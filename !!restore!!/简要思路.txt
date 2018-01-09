@@ -1,0 +1,12 @@
+
+
+在genesis.json中：
+1，在validators中增加eth_account字段；如果没有设置或者配置了而不存在该账号，则退出
+2，配置validators中对应的amount，如果没有设置或者设置了而对应的eth_account的以太币不够，则退出
+3，在单节点刚启动运行时，如果没有priv_validator.json和genesis.json，则eth_account默认为coinbase，amount为10
+
+
+检查：
+1，在ethermint中，在进行初始化时，嵌入检查eth_account和amount的代码
+2，在ethereum中，进行交易燃烧Gas或者转账时，如果牵涉到eth_account，要检查余额(balance)不能少于定义的amount
+3，在tendermint中，在进行共识时检查eth_account是否有足够的amount
