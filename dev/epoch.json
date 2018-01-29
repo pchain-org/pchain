@@ -1,0 +1,37 @@
+{
+  "app_hash": "",
+  "chain_id": "test-chain-6h3osU",
+  "consensus": "pos",
+  "genesis_time": "0001-01-01T00:00:00.000Z",
+
+  "reward_scheme" : {
+    "total_reward": "210000000000000000000000000",
+    "pre_allocated": "100000000000000000000000000",
+    "added_per_year": "0",
+    "reward_first_year": "20000000000000000000000000",
+    "descend_per_year": "2000000000000000000000000",
+    "allocated": "0"
+  },
+
+  "current_epoch" : {
+    "height" : "0",
+    "reward_per_block" : "0",
+    "start_block" : "0",
+    "end_block" : "0",
+    "start_time" : "0",
+    "end_time" : "0",
+    "block_generated" : "0",
+    "saved" : "0",
+    "validators": [
+      {
+        "amount": 10,
+        "eth_account": "7EFF122B94897EA5B0E2A9ABF47B86337FAFEBDC",
+        "name": "",
+        "pub_key": [
+          1,
+          "CD6E2FF9932A71A5F04F05EE8CE5690A0EA3A27EAB8F3DA53D69E4D37C1370C3"
+        ]
+      }
+    ]
+  }
+}
