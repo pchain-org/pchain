@@ -18,12 +18,22 @@ const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 type Block struct {
 	*Header    `json:"header"`
 	*Data      `json:"data"`
+	*ExData    `json:"exdata"`
 	LastCommit *Commit `json:"last_commit"`
 }
 
 // TODO: version
 func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
-	prevBlockID BlockID, valHash, appHash []byte, partSize int) (*Block, *PartSet) {
+	prevBlockID BlockID, valHash, appHash []byte, blkExData BlockExData, partSize int) (*Block, *PartSet) {
+
+	data := &Data{
+		Txs: txs,
+	}
+
+	exData := &ExData{
+		BlockExData: blkExData,
+	}
+
 	block := &Block{
 		Header: &Header{
 			ChainID:        chainID,
@@ -35,9 +45,8 @@ func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
 			AppHash:        appHash, // state merkle root of txs from the previous block.
 		},
 		LastCommit: commit,
-		Data: &Data{
-			Txs: txs,
-		},
+		Data: data,
+		ExData: exData,
 	}
 	block.FillHeader()
 	return block, block.MakePartSet(partSize)
@@ -356,6 +365,18 @@ type Data struct {
 	// NOTE: not all txs here are valid.  We're just agreeing on the order first.
 	// This means that block.AppHash does not include these txs.
 	Txs Txs `json:"txs"`
+
+	// Volatile
+	hash []byte
+}
+
+type BlockExData interface {
+
+}
+
+type ExData struct {
+
+	BlockExData BlockExData `json:"ex_data"`
 
 	// Volatile
 	hash []byte

@@ -4,6 +4,8 @@ import (
 	rpc "github.com/tendermint/go-rpc/server"
 	"github.com/tendermint/go-rpc/types"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
+
+	"fmt"
 )
 
 // TODO: better system than "unsafe" prefix
@@ -43,6 +45,9 @@ var Routes = map[string]*rpc.RPCFunc{
 	"unsafe_start_cpu_profiler": rpc.NewRPCFunc(UnsafeStartCPUProfilerResult, "filename"),
 	"unsafe_stop_cpu_profiler":  rpc.NewRPCFunc(UnsafeStopCPUProfilerResult, ""),
 	"unsafe_write_heap_profile": rpc.NewRPCFunc(UnsafeWriteHeapProfileResult, "filename"),
+
+	//validator API
+	"validator_ex": rpc.NewRPCFunc(ValidatorExResult, "epoch,key,power,flag"),
 }
 
 func SubscribeResult(wsCtx rpctypes.WSRPCContext, event string) (ctypes.TMResult, error) {
@@ -142,4 +147,11 @@ func UnsafeStopCPUProfilerResult() (ctypes.TMResult, error) {
 
 func UnsafeWriteHeapProfileResult(filename string) (ctypes.TMResult, error) {
 	return UnsafeWriteHeapProfile(filename)
+}
+
+//--------------
+//author@liaoyd
+func ValidatorExResult(epoch int, key string, power uint64, flag string) (ctypes.TMResult, error) {
+	fmt.Println("func TransExResult(s string) (ctypes.TMResult, error)")
+	return ValidatorEx(epoch, key, power, flag)
 }

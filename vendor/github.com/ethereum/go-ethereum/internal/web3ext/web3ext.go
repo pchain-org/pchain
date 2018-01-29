@@ -28,6 +28,7 @@ var Modules = map[string]string{
 	"rpc":        RPC_JS,
 	"shh":        Shh_JS,
 	"txpool":     TxPool_JS,
+	"validator":  Validator_JS,
 }
 
 const Chequebook_JS = `
@@ -518,5 +519,25 @@ web3._extend({
 			}
 		})
 	]
+});
+`
+
+//author@liaoyd
+const Validator_JS = `
+web3._extend({
+	property: 'validator',
+	methods: [
+		new web3._extend.Method({
+			name: 'joinValidators',
+			call: 'validator_joinValidators',
+			params: 3
+		}),
+		new web3._extend.Method({
+			name: 'acceptJoinReq',
+			call: 'validator_acceptJoinReq',
+			params: 3
+		}),
+	],
+	properties: []
 });
 `

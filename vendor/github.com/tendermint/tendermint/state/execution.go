@@ -7,10 +7,10 @@ import (
 	fail "github.com/ebuchman/fail-test"
 	abci "github.com/tendermint/abci/types"
 	. "github.com/tendermint/go-common"
-	crypto "github.com/tendermint/go-crypto"
 	"github.com/tendermint/tendermint/proxy"
 	"github.com/tendermint/tendermint/state/txindex"
 	"github.com/tendermint/tendermint/types"
+	"github.com/tendermint/tendermint/epoch"
 )
 
 //--------------------------------------------------
@@ -113,47 +113,6 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 	return abciResponses, nil
 }
 
-func updateValidators(validators *types.ValidatorSet, changedValidators []*abci.Validator) error {
-	// TODO: prevent change of 1/3+ at once
-
-	for _, v := range changedValidators {
-		pubkey, err := crypto.PubKeyFromBytes(v.PubKey) // NOTE: expects go-wire encoded pubkey
-		if err != nil {
-			return err
-		}
-
-		address := pubkey.Address()
-		power := int64(v.Power)
-		// mind the overflow from uint64
-		if power < 0 {
-			return errors.New(Fmt("Power (%d) overflows int64", v.Power))
-		}
-
-		_, val := validators.GetByAddress(address)
-		if val == nil {
-			// add val
-			added := validators.Add(types.NewValidator(pubkey, power))
-			if !added {
-				return errors.New(Fmt("Failed to add new validator %X with voting power %d", address, power))
-			}
-		} else if v.Power == 0 {
-			// remove val
-			_, removed := validators.Remove(address)
-			if !removed {
-				return errors.New(Fmt("Failed to remove validator %X)"))
-			}
-		} else {
-			// update val
-			val.VotingPower = power
-			updated := validators.Update(val)
-			if !updated {
-				return errors.New(Fmt("Failed to update validator %X with voting power %d", address, power))
-			}
-		}
-	}
-	return nil
-}
-
 // return a bit array of validators that signed the last commit
 // NOTE: assumes commits have already been authenticated
 func commitBitArrayFromBlock(block *types.Block) *BitArray {
@@ -195,8 +154,13 @@ func (s *State) validateBlock(block *types.Block) error {
 		}
 		*/
 		//fmt.Printf("(s *State) validateBlock(), avoid LastValidators and LastCommit.Precommits size check for validatorset change\n")
-		err := s.LastValidators.VerifyCommit(
-			s.ChainID, s.LastBlockID, block.Height-1, block.LastCommit)
+		lastValidators, _, err := s.GetValidators()
+
+		if err != nil && lastValidators != nil {
+			err = lastValidators.VerifyCommit(
+				s.ChainID, s.LastBlockID, block.Height - 1, block.LastCommit)
+		}
+
 		if err != nil {
 			return err
 		}
@@ -229,8 +193,39 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 
 	fail.Fail() // XXX
 
-	// now update the block and validators
-	s.SetBlockAndValidators(block.Header, partsHeader, abciResponses)
+	//here handles the proposed next epoch
+	epochInBlock := block.ExData.BlockExData.(*epoch.Epoch)
+	if epochInBlock != nil {
+		s.Epoch = epochInBlock.Copy()
+		s.Epoch.NextEpoch.Status = epoch.EPOCH_VOTED_NOT_SAVED
+		s.Epoch.Save()
+	}
+
+	fail.Fail() // XXX
+
+	//here handles if need to enter next epoch
+	epochNumber := s.Epoch.Number
+
+	ok, err := s.Epoch.ShouldEnterNewEpoch(block.Height)
+	if ok && err == nil {
+
+		// now update the block and validators
+		// fmt.Println("Diffs before:", abciResponses.EndBlock.Diffs)
+		// types.ValidatorChannel <- abciResponses.EndBlock.Diffs
+		types.ValidatorChannel <- s.Epoch.Number
+		abciResponses.EndBlock.Diffs = <-types.EndChannel
+		// fmt.Println("Diffs after:", abciResponses.EndBlock.Diffs)
+
+		s.Epoch.EnterNewEpoch(block.Height, abciResponses.EndBlock.Diffs)
+
+	} else if err != nil {
+		log.Warn(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
+			block.Height, s.Epoch, err))
+		return err
+	}
+
+	//here handles when enter new epoch
+	s.SetBlockAndEpoch(block.Header, partsHeader, epochNumber)
 
 	// lock mempool, commit state, update mempoool
 	err = s.CommitStateUpdateMempool(proxyAppConn, block, mempool)
@@ -309,3 +304,5 @@ func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, block *types.Block
 	}
 	return res.Data, nil
 }
+
+

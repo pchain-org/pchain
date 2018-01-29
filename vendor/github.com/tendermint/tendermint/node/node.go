@@ -67,6 +67,7 @@ func NewNodeDefault(config cfg.Config) *Node {
 	return NewNode(config, privValidator, proxy.DefaultClientCreator(config))
 }
 
+//liaoyd
 func NewNode(config cfg.Config, privValidator *types.PrivValidator, clientCreator proxy.ClientCreator) *Node {
 
 	// Get BlockStore
@@ -75,7 +76,8 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator, clientCreato
 
 	// Get State
 	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
-	state := sm.GetState(config, stateDB, true)
+	// state := sm.GetState(config, stateDB, true)
+	state := sm.GetState(config, stateDB, false)
 
 	// add the chainid and number of validators to the global config
 	config.Set("chain_id", state.ChainID)
@@ -90,6 +92,10 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator, clientCreato
 
 	// reload the state (it may have been updated by the handshake)
 	state = sm.LoadState(stateDB)
+
+	//liaoyd
+	_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
+	fmt.Println("state.Validators:", state.Validators)
 
 	// Transaction indexing
 	var txIndexer txindex.TxIndexer

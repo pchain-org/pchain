@@ -1498,3 +1498,33 @@ func (s *PublicNetAPI) PeerCount() hexutil.Uint {
 func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
 }
+
+
+//------------------------------------
+//author@liaoyd
+// PublicValidatorAPI provides an API to some new methods.
+type PublicValidatorAPI struct {
+	b Backend
+}
+
+func NewPublicValidatorAPI(b Backend) *PublicValidatorAPI {
+	return &PublicValidatorAPI{b: b}
+}
+
+func (s *PublicValidatorAPI) JoinValidators(height int, key string, power uint64) string {
+	fmt.Println(("in func (s *PublicExtensionAPI) JoinValidators() string"))
+	s.b.SendValidatorMessage(height, key, power, "JOIN")
+	return "ok"
+}
+
+func (s *PublicValidatorAPI) AcceptJoinReq(height int, key string, power uint64) string {
+	fmt.Println("in func (s *PublicExtensionAPI) AcceptJoinReq() string")
+	s.b.SendValidatorMessage(height, key, power, "ACCEPT")
+	return "ok"
+}
+
+func (s *PublicValidatorAPI) Validators() string {
+	fmt.Println("in func (s *PublicExtensionAPI) AcceptJoinReq() string")
+	s.b.SendValidatorMessage(0, "", 0, "VALIDATORS")
+	return "ok"
+}

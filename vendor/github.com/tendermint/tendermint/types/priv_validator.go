@@ -259,3 +259,13 @@ func (pvs PrivValidatorsByAddress) Swap(i, j int) {
 	pvs[i] = pvs[j]
 	pvs[j] = it
 }
+
+//---------------------
+//author@liaoyd
+func (privVal *PrivValidator) SignValidatorMsg(chainID string, msg *ValidatorMsg) error {
+	privVal.mtx.Lock()
+	defer privVal.mtx.Unlock()
+	signature := privVal.Sign(SignBytes(chainID, msg))
+	msg.Signature = signature
+	return nil
+}

@@ -57,6 +57,7 @@ func GetConfig(rootDir string) cfg.Config {
 	}
 	mapConfig.SetRequired("chain_id") // blows up if you try to use it before setting.
 	mapConfig.SetDefault("genesis_file", rootDir+"/genesis.json")
+	mapConfig.SetDefault("epoch_file", rootDir+"/epoch.json")
 	mapConfig.SetDefault("proxy_app", "tcp://127.0.0.1:46658")
 	mapConfig.SetDefault("abci", "socket")
 	mapConfig.SetDefault("moniker", "anonymous")
@@ -79,6 +80,9 @@ func GetConfig(rootDir string) cfg.Config {
 	mapConfig.SetDefault("cs_wal_file", rootDir+"/data/cs.wal/wal")
 	mapConfig.SetDefault("cs_wal_light", false)
 	mapConfig.SetDefault("filter_peers", false)
+
+	//liaoyd
+	mapConfig.SetDefault("cs_val_file", rootDir+"/data/cs.val/val")
 
 	mapConfig.SetDefault("block_size", 10000)      // max number of txs
 	mapConfig.SetDefault("block_part_size", 65536) // part size 64K

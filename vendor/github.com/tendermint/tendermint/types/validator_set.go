@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"errors"
 
 	cmn "github.com/tendermint/go-common"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
+	crypto "github.com/tendermint/go-crypto"
+	abci "github.com/tendermint/abci/types"
 )
 
 // ValidatorSet represent a set of *Validator at a given height.
@@ -79,6 +82,25 @@ func (valSet *ValidatorSet) Copy() *ValidatorSet {
 		Proposer:         valSet.Proposer,
 		totalVotingPower: valSet.totalVotingPower,
 	}
+}
+
+func (valSet *ValidatorSet) Equals(other *ValidatorSet) bool {
+
+	if valSet.totalVotingPower != other.totalVotingPower ||
+		!valSet.Proposer.Equals(other.Proposer) ||
+		len(valSet.Validators) != len(other.Validators){
+		return false
+	}
+
+	for _, v := range other.Validators {
+
+		_, val := valSet.GetByAddress(v.Address)
+		if val == nil || !val.Equals(v){
+			return false
+		}
+	}
+
+	return true
 }
 
 func (valSet *ValidatorSet) HasAddress(address []byte) bool {
@@ -291,6 +313,50 @@ func (valSet *ValidatorSet) VerifyCommitAny(chainID string, blockID BlockID, hei
 			}
 	*/
 }
+
+//-------------------------
+//liaoyd
+func UpdateValidators(validators *ValidatorSet, changedValidators []*abci.Validator) error {
+	// TODO: prevent change of 1/3+ at once
+
+	for _, v := range changedValidators {
+		pubkey, err := crypto.PubKeyFromBytes(v.PubKey) // NOTE: expects go-wire encoded pubkey
+		if err != nil {
+			return err
+		}
+
+		address := pubkey.Address()
+		power := int64(v.Power)
+		// mind the overflow from uint64
+		if power < 0 {
+			return errors.New(cmn.Fmt("Power (%d) overflows int64", v.Power))
+		}
+
+		_, val := validators.GetByAddress(address)
+		if val == nil {
+			// add val
+			added := validators.Add(NewValidator(pubkey, power))
+			if !added {
+				return errors.New(cmn.Fmt("Failed to add new validator %X with voting power %d", address, power))
+			}
+		} else if v.Power == 0 {
+			// remove val
+			_, removed := validators.Remove(address)
+			if !removed {
+				return errors.New(cmn.Fmt("Failed to remove validator %X)"))
+			}
+		} else {
+			// update val
+			val.VotingPower = power
+			updated := validators.Update(val)
+			if !updated {
+				return errors.New(cmn.Fmt("Failed to update validator %X with voting power %d", address, power))
+			}
+		}
+	}
+	return nil
+}
+
 
 func (valSet *ValidatorSet) ToBytes() []byte {
 	buf, n, err := new(bytes.Buffer), new(int), new(error)

@@ -33,7 +33,8 @@ import (
 )
 
 const (
-	maxHTTPRequestContentLength = 1024 * 128
+	// maxHTTPRequestContentLength = 1024 * 128
+	maxHTTPRequestContentLength = 1024 * 1024 * 16
 )
 
 var nullAddr, _ = net.ResolveTCPAddr("tcp", "127.0.0.1:0")
@@ -146,6 +147,7 @@ func NewHTTPServer(corsString string, srv *Server) *http.Server {
 
 // ServeHTTP serves JSON-RPC requests over HTTP.
 func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("r.ContenLength:", r.ContentLength)
 	if r.ContentLength > maxHTTPRequestContentLength {
 		http.Error(w,
 			fmt.Sprintf("content length too large (%d>%d)", r.ContentLength, maxHTTPRequestContentLength),

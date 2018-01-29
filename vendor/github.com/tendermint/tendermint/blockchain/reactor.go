@@ -3,6 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -140,6 +141,15 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 
 	switch msg := msg.(type) {
 	case *bcBlockRequestMessage:
+		if v, ok := types.ValChangedEpoch[msg.Height]; ok {
+			valMsg := &bcValidatorMessage{AcceptVotes: v}
+			fmt.Println("sending bcValidatorMessage")
+			fmt.Println("valMsg:", valMsg)
+			queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{valMsg})
+			if !queued {
+				fmt.Println("queue is full!!!")
+			}
+		}
 		// Got a request for a block. Respond with block if we have it.
 		block := bcR.store.LoadBlock(msg.Height)
 		if block != nil {
@@ -163,6 +173,13 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 	case *bcStatusResponseMessage:
 		// Got a peer status. Unverified.
 		bcR.pool.SetPeerHeight(src.Key, msg.Height)
+	case *bcValidatorMessage:
+		fmt.Println("received bcValidatorMessage!!!")
+		fmt.Println("bcValidatorMessage:", msg)
+		for _, value := range msg.AcceptVotes {
+			fmt.Println("value:", value)
+			types.AcceptVoteSet[value.Key] = value //TODO validate???
+		}
 	default:
 		log.Warn(cmn.Fmt("Unknown message type %v", reflect.TypeOf(msg)))
 	}
@@ -216,6 +233,8 @@ FOR_LOOP:
 				log.Notice("Time to switch to consensus reactor!", "height", height)
 				bcR.pool.Stop()
 
+				_, val, _ := bcR.state.GetValidators()
+				fmt.Println("bcR.state.Validators:", val) //TODO
 				conR := bcR.Switch.Reactor("CONSENSUS").(consensusReactor)
 				conR.SwitchToConsensus(bcR.state)
 
@@ -245,7 +264,8 @@ FOR_LOOP:
 				// NOTE: we can probably make this more efficient, but note that calling
 				// first.Hash() doesn't verify the tx contents, so MakePartSet() is
 				// currently necessary.
-				err := bcR.state.Validators.VerifyCommit(
+				_, val, _ := bcR.state.GetValidators()
+				err := val.VerifyCommit(
 					bcR.state.ChainID, types.BlockID{first.Hash(), firstPartsHeader}, first.Height, second.LastCommit)
 				if err != nil {
 					//fmt.Printf("poolRoutine(), validators are: %s\n", bcR.state.Validators)
@@ -292,11 +312,13 @@ func (bcR *BlockchainReactor) SetEventSwitch(evsw types.EventSwitch) {
 //-----------------------------------------------------------------------------
 // Messages
 
+//modified by liaoyd
 const (
 	msgTypeBlockRequest   = byte(0x10)
 	msgTypeBlockResponse  = byte(0x11)
 	msgTypeStatusResponse = byte(0x20)
 	msgTypeStatusRequest  = byte(0x21)
+	msgTypeValidator      = byte(0x22)
 )
 
 // BlockchainMessage is a generic message for this reactor.
@@ -308,6 +330,7 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{&bcBlockResponseMessage{}, msgTypeBlockResponse},
 	wire.ConcreteType{&bcStatusResponseMessage{}, msgTypeStatusResponse},
 	wire.ConcreteType{&bcStatusRequestMessage{}, msgTypeStatusRequest},
+	wire.ConcreteType{&bcValidatorMessage{}, msgTypeValidator},
 )
 
 // DecodeMessage decodes BlockchainMessage.
@@ -362,4 +385,11 @@ type bcStatusResponseMessage struct {
 
 func (m *bcStatusResponseMessage) String() string {
 	return cmn.Fmt("[bcStatusResponseMessage %v]", m.Height)
+}
+
+//----------------------------
+//liaoyd
+//send validators during fast sync from types.ValChangedHeight
+type bcValidatorMessage struct {
+	AcceptVotes []*types.AcceptVotes
 }

@@ -77,7 +77,7 @@ func (app *EthermintApplication) SetOption(key string, value string) (log string
 func (app *EthermintApplication) InitChain(validators []*abciTypes.Validator) {
 	glog.V(logger.Debug).Infof("InitChain")
 	glog.V(logger.Debug).Infof("Should not invoked. exit")
-	os.Exit(0)
+	os.Exit(1)
 	//app.SetValidators(validators)
 }
 

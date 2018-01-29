@@ -16,6 +16,9 @@ import (
 	"github.com/tendermint/tendermint/types"
 	"fmt"
 	//"runtime/debug"
+	//"github.com/tendermint/ethermint/strategies/validators"
+	"github.com/tendermint/tendermint/epoch"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -39,8 +42,11 @@ type State struct {
 	LastBlockHeight int // Genesis state has this set to 0.  So, Block(H=0) does not exist.
 	LastBlockID     types.BlockID
 	LastBlockTime   time.Time
-	Validators      *types.ValidatorSet
-	LastValidators  *types.ValidatorSet // block.LastCommit validated against this
+
+	LastEpochNumber	int
+	Epoch *epoch.Epoch
+	//Validators      *types.ValidatorSet
+	//LastValidators  *types.ValidatorSet // block.LastCommit validated against this
 
 	// AppHash is updated after Commit
 	AppHash []byte
@@ -52,8 +58,9 @@ type State struct {
 	abciResponses *ABCIResponses
 }
 
-func LoadState(db dbm.DB) *State {
-	return loadState(db, stateKey)
+func LoadState(stateDB dbm.DB) *State {
+	state := loadState(stateDB, stateKey)
+	return state
 }
 
 func loadState(db dbm.DB, key []byte) *State {
@@ -73,6 +80,7 @@ func loadState(db dbm.DB, key []byte) *State {
 	return s
 }
 
+
 func (s *State) Copy() *State {
 	//fmt.Printf("State.Copy(), s.LastValidators are %v\n",s.LastValidators)
 	//debug.PrintStack()
@@ -84,8 +92,10 @@ func (s *State) Copy() *State {
 		LastBlockHeight: s.LastBlockHeight,
 		LastBlockID:     s.LastBlockID,
 		LastBlockTime:   s.LastBlockTime,
-		Validators:      s.Validators.Copy(),
-		LastValidators:  s.LastValidators.Copy(),
+		LastEpochNumber: s.LastEpochNumber,
+		Epoch:           s.Epoch.Copy(),
+		//Validators:      s.Validators.Copy(),
+		//LastValidators:  s.LastValidators.Copy(),
 		AppHash:         s.AppHash,
 		TxIndexer:       s.TxIndexer, // pointer here, not value
 	}
@@ -135,53 +145,51 @@ func (s *State) Bytes() []byte {
 
 // Mutate state variables to match block and validators
 // after running EndBlock
-func (s *State) SetBlockAndValidators(header *types.Header, blockPartsHeader types.PartSetHeader, abciResponses *ABCIResponses) {
+func (s *State) SetBlockAndEpoch(header *types.Header, blockPartsHeader types.PartSetHeader, epochNumber int) {
 
-	// copy the valset so we can apply changes from EndBlock
-	// and update s.LastValidators and s.Validators
-	prevValSet := s.Validators.Copy()
-	nextValSet := prevValSet.Copy()
-
-	// update the validator set with the latest abciResponses
-	err := updateValidators(nextValSet, abciResponses.EndBlock.Diffs)
-	if err != nil {
-		log.Warn("Error changing validator set", "error", err)
-		// TODO: err or carry on?
-	}
-	// Update validator accums and set state variables
-	nextValSet.IncrementAccum(1)
-
-	s.setBlockAndValidators(header.Height,
-		types.BlockID{header.Hash(), blockPartsHeader}, header.Time,
-		prevValSet, nextValSet)
+	s.setBlockAndEpoch(header.Height, types.BlockID{header.Hash(), blockPartsHeader},
+				header.Time, epochNumber)
 }
 
-func (s *State) setBlockAndValidators(
-	height int, blockID types.BlockID, blockTime time.Time,
-	prevValSet, nextValSet *types.ValidatorSet) {
+func (s *State) setBlockAndEpoch(
+	height int, blockID types.BlockID, blockTime time.Time, epochNumber int) {
 
 	s.LastBlockHeight = height
 	s.LastBlockID = blockID
 	s.LastBlockTime = blockTime
-	s.Validators = nextValSet
-	s.LastValidators = prevValSet
+	s.LastEpochNumber = s.Epoch.Number
+	//s.Validators = nextValSet
+	//s.LastValidators = prevValSet
 }
 
-func (s *State) GetValidators() (*types.ValidatorSet, *types.ValidatorSet) {
-	return s.LastValidators, s.Validators
+func (s *State) GetValidators() (*types.ValidatorSet, *types.ValidatorSet, error) {
+
+	if s.Epoch == nil {
+		return nil, nil, errors.New("epoch does not exist")
+	}
+
+	if s.LastEpochNumber == s.Epoch.Number {
+		return s.Epoch.Validators, s.Epoch.Validators, nil
+	} else if s.LastEpochNumber == s.Epoch.Number - 1 {
+		return s.Epoch.PreviousEpoch.Validators, s.Epoch.Validators, nil
+	}
+
+	return nil, nil, errors.New("epoch information error")
 }
 
 // Load the most recent state from "state" db,
 // or create a new one (and save) from genesis.
-func GetState(config cfg.Config, stateDB dbm.DB, valSetFromGenesis bool) *State {
+func GetState(config cfg.Config, stateDB dbm.DB /*, valSetFromGenesis bool*/) *State {
 	state := LoadState(stateDB)
 	if state == nil {
 		state = MakeGenesisStateFromFile(stateDB, config.GetString("genesis_file"))
+
 		state.Save()
 
-		_, val := state.GetValidators()
+		_, val, _ := state.GetValidators()
 		fmt.Printf("GetState() state 0, state.validators are: %v\n", val)
-	} else if valSetFromGenesis {
+	}
+	/*else if valSetFromGenesis {
 		valSet := MakeGenesisValidatorsFromFile(config.GetString("genesis_file"))
 		state.Validators = valSet
 		state.Save()
@@ -189,10 +197,10 @@ func GetState(config cfg.Config, stateDB dbm.DB, valSetFromGenesis bool) *State 
 		_, val := state.GetValidators()
 		fmt.Printf("GetState() state 1, state.validators are: %v\n", val)
 	} else {
-		_, val := state.GetValidators()
+		_, val, _ := state.GetValidators()
 		fmt.Printf("GetState() state 2, state.validators are: %v\n", val)
 	}
-
+	*/
 	return state
 }
 
@@ -277,8 +285,9 @@ func MakeGenesisState(db dbm.DB, genDoc *types.GenesisDoc) *State {
 		LastBlockHeight: 0,
 		LastBlockID:     types.BlockID{},
 		LastBlockTime:   genDoc.GenesisTime,
-		Validators:      types.NewValidatorSet(validators),
-		LastValidators:  types.NewValidatorSet(nil),
+		LastEpochNumber: 0,
+		//Validators:      types.NewValidatorSet(validators),
+		//LastValidators:  types.NewValidatorSet(nil),
 		AppHash:         genDoc.AppHash,
 		TxIndexer:       &null.TxIndex{}, // we do not need indexer during replay and in tests
 	}

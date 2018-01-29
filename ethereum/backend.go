@@ -157,7 +157,10 @@ func (s *Backend) APIs() []rpc.API {
 		retApis = append(retApis, v)
 	}
 	go s.txBroadcastLoop()
-
+	
+	//add by author@liaoyd
+	go s.validatorTransLoop()
+	
 	apis = retApis
 
 	return retApis
@@ -518,5 +521,38 @@ func newBlockHeader(receiver common.Address, prevBlock *ethTypes.Block) *ethType
 		ParentHash: prevBlock.Hash(),
 		GasLimit:   core.CalcGasLimit(prevBlock),
 		Coinbase:   receiver,
+	}
+}
+
+//----------------------
+//author@liaoyd
+func (s *Backend) validatorTransLoop() {
+	fmt.Println("func (s *Backend) validatorTransLoop()")
+	exSub := s.ethereum.EventMux().Subscribe(core.ValidatorEvent{})
+
+	if err := waitForServer(s); err != nil {
+		// timeouted when waiting for tendermint communication failed
+		glog.V(logger.Error).Infof("Failed to run tendermint HTTP endpoint, err=%s", err)
+		os.Exit(1)
+	}
+
+	var result core_types.TMResult
+	for obj := range exSub.Chan() {
+		event := obj.Data.(core.ValidatorEvent)
+		fmt.Println("event in extransloop!!!", event)
+		if event.Flag == "VALIDATORS" {
+			s.client.Call("validators", map[string]interface{}{}, &result)
+			continue
+		}
+		params := map[string]interface{}{
+			"epoch":  event.Epoch,
+			"key":    event.Key,
+			"power":  event.Power,
+			"flag":   event.Flag,
+		}
+		_, err := s.client.Call("validator_ex", params, &result)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }

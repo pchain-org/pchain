@@ -159,3 +159,7 @@ func (b *LesApiBackend) EventMux() *event.TypeMux {
 func (b *LesApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.accountManager
 }
+
+func (b *LesApiBackend) SendValidatorMessage(height int, key string, power uint64, flag string) error {
+	return nil
+}

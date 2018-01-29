@@ -1,6 +1,9 @@
 package types
 
 // canonical json is go-wire's json for structs with fields in alphabetical order
+import (
+	crypto "github.com/tendermint/go-crypto"
+)
 
 type CanonicalJSONBlockID struct {
 	Hash        []byte                     `json:"hash,omitempty"`
@@ -40,6 +43,22 @@ type CanonicalJSONOnceVote struct {
 	Vote    CanonicalJSONVote `json:"vote"`
 }
 
+//-----------------------------
+//author@liaoyd
+type CanonicalJSONOnceValidatorMsg struct {
+	ChainID string             `json:"chain_id"`
+	ValidatorMsg   CanonicalJSONValidatorMsg `json:"validator_msg"`
+}
+
+type CanonicalJSONValidatorMsg struct {
+	Epoch          int           `json:"epoch"`
+	ValidatorIndex int           `json:"validator_index"`
+	Key            string        `json:"key"`
+	PubKey         crypto.PubKey `json:"pub_key"`
+	Power          uint64        `json:"power"`
+	Flag           string        `json:"flag"`
+}
+
 //-----------------------------------
 // Canonicalize the structs
 
@@ -73,5 +92,17 @@ func CanonicalVote(vote *Vote) CanonicalJSONVote {
 		vote.Height,
 		vote.Round,
 		vote.Type,
+	}
+}
+
+//liaoyd
+func CanonicalValidatorMsg(msg *ValidatorMsg) CanonicalJSONValidatorMsg {
+	return CanonicalJSONValidatorMsg{
+		Epoch:         msg.Epoch,
+		ValidatorIndex: msg.ValidatorIndex,
+		Key:            msg.Key,
+		PubKey:         msg.PubKey,
+		Power:          msg.Power,
+		Flag:           msg.Flag,
 	}
 }

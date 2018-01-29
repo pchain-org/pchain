@@ -36,6 +36,13 @@ func (v *Validator) Copy() *Validator {
 	return &vCopy
 }
 
+func (v *Validator) Equals(other *Validator) bool {
+
+	return bytes.Equal(v.Address, other.Address) &&
+		v.PubKey.Equals(other.PubKey) &&
+		v.VotingPower == other.VotingPower
+}
+
 // Returns the one with higher Accum.
 func (v *Validator) CompareAccum(other *Validator) *Validator {
 	if v == nil {

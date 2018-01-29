@@ -19,24 +19,36 @@ import (
 	"github.com/pkg/errors"
 	"io/ioutil"
 	"encoding/json"
-	"io"
 	"fmt"
+	ep "github.com/tendermint/tendermint/epoch"
 )
 
 func initCmd(ctx *cli.Context) error {
 
 	// ethereum genesis.json
-	genesisPath := ctx.Args().First()
-	if len(genesisPath) == 0 {
+	ethGenesisPath := ctx.Args().First()
+	if len(ethGenesisPath) == 0 {
 		utils.Fatalf("must supply path to genesis JSON file")
 	}
+
+	init_eth_blockchain(ethGenesisPath, ctx)
+
+	init_em_files(ethGenesisPath)
+
+	rsTmplPath := ctx.Args().Get(1)
+	init_reward_scheme_files(rsTmplPath)
+
+	return nil
+}
+
+func init_eth_blockchain(ethGenesisPath string, ctx *cli.Context) {
 
 	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MakeDataDir(ctx), "chaindata"), 0, 0)
 	if err != nil {
 		utils.Fatalf("could not open database: %v", err)
 	}
 
-	genesisFile, err := os.Open(genesisPath)
+	genesisFile, err := os.Open(ethGenesisPath)
 	if err != nil {
 		utils.Fatalf("failed to read genesis file: %v", err)
 	}
@@ -46,32 +58,25 @@ func initCmd(ctx *cli.Context) error {
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
 
-	genesisFile, err = os.Open(genesisPath)
-	if err != nil {
-		utils.Fatalf("failed to read genesis file: %v", err)
-	}
-
-	err = init_files(genesisFile)
-	if(err != nil) {
-		utils.Fatalf("failed to initialize ethermint's priv_validators/genesis file: %v", err)
-	}
-
 	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
-
-	return nil
 }
 
-func init_files(ethGenesisFile io.Reader) error {
+func init_em_files(ethGenesisPath string) {
+
+	ethGenesisFile, err := os.Open(ethGenesisPath)
+	if err != nil {
+		utils.Fatalf("failed to read eth_genesis file: %v", err)
+	}
 
 	contents, err := ioutil.ReadAll(ethGenesisFile)
 	if err != nil {
-		return err
+		utils.Fatalf("failed to read eth_genesis file: %v", err)
 	}
 
 	var coreGenesis = core.Genesis{}
 
 	if err := json.Unmarshal(contents, &coreGenesis); err != nil {
-		return err
+		utils.Fatalf("failed to unmarshal content from eth_genesis file: %v", err)
 	}
 
 	// if no priv val, make it
@@ -103,9 +108,57 @@ func init_files(ethGenesisFile io.Reader) error {
 			genDoc.SaveAs(genFile)
 		}
 	}
+}
 
-	// TODO: if there is a priv val but no genesis
-	return nil
+
+func init_reward_scheme_files(rsTmplPath string) {
+
+	rsPath := config.GetString("epoch_file")
+
+	if _, err := os.Stat(rsTmplPath); os.IsNotExist(err) {
+
+		rsDoc := ep.EpochDoc{
+			RewardScheme : ep.RewardSchemeDoc{
+				TotalReward : "210000000000000000000000000",
+				PreAllocated : "100000000000000000000000000",
+				AddedPerYear : "0",
+				RewardFirstYear : "20000000000000000000000000", //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
+				DescendPerYear : "2000000000000000000000000",
+				Allocated : "0",
+			},
+			CurrentEpoch : ep.OneEpochDoc {
+				Number :		"0",
+				RewardPerBlock :	"0",
+				StartBlock :		"0",
+				EndBlock :		"0",
+				StartTime :		"0",
+				EndTime :		"0",//not accurate for current epoch
+				BlockGenerated :	"0",
+				Status :		"0",
+			},
+		}
+
+		rsDoc.SaveAs(rsPath)
+
+	} else if rsFile, err := os.Open(rsTmplPath); err == nil {
+
+		contents, err := ioutil.ReadAll(rsFile)
+		if err != nil {
+			utils.Fatalf("failed to read ethermint's reward scheme file: %v", err)
+		}
+
+		//fmt.Printf("content is: %s\n", string(contents))
+
+		rsDoc := &ep.RewardSchemeDoc{}
+		if err := json.Unmarshal(contents, &rsDoc); err != nil {
+			utils.Fatalf("failed to unmarshal ethermint's reward scheme file: %v", err)
+		}
+
+		//fmt.Printf("rsDoc is: %v\n", rsDoc)
+		//rsDoc.SaveAs(rsPath)
+	} else {
+		utils.Fatalf("failed to read ethermint's reward scheme file: %v", err)
+	}
 }
 
 func checkAccount(coreGenesis core.Genesis) (common.Address, int64, error) {

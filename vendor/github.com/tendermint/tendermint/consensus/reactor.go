@@ -13,6 +13,8 @@ import (
 	"github.com/tendermint/go-wire"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
+	abci "github.com/tendermint/abci/types"
+	"github.com/tendermint/go-clist"
 )
 
 const (
@@ -53,7 +55,11 @@ func (conR *ConsensusReactor) OnStart() error {
 	// upon their respective events (ie. uses evsw)
 	conR.registerEventCallbacks()
 
+	//liaoyd
+	go conR.GetDiffValidator()
+
 	if !conR.fastSync {
+		// conR.catchupValidator(val, ok)
 		_, err := conR.conS.Start()
 		if err != nil {
 			return err
@@ -74,7 +80,7 @@ func (conR *ConsensusReactor) SwitchToConsensus(state *sm.State) {
 	conR.conS.reconstructLastCommit(state)
 	// NOTE: The line below causes broadcastNewRoundStepRoutine() to
 	// broadcast a NewRoundStepMessage.
-	conR.conS.updateToState(state)
+	conR.conS.updateToStateAndEpoch(state, conR.conS.epoch)
 	conR.fastSync = false
 	conR.conS.Start()
 }
@@ -124,6 +130,9 @@ func (conR *ConsensusReactor) AddPeer(peer *p2p.Peer) {
 	go conR.gossipVotesRoutine(peer, peerState)
 	go conR.queryMaj23Routine(peer, peerState)
 
+	go conR.validatorExMsgRoutine(peer, peerState)
+	// go conR.GetDiffValidator()
+
 	// Send our state to peer.
 	// If we're fast_syncing, broadcast a RoundStepMessage later upon SwitchToConsensus().
 	if !conR.fastSync {
@@ -165,6 +174,7 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 
 	switch chID {
 	case StateChannel:
+		// fmt.Println(chID, src, msg)
 		switch msg := msg.(type) {
 		case *NewRoundStepMessage:
 			ps.ApplyNewRoundStepMessage(msg)
@@ -201,6 +211,20 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 				BlockID: msg.BlockID,
 				Votes:   ourVotes,
 			}})
+		case *TestMessage:
+			fmt.Println(chID, src, msg)
+			fmt.Println("get test message!!!!!!!!!")
+			// fmt.Println(src.PubKey())
+			switch msg.ValidatorMsg.Flag {
+			case "JOIN":
+				// msg.ValidatorMsg.PubKey = src.PubKey()     //get PubKey
+				ValidatorMsgMap[msg.ValidatorMsg.Key] = msg.ValidatorMsg //store request
+				if _, ok := types.AcceptVoteSet[msg.ValidatorMsg.Key]; !ok {
+					types.AcceptVoteSet[msg.ValidatorMsg.Key] = conR.NewAcceptVotes() //new vote list to add vote
+				}
+			case "ACCEPT":
+				conR.tryAddAcceptVote(msg.ValidatorMsg) //TODO
+			}
 		default:
 			log.Warn(Fmt("Unknown message type %v", reflect.TypeOf(msg)))
 		}
@@ -1099,6 +1123,8 @@ const (
 	msgTypeHasVote      = byte(0x15)
 	msgTypeVoteSetMaj23 = byte(0x16)
 	msgTypeVoteSetBits  = byte(0x17)
+	//new liaoyd
+	msgTypeTest = byte(0x03)
 )
 
 type ConsensusMessage interface{}
@@ -1114,6 +1140,8 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{&HasVoteMessage{}, msgTypeHasVote},
 	wire.ConcreteType{&VoteSetMaj23Message{}, msgTypeVoteSetMaj23},
 	wire.ConcreteType{&VoteSetBitsMessage{}, msgTypeVoteSetBits},
+	//new liaoyd
+	wire.ConcreteType{&TestMessage{}, msgTypeTest},
 )
 
 // TODO: check for unnecessary extra bytes at the end.
@@ -1136,9 +1164,23 @@ type NewRoundStepMessage struct {
 	LastCommitRound       int
 }
 
+//new liaoyd
+// type TestMessage struct {
+// 	IP    string
+// 	Value string
+// }
+type TestMessage struct {
+	ValidatorMsg *types.ValidatorMsg
+}
+
 func (m *NewRoundStepMessage) String() string {
 	return fmt.Sprintf("[NewRoundStep H:%v R:%v S:%v LCR:%v]",
 		m.Height, m.Round, m.Step, m.LastCommitRound)
+}
+
+//new liaoyd
+func (m *TestMessage) String() string {
+	return fmt.Sprintf("[TestMessage %v]", m.ValidatorMsg)
 }
 
 //-------------------------------------
@@ -1235,4 +1277,186 @@ type VoteSetBitsMessage struct {
 
 func (m *VoteSetBitsMessage) String() string {
 	return fmt.Sprintf("[VSB %v/%02d/%v %v %v]", m.Height, m.Round, m.Type, m.BlockID, m.Votes)
+}
+
+//----------------------------------------------
+//author@liaoyd
+// type AcceptVotes struct {
+// 	Height int            `json:"height"`
+// 	Key    string         `json:"key"`
+// 	PubKey crypto.PubKey  `json:"pub_key"`
+// 	Power  uint64         `"power"`
+// 	Sum    int64          `"sum"`
+// 	Votes  []*types.ExMsg `votes`
+// 	Maj23  bool           `"maj23"`
+// }
+
+// type PreVal struct {
+// 	ValidatorSet *types.ValidatorSet `json:"validator_set"`
+// }
+
+// var AcceptVoteSet map[string]*types.AcceptVotes //votes
+
+func (conR *ConsensusReactor) NewAcceptVotes() *types.AcceptVotes {
+	return &types.AcceptVotes{
+		Sum:   0,
+		Votes: make([]*types.ValidatorMsg, conR.conS.Validators.Size()),
+		Maj23: false,
+	}
+}
+
+//------------------------------------------
+var ValidatorMsgList = clist.New() //transfer
+
+var ValidatorMsgMap map[string]*types.ValidatorMsg //request
+
+func SendValidatorMsgToCons(epoch int, key string, power uint64, flag string) {
+	// fmt.Println("in func SendExMsgToCons(s string)")
+	validatorMsg := types.NewValidatorMsg(epoch, key, power, flag)
+
+	ValidatorMsgList.PushBack(validatorMsg)
+}
+
+func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerState) {
+	fmt.Println("in func validatorExMsgRoutine(peer *p2p.Peer, ps *PeerState)")
+	types.AcceptVoteSet = make(map[string]*types.AcceptVotes)
+	// AcceptVoteSet := types.AcceptVoteSet
+	ValidatorMsgMap = make(map[string]*types.ValidatorMsg)
+	// AcceptVoteSet = make(map[string]*types.AcceptVotes)
+
+	var next *clist.CElement
+
+	for {
+		if next == nil {
+			next = ValidatorMsgList.FrontWait()
+		}
+		msg := next.Value.(*types.ValidatorMsg)
+		fmt.Println("msg:", msg)
+
+		switch msg.Flag {
+		case "JOIN": //joinValidator
+			// privVal := types.LoadPrivValidator("/mnt/vdb/ethermint-validatortest/.ethermint/priv_validator.json")
+			privVal := types.LoadPrivValidator(conR.conS.config.GetString("priv_validator_file"))
+			msg.PubKey = privVal.PubKey
+			// fmt.Println("priVal:", privVal)
+			// fmt.Println("priValPubKey:", privVal.PubKey)
+			tMsg := &TestMessage{ValidatorMsg: msg}
+			fmt.Println("broadcast message!!!!!!")
+			peer.Send(StateChannel, struct{ ConsensusMessage }{tMsg})
+			ValidatorMsgMap[msg.Key] = msg
+			if _, ok := types.AcceptVoteSet[msg.Key]; !ok {
+				types.AcceptVoteSet[msg.Key] = conR.NewAcceptVotes() //new vote list to add vote
+			}
+		case "ACCEPT": //acceptJoinReq
+			if conR.conS.privValidator == nil || !conR.conS.Validators.HasAddress(conR.conS.privValidator.GetAddress()) {
+				fmt.Println("we are not in validator set")
+				break
+			}
+			if received, ok := ValidatorMsgMap[msg.Key]; ok {
+				if received.Epoch <= conR.conS.Epoch.Number {
+					fmt.Println("request height is lower than consensus height")
+					break
+				}
+				if received.Power == msg.Power && received.Epoch == msg.Epoch {
+					addr := conR.conS.privValidator.GetAddress()
+					valIndex, _ := conR.conS.Validators.GetByAddress(addr)
+					msg.ValidatorIndex = valIndex
+					msg.PubKey = received.PubKey
+
+					conR.conS.privValidator.SignValidatorMsg(conR.conS.state.ChainID, msg)
+					tMsg := &TestMessage{ValidatorMsg: msg}
+					fmt.Println("sending tMsg!!!", tMsg)
+					// conR.Switch.Broadcast(StateChannel, struct{ ConsensusMessage }{tMsg})
+					peer.Send(StateChannel, struct{ ConsensusMessage }{tMsg})
+					conR.tryAddAcceptVote(msg)
+
+				} else {
+					fmt.Println("different power or height")
+				}
+			} else {
+				fmt.Println("didn't received JOIN request")
+			}
+		}
+		next = next.NextWait()
+		continue
+	}
+}
+
+func (conR *ConsensusReactor) tryAddAcceptVote(validatorMsg *types.ValidatorMsg) (success bool, err error) {
+	fmt.Println("in func (conR *ConsensusReactor) tryAddAcceptVote(validatorMsg *types.ValidatorMsg) (success bool, err error)")
+	_, val := conR.conS.Validators.GetByIndex(validatorMsg.ValidatorIndex)
+	if val == nil {
+		fmt.Println("bad index!!!!!")
+		return false, types.ErrVoteInvalidValidatorIndex
+	}
+	if !val.PubKey.VerifyBytes(types.SignBytes(conR.conS.state.ChainID, validatorMsg), validatorMsg.Signature) {
+		// Bad signature.
+		fmt.Println("bad signature!!!!!")
+		return false, types.ErrVoteInvalidSignature
+	}
+	if validatorMsg.Epoch <= conR.conS.Epoch.Number {
+		fmt.Println("bad height!!!!!")
+		return false, nil
+	}
+	return conR.addAcceptVotes(validatorMsg)
+}
+
+func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (success bool, err error) {
+	fmt.Println("in func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (success bool, err error)")
+	_, val := conR.conS.Validators.GetByIndex(validatorMsg.ValidatorIndex)
+	if types.AcceptVoteSet[validatorMsg.Key].Votes[validatorMsg.ValidatorIndex] != nil {
+		fmt.Println("duplicate vote!!!")
+		return false, nil
+	}
+	types.AcceptVoteSet[validatorMsg.Key].Sum += val.VotingPower
+	types.AcceptVoteSet[validatorMsg.Key].Votes[validatorMsg.ValidatorIndex] = validatorMsg
+	if types.AcceptVoteSet[validatorMsg.Key].Sum > conR.conS.Validators.TotalVotingPower()*2/3 && !types.AcceptVoteSet[validatorMsg.Key].Maj23 {
+		fmt.Println("update validator set!!!!")
+		types.AcceptVoteSet[validatorMsg.Key].Maj23 = true
+		types.AcceptVoteSet[validatorMsg.Key].Epoch = validatorMsg.Epoch
+		types.AcceptVoteSet[validatorMsg.Key].PubKey = validatorMsg.PubKey
+		types.AcceptVoteSet[validatorMsg.Key].Power = validatorMsg.Power
+		types.AcceptVoteSet[validatorMsg.Key].Key = validatorMsg.Key
+	}
+	return true, nil
+}
+
+func (conR *ConsensusReactor) GetDiffValidator() {
+	types.ValidatorChannel = make(chan int)
+	types.EndChannel = make(chan []*abci.Validator)
+	val, err := OpenVAL(conR.conS.config.GetString("cs_val_file"))
+	// AcceptVoteSet := types.AcceptVoteSet
+	if err != nil {
+		fmt.Println("ERROR IN OPENVAL", err)
+	}
+	for {
+		var diffs []*abci.Validator
+		init := 0
+		epochNumber := <-types.ValidatorChannel
+		for k, v := range types.AcceptVoteSet {
+			if v.Maj23 && v.Epoch == epochNumber {
+				fmt.Println("k:", k, "v:", v)
+				diffs = append(
+					diffs,
+					&abci.Validator{
+						PubKey: v.PubKey.Bytes(),
+						Power:  v.Power,
+					},
+				)
+				if init == 0 {
+					val.writeEpoch(v.Epoch)
+					val.Save(&types.PreVal{ValidatorSet: conR.conS.Validators})
+					init = 1
+				}
+				val.Save(v)
+				delete(ValidatorMsgMap, v.Key)
+				delete(types.AcceptVoteSet, v.Key)
+				types.ValChangedEpoch[v.Epoch] = append(
+					types.ValChangedEpoch[v.Epoch],
+					v,
+				)
+			}
+		}
+		types.EndChannel <- diffs
+	}
 }

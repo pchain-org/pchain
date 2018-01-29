@@ -65,6 +65,10 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
+
+	//add by author@liaoyd
+	// Validator API
+	SendValidatorMessage(height int, key string, power uint64, flag string) error
 }
 
 type State interface {
@@ -74,6 +78,7 @@ type State interface {
 	GetNonce(ctx context.Context, addr common.Address) (uint64, error)
 }
 
+//modified by author@liaoyd add extension module
 func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 	compiler := makeCompilerAPIs(solcPath)
 	all := []rpc.API{
@@ -115,6 +120,11 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Namespace: "personal",
 			Version:   "1.0",
 			Service:   NewPrivateAccountAPI(apiBackend),
+			Public:    false,
+		}, {
+			Namespace: "validator",
+			Version:   "1.0",
+			Service:   NewPublicValidatorAPI(apiBackend),
 			Public:    false,
 		},
 	}
