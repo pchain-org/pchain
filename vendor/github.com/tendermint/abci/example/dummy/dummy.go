@@ -38,7 +38,7 @@ func (app *DummyApplication) CheckTx(tx []byte) types.Result {
 	return types.OK
 }
 
-func (app *DummyApplication) Commit() types.Result {
+func (app *DummyApplication) Commit(validators []*types.Validator) types.Result {
 	hash := app.state.Hash()
 	return types.NewResultOK(hash, "")
 }

@@ -15,9 +15,9 @@
 
   "current_epoch" : {
     "height" : "0",
-    "reward_per_block" : "0",
+    "reward_per_block" : "1666666666666666666666667",
     "start_block" : "0",
-    "end_block" : "0",
+    "end_block" : "1295999",
     "start_time" : "0",
     "end_time" : "0",
     "block_generated" : "0",

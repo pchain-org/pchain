@@ -93,6 +93,7 @@ type dummyIndexer struct {
 func (indexer *dummyIndexer) Get(hash []byte) (*types.TxResult, error) {
 	return nil, nil
 }
+
 func (indexer *dummyIndexer) AddBatch(batch *txindex.Batch) error {
 	indexer.Indexed += batch.Size()
 	return nil

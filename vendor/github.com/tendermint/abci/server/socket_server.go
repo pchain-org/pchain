@@ -181,7 +181,7 @@ func (s *SocketServer) handleRequest(req *types.Request, responses chan<- *types
 		res := s.app.CheckTx(r.CheckTx.Tx)
 		responses <- types.ToResponseCheckTx(res.Code, res.Data, res.Log)
 	case *types.Request_Commit:
-		res := s.app.Commit()
+		res := s.app.Commit(r.Commit.Validators)
 		responses <- types.ToResponseCommit(res.Code, res.Data, res.Log)
 	case *types.Request_Query:
 		resQuery := s.app.Query(*r.Query)

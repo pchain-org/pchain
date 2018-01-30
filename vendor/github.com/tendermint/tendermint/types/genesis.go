@@ -7,6 +7,9 @@ import (
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
 	"github.com/ethereum/go-ethereum/common"
+
+	abciTypes "github.com/tendermint/abci/types"
+	"fmt"
 )
 
 //------------------------------------------------------------
@@ -55,4 +58,36 @@ func GenesisValidatorsString(vs []*GenesisValidator) string {
 		s[i] = GenesisValidator{v.EthAccount,v.PubKey,v.Amount,v.Name}
 	}
 	return string(wire.JSONBytes(s))
+}
+
+func (gv *GenesisValidator) ToAbciValidator () *abciTypes.Validator {
+
+	return &abciTypes.Validator{
+		PubKey: gv.PubKey.Bytes(),
+		Power: uint64(gv.Amount),
+	}
+}
+
+func FromAbciValidator (val *abciTypes.Validator) *GenesisValidator {
+
+	pubkey, err := crypto.PubKeyFromBytes(val.PubKey)
+	if err != nil {
+		fmt.Printf("\n\n\n!!!FromAbciValidator(), pubkey convert failed!!!\n\n\n")
+	}
+	return &GenesisValidator{
+		EthAccount: common.Address{},
+		PubKey: pubkey,
+		Amount: int64(val.Power),
+		Name: "",
+	}
+}
+
+func FromAbciValidators (vals []*abciTypes.Validator) []*GenesisValidator {
+
+	genVals := make([]*GenesisValidator, len(vals))
+	for i, val := range vals {
+		genVals[i] = FromAbciValidator(val)
+	}
+
+	return genVals
 }

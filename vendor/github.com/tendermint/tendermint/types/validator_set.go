@@ -376,6 +376,16 @@ func (valSet *ValidatorSet) FromBytes(b []byte) {
 	}
 }
 
+func (valSet *ValidatorSet) ToAbciValidators() []*abci.Validator {
+
+	abciValidators := make([]*abci.Validator, len(valSet.Validators))
+	for i,val := range valSet.Validators {
+		abciValidators[i] = val.ToAbciValidator()
+	}
+
+	return abciValidators
+}
+
 func (valSet *ValidatorSet) String() string {
 	return valSet.StringIndented("")
 }

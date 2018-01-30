@@ -256,8 +256,8 @@ func (cli *socketClient) QueryAsync(reqQuery types.RequestQuery) *ReqRes {
 	return cli.queueRequest(types.ToRequestQuery(reqQuery), nil)
 }
 
-func (cli *socketClient) CommitAsync() *ReqRes {
-	return cli.queueRequest(types.ToRequestCommit(), nil)
+func (cli *socketClient) CommitAsync(validators []*types.Validator) *ReqRes {
+	return cli.queueRequest(types.ToRequestCommit(validators), nil)
 }
 
 func (cli *socketClient) InitChainAsync(validators []*types.Validator) *ReqRes {
@@ -347,8 +347,8 @@ func (cli *socketClient) QuerySync(reqQuery types.RequestQuery) (resQuery types.
 	return resQuery, nil
 }
 
-func (cli *socketClient) CommitSync() (res types.Result) {
-	reqres := cli.queueRequest(types.ToRequestCommit(), nil)
+func (cli *socketClient) CommitSync(validators []*types.Validator) (res types.Result) {
+	reqres := cli.queueRequest(types.ToRequestCommit(validators), nil)
 	cli.FlushSync()
 	if err := cli.Error(); err != nil {
 		return types.ErrInternalError.SetLog(err.Error())

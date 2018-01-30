@@ -249,6 +249,7 @@ func (h *Handshaker) Handshake(proxyApp proxy.AppConns) error {
 	return nil
 }
 
+//TODO: Be very careful, here may need to handle Epoch infomation
 // Replay all blocks since appBlockHeight and ensure the result matches the current state.
 // Returns the final AppHash or an error
 func (h *Handshaker) ReplayBlocks(appHash []byte, appBlockHeight int, proxyApp proxy.AppConns) ([]byte, error) {
@@ -318,6 +319,7 @@ func (h *Handshaker) ReplayBlocks(appHash []byte, appBlockHeight int, proxyApp p
 	return nil, nil
 }
 
+//TODO: Be very careful, here may need to handle Epoch infomation
 func (h *Handshaker) replayBlocks(proxyApp proxy.AppConns, appBlockHeight, storeBlockHeight int, mutateState bool) ([]byte, error) {
 	// App is further behind than it should be, so we need to replay blocks.
 	// We replay all blocks from appBlockHeight+1.
@@ -334,7 +336,8 @@ func (h *Handshaker) replayBlocks(proxyApp proxy.AppConns, appBlockHeight, store
 	for i := appBlockHeight + 1; i <= finalBlock; i++ {
 		log.Info("Applying block", "height", i)
 		block := h.store.LoadBlock(i)
-		appHash, err = sm.ExecCommitBlock(proxyApp.Consensus(), block)
+
+		appHash, err = sm.ExecCommitBlock(proxyApp.Consensus(), h.state, block)
 		if err != nil {
 			return nil, err
 		}
@@ -411,7 +414,7 @@ func (mock *mockProxyApp) EndBlock(height uint64) abci.ResponseEndBlock {
 	return mock.abciResponses.EndBlock
 }
 
-func (mock *mockProxyApp) Commit() abci.Result {
+func (mock *mockProxyApp) Commit(validators []*abci.Validator) abci.Result {
 	return abci.NewResultOK(mock.appHash, "")
 }
 
