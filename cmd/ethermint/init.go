@@ -20,7 +20,6 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	"fmt"
-	ep "github.com/tendermint/tendermint/epoch"
 )
 
 func initCmd(ctx *cli.Context) error {
@@ -34,10 +33,10 @@ func initCmd(ctx *cli.Context) error {
 	init_eth_blockchain(ethGenesisPath, ctx)
 
 	init_em_files(ethGenesisPath)
-
+	/*
 	rsTmplPath := ctx.Args().Get(1)
 	init_reward_scheme_files(rsTmplPath)
-
+	*/
 	return nil
 }
 
@@ -92,6 +91,24 @@ func init_em_files(ethGenesisPath string) {
 			genDoc := types.GenesisDoc{
 				ChainID: cmn.Fmt("test-chain-%v", cmn.RandStr(6)),
 				Consensus: types.CONSENSUS_POS,
+				RewardScheme: types.RewardSchemeDoc {
+					TotalReward : "210000000000000000000000000",
+					PreAllocated : "100000000000000000000000000",
+					AddedPerYear : "0",
+					RewardFirstYear : "20000000000000000000000000", //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
+					DescendPerYear : "2000000000000000000000000",
+					Allocated : "0",
+				},
+				CurrentEpoch: types.OneEpochDoc{
+					Number :		"0",
+					RewardPerBlock :	"1666666666666666666666667",
+					StartBlock :		"0",
+					EndBlock :		"1295999",
+					StartTime :		"0",
+					EndTime :		"0",//not accurate for current epoch
+					BlockGenerated :	"0",
+					Status :		"0",
+				},
 			}
 
 			coinbase, amount, checkErr := checkAccount(coreGenesis)
@@ -100,7 +117,7 @@ func init_em_files(ethGenesisPath string) {
 				cmn.Exit(checkErr.Error())
 			}
 
-			genDoc.Validators = []types.GenesisValidator{types.GenesisValidator{
+			genDoc.CurrentEpoch.Validators = []types.GenesisValidator{types.GenesisValidator{
 				EthAccount: coinbase,
 				PubKey: privValidator.PubKey,
 				Amount: amount,
@@ -110,7 +127,7 @@ func init_em_files(ethGenesisPath string) {
 	}
 }
 
-
+/*
 func init_reward_scheme_files(rsTmplPath string) {
 
 	rsPath := config.GetString("epoch_file")
@@ -160,7 +177,7 @@ func init_reward_scheme_files(rsTmplPath string) {
 		utils.Fatalf("failed to read ethermint's reward scheme file: %v", err)
 	}
 }
-
+*/
 func checkAccount(coreGenesis core.Genesis) (common.Address, int64, error) {
 
 	coinbase := common.HexToAddress(coreGenesis.Coinbase)

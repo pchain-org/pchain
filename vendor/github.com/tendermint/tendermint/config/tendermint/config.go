@@ -57,7 +57,6 @@ func GetConfig(rootDir string) cfg.Config {
 	}
 	mapConfig.SetRequired("chain_id") // blows up if you try to use it before setting.
 	mapConfig.SetDefault("genesis_file", rootDir+"/genesis.json")
-	mapConfig.SetDefault("epoch_file", rootDir+"/epoch.json")
 	mapConfig.SetDefault("proxy_app", "tcp://127.0.0.1:46658")
 	mapConfig.SetDefault("abci", "socket")
 	mapConfig.SetDefault("moniker", "anonymous")

@@ -194,9 +194,9 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	fail.Fail() // XXX
 
 	//here handles the proposed next epoch
-	epochInBlock := block.ExData.BlockExData.(*epoch.Epoch)
-	if epochInBlock != nil {
-		s.Epoch = epochInBlock.Copy()
+	nextEpochInBlock := epoch.FromBytes(block.ExData.BlockExData)
+	if nextEpochInBlock != nil {
+		s.Epoch.SetNextEpoch(nextEpochInBlock)
 		s.Epoch.NextEpoch.Status = epoch.EPOCH_VOTED_NOT_SAVED
 		s.Epoch.Save()
 	}

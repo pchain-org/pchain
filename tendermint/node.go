@@ -35,8 +35,10 @@ import (
 	"fmt"
 	"github.com/tendermint/ethermint/app"
 	"github.com/tendermint/go-logger"
-	"github.com/tendermint/ethermint/utils"
+	//"github.com/tendermint/ethermint/utils"
 	ep "github.com/tendermint/tendermint/epoch"
+	st "github.com/tendermint/tendermint/state"
+	"os"
 )
 
 var log = logger.New("module", "node")
@@ -80,20 +82,19 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
 	blockStore := bc.NewBlockStore(blockStoreDB)
 
-	// Get State
+	// Get State And Epoch
 	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
-	state := sm.GetState(config, stateDB/*, true*/)
-
 	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
-	epoch := ep.GetEpoch(config, epochDB, state.LastEpochNumber)
-	state.Epoch = epoch
+	state, epoch := InitStateAndEpoch(config, stateDB, epochDB)
 
+	/*
 	genDoc := utils.GetGenDocFromFile(config)
-	validators := make([]*types.GenesisValidator, len(genDoc.Validators))
-	for i, val := range genDoc.Validators {
+	validators := make([]*types.GenesisValidator, len(genDoc.CurrentEpoch.Validators))
+	for i, val := range genDoc.CurrentEpoch.Validators {
 		validators[i] = &val
 	}
 	app.SetValidators(validators)
+	*/
 
 	// add the chainid and number of validators to the global config
 	config.Set("chain_id", state.ChainID)
@@ -110,6 +111,9 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	state = sm.LoadState(stateDB)
 	epoch = ep.LoadOneEpoch(epochDB, state.LastEpochNumber)
 	state.Epoch = epoch
+
+	_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
+	fmt.Println("state.Validators:", state.Epoch.Validators)
 
 	// Transaction indexing
 	var txIndexer txindex.TxIndexer
@@ -432,8 +436,64 @@ func (n *Node) makeNodeInfo() *p2p.NodeInfo {
 	return nodeInfo
 }
 
-//------------------------------------------------------------------------------
 
+func InitStateAndEpoch(config cfg.Config, stateDB dbm.DB, epochDB dbm.DB) (state *st.State, epoch *ep.Epoch) {
+
+	state = st.LoadState(stateDB)
+	if state == nil { //first run, generate state and epoch from genesis doc
+
+		genDocFile := config.GetString("genesis_file")
+		if !cmn.FileExists(genDocFile) {
+			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), Couldn't find GenesisDoc file"))
+		}
+
+		jsonBlob, err := ioutil.ReadFile(genDocFile)
+		if err != nil {
+			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), Couldn't read GenesisDoc file: %v", err))
+		}
+
+		genDoc, err := types.GenesisDocFromJSON(jsonBlob)
+		if err != nil {
+			cmn.PanicSanity(cmn.Fmt("InitStateAndEpoch(), Genesis doc parse json error: %v", err))
+		}
+
+		state = st.MakeGenesisState(stateDB, genDoc)
+		state.Save()
+
+		rewardScheme := ep.MakeRewardScheme(epochDB, &genDoc.RewardScheme)
+		epoch = ep.MakeOneEpoch(epochDB, &genDoc.CurrentEpoch)
+		epoch.RS = rewardScheme
+
+		if state.LastEpochNumber != epoch.Number {
+			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), initial state error"))
+		}
+		state.Epoch = epoch
+
+		rewardScheme.Save()
+		epoch.Save()
+
+	} else {
+		rewardScheme := ep.LoadRewardScheme(epochDB)
+		if rewardScheme == nil {
+			fmt.Printf("InitStateAndEpoch(), Reward Scheme information emitted\n")
+			os.Exit(1)
+		}
+
+		epoch = ep.LoadOneEpoch(epochDB, state.LastEpochNumber)
+		if epoch == nil {
+			fmt.Printf("InitStateAndEpoch(), epoch information emitted\n")
+			os.Exit(1)
+		}
+
+		epoch.RS = rewardScheme
+
+		state.Epoch = epoch
+	}
+
+	return state, epoch
+}
+
+//------------------------------------------------------------------------------
 // Users wishing to:
 //	* use an external signer for their validators
 //	* supply an in-proc abci app

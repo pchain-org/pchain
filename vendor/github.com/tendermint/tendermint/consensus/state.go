@@ -605,6 +605,7 @@ func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators)
 	cs.CommitRound = -1
 	cs.LastCommit = lastPrecommits
+	cs.Epoch = epoch
 
 	//fmt.Printf("State.Copy(), cs.LastValidators are: %v, state.LastValidators are: %v\n",
 	//	cs.LastValidators, state.LastValidators)
@@ -928,15 +929,18 @@ func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts 
 	// Mempool validated transactions
 	txs := cs.mempool.Reap(cs.config.GetInt("block_size"))
 
-	if cs.Epoch.ShouldProposeNextEpoch(cs.Height) {
+	var epochBytes []byte = []byte{}
+	shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
+	if shouldProposeEpoch {
 		cs.Epoch.SetNextEpoch(cs.Epoch.ProposeNextEpoch(cs.Height))
+		epochBytes = cs.Epoch.NextEpoch.Bytes()
 	}
 
 	_, val, _ := cs.state.GetValidators()
 
 	return types.MakeBlock(cs.Height, cs.state.ChainID, txs, commit,
 		cs.state.LastBlockID, val.Hash(), cs.state.AppHash,
-		cs.epoch, cs.config.GetInt("block_part_size"))
+		epochBytes, cs.config.GetInt("block_part_size"))
 }
 
 // Enter: `timeoutPropose` after entering Propose.
@@ -998,13 +1002,15 @@ func (cs *ConsensusState) defaultDoPrevote(height int, round int) {
 	}
 
 	// Valdiate proposal block
-	epochInBlock := cs.ProposalBlock.ExData.BlockExData.(*ep.Epoch)
-	err = cs.RoundState.Epoch.Validate(epochInBlock, height, true)
-	if err != nil {
-		// ProposalBlock is invalid, prevote nil.
-		log.Warn("enterPrevote: Proposal reward scheme is invalid", "error", err)
-		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
-		return
+	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.ExData.BlockExData)
+	if proposedNextEpoch != nil {
+		err = cs.RoundState.Epoch.ValidateNextEpoch(proposedNextEpoch, height)
+		if err != nil {
+			// ProposalBlock is invalid, prevote nil.
+			log.Warn("enterPrevote: Proposal reward scheme is invalid", "error", err)
+			cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+			return
+		}
 	}
 
 	// Prevote cs.ProposalBlock
@@ -1385,6 +1391,8 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 		cs.ProposalBlock = wire.ReadBinary(&types.Block{}, cs.ProposalBlockParts.GetReader(), types.MaxBlockSize, &n, &err).(*types.Block)
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
 		log.Info("Received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
+		fmt.Printf("Received complete proposal block is %v\n", cs.ProposalBlock.String())
+		fmt.Printf("block.LastCommit is %v\n", cs.ProposalBlock.LastCommit)
 		if cs.Step == RoundStepPropose && cs.isProposalComplete() {
 			// Move onto the next step
 			cs.enterPrevote(height, cs.Round)

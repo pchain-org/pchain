@@ -256,7 +256,7 @@ func MakeGenesisStateFromFile(db dbm.DB, genDocFile string) *State {
 //
 // Used in tests.
 func MakeGenesisState(db dbm.DB, genDoc *types.GenesisDoc) *State {
-	if len(genDoc.Validators) == 0 {
+	if len(genDoc.CurrentEpoch.Validators) == 0 {
 		Exit(Fmt("The genesis file has no validators"))
 	}
 
@@ -265,8 +265,8 @@ func MakeGenesisState(db dbm.DB, genDoc *types.GenesisDoc) *State {
 	}
 
 	// Make validators slice
-	validators := make([]*types.Validator, len(genDoc.Validators))
-	for i, val := range genDoc.Validators {
+	validators := make([]*types.Validator, len(genDoc.CurrentEpoch.Validators))
+	for i, val := range genDoc.CurrentEpoch.Validators {
 		pubKey := val.PubKey
 		address := pubKey.Address()
 
@@ -305,13 +305,13 @@ func MakeGenesisValidatorsFromFile(genDocFile string) *types.ValidatorSet {
 		Exit(Fmt("MakeGenesisValidatorsFromFile(), Error reading GenesisDoc: %v", err))
 	}
 
-	if len(genDoc.Validators) == 0 {
+	if len(genDoc.CurrentEpoch.Validators) == 0 {
 		Exit(Fmt("MakeGenesisValidatorsFromFile(), The genesis file has no validators"))
 	}
 
 	// Make validators slice
-	validators := make([]*types.Validator, len(genDoc.Validators))
-	for i, val := range genDoc.Validators {
+	validators := make([]*types.Validator, len(genDoc.CurrentEpoch.Validators))
+	for i, val := range genDoc.CurrentEpoch.Validators {
 		pubKey := val.PubKey
 		address := pubKey.Address()
 

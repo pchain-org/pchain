@@ -15,6 +15,7 @@ import (
 	"github.com/tendermint/go-logger"
 	abciTypes "github.com/tendermint/abci/types"
 	"strconv"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var log = logger.New("module", "epoch")
@@ -121,7 +122,7 @@ func LoadOneEpoch(db dbm.DB, epochNumber int) *Epoch {
 
 func loadOneEpoch(db dbm.DB, epochNumber int) *Epoch {
 
-	oneEpoch := &OneEpochDoc{}
+	oneEpoch := &tmTypes.OneEpochDoc{}
 	buf := db.Get(calcEpochKeyWithHeight(epochNumber))
 	if len(buf) == 0 {
 		return nil
@@ -141,31 +142,47 @@ func loadOneEpoch(db dbm.DB, epochNumber int) *Epoch {
 }
 
 // Used during replay and in tests.
-func MakeEpochFromFile(db dbm.DB, epochFile string) *Epoch {
-	epochJSON, err := ioutil.ReadFile(epochFile)
+func MakeEpochFromFile(db dbm.DB, genesisFile string) *Epoch {
+	epochJSON, err := ioutil.ReadFile(genesisFile)
 	if err != nil {
 		fmt.Printf("Couldn't read GenesisDoc file: %v\n", err)
 		os.Exit(1)
 	}
-	epochDoc, err := epochFromJSON(epochJSON)
+	genDoc, err := tmTypes.GenesisDocFromJSON(epochJSON)
 	if err != nil {
 		fmt.Printf("Error reading GenesisDoc: %v\n", err)
 		os.Exit(1)
 	}
-	return MakeOneEpoch(db, &epochDoc.CurrentEpoch)
+	return MakeOneEpoch(db, &genDoc.CurrentEpoch)
 }
 
 
-func MakeOneEpoch(db dbm.DB, oneEpoch *OneEpochDoc) *Epoch {
+func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc) *Epoch {
 
 	number, _ := strconv.Atoi(oneEpoch.Number)
 	RewardPerBlock, _ := strconv.Atoi(oneEpoch.RewardPerBlock)
 	StartBlock, _ := strconv.Atoi(oneEpoch.StartBlock)
 	EndBlock, _ := strconv.Atoi(oneEpoch.EndBlock)
-	StartTime, _ := time.Parse(timeLayout, oneEpoch.StartTime)
-	EndTime, _ := time.Parse(timeLayout, oneEpoch.EndTime)
+	StartTime, _ := time.Parse(tmTypes.TimeLayout, oneEpoch.StartTime)
+	EndTime, _ := time.Parse(tmTypes.TimeLayout, oneEpoch.EndTime)
 	BlockGenerated, _ := strconv.Atoi(oneEpoch.BlockGenerated)
 	Status, _ := strconv.Atoi(oneEpoch.Status)
+
+	validators := make([]*tmTypes.Validator, len(oneEpoch.Validators))
+	for i, val := range oneEpoch.Validators {
+		pubKey := val.PubKey
+		address := pubKey.Address()
+		//TODO: very important, here the address should be the ethereum account,
+		//TODO: at least, should add one additional ethereum account
+		//address := val.EthAccount.Bytes()
+
+		// Make validator
+		validators[i] = &tmTypes.Validator{
+			Address:     address,
+			PubKey:      pubKey,
+			VotingPower: val.Amount,
+		}
+	}
 
 	te := &Epoch{
 		db : db,
@@ -178,22 +195,34 @@ func MakeOneEpoch(db dbm.DB, oneEpoch *OneEpochDoc) *Epoch {
 		EndTime : EndTime,
 		BlockGenerated : BlockGenerated,
 		Status : Status,
+		Validators : tmTypes.NewValidatorSet(validators),
 	}
 
 	return te
 }
 
-func (epoch *Epoch) MakeOneEpochDoc() *OneEpochDoc {
+func (epoch *Epoch) MakeOneEpochDoc() *tmTypes.OneEpochDoc {
 
-	epochDoc := &OneEpochDoc{
+	validators := make([]tmTypes.GenesisValidator, len(epoch.Validators.Validators))
+	for i, val := range epoch.Validators.Validators {
+		validators[i] = tmTypes.GenesisValidator {
+			EthAccount: common.BytesToAddress(val.Address),
+			PubKey: val.PubKey,
+			Amount: val.VotingPower,
+			Name: "",
+		}
+	}
+
+	epochDoc := &tmTypes.OneEpochDoc{
 		Number : fmt.Sprintf("%v", epoch.Number),
 		RewardPerBlock : fmt.Sprintf("%v", epoch.RewardPerBlock),
 		StartBlock : fmt.Sprintf("%v", epoch.StartBlock),
 		EndBlock : fmt.Sprintf("%v", epoch.EndBlock),
-		StartTime : epoch.StartTime.Format(timeLayout),
-		EndTime : epoch.EndTime.Format(timeLayout),
+		StartTime : epoch.StartTime.Format(tmTypes.TimeLayout),
+		EndTime : epoch.EndTime.Format(tmTypes.TimeLayout),
 		BlockGenerated : fmt.Sprintf("%v", epoch.BlockGenerated),
 		Status : fmt.Sprintf("%v", epoch.Status),
+		Validators: validators,
 	}
 
 	return epochDoc
@@ -203,14 +232,33 @@ func (epoch *Epoch) Save() {
 
 	epoch.mtx.Lock()
 	defer epoch.mtx.Unlock()
-	fmt.Printf("(ts *TxScheme) Save(), (rewardSchemeKey, ts.Bytes()) are: (%v,%v\n", rewardSchemeKey, epoch.Bytes())
+	fmt.Printf("(ts *TxScheme) Save(), (rewardSchemeKey, ts.Bytes()) are: (%v,%v\n", calcEpochKeyWithHeight(epoch.Number), epoch.Bytes())
 	epoch.db.SetSync(calcEpochKeyWithHeight(epoch.Number), epoch.Bytes())
 
-	if epoch.NextEpoch.Status == EPOCH_VOTED_NOT_SAVED {
+	if epoch.NextEpoch != nil && epoch.NextEpoch.Status == EPOCH_VOTED_NOT_SAVED {
 		epoch.db.SetSync(calcEpochKeyWithHeight(epoch.NextEpoch.Number), epoch.NextEpoch.Bytes())
 		epoch.NextEpoch.Status = EPOCH_SAVED
 	}
 }
+
+func FromBytes(buf []byte) *Epoch {
+
+	oneEpoch := &tmTypes.OneEpochDoc{}
+	if len(buf) == 0 {
+		return nil
+	} else {
+		r, n, err := bytes.NewReader(buf), new(int), new(error)
+		wire.ReadBinaryPtr(&oneEpoch, r, 0, n, err)
+		if *err != nil {
+			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
+			fmt.Printf("LoadState: Data has been corrupted or its spec has changed: %v\n", *err)
+			os.Exit(1)
+		}
+		// TODO: ensure that buf is completely read.
+		ts := MakeOneEpoch(nil, oneEpoch)
+		fmt.Printf("loadEpoch(), reward scheme is: %v\n", ts)
+		return ts
+	}}
 
 func (epoch *Epoch) Bytes() []byte {
 	buf, n, err := new(bytes.Buffer), new(int), new(error)
@@ -225,25 +273,14 @@ func (epoch *Epoch) Bytes() []byte {
 	return buf.Bytes()
 }
 
-func (epoch *Epoch) Validate(other *Epoch, height int, checkNextEpoch bool) error {
+func (epoch *Epoch) ValidateNextEpoch(next *Epoch, height int) error {
 
-	if !epoch.Equals(other) {
-		return errors.New("main epoch not equal")
+	if epoch.NextEpoch == nil {
+		epoch.NextEpoch = epoch.ProposeNextEpoch(height)
 	}
 
-	if checkNextEpoch {
-		if (other.NextEpoch == nil) {
-			return NextEpochNotExist
-		}
-
-		nextEpoch := epoch.NextEpoch
-		if nextEpoch == nil {
-			nextEpoch = epoch.ProposeNextEpoch(height)
-		}
-
-		if !nextEpoch.Equals(other.NextEpoch) {
-			return NextEpochNotEXPECTED
-		}
+	if !epoch.NextEpoch.Equals(next, false) {
+		return NextEpochNotEXPECTED
 	}
 
 	return nil
@@ -302,6 +339,9 @@ func (epoch *Epoch) GetNextEpoch() *Epoch {
 
 func (epoch *Epoch) SetNextEpoch(next *Epoch) {
 	epoch.NextEpoch = next
+	if next != nil {
+		epoch.NextEpoch.db = epoch.db
+	}
 }
 
 func (epoch *Epoch) GetNextEpochStatus() int {
@@ -442,15 +482,30 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock, bl
 	return rewardPerBlock, blocksOfNextEpoch
 }
 
-func (epoch *Epoch) Equals(other *Epoch) bool{
+func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool{
 
-	if (epoch.Number == other.Number && epoch.RewardPerBlock == other.RewardPerBlock &&
-		epoch.StartBlock == other.StartBlock && epoch.EndBlock == other.EndBlock &&
-		epoch.Validators.Equals(other.Validators)) {
+	if (epoch == nil && other != nil) || (epoch != nil && other == nil) {
+		return false
+	}
+
+	if epoch == nil && other == nil {
 		return true
 	}
 
-	return false
+	if !(epoch.Number == other.Number && epoch.RewardPerBlock == other.RewardPerBlock &&
+		epoch.StartBlock == other.StartBlock && epoch.EndBlock == other.EndBlock &&
+		epoch.Validators.Equals(other.Validators)) {
+		return false
+	}
+
+	if checkPrevNext {
+		if !epoch.PreviousEpoch.Equals(other.PreviousEpoch, false) ||
+			!epoch.NextEpoch.Equals(other.NextEpoch, false){
+			return false
+		}
+	}
+
+	return true
 }
 
 func (epoch *Epoch) String() string {

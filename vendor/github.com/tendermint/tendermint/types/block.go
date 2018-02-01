@@ -11,6 +11,7 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
+	//"github.com/tendermint/go-data"
 )
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
@@ -24,7 +25,7 @@ type Block struct {
 
 // TODO: version
 func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
-	prevBlockID BlockID, valHash, appHash []byte, blkExData BlockExData, partSize int) (*Block, *PartSet) {
+	prevBlockID BlockID, valHash, appHash []byte, blkExData []byte, partSize int) (*Block, *PartSet) {
 
 	data := &Data{
 		Txs: txs,
@@ -49,6 +50,10 @@ func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
 		ExData: exData,
 	}
 	block.FillHeader()
+
+	fmt.Printf("MakeBlock(), block is %v\n", block.String())
+	fmt.Printf("block.LastCommit is %v\n", block.LastCommit)
+
 	return block, block.MakePartSet(partSize)
 }
 
@@ -143,9 +148,11 @@ func (b *Block) StringIndented(indent string) string {
 %s  %v
 %s  %v
 %s  %v
+%s  %v
 %s}#%X`,
 		indent, b.Header.StringIndented(indent+"  "),
 		indent, b.Data.StringIndented(indent+"  "),
+		indent, b.ExData.StringIndented(indent+"  "),
 		indent, b.LastCommit.StringIndented(indent+"  "),
 		indent, b.Hash())
 }
@@ -370,16 +377,24 @@ type Data struct {
 	hash []byte
 }
 
-type BlockExData interface {
-
-}
-
 type ExData struct {
 
-	BlockExData BlockExData `json:"ex_data"`
+	BlockExData []byte `json:"ex_data"`
 
 	// Volatile
 	hash []byte
+}
+
+func (exData *ExData) StringIndented(indent string) string {
+	if exData == nil {
+		return "nil-ExData"
+	}
+
+	return fmt.Sprintf(`ExData{
+%s  %v
+%s}#%X`,
+		indent, string(exData.BlockExData),
+		indent, exData.hash)
 }
 
 func (data *Data) Hash() []byte {

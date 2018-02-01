@@ -20,22 +20,48 @@ var GenDocKey = []byte("GenDocKey")
 //------------------------------------------------------------
 // core types for a genesis definition
 
-type GenesisValidator struct {
-	EthAccount common.Address `json:"eth_account"`
-	PubKey crypto.PubKey `json:"pub_key"`
-	Amount int64         `json:"amount"`
-	Name   string        `json:"name"`
-}
-
 var CONSENSUS_POS string = "pos"
 var CONSENSUS_POW string = "pow"
 
+
+var TimeLayout = "1970-01-01 00:00:00"
+
+
+type GenesisValidator struct {
+	EthAccount common.Address `json:"eth_account"`
+	PubKey crypto.PubKey      `json:"pub_key"`
+	Amount int64              `json:"amount"`
+	Name   string             `json:"name"`
+}
+
+type OneEpochDoc struct {
+	Number 		string	            `json:"number"`
+	RewardPerBlock 	string	            `json:"reward_per_block"`
+	StartBlock	string	            `json:"start_block"`
+	EndBlock	string	            `json:"end_block"`
+	StartTime	string	            `json:"start_time"`
+	EndTime		string	            `json:"end_time"`
+	BlockGenerated	string	            `json:"block_generated"`
+	Status		string	            `json:"status"`
+	Validators      []GenesisValidator  `json:"validators"`
+}
+
+type RewardSchemeDoc struct {
+	TotalReward		string		`json:"total_reward"`
+	PreAllocated		string		`json:"pre_allocated"`
+	AddedPerYear		string		`json:"added_per_year"`
+	RewardFirstYear		string		`json:"reward_first_year"`
+	DescendPerYear		string		`json:"descend_per_year"`
+	Allocated		string		`json:"allocated"`
+}
+
 type GenesisDoc struct {
-	GenesisTime time.Time          `json:"genesis_time"`
-	ChainID     string             `json:"chain_id"`
-	Consensus   string             `json:"consensus"` //should be 'pos' or 'pow'
-	Validators  []GenesisValidator `json:"validators"`
-	AppHash     []byte             `json:"app_hash"`
+	AppHash     []byte              `json:"app_hash"`
+	ChainID     string              `json:"chain_id"`
+	Consensus   string              `json:"consensus"` //should be 'pos' or 'pow'
+	GenesisTime time.Time          	`json:"genesis_time"`
+	RewardScheme RewardSchemeDoc    `json:"reward_scheme"`
+	CurrentEpoch OneEpochDoc        `json:"current_epoch"`
 }
 
 // Utility method for saving GenensisDoc as JSON file.

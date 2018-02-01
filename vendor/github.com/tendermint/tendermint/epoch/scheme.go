@@ -6,6 +6,7 @@ import (
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
 	wire "github.com/tendermint/go-wire"
+	tmTypes "github.com/tendermint/tendermint/types"
 	"fmt"
 	"bytes"
 	"os"
@@ -74,7 +75,7 @@ func LoadRewardScheme(db dbm.DB) *RewardScheme {
 }
 
 func loadRewardScheme(db dbm.DB, key []byte) *RewardScheme {
-	rsDoc := &RewardSchemeDoc{}
+	rsDoc := &tmTypes.RewardSchemeDoc{}
 	buf := db.Get(key)
 	if len(buf) == 0 {
 		return nil
@@ -94,22 +95,22 @@ func loadRewardScheme(db dbm.DB, key []byte) *RewardScheme {
 }
 
 // Used during replay and in tests.
-func MakeRewardSchemeFromFile(db dbm.DB, epochFile string) *RewardScheme {
-	epochJSON, err := ioutil.ReadFile(epochFile)
+func MakeRewardSchemeFromFile(db dbm.DB, genFile string) *RewardScheme {
+	genJSON, err := ioutil.ReadFile(genFile)
 	if err != nil {
 		fmt.Printf("Couldn't read GenesisDoc file: %v\n", err)
 		os.Exit(1)
 	}
-	epochDoc, err := epochFromJSON(epochJSON)
+	genDoc, err := tmTypes.GenesisDocFromJSON(genJSON)
 	if err != nil {
 		fmt.Printf("Error reading GenesisDoc: %v\n", err)
 		os.Exit(1)
 	}
-	return MakeRewardScheme(db, &epochDoc.RewardScheme)
+	return MakeRewardScheme(db, &genDoc.RewardScheme)
 }
 
 
-func MakeRewardScheme(db dbm.DB, rsDoc *RewardSchemeDoc) *RewardScheme {
+func MakeRewardScheme(db dbm.DB, rsDoc *tmTypes.RewardSchemeDoc) *RewardScheme {
 
 	totalReward,_ := strconv.Atoi(rsDoc.TotalReward)
 	preAllocated,_ := strconv.Atoi(rsDoc.PreAllocated)
@@ -131,9 +132,9 @@ func MakeRewardScheme(db dbm.DB, rsDoc *RewardSchemeDoc) *RewardScheme {
 	return rs
 }
 
-func (rs *RewardScheme) MakeRewardSchemeDoc() *RewardSchemeDoc {
+func (rs *RewardScheme) MakeRewardSchemeDoc() *tmTypes.RewardSchemeDoc {
 
-	rsDoc := &RewardSchemeDoc{
+	rsDoc := &tmTypes.RewardSchemeDoc{
 		TotalReward : fmt.Sprintf("%v", rs.totalReward),
 		PreAllocated : fmt.Sprintf("%v", rs.preAllocated),
 		AddedPerYear : fmt.Sprintf("%v", rs.addedPerYear),
@@ -188,75 +189,3 @@ func (rs *RewardScheme) String() string {
 		rs.descendPerYear,
 		rs.allocated)
 }
-/*
-func (rs *RewardScheme)Current() (uint64, error) {
-
-	if !epoch.agreedBy23 {
-		return 0, errors.New("not synchronized by all validators")
-	}
-	return 0
-}
-
-func (rs *RewardScheme)CurrentRewardPerBlock() (uint64, error) {
-	if !epoch.agreedBy23 {
-		return 0, errors.New("not synchronized by all validators")
-	}
-	return 0
-}
-
-func (rs *RewardScheme)CurrentStartBlock() (uint64, error) {
-	if !epoch.agreedBy23 {
-		return 0, errors.New("not synchronized by all validators")
-	}
-	return 0
-}
-
-func (rs *RewardScheme)CurrentEndBlock() (uint64, error) {
-	if !epoch.agreedBy23 {
-		return 0, errors.New("not synchronized by all validators")
-	}
-	return 0
-}
-
-func (rs *RewardScheme)CurrentStartTime() (time.Time, error) {
-	if !epoch.agreedBy23 {
-		return time.Now(), errors.New("not synchronized by all validators")
-	}
-	return time.Now()
-}
-
-func (rs *RewardScheme)CurrentEstimatedEndTime() (time.Time, error) {
-	if !epoch.agreedBy23 {
-		return time.Now(), errors.New("not synchronized by all validators")
-	}
-	return time.Now()
-}
-
-func (rs *RewardScheme)Next() (uint64, error) {
-	if !epoch.agreedBy23 {
-		return 0, errors.New("not synchronized by all validators")
-	}
-	return 0
-}
-
-func (rs *RewardScheme)NextStartBlock() (uint64, error) {
-	if !epoch.agreedBy23 {
-		return 0, errors.New("not synchronized by all validators")
-	}
-	return 0
-}
-
-func (rs *RewardScheme)NextEstimatedEndBlock() (uint64, error) {
-	if !epoch.agreedBy23 {
-		return 0, errors.New("not synchronized by all validators")
-	}
-	return 0
-}
-
-func (rs *RewardScheme)NextRewardPerBlock() (uint64, error) {
-	if !epoch.agreedBy23 {
-		return 0, errors.New("not synchronized by all validators")
-	}
-	return 0
-}
-*/
