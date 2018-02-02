@@ -4,8 +4,6 @@ import (
 	rpc "github.com/tendermint/go-rpc/server"
 	"github.com/tendermint/go-rpc/types"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
-
-	"fmt"
 )
 
 // TODO: better system than "unsafe" prefix
@@ -47,7 +45,8 @@ var Routes = map[string]*rpc.RPCFunc{
 	"unsafe_write_heap_profile": rpc.NewRPCFunc(UnsafeWriteHeapProfileResult, "filename"),
 
 	//validator API
-	"validator_ex": rpc.NewRPCFunc(ValidatorExResult, "epoch,key,power,flag"),
+	"validator_operation": rpc.NewRPCFunc(ValidatorOperationResult, "epoch,key,power,flag"),
+	"validator_epoch": rpc.NewRPCFunc(ValidatorEpochResult, "address"),
 }
 
 func SubscribeResult(wsCtx rpctypes.WSRPCContext, event string) (ctypes.TMResult, error) {
@@ -151,7 +150,11 @@ func UnsafeWriteHeapProfileResult(filename string) (ctypes.TMResult, error) {
 
 //--------------
 //author@liaoyd
-func ValidatorExResult(epoch int, key string, power uint64, flag string) (ctypes.TMResult, error) {
-	fmt.Println("func TransExResult(s string) (ctypes.TMResult, error)")
-	return ValidatorEx(epoch, key, power, flag)
+func ValidatorOperationResult(epoch int, key string, power uint64, flag string) (ctypes.TMResult, error) {
+	//fmt.Println("func ValidatorOperationResult(s string) (ctypes.TMResult, error)")
+	return ValidatorOperation(epoch, key, power, flag)
+}
+
+func ValidatorEpochResult(address string) (ctypes.TMResult, error) {
+	return ValidatorEpoch(address)
 }

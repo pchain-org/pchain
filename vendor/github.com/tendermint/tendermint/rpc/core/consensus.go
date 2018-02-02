@@ -5,13 +5,8 @@ import (
 	cm "github.com/tendermint/tendermint/consensus"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"github.com/tendermint/tendermint/types"
-	"fmt"
 )
 
-func Validators() (*ctypes.ResultValidators, error) {
-	blockHeight, validators := consensusState.GetValidators()
-	return &ctypes.ResultValidators{blockHeight, validators}, nil
-}
 
 func DumpConsensusState() (*ctypes.ResultDumpConsensusState, error) {
 	roundState := consensusState.GetRoundState()
@@ -24,10 +19,4 @@ func DumpConsensusState() (*ctypes.ResultDumpConsensusState, error) {
 		peerRoundStates = append(peerRoundStates, peerRoundStateStr)
 	}
 	return &ctypes.ResultDumpConsensusState{roundState.String(), peerRoundStates}, nil
-}
-
-func ValidatorEx(epoch int, key string, power uint64, flag string) (*ctypes.ResultValidatorEx, error) {
-	fmt.Println("in func ValidatorEx(s string) (*ctypes.ResultValidatorEx, error)")
-	cm.SendValidatorMsgToCons(epoch, key, power, flag)
-	return &ctypes.ResultValidatorEx{}, nil
 }

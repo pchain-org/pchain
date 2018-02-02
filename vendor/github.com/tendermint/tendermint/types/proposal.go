@@ -87,6 +87,7 @@ type AcceptVotes struct {
 	Key    string        `json:"key"`
 	PubKey crypto.PubKey `json:"pub_key"`
 	Power  uint64        `"power"`
+	Action string        `"action"`
 	Sum    int64         `"sum"`
 	Votes  []*ValidatorMsg      `votes`
 	Maj23  bool          `"maj23"`

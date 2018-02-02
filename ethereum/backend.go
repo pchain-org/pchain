@@ -535,7 +535,7 @@ func newBlockHeader(receiver common.Address, prevBlock *ethTypes.Block) *ethType
 //author@liaoyd
 func (s *Backend) validatorTransLoop() {
 	fmt.Println("func (s *Backend) validatorTransLoop()")
-	exSub := s.ethereum.EventMux().Subscribe(core.ValidatorEvent{})
+	exSub := s.ethereum.EventMux().Subscribe(core.ValidatorOperationEvent{})
 
 	if err := waitForServer(s); err != nil {
 		// timeouted when waiting for tendermint communication failed
@@ -545,7 +545,7 @@ func (s *Backend) validatorTransLoop() {
 
 	var result core_types.TMResult
 	for obj := range exSub.Chan() {
-		event := obj.Data.(core.ValidatorEvent)
+		event := obj.Data.(core.ValidatorOperationEvent)
 		fmt.Println("event in extransloop!!!", event)
 		if event.Flag == "VALIDATORS" {
 			s.client.Call("validators", map[string]interface{}{}, &result)
@@ -557,7 +557,7 @@ func (s *Backend) validatorTransLoop() {
 			"power":  event.Power,
 			"flag":   event.Flag,
 		}
-		_, err := s.client.Call("validator_ex", params, &result)
+		_, err := s.client.Call("validator_operation", params, &result)
 		if err != nil {
 			fmt.Println(err)
 		}

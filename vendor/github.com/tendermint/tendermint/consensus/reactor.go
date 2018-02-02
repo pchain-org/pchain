@@ -218,9 +218,10 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 			switch msg.ValidatorMsg.Flag {
 			case "JOIN":
 				// msg.ValidatorMsg.PubKey = src.PubKey()     //get PubKey
-				ValidatorMsgMap[msg.ValidatorMsg.Key] = msg.ValidatorMsg //store request
-				if _, ok := types.AcceptVoteSet[msg.ValidatorMsg.Key]; !ok {
-					types.AcceptVoteSet[msg.ValidatorMsg.Key] = conR.NewAcceptVotes() //new vote list to add vote
+				validatorMsg := msg.ValidatorMsg
+				ValidatorMsgMap[validatorMsg.Key] = validatorMsg //store request
+				if _, ok := types.AcceptVoteSet[validatorMsg.Key]; !ok {
+					types.AcceptVoteSet[validatorMsg.Key] = conR.NewAcceptVotes(validatorMsg) //new vote list to add vote
 				}
 			case "ACCEPT":
 				conR.tryAddAcceptVote(msg.ValidatorMsg) //TODO
@@ -1297,8 +1298,13 @@ func (m *VoteSetBitsMessage) String() string {
 
 // var AcceptVoteSet map[string]*types.AcceptVotes //votes
 
-func (conR *ConsensusReactor) NewAcceptVotes() *types.AcceptVotes {
+func (conR *ConsensusReactor) NewAcceptVotes(msg *types.ValidatorMsg) *types.AcceptVotes {
 	return &types.AcceptVotes{
+		Epoch: msg.Epoch,
+		Key: msg.PubKey.KeyString(),
+		PubKey: msg.PubKey,
+		Power: msg.Power,
+		Action: msg.Flag,
 		Sum:   0,
 		Votes: make([]*types.ValidatorMsg, conR.conS.Validators.Size()),
 		Maj23: false,
@@ -1345,7 +1351,7 @@ func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerStat
 			peer.Send(StateChannel, struct{ ConsensusMessage }{tMsg})
 			ValidatorMsgMap[msg.Key] = msg
 			if _, ok := types.AcceptVoteSet[msg.Key]; !ok {
-				types.AcceptVoteSet[msg.Key] = conR.NewAcceptVotes() //new vote list to add vote
+				types.AcceptVoteSet[msg.Key] = conR.NewAcceptVotes(msg) //new vote list to add vote
 			}
 		case "ACCEPT": //acceptJoinReq
 			if conR.conS.privValidator == nil || !conR.conS.Validators.HasAddress(conR.conS.privValidator.GetAddress()) {
@@ -1417,6 +1423,7 @@ func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (
 		types.AcceptVoteSet[validatorMsg.Key].PubKey = validatorMsg.PubKey
 		types.AcceptVoteSet[validatorMsg.Key].Power = validatorMsg.Power
 		types.AcceptVoteSet[validatorMsg.Key].Key = validatorMsg.Key
+		types.AcceptVoteSet[validatorMsg.Key].Action = validatorMsg.Flag
 	}
 	return true, nil
 }

@@ -41,6 +41,7 @@ func (s *PublicTendermintAPI) GetBlock(ctx context.Context, blockNumber rpc.Bloc
 	_, err := s.Client.Call("block", params, &result)
 	if err != nil {
 		fmt.Println(err)
+		return "", err
 	}
 
 	//fmt.Printf("tdm_getBlock: %v\n", result)
@@ -48,21 +49,21 @@ func (s *PublicTendermintAPI) GetBlock(ctx context.Context, blockNumber rpc.Bloc
 }
 
 // GasPrice returns a suggestion for a gas price.
-func (s *PublicTendermintAPI) GetValidator(ctx context.Context, addr string) (string, error) {
+func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string) (string, error) {
 
 	var result core_types.TMResult
 
-	//fmt.Printf("GetBlock() called with startBlock: %v\n", blockNumber)
-	//params := map[string]interface{}{
-	//	"addr":  addr,
-	//}
-
-	params := map[string]interface{}{}
-	_, err := s.Client.Call("validators", params, &result)
-	if err != nil {
-		fmt.Println(err)
+	//fmt.Printf("GetValidator() called with address: %v\n", address)
+	params := map[string]interface{}{
+		"address":  address,
 	}
 
-	fmt.Printf("tdm_getValidator: %v\n", result)
-	return string(wire.JSONBytes(result.(*core_types.ResultValidators))), nil
+	_, err := s.Client.Call("validator_epoch", params, &result)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+
+	//fmt.Printf("tdm_getValidator: %v\n", result)
+	return string(wire.JSONBytes(result.(*core_types.ResultValidatorEpoch))), nil
 }

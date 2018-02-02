@@ -9,6 +9,7 @@ import (
 	"github.com/tendermint/go-rpc/types"
 	"github.com/tendermint/go-wire"
 	"github.com/tendermint/tendermint/types"
+	"github.com/tendermint/tendermint/epoch"
 )
 
 type ResultBlockchainInfo struct {
@@ -133,7 +134,24 @@ type ResultEvent struct {
 }
 
 //author@liaoyd
-type ResultValidatorEx struct{}
+type ResultValidatorOperation struct{}
+
+type ResultValidatorOperationSimple struct {
+	Epoch        int        `json:"epoch"`
+	Operation    string     `json:"operation"`
+	Amount       uint64     `json:"amount"`
+}
+
+type ResultValidatorEpochValidator struct {
+	Validator   *types.Validator	`json"validator"`
+	Operation   *ResultValidatorOperationSimple `json:"operation"`
+}
+
+type ResultValidatorEpoch struct{
+	BlockHeight int                `json:"block_height"`
+	Validators  []*ResultValidatorEpochValidator `json:"validators"`
+	Epoch	*epoch.Epoch		`json:"epoch"`
+}
 
 //----------------------------------------
 // response & result types
@@ -177,7 +195,8 @@ const (
 	ResultTypeUnsafeFlushMempool     = byte(0xa4)
 
 	// 0xb bytes for extension
-	ResultTypeValidatorEx = byte(0xb0)
+	ResultTypeValidatorOperation = byte(0xb0)
+	ResultTypeValidatorEpoch = byte(0xb1)
 )
 
 type TMResult interface {
@@ -212,5 +231,6 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{&ResultUnsafeFlushMempool{}, ResultTypeUnsafeFlushMempool},
 	wire.ConcreteType{&ResultABCIQuery{}, ResultTypeABCIQuery},
 	wire.ConcreteType{&ResultABCIInfo{}, ResultTypeABCIInfo},
-	wire.ConcreteType{&ResultValidatorEx{}, ResultTypeValidatorEx},
+	wire.ConcreteType{&ResultValidatorOperation{}, ResultTypeValidatorOperation},
+	wire.ConcreteType{&ResultValidatorEpoch{}, ResultTypeValidatorEpoch},
 )
