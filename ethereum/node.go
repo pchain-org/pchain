@@ -15,7 +15,7 @@ import (
 var clientIdentifier = "geth" // Client identifier to advertise over the network
 
 // MakeSystemNode sets up a local node and configures the services to launch
-func MakeSystemNode(name, version, rcpuri string, ctx *cli.Context) *node.Node {
+func MakeSystemNode(name, version, rpcuri string, ctx *cli.Context) *node.Node {
 	params.TargetGasLimit = common.String2Big(ctx.GlobalString(utils.TargetGasLimitFlag.Name))
 
 	// Configure the node's service container
@@ -66,7 +66,7 @@ func MakeSystemNode(name, version, rcpuri string, ctx *cli.Context) *node.Node {
 	}
 
 	if err := stack.Register(func(nsc *node.ServiceContext) (node.Service, error) {
-		return NewBackend(nsc, ethConf, rpcclient.NewURIClient(rcpuri))
+		return NewBackend(nsc, ethConf, rpcclient.NewURIClient(rpcuri))
 	}); err != nil {
 		utils.Fatalf("Failed to register the TMSP application service: %v", err)
 	}

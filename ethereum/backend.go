@@ -156,11 +156,18 @@ func (s *Backend) APIs() []rpc.API {
 		*/
 		retApis = append(retApis, v)
 	}
+
+	tdmApis := TdmAPIs(s.client)
+
+	for _, v := range tdmApis {
+		retApis = append(retApis, v)
+	}
+
 	go s.txBroadcastLoop()
-	
+
 	//add by author@liaoyd
 	go s.validatorTransLoop()
-	
+
 	apis = retApis
 
 	return retApis

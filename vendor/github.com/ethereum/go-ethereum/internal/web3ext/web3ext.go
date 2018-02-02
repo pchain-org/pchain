@@ -29,6 +29,7 @@ var Modules = map[string]string{
 	"shh":        Shh_JS,
 	"txpool":     TxPool_JS,
 	"validator":  Validator_JS,
+	"tdm":         Tendermint_JS,
 }
 
 const Chequebook_JS = `
@@ -535,6 +536,21 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'acceptJoinReq',
 			call: 'validator_acceptJoinReq',
+			params: 3
+		}),
+	],
+	properties: []
+});
+`
+
+
+const Tendermint_JS = `
+web3._extend({
+	property: 'tdm',
+	methods: [
+		new web3._extend.Method({
+			name: 'getBlock',
+			call: 'tdm_getBlock',
 			params: 3
 		}),
 	],
