@@ -58,21 +58,21 @@ type ValidatorMsg struct {
 	Key            string           `json:"key"`
 	PubKey         crypto.PubKey    `json:"pub_key"`
 	Power          uint64           `json:"power"`
-	Flag           string           `json:"flag"`
+	Action         string           `json:"action"`
 	Signature      crypto.Signature `json:"signature"`
 }
 
-func NewValidatorMsg(epoch int, key string, power uint64, flag string) *ValidatorMsg {
+func NewValidatorMsg(epoch int, key string, power uint64, action string) *ValidatorMsg {
 	return &ValidatorMsg{
 		Epoch:  epoch,
 		Key:    key,
 		Power:  power,
-		Flag:   flag,
+		Action: action,
 	}
 }
 
 func (e *ValidatorMsg) String() string {
-	return fmt.Sprintf("ValidatorMsg{Epoch:%v ValidatorIndex:%v Key:%s Power:%v Flag:%s Signature:%v}", e.Epoch, e.ValidatorIndex, e.Key, e.Power, e.Flag, e.Signature)
+	return fmt.Sprintf("ValidatorMsg{Epoch:%v ValidatorIndex:%v Key:%s Power:%v Action:%s Signature:%v}", e.Epoch, e.ValidatorIndex, e.Key, e.Power, e.Action, e.Signature)
 }
 
 func (e *ValidatorMsg) WriteSignBytes(chainID string, w io.Writer, n *int, err *error) {

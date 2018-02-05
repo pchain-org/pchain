@@ -45,7 +45,7 @@ var Routes = map[string]*rpc.RPCFunc{
 	"unsafe_write_heap_profile": rpc.NewRPCFunc(UnsafeWriteHeapProfileResult, "filename"),
 
 	//validator API
-	"validator_operation": rpc.NewRPCFunc(ValidatorOperationResult, "epoch,key,power,flag"),
+	"validator_operation": rpc.NewRPCFunc(ValidatorOperationResult, "epoch,key,power,action"),
 	"validator_epoch": rpc.NewRPCFunc(ValidatorEpochResult, "address"),
 }
 
@@ -150,9 +150,9 @@ func UnsafeWriteHeapProfileResult(filename string) (ctypes.TMResult, error) {
 
 //--------------
 //author@liaoyd
-func ValidatorOperationResult(epoch int, key string, power uint64, flag string) (ctypes.TMResult, error) {
+func ValidatorOperationResult(epoch int, key string, power uint64, action string) (ctypes.TMResult, error) {
 	//fmt.Println("func ValidatorOperationResult(s string) (ctypes.TMResult, error)")
-	return ValidatorOperation(epoch, key, power, flag)
+	return ValidatorOperation(epoch, key, power, action)
 }
 
 func ValidatorEpochResult(address string) (ctypes.TMResult, error) {

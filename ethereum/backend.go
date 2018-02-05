@@ -547,7 +547,7 @@ func (s *Backend) validatorTransLoop() {
 	for obj := range exSub.Chan() {
 		event := obj.Data.(core.ValidatorOperationEvent)
 		fmt.Println("event in extransloop!!!", event)
-		if event.Flag == "VALIDATORS" {
+		if event.Action == "VALIDATORS" {
 			s.client.Call("validators", map[string]interface{}{}, &result)
 			continue
 		}
@@ -555,7 +555,7 @@ func (s *Backend) validatorTransLoop() {
 			"epoch":  event.Epoch,
 			"key":    event.Key,
 			"power":  event.Power,
-			"flag":   event.Flag,
+			"action":   event.Action,
 		}
 		_, err := s.client.Call("validator_operation", params, &result)
 		if err != nil {

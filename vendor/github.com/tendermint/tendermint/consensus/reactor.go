@@ -215,7 +215,7 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 			fmt.Println(chID, src, msg)
 			fmt.Println("get test message!!!!!!!!!")
 			// fmt.Println(src.PubKey())
-			switch msg.ValidatorMsg.Flag {
+			switch msg.ValidatorMsg.Action {
 			case "JOIN":
 				// msg.ValidatorMsg.PubKey = src.PubKey()     //get PubKey
 				validatorMsg := msg.ValidatorMsg
@@ -1304,7 +1304,7 @@ func (conR *ConsensusReactor) NewAcceptVotes(msg *types.ValidatorMsg) *types.Acc
 		Key: msg.PubKey.KeyString(),
 		PubKey: msg.PubKey,
 		Power: msg.Power,
-		Action: msg.Flag,
+		Action: msg.Action,
 		Sum:   0,
 		Votes: make([]*types.ValidatorMsg, conR.conS.Validators.Size()),
 		Maj23: false,
@@ -1316,9 +1316,9 @@ var ValidatorMsgList = clist.New() //transfer
 
 var ValidatorMsgMap map[string]*types.ValidatorMsg //request
 
-func SendValidatorMsgToCons(epoch int, key string, power uint64, flag string) {
+func SendValidatorMsgToCons(epoch int, key string, power uint64, action string) {
 	// fmt.Println("in func SendExMsgToCons(s string)")
-	validatorMsg := types.NewValidatorMsg(epoch, key, power, flag)
+	validatorMsg := types.NewValidatorMsg(epoch, key, power, action)
 
 	ValidatorMsgList.PushBack(validatorMsg)
 }
@@ -1339,7 +1339,7 @@ func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerStat
 		msg := next.Value.(*types.ValidatorMsg)
 		fmt.Println("msg:", msg)
 
-		switch msg.Flag {
+		switch msg.Action {
 		case "JOIN": //joinValidator
 			// privVal := types.LoadPrivValidator("/mnt/vdb/ethermint-validatortest/.ethermint/priv_validator.json")
 			privVal := types.LoadPrivValidator(conR.conS.config.GetString("priv_validator_file"))
@@ -1423,7 +1423,7 @@ func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (
 		types.AcceptVoteSet[validatorMsg.Key].PubKey = validatorMsg.PubKey
 		types.AcceptVoteSet[validatorMsg.Key].Power = validatorMsg.Power
 		types.AcceptVoteSet[validatorMsg.Key].Key = validatorMsg.Key
-		types.AcceptVoteSet[validatorMsg.Key].Action = validatorMsg.Flag
+		types.AcceptVoteSet[validatorMsg.Key].Action = validatorMsg.Action
 	}
 	return true, nil
 }

@@ -14,9 +14,9 @@ func Validators() (*ctypes.ResultValidators, error) {
 	return &ctypes.ResultValidators{blockHeight, validators}, nil
 }
 
-func ValidatorOperation(epoch int, key string, power uint64, flag string) (*ctypes.ResultValidatorOperation, error) {
+func ValidatorOperation(epoch int, key string, power uint64, action string) (*ctypes.ResultValidatorOperation, error) {
 	//fmt.Println("in func ValidatorOperation(s string) (*ctypes.ResultValidatorOperation, error)")
-	cm.SendValidatorMsgToCons(epoch, key, power, flag)
+	cm.SendValidatorMsgToCons(epoch, key, power, action)
 	return &ctypes.ResultValidatorOperation{}, nil
 }
 

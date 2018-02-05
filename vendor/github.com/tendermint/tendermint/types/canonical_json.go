@@ -103,6 +103,6 @@ func CanonicalValidatorMsg(msg *ValidatorMsg) CanonicalJSONValidatorMsg {
 		Key:            msg.Key,
 		PubKey:         msg.PubKey,
 		Power:          msg.Power,
-		Flag:           msg.Flag,
+		Flag:           msg.Action,
 	}
 }

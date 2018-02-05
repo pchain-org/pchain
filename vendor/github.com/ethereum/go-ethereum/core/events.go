@@ -84,5 +84,5 @@ type ValidatorOperationEvent struct {
 	Epoch  int
 	Key    string
 	Power  uint64
-	Flag   string
+	Action string
 }

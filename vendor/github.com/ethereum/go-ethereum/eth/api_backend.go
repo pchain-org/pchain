@@ -242,7 +242,7 @@ func (s EthApiState) GetNonce(ctx context.Context, addr common.Address) (uint64,
 
 //---------------------------------
 //author@liaoyd
-func (b *EthApiBackend) SendValidatorMessage(epoch int, key string, power uint64, flag string) error {
+func (b *EthApiBackend) SendValidatorMessage(epoch int, key string, power uint64, action string) error {
 	fmt.Println("in func (b *EthApiBackend) SendValidatorMessage(msg string) error")
-	return b.eth.txPool.SendValidatorMsgToBackend(epoch, key, power, flag)
+	return b.eth.txPool.SendValidatorMsgToBackend(epoch, key, power, action)
 }
