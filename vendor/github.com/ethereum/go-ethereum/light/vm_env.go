@@ -107,6 +107,26 @@ func (s *VMState) GetBalance(addr common.Address) *big.Int {
 	return res
 }
 
+// AddLockedBalance adds the given amount to the locked balance of the specified account
+func (s *VMState) AddLockedBalance(addr common.Address, amount *big.Int) {
+	err := s.state.AddLockedBalance(s.ctx, addr, amount)
+	s.errHandler(err)
+}
+
+// SubLockedBalance subs the given amount from the locked balance of the specified account
+func (s *VMState) SubLockedBalance(addr common.Address, amount *big.Int) {
+	err := s.state.SubLockedBalance(s.ctx, addr, amount)
+	s.errHandler(err)
+}
+
+// GetLockedBalance retrieves the locked balance from the given address or 0 if the account does
+// not exist
+func (s *VMState) GetLockedBalance(addr common.Address) *big.Int {
+	res, err := s.state.GetLockedBalance(s.ctx, addr)
+	s.errHandler(err)
+	return res
+}
+
 // GetNonce returns the nonce at the given address or 0 if the account does
 // not exist
 func (s *VMState) GetNonce(addr common.Address) uint64 {

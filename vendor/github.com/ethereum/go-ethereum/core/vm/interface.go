@@ -30,7 +30,10 @@ type StateDB interface {
 
 	SubBalance(common.Address, *big.Int)
 	AddBalance(common.Address, *big.Int)
+	SubLockedBalance(common.Address, *big.Int)
+	AddLockedBalance(common.Address, *big.Int)
 	GetBalance(common.Address) *big.Int
+	GetLockedBalance(common.Address) *big.Int
 
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64)
@@ -81,7 +84,7 @@ type Account interface {
 // depends on this context being implemented for doing subcalls and initialising new EVM contracts.
 type CallContext interface {
 	// Call another contract
-	Call(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
+	Call(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int, mtype uint64) ([]byte, error)
 	// Take another's contract code and execute within our own context
 	CallCode(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
 	// Same as CallCode except sender and value is propagated from parent to child scope

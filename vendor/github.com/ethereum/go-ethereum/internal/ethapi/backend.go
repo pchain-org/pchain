@@ -73,6 +73,7 @@ type Backend interface {
 
 type State interface {
 	GetBalance(ctx context.Context, addr common.Address) (*big.Int, error)
+	GetLockedBalance(ctx context.Context, addr common.Address) (*big.Int, error)
 	GetCode(ctx context.Context, addr common.Address) ([]byte, error)
 	GetState(ctx context.Context, a common.Address, b common.Hash) (common.Hash, error)
 	GetNonce(ctx context.Context, addr common.Address) (uint64, error)

@@ -513,7 +513,7 @@ func opCall(pc *uint64, env *EVM, contract *Contract, memory *Memory, stack *Sta
 		gas.Add(gas, params.CallStipend)
 	}
 
-	ret, err := env.Call(contract, address, args, gas, value)
+	ret, err := env.Call(contract, address, args, gas, value, 0)
 
 	if err != nil {
 		stack.push(new(big.Int))

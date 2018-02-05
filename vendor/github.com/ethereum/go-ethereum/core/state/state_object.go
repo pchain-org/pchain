@@ -100,16 +100,20 @@ func (s *StateObject) empty() bool {
 // Account is the Ethereum consensus representation of accounts.
 // These objects are stored in the main account trie.
 type Account struct {
-	Nonce    uint64
-	Balance  *big.Int
-	Root     common.Hash // merkle root of the storage trie
-	CodeHash []byte
+	Nonce		uint64
+	Balance		*big.Int
+	LockedBalance   *big.Int
+	Root     	common.Hash // merkle root of the storage trie
+	CodeHash	[]byte
 }
 
 // newObject creates a state object.
 func newObject(db *StateDB, address common.Address, data Account, onDirty func(addr common.Address)) *StateObject {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
+	}
+	if data.LockedBalance == nil {
+		data.LockedBalance = new(big.Int)
 	}
 	if data.CodeHash == nil {
 		data.CodeHash = emptyCodeHash
@@ -287,6 +291,58 @@ func (self *StateObject) setBalance(amount *big.Int) {
 	}
 }
 
+// AddLockedBalance add amount to the locked balance.
+func (c *StateObject) AddLockedBalance(amount *big.Int) {
+	// EIP158: We must check emptiness for the objects such that the account
+	// clearing (0,0,0 objects) can take effect.
+	if amount.Cmp(common.Big0) == 0 {
+		if c.empty() {
+			c.touch()
+		}
+
+		return
+	}
+	
+	fmt.Printf("StateObject_AddLockedBalance : value to lock %d\n", amount)
+	fmt.Printf("StateObject_AddLockedBalance : value before lock: addr %x balance %d\n",c.Address(), c.LockedBalance())
+
+	c.SetLockedBalance(new(big.Int).Add(c.LockedBalance(), amount))
+
+	fmt.Printf("StateObject_AddLockedBalance : value after lock: addr %x balance %d\n",c.Address(), c.LockedBalance())
+
+	if glog.V(logger.Core) {
+		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.LockedBalance(), amount)
+	}
+}
+
+func (self *StateObject) SetLockedBalance(amount *big.Int) {
+	self.db.journal = append(self.db.journal, balanceChange{
+		account: &self.address,
+		prev:    new(big.Int).Set(self.data.LockedBalance),
+	})
+	self.setLockedBalance(amount)
+}
+
+func (self *StateObject) setLockedBalance(amount *big.Int) {
+	self.data.LockedBalance = amount
+	if self.onDirty != nil {
+		self.onDirty(self.Address())
+		self.onDirty = nil
+	}
+}
+
+// SubLockedBalance removes amount from c's locked balance.
+func (c *StateObject) SubLockedBalance(amount *big.Int) {
+	if amount.Cmp(common.Big0) == 0 {
+		return
+	}
+	c.SetLockedBalance(new(big.Int).Sub(c.LockedBalance(), amount))
+
+	if glog.V(logger.Core) {
+		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.Nonce(), c.LockedBalance(), amount)
+	}
+}
+
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas *big.Int) {}
 
@@ -369,6 +425,10 @@ func (self *StateObject) CodeHash() []byte {
 
 func (self *StateObject) Balance() *big.Int {
 	return self.data.Balance
+}
+
+func (self *StateObject) LockedBalance() *big.Int {
+	return self.data.LockedBalance
 }
 
 func (self *StateObject) Nonce() uint64 {

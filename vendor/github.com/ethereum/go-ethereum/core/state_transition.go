@@ -73,6 +73,7 @@ type Message interface {
 	Nonce() uint64
 	CheckNonce() bool
 	Data() []byte
+	Type() uint64
 }
 
 func MessageCreatesContract(msg Message) bool {
@@ -273,7 +274,7 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), self.state.GetNonce(sender.Address())+1)
-		ret, vmerr = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value)
+		ret, vmerr = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value, self.msg.Type())
 	}
 	if vmerr != nil {
 		glog.V(logger.Core).Infoln("vm returned with error:", err)
@@ -331,7 +332,7 @@ func (self *StateTransition) TransitionDbEx() (ret []byte, requiredGas, usedGas 
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), self.state.GetNonce(sender.Address())+1)
-		ret, vmerr = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value)
+		ret, vmerr = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value, self.msg.Type())
 	}
 	if vmerr != nil {
 		glog.V(logger.Core).Infoln("vm returned with error:", err)

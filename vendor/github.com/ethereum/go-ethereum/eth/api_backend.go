@@ -228,6 +228,10 @@ func (s EthApiState) GetBalance(ctx context.Context, addr common.Address) (*big.
 	return s.state.GetBalance(addr), nil
 }
 
+func (s EthApiState) GetLockedBalance(ctx context.Context, addr common.Address) (*big.Int, error) {
+	return s.state.GetLockedBalance(addr), nil
+}
+
 func (s EthApiState) GetCode(ctx context.Context, addr common.Address) ([]byte, error) {
 	return s.state.GetCode(addr), nil
 }
