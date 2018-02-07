@@ -141,15 +141,6 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 
 	switch msg := msg.(type) {
 	case *bcBlockRequestMessage:
-		if v, ok := types.ValChangedEpoch[msg.Height]; ok {
-			valMsg := &bcValidatorMessage{AcceptVotes: v}
-			fmt.Println("sending bcValidatorMessage")
-			fmt.Println("valMsg:", valMsg)
-			queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{valMsg})
-			if !queued {
-				fmt.Println("queue is full!!!")
-			}
-		}
 		// Got a request for a block. Respond with block if we have it.
 		block := bcR.store.LoadBlock(msg.Height)
 		if block != nil {
@@ -173,7 +164,17 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 	case *bcStatusResponseMessage:
 		// Got a peer status. Unverified.
 		bcR.pool.SetPeerHeight(src.Key, msg.Height)
-	case *bcValidatorMessage:
+	case *bcValidatorRequestMessage:
+		for _, v := range types.ValChangedEpoch {
+			valMsg := &bcValidatorResponseMessage{AcceptVotes: v}
+			fmt.Println("sending bcValidatorResponseMessage")
+			fmt.Println("valMsg:", valMsg)
+			queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{valMsg})
+			if !queued {
+				fmt.Println("queue is full!!!")
+			}
+		}
+	case *bcValidatorResponseMessage:
 		fmt.Println("received bcValidatorMessage!!!")
 		fmt.Println("bcValidatorMessage:", msg)
 		for _, value := range msg.AcceptVotes {
@@ -211,6 +212,17 @@ FOR_LOOP:
 				// The pool handles timeouts, just let it go.
 				continue FOR_LOOP
 			}
+
+			valMsg := &bcValidatorRequestMessage{}
+			//fmt.Printf("poolRoutine(), bcR.requestsCh with height & PeerID: %v, %v\n", request.Height, request.PeerID)
+			queued = peer.TrySend(BlockchainChannel, struct{ BlockchainMessage }{valMsg})
+			//fmt.Printf("poolRoutine(), queued is %v\n", queued);
+			if !queued {
+				// We couldn't make the request, send-queue full.
+				// The pool handles timeouts, just let it go.
+				continue FOR_LOOP
+			}
+
 		case peerID := <-bcR.timeoutsCh: // chan string
 			//fmt.Printf("poolRoutine(), bcR.timeoutsCh with PeerID: %v\n", peerID)
 			// Peer timed out.
@@ -318,7 +330,8 @@ const (
 	msgTypeBlockResponse  = byte(0x11)
 	msgTypeStatusResponse = byte(0x20)
 	msgTypeStatusRequest  = byte(0x21)
-	msgTypeValidator      = byte(0x22)
+	msgTypeValidatorRequest      = byte(0x31)
+	msgTypeValidatorResponse     = byte(0x32)
 )
 
 // BlockchainMessage is a generic message for this reactor.
@@ -330,7 +343,8 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{&bcBlockResponseMessage{}, msgTypeBlockResponse},
 	wire.ConcreteType{&bcStatusResponseMessage{}, msgTypeStatusResponse},
 	wire.ConcreteType{&bcStatusRequestMessage{}, msgTypeStatusRequest},
-	wire.ConcreteType{&bcValidatorMessage{}, msgTypeValidator},
+	wire.ConcreteType{&bcValidatorRequestMessage{}, msgTypeValidatorRequest},
+	wire.ConcreteType{&bcValidatorResponseMessage{}, msgTypeValidatorResponse},
 )
 
 // DecodeMessage decodes BlockchainMessage.
@@ -347,7 +361,6 @@ func DecodeMessage(bz []byte) (msgType byte, msg BlockchainMessage, err error) {
 }
 
 //-------------------------------------
-
 type bcBlockRequestMessage struct {
 	Height int
 }
@@ -388,8 +401,22 @@ func (m *bcStatusResponseMessage) String() string {
 }
 
 //----------------------------
+
+//-------------------------------------
+
+type bcValidatorRequestMessage struct {
+}
+
+func (m *bcValidatorRequestMessage) String() string {
+	return cmn.Fmt("[bcValidatorRequestMessage")
+}
+
 //liaoyd
 //send validators during fast sync from types.ValChangedHeight
-type bcValidatorMessage struct {
+type bcValidatorResponseMessage struct {
 	AcceptVotes []*types.AcceptVotes
+}
+
+func (m *bcValidatorResponseMessage) String() string {
+	return cmn.Fmt("[bcValidatorResponseMessage")
 }
