@@ -39,7 +39,8 @@ func ReloadEthApi(n *node.Node, backend *Backend) {
 	for i := 0; i < len(apis); i++ {
 		api := apis[i]
 
-		//fmt.Println("----------------------")
+		fmt.Println("------------------------------------")
+		fmt.Println("------------------------------------")
 		svrType := reflect.TypeOf(api.Service)
 		//PrintType(svrType)
 

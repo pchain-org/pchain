@@ -35,7 +35,6 @@ import (
 	"golang.org/x/net/context"
 	"github.com/ethereum/go-ethereum/miner"
 	"sync"
-	"fmt"
 )
 
 type PreCheckInt interface {
@@ -220,6 +219,10 @@ func (b *EthApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.AccountManager()
 }
 
+func (b *EthApiBackend) Client() ethapi.Client {
+	return b.eth.Client()
+}
+
 type EthApiState struct {
 	state *state.StateDB
 }
@@ -244,9 +247,11 @@ func (s EthApiState) GetNonce(ctx context.Context, addr common.Address) (uint64,
 	return s.state.GetNonce(addr), nil
 }
 
+/*
 //---------------------------------
 //author@liaoyd
 func (b *EthApiBackend) SendValidatorMessage(epoch int, key string, power uint64, action string) error {
 	fmt.Println("in func (b *EthApiBackend) SendValidatorMessage(msg string) error")
 	return b.eth.txPool.SendValidatorMsgToBackend(epoch, key, power, action)
 }
+*/

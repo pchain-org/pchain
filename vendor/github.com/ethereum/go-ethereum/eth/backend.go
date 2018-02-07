@@ -141,6 +141,8 @@ type Ethereum struct {
 
 	netVersionId  int
 	netRPCService *ethapi.PublicNetAPI
+
+	client ethapi.Client
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
@@ -150,7 +152,7 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(ctx *node.ServiceContext, config *Config, pending miner.Pending) (*Ethereum, error) {
+func New(ctx *node.ServiceContext, config *Config, pending miner.Pending, client ethapi.Client) (*Ethereum, error) {
 	chainDb, err := CreateDB(ctx, config, "chaindata")
 	if err != nil {
 		return nil, err
@@ -176,6 +178,7 @@ func New(ctx *node.ServiceContext, config *Config, pending miner.Pending) (*Ethe
 		MinerThreads:   config.MinerThreads,
 		AutoDAG:        config.AutoDAG,
 		solcPath:       config.SolcPath,
+		client:         client,
 	}
 
 	if err := upgradeChainDatabase(chainDb); err != nil {
@@ -413,6 +416,7 @@ func (s *Ethereum) IsListening() bool                  { return true } // Always
 func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *Ethereum) NetVersion() int                    { return s.netVersionId }
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
+func (s *Ethereum) Client() ethapi.Client {return s.client}
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.

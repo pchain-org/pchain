@@ -6,6 +6,9 @@ import (
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"fmt"
 	"github.com/syndtr/goleveldb/leveldb/errors"
+	"strings"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 
@@ -14,10 +17,56 @@ func Validators() (*ctypes.ResultValidators, error) {
 	return &ctypes.ResultValidators{blockHeight, validators}, nil
 }
 
-func ValidatorOperation(epoch int, key string, power uint64, action string) (*ctypes.ResultValidatorOperation, error) {
-	//fmt.Println("in func ValidatorOperation(s string) (*ctypes.ResultValidatorOperation, error)")
-	cm.SendValidatorMsgToCons(epoch, key, power, action)
-	return &ctypes.ResultValidatorOperation{}, nil
+func ValidatorOperation(epoch int, address string, power uint64, action string, sig []byte) (*ctypes.ResultValidatorOperation, error) {
+
+	fmt.Println("in func ValidatorOperation(s string) (*ctypes.ResultValidatorOperation, error)")
+
+	//check epoch
+	if epoch <= consensusState.GetRoundState().Epoch.Number {
+		return &ctypes.ResultValidatorOperation{}, errors.New("epoch should be bigger than current epoch number")
+	}
+
+	actionLower := strings.ToLower(action)
+	if actionLower != "join" && actionLower != "withdraw" && actionLower != "accept" {
+		return &ctypes.ResultValidatorOperation{}, errors.New("action should be {join|withdraw|accept}")
+	}
+
+	data := fmt.Sprintf("%s-%X-%X-%s", address, epoch, power, action)
+	fmt.Printf("in func ValidatorOperation(), data to verify is: %v, sig is: %X\n", data, sig)
+
+	if len(sig) != 65 {
+		return &ctypes.ResultValidatorOperation{}, fmt.Errorf("signature must be 65 bytes long")
+	}
+	if sig[64] != 27 && sig[64] != 28 {
+		return &ctypes.ResultValidatorOperation{}, fmt.Errorf("invalid Ethereum signature (V is not 27 or 28)")
+	}
+	sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
+
+	rpk, err := crypto.Ecrecover(signHash([]byte(data)), sig)
+	if err != nil {
+		return &ctypes.ResultValidatorOperation{}, err
+	}
+
+	pubKey := crypto.ToECDSAPub(rpk)
+	recoveredAddr := crypto.PubkeyToAddress(*pubKey)
+
+	fmt.Printf("in func ValidatorOperation(), recovered address is %s, address is : %s\n", recoveredAddr.Hex(), address)
+
+
+	if recoveredAddr != common.HexToAddress(address) {
+		return &ctypes.ResultValidatorOperation{}, fmt.Errorf("recovered address is not the address send the message")
+	}
+
+	key := fmt.Sprintf("%X", (crypto.FromECDSAPub(pubKey)))
+	fmt.Printf("in func ValidatorOperation(), recovered address is %s, key is : %s\n", recoveredAddr.Hex(), key)
+
+	cm.SendValidatorMsgToCons(epoch, key, power, actionLower)
+	return &ctypes.ResultValidatorOperation{
+		Epoch: epoch,
+		Key: key,
+		Power: power,
+		Action: action,
+	}, nil
 }
 
 func ValidatorEpoch(address string) (*ctypes.ResultValidatorEpoch, error) {
@@ -96,4 +145,9 @@ func ValidatorEpoch(address string) (*ctypes.ResultValidatorEpoch, error) {
 	}
 
 	return result, err
+}
+
+func signHash(data []byte) []byte {
+	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
+	return crypto.Keccak256([]byte(msg))
 }

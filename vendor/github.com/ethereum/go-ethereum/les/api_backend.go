@@ -160,6 +160,12 @@ func (b *LesApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.accountManager
 }
 
+func (b *LesApiBackend) Client() ethapi.Client {
+	return b.eth.Client()
+}
+
+/*
 func (b *LesApiBackend) SendValidatorMessage(height int, key string, power uint64, action string) error {
 	return nil
 }
+*/

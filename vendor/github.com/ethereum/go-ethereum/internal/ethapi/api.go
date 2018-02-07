@@ -1531,7 +1531,7 @@ func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
 }
 
-
+/*
 //------------------------------------
 //author@liaoyd
 // PublicValidatorAPI provides an API to some new methods.
@@ -1560,3 +1560,4 @@ func (s *PublicValidatorAPI) Validators() string {
 	s.b.SendValidatorMessage(0, "", 0, "VALIDATORS")
 	return "ok"
 }
+*/

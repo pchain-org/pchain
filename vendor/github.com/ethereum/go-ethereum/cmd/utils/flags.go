@@ -776,13 +776,13 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 
 	if ethConf.LightMode {
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, ethConf)
+			return les.New(ctx, ethConf, nil)
 		}); err != nil {
 			Fatalf("Failed to register the Ethereum light node service: %v", err)
 		}
 	} else {
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			fullNode, err := eth.New(ctx, ethConf, nil)
+			fullNode, err := eth.New(ctx, ethConf, nil, nil)
 			if fullNode != nil && ethConf.LightServ > 0 {
 				ls, _ := les.NewLesServer(fullNode, ethConf)
 				fullNode.AddLesServer(ls)

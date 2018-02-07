@@ -79,6 +79,7 @@ type GasPriceChanged struct{ Price *big.Int }
 type StartMining struct{}
 type TopMining struct{}
 
+/*
 //add by author@liaoyd
 type ValidatorOperationEvent struct {
 	Epoch  int
@@ -86,3 +87,4 @@ type ValidatorOperationEvent struct {
 	Power  uint64
 	Action string
 }
+*/
