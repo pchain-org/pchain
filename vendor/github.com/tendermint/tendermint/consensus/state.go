@@ -147,6 +147,10 @@ type RoundState struct {
 	CommitRound        int            //
 	LastCommit         *types.VoteSet // Last precommits at Height-1
 	LastValidators     *types.ValidatorSet
+	PrevoteAggrParts   *types.PartSet
+	PrecommitAggrParts *types.PartSet
+	PrevoteAggr	   *types.VoteSet
+	PrecommitAggr      *types.VoteSet
 }
 
 func (rs *RoundState) RoundStateEvent() types.EventDataRoundState {
@@ -236,6 +240,9 @@ type ConsensusState struct {
 	blockStore   types.BlockStore
 	mempool      types.Mempool
 	privValidator PrivValidator // for signing votes
+
+	nodeInfo	*NodeInfo	// Validator's node info (ip, port, etc)
+	proposerPeerKey	string		// Proposer's peer key
 
 	mtx sync.Mutex
 	RoundState
@@ -333,6 +340,20 @@ func (cs *ConsensusState) SetPrivValidator(priv PrivValidator) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 	cs.privValidator = priv
+}
+
+// Sets our private validator account for signing votes.
+func (cs *ConsensusState) GetProposer() (proposer *Validator) {
+	return cs.Validators.GetProposer()
+}
+
+// Returns true if this validator is the proposer.
+func (cs *ConsensusState) IsProposer() bool {
+	if bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
+		return TRUE
+	} else {
+		return FALSE
+	}
 }
 
 // Set the local timer
@@ -479,6 +500,11 @@ func (cs *ConsensusState) SetProposalAndBlock(proposal *types.Proposal, block *t
 	return nil // TODO errors
 }
 
+// Set node info wich is about current validator's peer info
+func (cs *ConsensusState) SetNodeInfo(nodeInfo *NodeInfo) {
+	cs.nodeInfo = nodeInfo
+}
+
 //------------------------------------------------------------
 // internal functions for managing the state
 
@@ -599,6 +625,8 @@ func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	cs.Proposal = nil
 	cs.ProposalBlock = nil
 	cs.ProposalBlockParts = nil
+	cs.PrevoteAggrParts = nil
+	cs.PrecommitAggrParts = nil
 	cs.LockedRound = 0
 	cs.LockedBlock = nil
 	cs.LockedBlockParts = nil
@@ -696,6 +724,13 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 	case *BlockPartMessage:
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
 		_, err = cs.addProposalBlockPart(msg.Height, msg.Part, peerKey != "")
+		if err != nil && msg.Round != cs.Round {
+			err = nil
+		}
+	case *VotesAggrPartMessage:
+		// Major 2/3+ vote (prevote/precommit) part message, if the votes are complete,
+		// we'll enterPrecommit or tryFinalizeCommit
+		_, err = cs.addVotesAggrPart(msg.Height, msg.Part, msg.Type, peerKey != "")
 		if err != nil && msg.Round != cs.Round {
 			err = nil
 		}
@@ -799,6 +834,8 @@ func (cs *ConsensusState) enterNewRound(height int, round int) {
 		cs.Proposal = nil
 		cs.ProposalBlock = nil
 		cs.ProposalBlockParts = nil
+		cs.PrevoteAggrParts = nil
+		cs.PrecommitAggrParts = nil
 	}
 	cs.Votes.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
 
@@ -852,12 +889,19 @@ func (cs *ConsensusState) enterPropose(height int, round int) {
 func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 	var block *types.Block
 	var blockParts *types.PartSet
+	var proposerPeerKey string
 
 	// Decide on block
 	if cs.LockedBlock != nil {
+		// Use current validator or last proposer's peer key?
+		proposerPeerKey = "peer key from locked block"
+
 		// If we're locked onto a block, just choose that.
 		block, blockParts = cs.LockedBlock, cs.LockedBlockParts
 	} else {
+		// Need to find some way to get current validators nodeInfo
+		proposerPeerKey = cs.nodeInfo.ListenAddr()
+
 		// Create a new proposal block from state/txs from the mempool.
 		block, blockParts = cs.createProposalBlock()
 		if block == nil { // on error
@@ -867,7 +911,7 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 
 	// Make proposal
 	polRound, polBlockID := cs.Votes.POLInfo()
-	proposal := types.NewProposal(height, round, blockParts.Header(), polRound, polBlockID)
+	proposal := types.NewProposal(height, round, blockParts.Header(), polRound, polBlockID, proposerPeerKey)
 	err := cs.privValidator.SignProposal(cs.state.ChainID, proposal)
 	if err == nil {
 		// Set fields
@@ -875,6 +919,7 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 		cs.Proposal = proposal
 		cs.ProposalBlock = block
 		cs.ProposalBlockParts = blockParts
+		cs.ProposerPeerKey = proposerPeerKey
 		*/
 
 		// send proposal and block parts on internal msg queue
@@ -1364,6 +1409,7 @@ func (cs *ConsensusState) defaultSetProposal(proposal *types.Proposal) error {
 
 	cs.Proposal = proposal
 	cs.ProposalBlockParts = types.NewPartSetFromHeader(proposal.BlockPartsHeader)
+	cs.ProposerPeerKey = proposal.ProposerPeerKey
 	return nil
 }
 
@@ -1405,6 +1451,99 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 	return added, nil
 }
 
+// Asynchronously triggers either enterPrecommit (before we timeout of propose) or tryFinalizeCommit, once we have the full votes set.
+func (cs *ConsensusState) addVotesAggrPart(height int, part *types.Part, type byte, verify bool) (added bool, err error) {
+	if type == RoundStepPrevote {
+		return cs.addPrevotesAggrPart(height, part, bool)
+	} else {
+		if if type != RoundStepCommit {
+			panic(Fmt("Invalid VotesAggrPart type %d", type))
+		}
+
+		return cs.addPrecommitsAggrPart(height, part, bool)
+	}
+}
+
+func (cs *ConsensusState) addPrevotesAggrPart(height int, part *types.Part, verify bool) (added bool, err error) {
+	// Blocks might be reused, so round mismatch is OK
+	if cs.Height != height {
+		return false, nil
+	}
+
+	// We're not expecting a block part.
+	if cs.PrevoteAggrParts == nil {
+		return false, nil // TODO: bad peer? Return error?
+	}
+
+	added, err = cs.PrevoteAggrParts.AddPart(part, verify)
+	if err != nil {
+		return added, err
+	}
+	if added && cs.PrevoteAggrParts.IsComplete() {
+		// Added and completed!
+		var n int
+		var err error
+
+		cs.PrevoteAggr = wire.ReadBinary(&types.VotesAggr{}, cs.PrevoteAggrParts.GetReader(), types.MaxVotesAggrSize, &n, &err).(*types.VotesAggr)
+
+		fmt.Printf("Received complete prevote vote set %v\n", cs.PrevoteAggr.String())
+
+		for _, vote := range cs.PrevoteAggr.votes {
+			if (vote.Height != cs.Height || vote.Round != cs.Round {
+				fmt.Printf("Invalid Vote (H %d R %d) current state (H %d %d)\n", vote.Height, vote.Round, cs.Height, cs.Round)
+			}
+
+			fmt.Printf("Add Vote (H %d R %d T %d VALIDX %d) current state (H %d %d)\n", vote.Height, vote.Round, vote.Type, vote.ValidatorIndex)
+			
+			added, err = cs.Votes.AddVoteNoPeer(vote, peerKey)
+
+			if added {
+				prevotes := cs.Votes.Prevotes(vote.Round)
+
+				if prevotes.HasTwoThirdsMajority() {
+					cs.enterPrecommit(height, vote.Round)
+				}
+			}
+		}
+
+		return true, err
+	}
+
+	return added, nil
+}
+
+func (cs *ConsensusState) addPrecommitsAggrPart(height int, part *types.Part, verify bool) (added bool, err error) {
+	// Blocks might be reused, so round mismatch is OK
+	if cs.Height != height {
+		return false, nil
+	}
+
+	// We're not expecting a block part.
+	if cs.PrecommitAggrParts == nil {
+		return false, nil // TODO: bad peer? Return error?
+	}
+
+	added, err = cs.PrecommitAggrParts.AddPart(part, verify)
+	if err != nil {
+		return added, err
+	}
+	if added && cs.PrecommitAggrParts.IsComplete() {
+		// Added and completed!
+		var n int
+		var err error
+
+		cs.PrevoteAggr = wire.ReadBinary(&types.VotesAggr{}, cs.PrecommitAggrParts.GetReader(), types.MaxVotesAggrSize, &n, &err).(*types.VotesAggr)
+
+		fmt.Printf("Received complete precommit vote set %v\n", cs.PrecommitAggr.String())
+
+		// If we're waiting on the proposal block...
+		// cs.tryFinalizeCommit(height) shall go into this stage?
+
+		return true, err
+	}
+	return added, nil
+}
+
 // Attempt to add the vote. if its a duplicate signature, dupeout the validator
 func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerKey string) error {
 	_, err := cs.addVote(vote, peerKey)
@@ -1435,6 +1574,7 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerKey string) error {
 			return ErrAddingVote
 		}
 	}
+
 	return nil
 }
 
@@ -1443,6 +1583,7 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerKey string) error {
 func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool, err error) {
 	log.Debug("addVote", "voteHeight", vote.Height, "voteType", vote.Type, "csHeight", cs.Height)
 
+/*
 	// A precommit for the previous height?
 	// These come in while we wait timeoutCommit
 	if vote.Height+1 == cs.Height {
@@ -1466,12 +1607,20 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 
 		return
 	}
+*/
 
 	// A prevote/precommit for this height?
 	if vote.Height == cs.Height {
 		height := cs.Height
 		added, err = cs.Votes.AddVote(vote, peerKey)
 		if added {
+			// If 2/3+ votes received, send them to other validators
+			if cs.Votes.Prevotes(cs.Round).HasTwoThirdsMajority() ||
+			   cs.Votes.Precommits(cs.Round).HasTwoThirdsMajority() {
+				cs.sendMaj23Vote(cs.Type)
+			}
+
+/*
 			types.FireEventVote(cs.evsw, types.EventDataVote{vote})
 
 			switch vote.Type {
@@ -1537,6 +1686,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 				PanicSanity(Fmt("Unexpected vote type %X", vote.Type)) // Should not happen.
 			}
 		}
+*/
 		// Either duplicate, or error upon cs.Votes.AddByIndex()
 		return
 	} else {
@@ -1580,6 +1730,32 @@ func (cs *ConsensusState) signAddVote(type_ byte, hash []byte, header types.Part
 		//}
 		return nil
 	}
+}
+
+// Build the 2/3+ vote set parts and send them to other validators
+func (cs *ConsensusState) sendMaj23Vote(type byte) {
+	votesAggr := newVotesAggr(cs.Height, cs.Round, cs.Type, cs.Validators.Size())
+
+	if type == types.VoteTypePrevote {
+		votesAggr.AddVotes(cs.Votes.Prevotes(cs.Round).Votes())
+
+		votesAggrParts := votesAggr.MakePartSet()
+		cs.PrevoteAggrParts = voteParts
+	} else if type == types.VoteTypePrecommit {
+		votesAggr.AddVotes(cs.Votes.Precommits(cs.Round).Votes())
+
+		votesAggrParts := votesAggr.MakePartSet()
+		cs.PrecommitAggrParts = voteParts
+	}
+
+	for i := 0; i < votesAggrParts.Total(); i++ {
+		part := votesAggrParts.GetPart(i)
+		cs.sendInternalMessage(msgInfo{&BlockPartMessage{cs.Height, cs.Round, part}, ""})
+	}
+
+	fmt.Printf("Build and send Maj 2/3+ for (height %d round %d type %d)\n", cs.Height, cs.Round, cs.Type)
+
+	fmt.Printf("Vote Aggre %#v\n", votesAggr)
 }
 
 //---------------------------------------------------------

@@ -107,6 +107,9 @@ func (voteSet *VoteSet) Type() byte {
 	}
 }
 
+func (voteSet *VoteSet) Type() []*Vote {
+	return votes
+}
 func (voteSet *VoteSet) Size() int {
 	if voteSet == nil {
 		return 0
@@ -447,6 +450,11 @@ func (voteSet *VoteSet) StringShort() string {
 	defer voteSet.mtx.Unlock()
 	return fmt.Sprintf(`VoteSet{H:%v R:%v T:%v +2/3:%v %v %v}`,
 		voteSet.height, voteSet.round, voteSet.type_, voteSet.maj23, voteSet.votesBitArray, voteSet.peerMaj23s)
+}
+
+// Split vote set into parts
+func (voteSet *VoteSet) MakePartSet(partSize int) *PartSet {
+        return NewPartSetFromData(wire.BinaryBytes(VoteSet), partSize)
 }
 
 //--------------------------------------------------------------------------------

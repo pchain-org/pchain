@@ -234,6 +234,9 @@ func (n *Node) OnStart() error {
 	l := p2p.NewDefaultListener(protocol, address, n.config.GetBool("skip_upnp"))
 	n.sw.AddListener(l)
 
+	// Set node info
+	n.consensusReactor.conS.SetNodeInfo(n.makeNodeInfo())
+
 	// Start the switch
 	n.sw.SetNodeInfo(n.makeNodeInfo())
 	n.sw.SetNodePrivKey(n.privKey)

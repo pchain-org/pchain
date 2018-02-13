@@ -126,6 +126,24 @@ func (hvs *HeightVoteSet) AddVote(vote *types.Vote, peerKey string) (added bool,
 	return
 }
 
+// Duplicate votes return added=false, err=nil.
+// By convention, peerKey is "" if origin is self.
+func (hvs *HeightVoteSet) AddVoteNoPeer(vote *types.Vote, peerKey string) (added bool, err error) {
+	hvs.mtx.Lock()
+	defer hvs.mtx.Unlock()
+	if !types.IsVoteTypeValid(vote.Type) {
+		return
+	}
+	voteSet := hvs.getVoteSet(vote.Round, vote.Type)
+	if voteSet == nil {
+		fmt.Print("Nil vote set, cannot add vote %#v\n", vote)
+		return
+	}
+
+	added, err = voteSet.AddVote(vote)
+	return
+}
+
 func (hvs *HeightVoteSet) Prevotes(round int) *types.VoteSet {
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
