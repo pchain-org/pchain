@@ -107,9 +107,10 @@ func (voteSet *VoteSet) Type() byte {
 	}
 }
 
-func (voteSet *VoteSet) Type() []*Vote {
+func (voteSet *VoteSet) Votes() []*Vote {
 	return votes
 }
+
 func (voteSet *VoteSet) Size() int {
 	if voteSet == nil {
 		return 0

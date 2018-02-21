@@ -147,10 +147,12 @@ type RoundState struct {
 	CommitRound        int            //
 	LastCommit         *types.VoteSet // Last precommits at Height-1
 	LastValidators     *types.ValidatorSet
-	PrevoteAggrParts   *types.PartSet
-	PrecommitAggrParts *types.PartSet
-	PrevoteAggr	   *types.VoteSet
-	PrecommitAggr      *types.VoteSet
+	PrevoteAggr        *types.VotesAggr
+	PrevoteMaj23       *types.Maj23VoteSet
+	PrevoteMaj23Parts  *types.PartSet
+	PrecommitAggr      *types.VotesAggr
+	PrecommitMaj23     *types.Maj23VoteSet
+	PrecommitMaj23Parts *types.PartSet
 }
 
 func (rs *RoundState) RoundStateEvent() types.EventDataRoundState {
@@ -625,8 +627,8 @@ func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	cs.Proposal = nil
 	cs.ProposalBlock = nil
 	cs.ProposalBlockParts = nil
-	cs.PrevoteAggrParts = nil
-	cs.PrecommitAggrParts = nil
+	cs.PrevoteMaj23Parts = nil
+	cs.PrecommitMaj23Parts = nil
 	cs.LockedRound = 0
 	cs.LockedBlock = nil
 	cs.LockedBlockParts = nil
@@ -727,10 +729,13 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 		if err != nil && msg.Round != cs.Round {
 			err = nil
 		}
-	case *VotesAggrPartMessage:
+        case *Maj23VotesAggrMessage:
+		// Msg saying a set of 2/3+ votes had been received
+		err = cs.setMaj23VotesAggr(msg.Maj23VotesAggr)
+        case *VotesAggrPartMessage:
 		// Major 2/3+ vote (prevote/precommit) part message, if the votes are complete,
 		// we'll enterPrecommit or tryFinalizeCommit
-		_, err = cs.addVotesAggrPart(msg.Height, msg.Part, msg.Type, peerKey != "")
+		_, err = cs.addMaj23VotesPart(msg.Height, msg.Part, msg.Type, peerKey != "")
 		if err != nil && msg.Round != cs.Round {
 			err = nil
 		}
@@ -834,8 +839,8 @@ func (cs *ConsensusState) enterNewRound(height int, round int) {
 		cs.Proposal = nil
 		cs.ProposalBlock = nil
 		cs.ProposalBlockParts = nil
-		cs.PrevoteAggrParts = nil
-		cs.PrecommitAggrParts = nil
+		cs.PrevoteMaj23Parts = nil
+		cs.PrecommitMaj23Parts = nil
 	}
 	cs.Votes.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
 
@@ -1451,12 +1456,51 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 	return added, nil
 }
 
-// Asynchronously triggers either enterPrecommit (before we timeout of propose) or tryFinalizeCommit, once we have the full votes set.
-func (cs *ConsensusState) addVotesAggrPart(height int, part *types.Part, type byte, verify bool) (added bool, err error) {
+// -----------------------------------------------------------------------------
+func (cs *ConsensusState) setMaj23VotesAggr(votesAggr *types.VotesAggr) error {
+	// Does not apply
+	if votesAggr.Height != cs.Height || votesAggr.Round != cs.Round {
+		return nil
+	}
+
+/*
+	// TODO : Need following check
+
+	// We don't care about the votes if we're already in RoundStepCommit.
+	if RoundStepCommit <= cs.Step {
+		return nil
+	}
+
+	// TODO : Verify signature, which is not added now?
+	if !cs.Validators.GetProposer().PubKey.VerifyBytes(types.SignBytes(cs.state.ChainID, votesAggr), proposal.Signature) {
+		return ErrInvalidProposalSignature
+	}
+*/
+
+	if votesAggr.Type == types.VoteTypePrevote {
+		if cs.PrevoteAggr != nil {
+			return nil
+		}
+		
+		cs.PrevoteAggr = votesAggr
+		cs.PrevoteMaj23 = types.NewPartSetFromHeader(votesAggr.VotePartsHeader)
+	} else if votesAggr.Type == types.VoteTypePrecommit {
+		if cs.PrecommitAggr != nil {
+			return nil
+		}
+		
+		cs.PrecommitAggr = votesAggr
+		cs.PrecommitMaj23 = types.NewPartSetFromHeader(votesAggr.VotePartsHeader)
+	}
+
+	return nil
+}
+
+func (cs *ConsensusState) addMaj23VotesPart(height int, part *types.Part, type byte, verify bool) (added bool, err error) {
 	if type == RoundStepPrevote {
 		return cs.addPrevotesAggrPart(height, part, bool)
 	} else {
-		if if type != RoundStepCommit {
+		if type != RoundStepCommit {
 			panic(Fmt("Invalid VotesAggrPart type %d", type))
 		}
 
@@ -1471,31 +1515,31 @@ func (cs *ConsensusState) addPrevotesAggrPart(height int, part *types.Part, veri
 	}
 
 	// We're not expecting a block part.
-	if cs.PrevoteAggrParts == nil {
+	if cs.PrevoteMaj23Parts == nil {
 		return false, nil // TODO: bad peer? Return error?
 	}
 
-	added, err = cs.PrevoteAggrParts.AddPart(part, verify)
+	added, err = cs.PrevoteMaj23Parts.AddPart(part, verify)
 	if err != nil {
 		return added, err
 	}
-	if added && cs.PrevoteAggrParts.IsComplete() {
+	if added && cs.PrevoteMaj23Parts.IsComplete() {
 		// Added and completed!
 		var n int
 		var err error
 
-		cs.PrevoteAggr = wire.ReadBinary(&types.VotesAggr{}, cs.PrevoteAggrParts.GetReader(), types.MaxVotesAggrSize, &n, &err).(*types.VotesAggr)
+		cs.PrevoteMaj23 = wire.ReadBinary(&types.Maj23VoteSet{}, cs.PrevoteMaj23Parts.GetReader(), types.MaxVoteSetSize, &n, &err).(*types.Maj23VoteSet)
 
 		fmt.Printf("Received complete prevote vote set %v\n", cs.PrevoteAggr.String())
 
-		for _, vote := range cs.PrevoteAggr.votes {
+		for _, vote := range cs.PrevoteMaj23.Votes {
 			if (vote.Height != cs.Height || vote.Round != cs.Round {
 				fmt.Printf("Invalid Vote (H %d R %d) current state (H %d %d)\n", vote.Height, vote.Round, cs.Height, cs.Round)
 			}
 
 			fmt.Printf("Add Vote (H %d R %d T %d VALIDX %d) current state (H %d %d)\n", vote.Height, vote.Round, vote.Type, vote.ValidatorIndex)
 			
-			added, err = cs.Votes.AddVoteNoPeer(vote, peerKey)
+			added, err = cs.Votes.AddVoteNoPeer(vote)
 
 			if added {
 				prevotes := cs.Votes.Prevotes(vote.Round)
@@ -1519,25 +1563,41 @@ func (cs *ConsensusState) addPrecommitsAggrPart(height int, part *types.Part, ve
 	}
 
 	// We're not expecting a block part.
-	if cs.PrecommitAggrParts == nil {
+	if cs.PrecommitMaj23Parts == nil {
 		return false, nil // TODO: bad peer? Return error?
 	}
 
-	added, err = cs.PrecommitAggrParts.AddPart(part, verify)
+	added, err = cs.PrecommitMaj23Parts.AddPart(part, verify)
 	if err != nil {
 		return added, err
 	}
-	if added && cs.PrecommitAggrParts.IsComplete() {
+	if added && cs.PrecommitMaj23Parts.IsComplete() {
 		// Added and completed!
 		var n int
 		var err error
 
-		cs.PrevoteAggr = wire.ReadBinary(&types.VotesAggr{}, cs.PrecommitAggrParts.GetReader(), types.MaxVotesAggrSize, &n, &err).(*types.VotesAggr)
+		cs.PrecommitMaj23 = wire.ReadBinary(&types.Maj23VoteSet{}, cs.PrecommitMaj23Parts.GetReader(), types.MaxVoteSetSize, &n, &err).(*types.Maj23VoteSet)
 
 		fmt.Printf("Received complete precommit vote set %v\n", cs.PrecommitAggr.String())
 
-		// If we're waiting on the proposal block...
-		// cs.tryFinalizeCommit(height) shall go into this stage?
+		for _, vote := range cs.PrecommitMaj23.Votes {
+			if (vote.Height != cs.Height || vote.Round != cs.Round {
+				fmt.Printf("Invalid Vote (H %d R %d) current state (H %d %d)\n", vote.Height, vote.Round, cs.Height, cs.Round)
+			}
+
+			fmt.Printf("Add Vote (H %d R %d T %d VALIDX %d) current state (H %d %d)\n", vote.Height, vote.Round, vote.Type, vote.ValidatorIndex)
+			
+			added, err = cs.Votes.AddVoteNoPeer(vote)
+
+			if added {
+				precommits := cs.Votes.Precommits(vote.Round)
+
+				// TODO : Shall go to this state?
+				if precommits.HasTwoThirdsMajority() {
+					// cs.tryFinalizeCommit(height)
+				}
+			}
+		}
 
 		return true, err
 	}
@@ -1734,23 +1794,31 @@ func (cs *ConsensusState) signAddVote(type_ byte, hash []byte, header types.Part
 
 // Build the 2/3+ vote set parts and send them to other validators
 func (cs *ConsensusState) sendMaj23Vote(type byte) {
-	votesAggr := newVotesAggr(cs.Height, cs.Round, cs.Type, cs.Validators.Size())
+	votes         []*Vote 
 
 	if type == types.VoteTypePrevote {
-		votesAggr.AddVotes(cs.Votes.Prevotes(cs.Round).Votes())
-
-		votesAggrParts := votesAggr.MakePartSet()
-		cs.PrevoteAggrParts = voteParts
+		votes = cs.Votes.Prevotes(cs.Round).Votes()
 	} else if type == types.VoteTypePrecommit {
-		votesAggr.AddVotes(cs.Votes.Precommits(cs.Round).Votes())
-
-		votesAggrParts := votesAggr.MakePartSet()
-		cs.PrecommitAggrParts = voteParts
+		votes = cs.Votes.Precommits(cs.Round).Votes()
 	}
 
+	Maj23VoteSet, voteSetParts := types.MakeMaj23VoteSet(len(votes))
+
+	votesAggr := types.MakeVotesAggr(cs.Height, cs.Round, cs.Type, voteSetParts.Header(), cs.Validators.Size())
+
+	if type == types.VoteTypePrevote {
+		cs.PrevoteMaj23Parts = voteSetParts
+	} else if type == types.VoteTypePrecommit {
+		cs.PrecommitMaj23Parts = voteParts
+	}
+
+	// send votes aggregate header on internal msg queue
+	cs.sendInternalMessage(msgInfo{&Maj23VotesAggrMessage{votesAggr}, ""})
+
+	// send block parts on internal msg queue
 	for i := 0; i < votesAggrParts.Total(); i++ {
 		part := votesAggrParts.GetPart(i)
-		cs.sendInternalMessage(msgInfo{&BlockPartMessage{cs.Height, cs.Round, part}, ""})
+		cs.sendInternalMessage(msgInfo{&VotesAggrPartMessage{cs.Height, cs.Round, type, part}, ""})
 	}
 
 	fmt.Printf("Build and send Maj 2/3+ for (height %d round %d type %d)\n", cs.Height, cs.Round, cs.Type)

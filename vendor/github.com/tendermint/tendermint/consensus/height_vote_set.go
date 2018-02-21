@@ -3,6 +3,7 @@ package consensus
 import (
 	"strings"
 	"sync"
+	"fmt"
 
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/tendermint/types"
@@ -127,8 +128,7 @@ func (hvs *HeightVoteSet) AddVote(vote *types.Vote, peerKey string) (added bool,
 }
 
 // Duplicate votes return added=false, err=nil.
-// By convention, peerKey is "" if origin is self.
-func (hvs *HeightVoteSet) AddVoteNoPeer(vote *types.Vote, peerKey string) (added bool, err error) {
+func (hvs *HeightVoteSet) AddVoteNoPeer(vote *types.Vote) (added bool, err error) {
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
 	if !types.IsVoteTypeValid(vote.Type) {
