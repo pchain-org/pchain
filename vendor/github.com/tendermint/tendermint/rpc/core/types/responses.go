@@ -135,10 +135,11 @@ type ResultEvent struct {
 
 //author@liaoyd
 type ResultValidatorOperation struct{
+	From string	`json:"from"`
 	Epoch int	`json:"epoch"`
-	Key   string	`json:"key"`
 	Power  uint64   `json:"power"`
 	Action string	`json:"action"`
+	Target string	`json:"target"`
 }
 
 type ResultValidatorOperationSimple struct {

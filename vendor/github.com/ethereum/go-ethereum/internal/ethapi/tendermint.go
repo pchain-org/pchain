@@ -13,6 +13,8 @@ import (
 	*/
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"strings"
+	"github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 type PublicTendermintAPI struct {
@@ -71,13 +73,29 @@ func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string) 
 }
 
 
-func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from common.Address, epoch int, power uint64, action string) (string, error) {
+func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from common.Address, epoch int, power uint64,
+						action string, target string) (string, error) {
 	fmt.Println("in func (s *PublicTendermintAPI) SendValidatorMessage()")
 
 	var result core_types.TMResult
 
+	action = strings.ToLower(action)
+	if action != "join" && action != "withdraw" && action != "accept" {
+		return "", errors.New("action should be {join|withdraw|accept}")
+	}
+
+	targetStr := target
+	targetAddr := common.Address{}
+	if action == "accept" {
+		if !common.IsHexAddress(target) {
+			return "", errors.New("target format error; should be hex string and have length 40 for Address")
+		}
+		targetAddr = common.HexToAddress(target)
+		targetStr = fmt.Sprintf("%X", targetAddr.Bytes())
+	}
+
 	fromStr := fmt.Sprintf("%X", from.Bytes())
-	data := fmt.Sprintf("%s-%X-%X-%s", fromStr, epoch, power, action)
+	data := fmt.Sprintf("%s-%X-%X-%s-%s", fromStr, epoch, power, action, targetStr)
 	fmt.Printf("in func (s *PublicTendermintAPI) SendValidatorMessage(), data to sign is: %v\n", data)
 
 	signature, err := s.Sign(ctx, from, data)
@@ -86,10 +104,11 @@ func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from com
 	}
 
 	params := map[string]interface{}{
-		"address": fromStr,
+		"from": fromStr,
 		"epoch":  epoch,
 		"power":  power,
 		"action":   action,
+		"target":   targetStr,
 		"signature":  signature,
 	}
 

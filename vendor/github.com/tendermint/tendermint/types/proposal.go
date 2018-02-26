@@ -53,26 +53,31 @@ func (p *Proposal) WriteSignBytes(chainID string, w io.Writer, n *int, err *erro
 //-----------------
 //author@liaoyd
 type ValidatorMsg struct {
+	From           string           `json:"from"`
 	Epoch          int              `json:"epoch"`
 	ValidatorIndex int              `json:"validator_index"`
 	Key            string           `json:"key"`
 	PubKey         crypto.PubKey    `json:"pub_key"`
 	Power          uint64           `json:"power"`
 	Action         string           `json:"action"`
+	Target         string           `json:"target"`
 	Signature      crypto.Signature `json:"signature"`
 }
 
-func NewValidatorMsg(epoch int, key string, power uint64, action string) *ValidatorMsg {
+func NewValidatorMsg(from string, key string, epoch int, power uint64, action string, target string) *ValidatorMsg {
 	return &ValidatorMsg{
-		Epoch:  epoch,
+		From:   from,
 		Key:    key,
+		Epoch:  epoch,
 		Power:  power,
 		Action: action,
+		Target: target,
 	}
 }
 
 func (e *ValidatorMsg) String() string {
-	return fmt.Sprintf("ValidatorMsg{Epoch:%v ValidatorIndex:%v Key:%s Power:%v Action:%s Signature:%v}", e.Epoch, e.ValidatorIndex, e.Key, e.Power, e.Action, e.Signature)
+	return fmt.Sprintf("ValidatorMsg{From:%s Epoch:%v ValidatorIndex:%v Key:%s Power:%v Action:%s Target:%s Signature:%v}",
+		e.From, e.Epoch, e.ValidatorIndex, e.Key, e.Power, e.Action, e.Target, e.Signature)
 }
 
 func (e *ValidatorMsg) WriteSignBytes(chainID string, w io.Writer, n *int, err *error) {
@@ -97,7 +102,7 @@ type PreVal struct {
 	ValidatorSet *ValidatorSet `json:"validator_set"`
 }
 
-var AcceptVoteSet map[string]*AcceptVotes //votes
+var AcceptVoteSet map[string]*AcceptVotes //votes, using address as the key
 
 // var ValidatorChannel chan []*abci.Validator
 var ValidatorChannel chan int

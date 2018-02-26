@@ -51,12 +51,14 @@ type CanonicalJSONOnceValidatorMsg struct {
 }
 
 type CanonicalJSONValidatorMsg struct {
+	From           string        `json:"from"`
 	Epoch          int           `json:"epoch"`
 	ValidatorIndex int           `json:"validator_index"`
 	Key            string        `json:"key"`
 	PubKey         crypto.PubKey `json:"pub_key"`
 	Power          uint64        `json:"power"`
-	Flag           string        `json:"flag"`
+	Action         string        `json:"action"`
+        Target         string        `json:"target"`
 }
 
 //-----------------------------------
@@ -98,11 +100,13 @@ func CanonicalVote(vote *Vote) CanonicalJSONVote {
 //liaoyd
 func CanonicalValidatorMsg(msg *ValidatorMsg) CanonicalJSONValidatorMsg {
 	return CanonicalJSONValidatorMsg{
+		From:          msg.From,
 		Epoch:         msg.Epoch,
 		ValidatorIndex: msg.ValidatorIndex,
 		Key:            msg.Key,
 		PubKey:         msg.PubKey,
 		Power:          msg.Power,
-		Flag:           msg.Action,
+		Action:         msg.Action,
+		Target:         msg.Target,
 	}
 }

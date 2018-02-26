@@ -165,22 +165,25 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 		// Got a peer status. Unverified.
 		bcR.pool.SetPeerHeight(src.Key, msg.Height)
 	case *bcValidatorRequestMessage:
-		for _, v := range types.ValChangedEpoch {
-			valMsg := &bcValidatorResponseMessage{AcceptVotes: v}
-			fmt.Println("sending bcValidatorResponseMessage")
-			fmt.Println("valMsg:", valMsg)
-			queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{valMsg})
-			if !queued {
-				fmt.Println("queue is full!!!")
-			}
+
+		//for epoch, v := range types.ValChangedEpoch {
+		valMsg := &bcValidatorResponseMessage{ValChangedEpoch: types.ValChangedEpoch, AcceptVoteSet: types.AcceptVoteSet}
+		fmt.Println("sending bcValidatorResponseMessage")
+		fmt.Println("valMsg:", valMsg)
+		queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{valMsg})
+		if !queued {
+			fmt.Println("queue is full!!!")
 		}
+		//}
 	case *bcValidatorResponseMessage:
 		fmt.Println("received bcValidatorMessage!!!")
 		fmt.Println("bcValidatorMessage:", msg)
-		for _, value := range msg.AcceptVotes {
-			fmt.Println("value:", value)
-			types.AcceptVoteSet[value.Key] = value //TODO validate???
-		}
+		types.ValChangedEpoch = msg.ValChangedEpoch
+		//TODO: here are bugs, may not handle here; should handle it in Consensus Reactor after catched up!!
+		//for _, value := range msg.AcceptVotes {
+		//	fmt.Println("value:", value)
+		types.AcceptVoteSet = msg.AcceptVoteSet //TODO validate???
+		//}
 	default:
 		log.Warn(cmn.Fmt("Unknown message type %v", reflect.TypeOf(msg)))
 	}
@@ -414,7 +417,8 @@ func (m *bcValidatorRequestMessage) String() string {
 //liaoyd
 //send validators during fast sync from types.ValChangedHeight
 type bcValidatorResponseMessage struct {
-	AcceptVotes []*types.AcceptVotes
+	ValChangedEpoch map[int][]*types.AcceptVotes
+	AcceptVoteSet map[string]*types.AcceptVotes
 }
 
 func (m *bcValidatorResponseMessage) String() string {

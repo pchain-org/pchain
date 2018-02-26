@@ -219,9 +219,10 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 			case "JOIN":
 				// msg.ValidatorMsg.PubKey = src.PubKey()     //get PubKey
 				validatorMsg := msg.ValidatorMsg
-				ValidatorMsgMap[validatorMsg.Key] = validatorMsg //store request
-				if _, ok := types.AcceptVoteSet[validatorMsg.Key]; !ok {
-					types.AcceptVoteSet[validatorMsg.Key] = conR.NewAcceptVotes(validatorMsg) //new vote list to add vote
+				from := validatorMsg.From
+				ValidatorMsgMap[from] = validatorMsg //store request
+				if _, ok := types.AcceptVoteSet[from]; !ok {
+					types.AcceptVoteSet[from] = conR.NewAcceptVotes(validatorMsg, from) //new vote list to add vote
 				}
 			case "ACCEPT":
 				conR.tryAddAcceptVote(msg.ValidatorMsg) //TODO
@@ -1298,10 +1299,10 @@ func (m *VoteSetBitsMessage) String() string {
 
 // var AcceptVoteSet map[string]*types.AcceptVotes //votes
 
-func (conR *ConsensusReactor) NewAcceptVotes(msg *types.ValidatorMsg) *types.AcceptVotes {
+func (conR *ConsensusReactor) NewAcceptVotes(msg *types.ValidatorMsg, key string) *types.AcceptVotes {
 	return &types.AcceptVotes{
 		Epoch: msg.Epoch,
-		Key: msg.PubKey.KeyString(),
+		Key: key,
 		PubKey: msg.PubKey,
 		Power: msg.Power,
 		Action: msg.Action,
@@ -1316,9 +1317,9 @@ var ValidatorMsgList = clist.New() //transfer
 
 var ValidatorMsgMap map[string]*types.ValidatorMsg //request
 
-func SendValidatorMsgToCons(epoch int, key string, power uint64, action string) {
+func SendValidatorMsgToCons(from string, key string, epoch int, power uint64, action string, target string) {
 	// fmt.Println("in func SendExMsgToCons(s string)")
-	validatorMsg := types.NewValidatorMsg(epoch, key, power, action)
+	validatorMsg := types.NewValidatorMsg(from, key, epoch, power, action, target)
 
 	ValidatorMsgList.PushBack(validatorMsg)
 }
@@ -1349,16 +1350,18 @@ func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerStat
 			tMsg := &TestMessage{ValidatorMsg: msg}
 			fmt.Println("broadcast message!!!!!!")
 			peer.Send(StateChannel, struct{ ConsensusMessage }{tMsg})
-			ValidatorMsgMap[msg.Key] = msg
-			if _, ok := types.AcceptVoteSet[msg.Key]; !ok {
-				types.AcceptVoteSet[msg.Key] = conR.NewAcceptVotes(msg) //new vote list to add vote
+
+			from := msg.From
+			ValidatorMsgMap[from] = msg
+			if _, ok := types.AcceptVoteSet[from]; !ok {
+				types.AcceptVoteSet[from] = conR.NewAcceptVotes(msg, from) //new vote list to add vote
 			}
 		case "ACCEPT": //acceptJoinReq
 			if conR.conS.privValidator == nil || !conR.conS.Validators.HasAddress(conR.conS.privValidator.GetAddress()) {
 				fmt.Println("we are not in validator set")
 				break
 			}
-			if received, ok := ValidatorMsgMap[msg.Key]; ok {
+			if received, ok := ValidatorMsgMap[msg.Target]; ok {
 				if received.Epoch <= conR.conS.Epoch.Number {
 					fmt.Println("request height is lower than consensus height")
 					break
@@ -1410,20 +1413,21 @@ func (conR *ConsensusReactor) tryAddAcceptVote(validatorMsg *types.ValidatorMsg)
 func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (success bool, err error) {
 	fmt.Println("in func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (success bool, err error)")
 	_, val := conR.conS.Validators.GetByIndex(validatorMsg.ValidatorIndex)
-	if types.AcceptVoteSet[validatorMsg.Key].Votes[validatorMsg.ValidatorIndex] != nil {
+	target := validatorMsg.Target
+	if types.AcceptVoteSet[target].Votes[validatorMsg.ValidatorIndex] != nil {
 		fmt.Println("duplicate vote!!!")
 		return false, nil
 	}
-	types.AcceptVoteSet[validatorMsg.Key].Sum += val.VotingPower
-	types.AcceptVoteSet[validatorMsg.Key].Votes[validatorMsg.ValidatorIndex] = validatorMsg
-	if types.AcceptVoteSet[validatorMsg.Key].Sum > conR.conS.Validators.TotalVotingPower()*2/3 && !types.AcceptVoteSet[validatorMsg.Key].Maj23 {
+	types.AcceptVoteSet[target].Sum += val.VotingPower
+	types.AcceptVoteSet[target].Votes[validatorMsg.ValidatorIndex] = validatorMsg
+	if types.AcceptVoteSet[target].Sum > conR.conS.Validators.TotalVotingPower()*2/3 && !types.AcceptVoteSet[target].Maj23 {
 		fmt.Println("update validator set!!!!")
-		types.AcceptVoteSet[validatorMsg.Key].Maj23 = true
-		types.AcceptVoteSet[validatorMsg.Key].Epoch = validatorMsg.Epoch
-		types.AcceptVoteSet[validatorMsg.Key].PubKey = validatorMsg.PubKey
-		types.AcceptVoteSet[validatorMsg.Key].Power = validatorMsg.Power
-		types.AcceptVoteSet[validatorMsg.Key].Key = validatorMsg.Key
-		types.AcceptVoteSet[validatorMsg.Key].Action = validatorMsg.Action
+		types.AcceptVoteSet[target].Maj23 = true
+		types.AcceptVoteSet[target].Epoch = validatorMsg.Epoch
+		types.AcceptVoteSet[target].PubKey = validatorMsg.PubKey
+		types.AcceptVoteSet[target].Power = validatorMsg.Power
+		types.AcceptVoteSet[target].Key = target
+		types.AcceptVoteSet[target].Action = validatorMsg.Action
 	}
 	return true, nil
 }
@@ -1441,27 +1445,32 @@ func (conR *ConsensusReactor) GetDiffValidator() {
 		init := 0
 		epochNumber := <-types.ValidatorChannel
 		for k, v := range types.AcceptVoteSet {
-			if v.Maj23 && v.Epoch == epochNumber {
+			if v.Epoch == epochNumber {
 				fmt.Println("k:", k, "v:", v)
-				diffs = append(
-					diffs,
-					&abci.Validator{
-						PubKey: v.PubKey.Bytes(),
-						Power:  v.Power,
-					},
-				)
-				if init == 0 {
-					val.writeEpoch(v.Epoch)
-					val.Save(&types.PreVal{ValidatorSet: conR.conS.Validators})
-					init = 1
+				if v.Maj23 {
+					diffs = append(
+						diffs,
+						&abci.Validator{
+							PubKey: v.PubKey.Bytes(),
+							Power:  v.Power,
+						},
+					)
+					if init == 0 {
+						val.writeEpoch(v.Epoch)
+						val.Save(&types.PreVal{ValidatorSet: conR.conS.Validators})
+						init = 1
+					}
+					val.Save(v)
+
+					types.ValChangedEpoch[v.Epoch] = append(
+						types.ValChangedEpoch[v.Epoch],
+						v,
+					)
 				}
-				val.Save(v)
-				delete(ValidatorMsgMap, v.Key)
-				delete(types.AcceptVoteSet, v.Key)
-				types.ValChangedEpoch[v.Epoch] = append(
-					types.ValChangedEpoch[v.Epoch],
-					v,
-				)
+				//delete(ValidatorMsgMap, v.Key)
+				//delete(types.AcceptVoteSet, v.Key)
+				delete(ValidatorMsgMap, k)
+				delete(types.AcceptVoteSet, k)
 			}
 		}
 		types.EndChannel <- diffs
