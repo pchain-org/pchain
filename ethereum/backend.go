@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-
 // used by Backend to call tendermint rpc endpoints
 // TODO: replace with HttpClient https://github.com/tendermint/go-rpc/issues/8
 type Client interface {
@@ -78,7 +77,7 @@ const (
 func NewBackend(ctx *node.ServiceContext, config *eth.Config, client Client) (*Backend, error) {
 	p := &pending{commitMutex: &sync.Mutex{}}
 
-	ethereum, err := eth.New(ctx, config, p, client)
+	ethereum, err := eth.New(ctx, config, p)
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +87,7 @@ func NewBackend(ctx *node.ServiceContext, config *eth.Config, client Client) (*B
 		pending:  p,
 		client:   client,
 		config:   config,
+		//client: client.NewClientURI(fmt.Sprintf("http://%s", ctx.String(TendermintCoreHostFlag.Name))),
 	}
 
 	return ethBackend, nil
@@ -156,13 +156,8 @@ func (s *Backend) APIs() []rpc.API {
 		*/
 		retApis = append(retApis, v)
 	}
-
 	go s.txBroadcastLoop()
 
-	/*
-	//add by author@liaoyd
-	go s.validatorTransLoop()
-	*/
 	apis = retApis
 
 	return retApis
@@ -525,38 +520,3 @@ func newBlockHeader(receiver common.Address, prevBlock *ethTypes.Block) *ethType
 		Coinbase:   receiver,
 	}
 }
-
-/*
-//----------------------
-//author@liaoyd
-func (s *Backend) validatorTransLoop() {
-	fmt.Println("func (s *Backend) validatorTransLoop()")
-	exSub := s.ethereum.EventMux().Subscribe(core.ValidatorEvent{})
-
-	if err := waitForServer(s); err != nil {
-		// timeouted when waiting for tendermint communication failed
-		glog.V(logger.Error).Infof("Failed to run tendermint HTTP endpoint, err=%s", err)
-		os.Exit(1)
-	}
-
-	var result core_types.TMResult
-	for obj := range exSub.Chan() {
-		event := obj.Data.(core.ValidatorEvent)
-		fmt.Println("event in extransloop!!!", event)
-		if event.Flag == "VALIDATORS" {
-			s.client.Call("validators", map[string]interface{}{}, &result)
-			continue
-		}
-		params := map[string]interface{}{
-			"epoch":  event.Epoch,
-			"key":    event.Key,
-			"power":  event.Power,
-			"flag":   event.Flag,
-		}
-		_, err := s.client.Call("validator_opera", params, &result)
-		if err != nil {
-			fmt.Println(err)
-		}
-	}
-}
-*/

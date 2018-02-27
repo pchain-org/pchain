@@ -11,7 +11,6 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
-	//"github.com/tendermint/go-data"
 )
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
@@ -19,22 +18,12 @@ const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 type Block struct {
 	*Header    `json:"header"`
 	*Data      `json:"data"`
-	*ExData    `json:"exdata"`
 	LastCommit *Commit `json:"last_commit"`
 }
 
 // TODO: version
 func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
-	prevBlockID BlockID, valHash, appHash []byte, blkExData []byte, partSize int) (*Block, *PartSet) {
-
-	data := &Data{
-		Txs: txs,
-	}
-
-	exData := &ExData{
-		BlockExData: blkExData,
-	}
-
+	prevBlockID BlockID, valHash, appHash []byte, partSize int) (*Block, *PartSet) {
 	block := &Block{
 		Header: &Header{
 			ChainID:        chainID,
@@ -46,14 +35,11 @@ func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
 			AppHash:        appHash, // state merkle root of txs from the previous block.
 		},
 		LastCommit: commit,
-		Data: data,
-		ExData: exData,
+		Data: &Data{
+			Txs: txs,
+		},
 	}
 	block.FillHeader()
-
-	fmt.Printf("MakeBlock(), block is %v\n", block.String())
-	fmt.Printf("block.LastCommit is %v\n", block.LastCommit)
-
 	return block, block.MakePartSet(partSize)
 }
 
@@ -148,11 +134,9 @@ func (b *Block) StringIndented(indent string) string {
 %s  %v
 %s  %v
 %s  %v
-%s  %v
 %s}#%X`,
 		indent, b.Header.StringIndented(indent+"  "),
 		indent, b.Data.StringIndented(indent+"  "),
-		indent, b.ExData.StringIndented(indent+"  "),
 		indent, b.LastCommit.StringIndented(indent+"  "),
 		indent, b.Hash())
 }
@@ -375,26 +359,6 @@ type Data struct {
 
 	// Volatile
 	hash []byte
-}
-
-type ExData struct {
-
-	BlockExData []byte `json:"ex_data"`
-
-	// Volatile
-	hash []byte
-}
-
-func (exData *ExData) StringIndented(indent string) string {
-	if exData == nil {
-		return "nil-ExData"
-	}
-
-	return fmt.Sprintf(`ExData{
-%s  %v
-%s}#%X`,
-		indent, string(exData.BlockExData),
-		indent, exData.hash)
 }
 
 func (data *Data) Hash() []byte {

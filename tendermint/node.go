@@ -35,10 +35,7 @@ import (
 	"fmt"
 	"github.com/tendermint/ethermint/app"
 	"github.com/tendermint/go-logger"
-	//"github.com/tendermint/ethermint/utils"
-	ep "github.com/tendermint/tendermint/epoch"
-	st "github.com/tendermint/tendermint/state"
-	"os"
+	"github.com/tendermint/ethermint/utils"
 )
 
 var log = logger.New("module", "node")
@@ -82,23 +79,20 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
 	blockStore := bc.NewBlockStore(blockStoreDB)
 
-	// Get State And Epoch
+	// Get State
 	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
-	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
-	state, epoch := InitStateAndEpoch(config, stateDB, epochDB)
+	state := sm.GetState(config, stateDB, true)
 
-	/*
 	genDoc := utils.GetGenDocFromFile(config)
-	validators := make([]*types.GenesisValidator, len(genDoc.CurrentEpoch.Validators))
-	for i, val := range genDoc.CurrentEpoch.Validators {
+	validators := make([]*types.GenesisValidator, len(genDoc.Validators))
+	for i, val := range genDoc.Validators {
 		validators[i] = &val
 	}
 	app.SetValidators(validators)
-	*/
 
 	// add the chainid and number of validators to the global config
 	config.Set("chain_id", state.ChainID)
-	config.Set("num_vals", state.Epoch.Validators.Size())
+	config.Set("num_vals", state.Validators.Size())
 
 	// Create the proxyApp, which manages connections (consensus, mempool, query)
 	// and sync tendermint and the app by replaying any necessary blocks
@@ -109,11 +103,6 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 
 	// reload the state (it may have been updated by the handshake)
 	state = sm.LoadState(stateDB)
-	epoch = ep.LoadOneEpoch(epochDB, state.LastEpochNumber)
-	state.Epoch = epoch
-
-	_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
-	fmt.Println("state.Validators:", state.Epoch.Validators)
 
 	// Transaction indexing
 	var txIndexer txindex.TxIndexer
@@ -139,8 +128,8 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	// Decide whether to fast-sync or not
 	// We don't fast-sync when the only validator is us.
 	fastSync := config.GetBool("fast_sync")
-	if state.Epoch.Validators.Size() == 1 {
-		addr, _ := state.Epoch.Validators.GetByIndex(0)
+	if state.Validators.Size() == 1 {
+		addr, _ := state.Validators.GetByIndex(0)
 		if bytes.Equal(privValidator.Address, addr) {
 			fastSync = false
 		}
@@ -154,7 +143,7 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	mempoolReactor := mempl.NewMempoolReactor(config, mempool)
 
 	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch)
+	consensusState := consensus.NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
@@ -436,64 +425,8 @@ func (n *Node) makeNodeInfo() *p2p.NodeInfo {
 	return nodeInfo
 }
 
-
-func InitStateAndEpoch(config cfg.Config, stateDB dbm.DB, epochDB dbm.DB) (state *st.State, epoch *ep.Epoch) {
-
-	state = st.LoadState(stateDB)
-	if state == nil { //first run, generate state and epoch from genesis doc
-
-		genDocFile := config.GetString("genesis_file")
-		if !cmn.FileExists(genDocFile) {
-			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), Couldn't find GenesisDoc file"))
-		}
-
-		jsonBlob, err := ioutil.ReadFile(genDocFile)
-		if err != nil {
-			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), Couldn't read GenesisDoc file: %v", err))
-		}
-
-		genDoc, err := types.GenesisDocFromJSON(jsonBlob)
-		if err != nil {
-			cmn.PanicSanity(cmn.Fmt("InitStateAndEpoch(), Genesis doc parse json error: %v", err))
-		}
-
-		state = st.MakeGenesisState(stateDB, genDoc)
-		state.Save()
-
-		rewardScheme := ep.MakeRewardScheme(epochDB, &genDoc.RewardScheme)
-		epoch = ep.MakeOneEpoch(epochDB, &genDoc.CurrentEpoch)
-		epoch.RS = rewardScheme
-
-		if state.LastEpochNumber != epoch.Number {
-			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), initial state error"))
-		}
-		state.Epoch = epoch
-
-		rewardScheme.Save()
-		epoch.Save()
-
-	} else {
-		rewardScheme := ep.LoadRewardScheme(epochDB)
-		if rewardScheme == nil {
-			fmt.Printf("InitStateAndEpoch(), Reward Scheme information emitted\n")
-			os.Exit(1)
-		}
-
-		epoch = ep.LoadOneEpoch(epochDB, state.LastEpochNumber)
-		if epoch == nil {
-			fmt.Printf("InitStateAndEpoch(), epoch information emitted\n")
-			os.Exit(1)
-		}
-
-		epoch.RS = rewardScheme
-
-		state.Epoch = epoch
-	}
-
-	return state, epoch
-}
-
 //------------------------------------------------------------------------------
+
 // Users wishing to:
 //	* use an external signer for their validators
 //	* supply an in-proc abci app

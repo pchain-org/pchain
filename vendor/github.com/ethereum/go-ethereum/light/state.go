@@ -82,20 +82,6 @@ func (self *LightState) GetBalance(ctx context.Context, addr common.Address) (*b
 	return common.Big0, nil
 }
 
-// GetLockedBalance retrieves the locked balance from the given address or 0 if the account does
-// not exist
-func (self *LightState) GetLockedBalance(ctx context.Context, addr common.Address) (*big.Int, error) {
-	stateObject, err := self.GetStateObject(ctx, addr)
-	if err != nil {
-		return common.Big0, err
-	}
-	if stateObject != nil {
-		return stateObject.lockedbalance, nil
-	}
-
-	return common.Big0, nil
-}
-
 // GetNonce returns the nonce at the given address or 0 if the account does
 // not exist
 func (self *LightState) GetNonce(ctx context.Context, addr common.Address) (uint64, error) {
@@ -160,24 +146,6 @@ func (self *LightState) SubBalance(ctx context.Context, addr common.Address, amo
 	stateObject, err := self.GetOrNewStateObject(ctx, addr)
 	if err == nil && stateObject != nil {
 		stateObject.SubBalance(amount)
-	}
-	return err
-}
-
-// AddLockedBalance adds the given amount to the balance of the specified account
-func (self *LightState) AddLockedBalance(ctx context.Context, addr common.Address, amount *big.Int) error {
-	stateObject, err := self.GetOrNewStateObject(ctx, addr)
-	if err == nil && stateObject != nil {
-		stateObject.AddLockedBalance(amount)
-	}
-	return err
-}
-
-// SubLockedBalance subs the given amount to the balance of the specified account
-func (self *LightState) SubLockedBalance(ctx context.Context, addr common.Address, amount *big.Int) error {
-	stateObject, err := self.GetOrNewStateObject(ctx, addr)
-	if err == nil && stateObject != nil {
-		stateObject.SubLockedBalance(amount)
 	}
 	return err
 }

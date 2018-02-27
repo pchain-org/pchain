@@ -43,9 +43,9 @@ func ToRequestCheckTx(txBytes []byte) *Request {
 	}
 }
 
-func ToRequestCommit(validators []*Validator) *Request {
+func ToRequestCommit() *Request {
 	return &Request{
-		Value: &Request_Commit{&RequestCommit{Validators: validators}},
+		Value: &Request_Commit{&RequestCommit{}},
 	}
 }
 

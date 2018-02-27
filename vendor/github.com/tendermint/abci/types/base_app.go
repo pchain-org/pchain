@@ -23,7 +23,7 @@ func (app *BaseApplication) CheckTx(tx []byte) Result {
 	return NewResultOK(nil, "")
 }
 
-func (app *BaseApplication) Commit(validators []*Validator) Result {
+func (app *BaseApplication) Commit() Result {
 	return NewResultOK([]byte("nil"), "")
 }
 

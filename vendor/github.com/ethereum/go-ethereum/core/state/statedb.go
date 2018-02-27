@@ -250,15 +250,6 @@ func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 	return common.Big0
 }
 
-// Retrieve the locked balance from the given address or 0 if object not found
-func (self *StateDB) GetLockedBalance(addr common.Address) *big.Int {
-	stateObject := self.GetStateObject(addr)
-	if stateObject != nil {
-		return stateObject.LockedBalance()
-	}
-	return common.Big0
-}
-
 func (self *StateDB) GetNonce(addr common.Address) uint64 {
 	stateObject := self.GetStateObject(addr)
 	if stateObject != nil {
@@ -343,25 +334,6 @@ func (self *StateDB) SetBalance(addr common.Address, amount *big.Int) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetBalance(amount)
-	}
-}
-
-// AddLockedBalance adds amount to the locked balance associated with addr
-func (self *StateDB) AddLockedBalance(addr common.Address, amount *big.Int) {
-
-//        fmt.Printf("StateDB_AddLockedBalance : value to lock %d\n", amount)
-
-	stateObject := self.GetOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.AddLockedBalance(amount)
-	}
-}
-
-// SubLockedBalance adds amount to the locked balance associated with addr
-func (self *StateDB) SubLockedBalance(addr common.Address, amount *big.Int) {
-	stateObject := self.GetOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SubLockedBalance(amount)
 	}
 }
 

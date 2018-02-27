@@ -73,8 +73,6 @@ type StateObject struct {
 	address common.Address
 	// The balance of the account
 	balance *big.Int
-	// The locked balance of the account
-	lockedbalance *big.Int
 	// The nonce of the account
 	nonce uint64
 	// The code hash if code is present (i.e. a contract)
@@ -180,30 +178,6 @@ func (c *StateObject) SetBalance(amount *big.Int) {
 	c.dirty = true
 }
 
-// AddLockedBalance adds the given amount to the locked account balance
-func (c *StateObject) AddLockedBalance(amount *big.Int) {
-	c.SetLockedBalance(new(big.Int).Add(c.lockedbalance, amount))
-
-	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.lockedbalance, amount)
-	}
-}
-
-// SubLockedBalance subtracts the given amount from the locked account balance
-func (c *StateObject) SubLockedBalance(amount *big.Int) {
-	c.SetLockedBalance(new(big.Int).Sub(c.lockedbalance, amount))
-
-	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.lockedbalance, amount)
-	}
-}
-
-// SetLockedBalance sets the account balance to the given amount
-func (c *StateObject) SetLockedBalance(amount *big.Int) {
-	c.lockedbalance = amount
-	c.dirty = true
-}
-
 // ReturnGas returns the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas *big.Int) {}
 
@@ -211,7 +185,6 @@ func (c *StateObject) ReturnGas(gas *big.Int) {}
 func (self *StateObject) Copy() *StateObject {
 	stateObject := NewStateObject(self.Address(), self.odr)
 	stateObject.balance.Set(self.balance)
-	stateObject.lockedbalance.Set(self.lockedbalance)
 	stateObject.codeHash = common.CopyBytes(self.codeHash)
 	stateObject.nonce = self.nonce
 	stateObject.trie = self.trie
@@ -236,11 +209,6 @@ func (self *StateObject) empty() bool {
 // Balance returns the account balance
 func (self *StateObject) Balance() *big.Int {
 	return self.balance
-}
-
-// LockedBalance returns the account locked balance
-func (self *StateObject) LockedBalance() *big.Int {
-	return self.lockedbalance
 }
 
 // Address returns the address of the contract/account

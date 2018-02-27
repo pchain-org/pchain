@@ -11,7 +11,6 @@ import (
 	tmTypes "github.com/tendermint/tendermint/types"
 	"math/big"
 	emTypes "github.com/tendermint/ethermint/types"
-	"runtime/debug"
 )
 
 type ValidatorsStrategy struct {
@@ -60,8 +59,6 @@ func (strategy *ValidatorsStrategy) GetUpdatedValidators() []*tmTypes.GenesisVal
 
 func (strategy *ValidatorsStrategy)AccumulateRewards(statedb *state.StateDB, header *ethTypes.Header,
 							uncles []*ethTypes.Header, totalUsedMoney *big.Int) {
-
-	debug.PrintStack()
 
 	glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() start, with %v validators\n", len(strategy.currentValidators))
 

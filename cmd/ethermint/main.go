@@ -9,13 +9,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-
 	"github.com/tendermint/ethermint/version"
 
 	cfg "github.com/tendermint/go-config"
 
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/cmd/geth"
+
 )
 
 const (
@@ -29,6 +29,7 @@ var (
 )
 
 func main() {
+
 	glog.V(logger.Info).Infof("Starting ethermint")
 
 	cliApp := newCliApp(version.Version, "the ethermint command line interface")

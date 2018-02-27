@@ -34,13 +34,6 @@ import (
 	"sync"
 )
 
-// used by Backend to call tendermint rpc endpoints
-// TODO: replace with HttpClient https://github.com/tendermint/go-rpc/issues/8
-type Client interface {
-	// see tendermint/go-rpc/client/http_client.go:115 func (c *ClientURI) Call(...)
-	Call(method string, params map[string]interface{}, result interface{}) (interface{}, error)
-}
-
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
 type Backend interface {
@@ -72,25 +65,15 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
-
-	//This client connects to tendermint part
-	Client() Client
-	/*
-	//add by author@liaoyd
-	// Validator API
-	SendValidatorMessage(height int, key string, power uint64, flag string) error
-	*/
 }
 
 type State interface {
 	GetBalance(ctx context.Context, addr common.Address) (*big.Int, error)
-	GetLockedBalance(ctx context.Context, addr common.Address) (*big.Int, error)
 	GetCode(ctx context.Context, addr common.Address) ([]byte, error)
 	GetState(ctx context.Context, a common.Address, b common.Hash) (common.Hash, error)
 	GetNonce(ctx context.Context, addr common.Address) (uint64, error)
 }
 
-//modified by author@liaoyd add extension module
 func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 	compiler := makeCompilerAPIs(solcPath)
 	all := []rpc.API{
@@ -133,11 +116,6 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Version:   "1.0",
 			Service:   NewPrivateAccountAPI(apiBackend),
 			Public:    false,
-		}, {
-			Namespace: "tdm",
-			Version:   "1.0",
-			Service:   NewPublicTendermintAPI(apiBackend),
-			Public:    true,
 		},
 	}
 	return append(compiler, all...)

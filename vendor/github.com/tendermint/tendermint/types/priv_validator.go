@@ -11,8 +11,24 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
+	"crypto/ecdsa"
+	crand "crypto/rand"
+	"github.com/tendermint/tendermint/keystore"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/tendermint/ed25519"
+	//"bytes"
+	//"errors"
+	//"fmt"
+	//"io/ioutil"
+	//"os"
+	//"sync"
+	//
+	//. "github.com/tendermint/go-common"
+	//"github.com/tendermint/go-crypto"
+	//"github.com/tendermint/go-wire"
+	//
+	//"github.com/tendermint/ed25519"
 )
 
 const (
@@ -34,8 +50,9 @@ func voteToStep(vote *Vote) int8 {
 	}
 }
 
+
 type PrivValidator struct {
-	Address       []byte           `json:"address"`
+	Address       []byte `json:"address"`
 	PubKey        crypto.PubKey    `json:"pub_key"`
 	LastHeight    int              `json:"last_height"`
 	LastRound     int              `json:"last_round"`
@@ -81,6 +98,28 @@ func (privVal *PrivValidator) SetSigner(s Signer) {
 
 // Generates a new validator with private key.
 func GenPrivValidator() *PrivValidator {
+	privateKeyECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), crand.Reader)
+	if err != nil {
+		return nil
+	}
+	newKey := keystore.NewKeyFromECDSA(privateKeyECDSA)
+	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
+	privKey := crypto.EtherumPrivKey(ethcrypto.FromECDSA(newKey.PrivateKey))
+	fmt.Println(len(privKey), len(pubKey), len(pubKey.Address()))
+	return &PrivValidator{
+		Address:  pubKey.Address(),
+		PubKey:   pubKey,
+		PrivKey:  privKey,
+		LastHeight: 0,
+		LastRound:  0,
+		LastStep:   stepNone,
+		LastSignature: nil,
+		LastSignBytes: nil,
+		filePath:      "",
+		Signer:        NewDefaultSigner(privKey),
+
+	}
+/*
 	privKeyBytes := new([64]byte)
 	copy(privKeyBytes[:32], crypto.CRandBytes(32))
 	pubKeyBytes := ed25519.MakePublicKey(privKeyBytes)
@@ -97,7 +136,7 @@ func GenPrivValidator() *PrivValidator {
 		LastSignBytes: nil,
 		filePath:      "",
 		Signer:        NewDefaultSigner(privKey),
-	}
+	}*/
 }
 
 func LoadPrivValidator(filePath string) *PrivValidator {
@@ -258,14 +297,4 @@ func (pvs PrivValidatorsByAddress) Swap(i, j int) {
 	it := pvs[i]
 	pvs[i] = pvs[j]
 	pvs[j] = it
-}
-
-//---------------------
-//author@liaoyd
-func (privVal *PrivValidator) SignValidatorMsg(chainID string, msg *ValidatorMsg) error {
-	privVal.mtx.Lock()
-	defer privVal.mtx.Unlock()
-	signature := privVal.Sign(SignBytes(chainID, msg))
-	msg.Signature = signature
-	return nil
 }

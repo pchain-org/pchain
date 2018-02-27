@@ -256,12 +256,9 @@ type SearchFunc func(line string) (int, error)
 // Returns true if an exact match was found, otherwise returns the next greater
 // line that starts with prefix.
 // CONTRACT: Caller must close the returned GroupReader
-//liaoyd
 func (g *Group) Search(prefix string, cmp SearchFunc) (*GroupReader, bool, error) {
-	// fmt.Println("in func (g *Group) Search(prefix string, cmp SearchFunc) (*GroupReader, bool, error)")
 	g.mtx.Lock()
 	minIndex, maxIndex := g.minIndex, g.maxIndex
-	fmt.Println(minIndex, maxIndex)
 	g.mtx.Unlock()
 	// Now minIndex/maxIndex may change meanwhile,
 	// but it shouldn't be a big deal
@@ -347,14 +344,10 @@ func scanNext(r *GroupReader, prefix string) (int, string, error) {
 
 // Returns true iff an exact match was found.
 // Pushes line, does not consume it.
-//liaoyd
 func scanUntil(r *GroupReader, prefix string, cmp SearchFunc) (bool, error) {
-	// fmt.Println("func scanUntil(r *GroupReader, prefix string, cmp SearchFunc) (bool, error)")
 	for {
 		line, err := r.ReadLine()
-		// fmt.Println("line:", line)
 		if err != nil {
-			// fmt.Println("readline error", err)
 			return false, err
 		}
 		if !strings.HasPrefix(line, prefix) {
@@ -362,18 +355,14 @@ func scanUntil(r *GroupReader, prefix string, cmp SearchFunc) (bool, error) {
 		}
 		val, err := cmp(line)
 		if err != nil {
-			// fmt.Println("cmp error", err)
 			return false, err
 		}
 		if val < 0 {
-			// fmt.Println("val < 0")
 			continue
 		} else if val == 0 {
-			// fmt.Println("val = 0")
 			r.PushLine(line)
 			return true, nil
 		} else {
-			// fmt.Println("val > 0")
 			r.PushLine(line)
 			return false, nil
 		}
@@ -445,10 +434,8 @@ func (g *Group) ReadGroupInfo() GroupInfo {
 
 // Index includes the head.
 // CONTRACT: caller should have called g.mtx.Lock
-//liaoyd
 func (g *Group) readGroupInfo() GroupInfo {
 	groupDir := filepath.Dir(g.Head.Path)
-	// fmt.Println("groupDir:", groupDir)
 	headBase := filepath.Base(g.Head.Path)
 	var minIndex, maxIndex int = -1, -1
 	var totalSize, headSize int64 = 0, 0
@@ -465,12 +452,10 @@ func (g *Group) readGroupInfo() GroupInfo {
 
 	// For each file in the directory, filter by pattern
 	for _, fileInfo := range fiz {
-		// fmt.Println("fileInfo:", fileInfo)
 		if fileInfo.Name() == headBase {
 			fileSize := fileInfo.Size()
 			totalSize += fileSize
 			headSize = fileSize
-			// fmt.Println("totalSize", totalSize)
 			continue
 		} else if strings.HasPrefix(fileInfo.Name(), headBase) {
 			fileSize := fileInfo.Size()
@@ -532,12 +517,6 @@ func newGroupReader(g *Group) *GroupReader {
 		curReader: nil,
 		curLine:   nil,
 	}
-}
-
-//-------------
-//liao
-func NewGroupReader(g *Group) *GroupReader {
-	return newGroupReader(g)
 }
 
 func (gr *GroupReader) Close() error {
@@ -679,98 +658,6 @@ func MakeSimpleSearchFunc(prefix string, target int) SearchFunc {
 			return 0, nil
 		} else {
 			return -1, nil
-		}
-	}
-}
-
-//liaoyd
-func (g *Group) SearchMaxLower(prefix string, cmp SearchFunc) (*GroupReader, bool, error) {
-	// fmt.Println("in func (g *Group) SearchMaxLower(prefix string, cmp SearchFunc) (*GroupReader, bool, error)")
-	//TODO didn't consider multi file
-	g.mtx.Lock()
-	minIndex, maxIndex := g.minIndex, g.maxIndex
-	fmt.Println(minIndex, maxIndex)
-	g.mtx.Unlock()
-	// Now minIndex/maxIndex may change meanwhile,
-	// but it shouldn't be a big deal
-	// (maybe we'll want to limit scanUntil though)
-
-	for {
-		curIndex := (minIndex + maxIndex + 1) / 2
-
-		// Base case, when there's only 1 choice left.
-		if minIndex == maxIndex {
-			pr, err := g.NewReader(maxIndex)
-			r, err := g.NewReader(maxIndex)
-			if err != nil {
-				return nil, false, err
-			}
-			// preIndex := 0
-			for {
-				_, line, err := scanNext(r, prefix)
-				// perIndex, preLine := index, line
-				//TODO
-				// if err != nil {//no next line
-				// 	return nil, false, err
-				// }
-				val, _ := cmp(line)
-				if val > 0 || err != nil { //found the max lower or no next line so just should return line 0
-					// fmt.Println("val > 0 || err != nil")
-					r.Close()
-					// nr, err := g.NewReader(maxIndex)
-					// nr.curIndex = preIndex
-					return pr, true, err
-				} else if val == 0 { //unbelievable! we found it!!!!
-					// fmt.Println("val == 0")
-					return r, true, nil
-				} else { //continue scan next line and store this line
-					// pr.curLine = r.curLine
-					// fmt.Println("else")
-					scanNext(pr, prefix)
-					// preIndex = index
-				}
-			}
-		}
-
-		// Read starting roughly at the middle file,
-		// until we find line that has prefix.
-		r, err := g.NewReader(curIndex)
-		if err != nil {
-			return nil, false, err
-		}
-		foundIndex, line, err := scanNext(r, prefix)
-		r.Close()
-		if err != nil {
-			return nil, false, err
-		}
-
-		// Compare this line to our search query.
-		val, err := cmp(line)
-		if err != nil {
-			return nil, false, err
-		}
-		if val < 0 {
-			// Line will come later
-			minIndex = foundIndex
-		} else if val == 0 {
-			// Stroke of luck, found the line
-			r, err := g.NewReader(foundIndex)
-			if err != nil {
-				return nil, false, err
-			}
-			match, err := scanUntil(r, prefix, cmp)
-			if !match {
-				panic("Expected match to be true")
-			}
-			if err != nil {
-				r.Close()
-				return nil, false, err
-			} else {
-				return r, true, err
-			}
-		} else {
-			// We passed it
-			maxIndex = curIndex - 1
 		}
 	}
 }

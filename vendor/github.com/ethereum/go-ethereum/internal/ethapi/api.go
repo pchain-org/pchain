@@ -450,18 +450,6 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	return state.GetBalance(ctx, address)
 }
 
-// GetLockedBalance returns the amount of locked wei for the given address in the state of the
-// given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
-// block numbers are also allowed.
-func (s *PublicBlockChainAPI) GetLockedBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*big.Int, error) {
-	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
-	if state == nil || err != nil {
-		return nil, err
-	}
-
-	return state.GetLockedBalance(ctx, address)
-}
-
 // GetBlockByNumber returns the requested block. When blockNr is -1 the chain head is returned. When fullTx is true all
 // transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, blockNr rpc.BlockNumber, fullTx bool) (map[string]interface{}, error) {
@@ -801,7 +789,6 @@ type RPCTransaction struct {
 	Hash             common.Hash     `json:"hash"`
 	Input            hexutil.Bytes   `json:"input"`
 	Nonce            hexutil.Uint64  `json:"nonce"`
-	Type		 hexutil.Uint64 `json:"type"`
 	To               *common.Address `json:"to"`
 	TransactionIndex hexutil.Uint    `json:"transactionIndex"`
 	Value            *hexutil.Big    `json:"value"`
@@ -825,7 +812,6 @@ func newRPCPendingTransaction(tx *types.Transaction) *RPCTransaction {
 		Hash:     tx.Hash(),
 		Input:    hexutil.Bytes(tx.Data()),
 		Nonce:    hexutil.Uint64(tx.Nonce()),
-		Type:     (hexutil.Uint64)(tx.Type()),
 		To:       tx.To(),
 		Value:    (*hexutil.Big)(tx.Value()),
 		V:        (*hexutil.Big)(v),
@@ -853,7 +839,6 @@ func newRPCTransactionFromBlockIndex(b *types.Block, txIndex uint) (*RPCTransact
 			Hash:             tx.Hash(),
 			Input:            hexutil.Bytes(tx.Data()),
 			Nonce:            hexutil.Uint64(tx.Nonce()),
-			Type:   	  (hexutil.Uint64)(tx.Type()),
 			To:               tx.To(),
 			TransactionIndex: hexutil.Uint(txIndex),
 			Value:            (*hexutil.Big)(tx.Value()),
@@ -1121,7 +1106,6 @@ type SendTxArgs struct {
 	Value    *hexutil.Big    `json:"value"`
 	Data     hexutil.Bytes   `json:"data"`
 	Nonce    *hexutil.Uint64 `json:"nonce"`
-	Type     *hexutil.Big    `json:"type"`
 }
 
 // prepareSendTxArgs is a helper function that fills in default values for unspecified tx fields.
@@ -1146,7 +1130,6 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 		}
 		args.Nonce = (*hexutil.Uint64)(&nonce)
 	}
-
 	return nil
 }
 
@@ -1202,12 +1185,6 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 		return common.Hash{}, err
 	}
 
-	if args.Type != nil && (*args.Type).ToInt().Uint64() > 0 && args.From.Hash() != (*args.To).Hash() {
-		panic("From/To must be the same address when (un)locking asset.\n")  
-
-		// should change the panic to some error msg
-		// return common.Hash{}, err
-	}
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: args.From}
 	//fmt.Println("(s *PublicBlockChainAPI) SendTransaction() 1")
@@ -1219,15 +1196,6 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	tx := args.toTransaction()
 	fmt.Printf("(s *PublicBlockChainAPI) SendTransaction(), tx(%s) has nonce(%v)\n", tx.Hash(), tx.Nonce())
 	//fmt.Println("(s *PublicBlockChainAPI) SendTransaction() 2")
-
-	// Set TX type based on input
-	if args.Type != nil {
-		tx.SetType(args.Type.ToInt().Uint64())
-
-		fmt.Printf("SendTransaction: Set type to %d for tx %s\n", tx.Type(), tx.Hash().Hex())
-	} else {
-		glog.V(logger.Info).Infof("Tx(%s): Not set type, default type %d \n", tx.Hash().Hex(), tx.Type())
-	}
 	var chainID *big.Int
 	if config := s.b.ChainConfig(); config.IsEIP155(s.b.CurrentBlock().Number()) {
 		chainID = config.ChainId
@@ -1530,34 +1498,3 @@ func (s *PublicNetAPI) PeerCount() hexutil.Uint {
 func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
 }
-
-/*
-//------------------------------------
-//author@liaoyd
-// PublicValidatorAPI provides an API to some new methods.
-type PublicValidatorAPI struct {
-	b Backend
-}
-
-func NewPublicValidatorAPI(b Backend) *PublicValidatorAPI {
-	return &PublicValidatorAPI{b: b}
-}
-
-func (s *PublicValidatorAPI) JoinValidators(height int, key string, power uint64) string {
-	fmt.Println(("in func (s *PublicExtensionAPI) JoinValidators() string"))
-	s.b.SendValidatorMessage(height, key, power, "JOIN")
-	return "ok"
-}
-
-func (s *PublicValidatorAPI) AcceptJoinReq(height int, key string, power uint64) string {
-	fmt.Println("in func (s *PublicExtensionAPI) AcceptJoinReq() string")
-	s.b.SendValidatorMessage(height, key, power, "ACCEPT")
-	return "ok"
-}
-
-func (s *PublicValidatorAPI) Validators() string {
-	fmt.Println("in func (s *PublicExtensionAPI) AcceptJoinReq() string")
-	s.b.SendValidatorMessage(0, "", 0, "VALIDATORS")
-	return "ok"
-}
-*/

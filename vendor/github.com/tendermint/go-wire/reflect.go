@@ -117,6 +117,8 @@ type ConcreteType struct {
 // Must use this to register an interface to properly decode the
 // underlying concrete type.
 func RegisterInterface(o interface{}, ctypes ...ConcreteType) *TypeInfo {
+	//cd rv := reflect.TypeOf(o)
+	//fmt.Println("register:",rv)
 	it := GetTypeFromStructDeclaration(o)
 	if it.Kind() != reflect.Interface {
 		PanicSanity("RegisterInterface expects an interface")
@@ -125,6 +127,7 @@ func RegisterInterface(o interface{}, ctypes ...ConcreteType) *TypeInfo {
 	toByte := make(map[reflect.Type]byte, 0)
 	for _, ctype := range ctypes {
 		crt := reflect.TypeOf(ctype.O)
+		//fmt.Println("regist info:", crt)
 		typeByte := ctype.Byte
 		if typeByte == 0x00 {
 			PanicSanity(Fmt("Byte of 0x00 is reserved for nil (%v)", ctype))
@@ -845,7 +848,6 @@ func writeReflectJSON(rv reflect.Value, rt reflect.Type, opts Options, w io.Writ
 
 	// Get typeInfo
 	typeInfo := GetTypeInfo(rt)
-
 	if rt.Kind() == reflect.Interface {
 		if rv.IsNil() {
 			WriteTo([]byte("null"), w, n, err)
@@ -857,35 +859,40 @@ func writeReflectJSON(rv reflect.Value, rt reflect.Type, opts Options, w io.Writ
 			// See if the crt is registered.
 			// If so, we're more restrictive.
 			typeByte, ok := typeInfo.TypeToByte[crt]
-			if !ok {
-				switch crt.Kind() {
-				case reflect.Ptr:
-					*err = errors.New(Fmt("Unexpected pointer type %v for registered interface %v. "+
-						"Was it registered as a value receiver rather than as a pointer receiver?", crt, rt.Name()))
-				case reflect.Struct:
-					*err = errors.New(Fmt("Unexpected struct type %v for registered interface %v. "+
-						"Was it registered as a pointer receiver rather than as a value receiver?", crt, rt.Name()))
-				default:
-					*err = errors.New(Fmt("Unexpected type %v for registered interface %v. "+
-						"If this is intentional, please register it.", crt, rt.Name()))
-				}
-				return
-			}
-			if crt.Kind() == reflect.Ptr {
-				crv, crt = crv.Elem(), crt.Elem()
-				if !crv.IsValid() {
-					*err = errors.New(Fmt("Unexpected nil-pointer of type %v for registered interface %v. "+
-						"For compatibility with other languages, nil-pointer interface values are forbidden.", crt, rt.Name()))
+			{
+				if !ok {
+
+					switch crt.Kind() {
+					case reflect.Ptr:
+						*err = errors.New(Fmt("Unexpected pointer type %v for registered interface %v. "+
+							"Was it registered as a value receiver rather than as a pointer receiver?", crt, rt.Name()))
+					case reflect.Struct:
+						*err = errors.New(Fmt("Unexpected struct type %v for registered interface %v. "+
+							"Was it registered as a pointer receiver rather than as a value receiver?", crt, rt.Name()))
+					default:
+						*err = errors.New(Fmt("Unexpected type %v for registered interface %v. "+
+							"If this is intentional, please register it.", crt, rt.Name()))
+					}
 					return
 				}
+				if crt.Kind() == reflect.Ptr {
+					crv, crt = crv.Elem(), crt.Elem()
+					if !crv.IsValid() {
+						*err = errors.New(Fmt("Unexpected nil-pointer of type %v for registered interface %v. "+
+							"For compatibility with other languages, nil-pointer interface values are forbidden.", crt, rt.Name()))
+						return
+					}
+				}
+				WriteTo([]byte(Fmt("[%v,", typeByte)), w, n, err)
+				writeReflectJSON(crv, crt, opts, w, n, err)
+				WriteTo([]byte("]"), w, n, err)
 			}
-			WriteTo([]byte(Fmt("[%v,", typeByte)), w, n, err)
-			writeReflectJSON(crv, crt, opts, w, n, err)
-			WriteTo([]byte("]"), w, n, err)
+
 		} else {
 			// We support writing unregistered interfaces for convenience.
 			writeReflectJSON(crv, crt, opts, w, n, err)
 		}
+
 		return
 	}
 

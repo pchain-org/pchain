@@ -80,9 +80,6 @@ func GetConfig(rootDir string) cfg.Config {
 	mapConfig.SetDefault("cs_wal_light", false)
 	mapConfig.SetDefault("filter_peers", false)
 
-	//liaoyd
-	mapConfig.SetDefault("cs_val_file", rootDir+"/data/cs.val/val")
-
 	mapConfig.SetDefault("block_size", 10000)      // max number of txs
 	mapConfig.SetDefault("block_part_size", 65536) // part size 64K
 	mapConfig.SetDefault("disable_data_hash", false)

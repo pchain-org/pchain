@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"fmt"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -136,6 +137,7 @@ func WriteJSON(o interface{}, w io.Writer, n *int, err *error) {
 	rv := reflect.ValueOf(o)
 	rt := reflect.TypeOf(o)
 	if rv.Kind() == reflect.Ptr {
+		fmt.Println("this is a ptr")
 		rv, rt = rv.Elem(), rt.Elem()
 	}
 	writeReflectJSON(rv, rt, Options{}, w, n, err)

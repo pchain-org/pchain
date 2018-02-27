@@ -768,13 +768,3 @@ func (self *txSet) add(hash common.Hash) {
 		self.delPtr++
 	}
 }
-
-/*
-//---------------------------------
-//author@liaoyd
-func (pool *TxPool) SendValidatorMsgToBackend(epoch int, key string, power uint64, action string) error {
-	fmt.Println("func (pool *TxPool) SendValidatorMsgToBackend() error")
-	pool.eventMux.Post(ValidatorOperationEvent{epoch, key, power, action})
-	return nil
-}
-*/

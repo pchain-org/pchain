@@ -8,7 +8,6 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
-	abciTypes "github.com/tendermint/abci/types"
 )
 
 // Volatile state for each Validator
@@ -35,13 +34,6 @@ func NewValidator(pubKey crypto.PubKey, votingPower int64) *Validator {
 func (v *Validator) Copy() *Validator {
 	vCopy := *v
 	return &vCopy
-}
-
-func (v *Validator) Equals(other *Validator) bool {
-
-	return bytes.Equal(v.Address, other.Address) &&
-		v.PubKey.Equals(other.PubKey) &&
-		v.VotingPower == other.VotingPower
 }
 
 // Returns the one with higher Accum.
@@ -78,15 +70,6 @@ func (v *Validator) String() string {
 
 func (v *Validator) Hash() []byte {
 	return wire.BinaryRipemd160(v)
-}
-
-
-func (v *Validator) ToAbciValidator() *abciTypes.Validator {
-
-	return &abciTypes.Validator {
-		PubKey: v.PubKey.Bytes(),
-		Power: uint64(v.VotingPower),
-	}
 }
 
 //-------------------------------------

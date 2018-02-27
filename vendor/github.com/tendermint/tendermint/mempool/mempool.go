@@ -17,7 +17,6 @@ import (
 )
 
 /*
-
 The mempool pushes new txs onto the proxyAppConn.
 It gets a stream of (req, res) tuples from the proxy.
 The memool stores good txs in a concurrent linked-list.

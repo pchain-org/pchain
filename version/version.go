@@ -26,7 +26,6 @@ func init() {
 	if Meta != "" {
 		Version += "-" + Meta
 	}
-
 	if GitCommit != "" {
 		Version += "-" + GitCommit[:8]
 	}

@@ -1,5 +1,4 @@
 package types
-
 import (
 	// for registering TMEventData as events.EventData
 	abci "github.com/tendermint/abci/types"

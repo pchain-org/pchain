@@ -15,7 +15,6 @@ import (
 	mempl "github.com/tendermint/tendermint/mempool"
 	"github.com/tendermint/tendermint/proxy"
 	sm "github.com/tendermint/tendermint/state"
-	ep "github.com/tendermint/tendermint/epoch"
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -103,7 +102,7 @@ func (pb *playback) replayReset(count int, newStepCh chan interface{}) error {
 	pb.cs.Stop()
 	pb.cs.Wait()
 
-	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.proxyAppConn, pb.cs.blockStore, pb.cs.mempool, pb.cs.epoch)
+	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.proxyAppConn, pb.cs.blockStore, pb.cs.mempool)
 	newCS.SetEventSwitch(pb.cs.evsw)
 	newCS.startForReplay()
 
@@ -246,10 +245,6 @@ func newConsensusStateForReplay(config cfg.Config) *ConsensusState {
 	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
 	state := sm.MakeGenesisStateFromFile(stateDB, config.GetString("genesis_file"))
 
-	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
-	epoch := ep.GetEpoch(config, epochDB, state.LastEpochNumber)
-	state.Epoch = epoch
-
 	// Create proxyAppConn connection (consensus, mempool, query)
 	proxyApp := proxy.NewAppConns(config, proxy.DefaultClientCreator(config), NewHandshaker(config, state, blockStore))
 	_, err := proxyApp.Start()
@@ -268,7 +263,7 @@ func newConsensusStateForReplay(config cfg.Config) *ConsensusState {
 
 	mempool := mempl.NewMempool(config, proxyApp.Mempool())
 
-	consensusState := NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch)
+	consensusState := NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool)
 	consensusState.SetEventSwitch(eventSwitch)
 	return consensusState
 }

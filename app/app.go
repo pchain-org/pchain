@@ -32,8 +32,7 @@ type EthermintApplication struct {
 }
 
 // NewEthermintApplication creates the abci application for ethermint
-func NewEthermintApplication(backend *ethereum.Backend,
-	client *rpc.Client, strategy emtTypes.Strategy) (*EthermintApplication, error) {
+func NewEthermintApplication(backend *ethereum.Backend,  client *rpc.Client, strategy emtTypes.Strategy) (*EthermintApplication, error) {
 	app := &EthermintApplication{
 		backend:      backend,
 		rpcClient:    client,
@@ -77,7 +76,7 @@ func (app *EthermintApplication) SetOption(key string, value string) (log string
 func (app *EthermintApplication) InitChain(validators []*abciTypes.Validator) {
 	glog.V(logger.Debug).Infof("InitChain")
 	glog.V(logger.Debug).Infof("Should not invoked. exit")
-	os.Exit(1)
+	os.Exit(0)
 	//app.SetValidators(validators)
 }
 
@@ -129,20 +128,17 @@ func (app *EthermintApplication) BeginBlock(hash []byte, tmHeader *abciTypes.Hea
 
 // EndBlock accumulates rewards for the validators and updates them
 func (app *EthermintApplication) EndBlock(height uint64) abciTypes.ResponseEndBlock {
+	app.backend.AccumulateRewards(app.strategy)
 	return app.GetUpdatedValidators()
 }
 
 // Commit commits the block and returns a hash of the current state
-func (app *EthermintApplication) Commit(validators []*abciTypes.Validator) abciTypes.Result {
+func (app *EthermintApplication) Commit() abciTypes.Result {
 	blockHash, err := app.backend.Commit(app.Receiver())
 	if err != nil {
 		glog.V(logger.Debug).Infof("Error getting latest ethereum state: %v", err)
 		return abciTypes.ErrInternalError
 	}
-
-	app.strategy.SetValidators(tmTypes.FromAbciValidators(validators))
-	app.backend.AccumulateRewards(app.strategy)
-
 	return abciTypes.NewResultOK(blockHash[:], "")
 }
 

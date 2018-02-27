@@ -219,20 +219,12 @@ func (b *EthApiBackend) AccountManager() *accounts.Manager {
 	return b.eth.AccountManager()
 }
 
-func (b *EthApiBackend) Client() ethapi.Client {
-	return b.eth.Client()
-}
-
 type EthApiState struct {
 	state *state.StateDB
 }
 
 func (s EthApiState) GetBalance(ctx context.Context, addr common.Address) (*big.Int, error) {
 	return s.state.GetBalance(addr), nil
-}
-
-func (s EthApiState) GetLockedBalance(ctx context.Context, addr common.Address) (*big.Int, error) {
-	return s.state.GetLockedBalance(addr), nil
 }
 
 func (s EthApiState) GetCode(ctx context.Context, addr common.Address) ([]byte, error) {
@@ -246,12 +238,3 @@ func (s EthApiState) GetState(ctx context.Context, a common.Address, b common.Ha
 func (s EthApiState) GetNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	return s.state.GetNonce(addr), nil
 }
-
-/*
-//---------------------------------
-//author@liaoyd
-func (b *EthApiBackend) SendValidatorMessage(epoch int, key string, power uint64, action string) error {
-	fmt.Println("in func (b *EthApiBackend) SendValidatorMessage(msg string) error")
-	return b.eth.txPool.SendValidatorMsgToBackend(epoch, key, power, action)
-}
-*/

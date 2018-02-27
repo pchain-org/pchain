@@ -271,7 +271,7 @@ type Request_CheckTx struct {
 	CheckTx *RequestCheckTx `protobuf:"bytes,6,opt,name=check_tx,json=checkTx,oneof"`
 }
 type Request_Commit struct {
-	Commit *RequestCommit `protobuf:"bytes,7,opt,name=commit,json=commit,oneof"`
+	Commit *RequestCommit `protobuf:"bytes,7,opt,name=commit,oneof"`
 }
 type Request_Query struct {
 	Query *RequestQuery `protobuf:"bytes,8,opt,name=query,oneof"`
@@ -756,7 +756,6 @@ func (m *RequestQuery) GetProve() bool {
 }
 
 type RequestCommit struct {
-	Validators []*Validator `protobuf:"bytes,1,rep,name=validators" json:"validators,omitempty"`
 }
 
 func (m *RequestCommit) Reset()                    { *m = RequestCommit{} }

@@ -3,7 +3,7 @@ package abcicli
 import (
 	"sync"
 
-	"github.com/tendermint/abci/types"
+	types "github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/go-common"
 )
 
@@ -99,12 +99,12 @@ func (app *localClient) QueryAsync(reqQuery types.RequestQuery) *ReqRes {
 	)
 }
 
-func (app *localClient) CommitAsync(validators []*types.Validator) *ReqRes {
+func (app *localClient) CommitAsync() *ReqRes {
 	app.mtx.Lock()
-	res := app.Application.Commit(validators)
+	res := app.Application.Commit()
 	app.mtx.Unlock()
 	return app.callback(
-		types.ToRequestCommit(validators),
+		types.ToRequestCommit(),
 		types.ToResponseCommit(res.Code, res.Data, res.Log),
 	)
 }
@@ -185,9 +185,9 @@ func (app *localClient) QuerySync(reqQuery types.RequestQuery) (resQuery types.R
 	return resQuery, nil
 }
 
-func (app *localClient) CommitSync(validators []*types.Validator) (res types.Result) {
+func (app *localClient) CommitSync() (res types.Result) {
 	app.mtx.Lock()
-	res = app.Application.Commit(validators)
+	res = app.Application.Commit()
 	app.mtx.Unlock()
 	return res
 }

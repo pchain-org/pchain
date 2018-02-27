@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path"
 	"reflect"
 	"strconv"
 	"strings"
@@ -249,7 +248,6 @@ func (h *Handshaker) Handshake(proxyApp proxy.AppConns) error {
 	return nil
 }
 
-//TODO: Be very careful, here may need to handle Epoch infomation
 // Replay all blocks since appBlockHeight and ensure the result matches the current state.
 // Returns the final AppHash or an error
 func (h *Handshaker) ReplayBlocks(appHash []byte, appBlockHeight int, proxyApp proxy.AppConns) ([]byte, error) {
@@ -319,7 +317,6 @@ func (h *Handshaker) ReplayBlocks(appHash []byte, appBlockHeight int, proxyApp p
 	return nil, nil
 }
 
-//TODO: Be very careful, here may need to handle Epoch infomation
 func (h *Handshaker) replayBlocks(proxyApp proxy.AppConns, appBlockHeight, storeBlockHeight int, mutateState bool) ([]byte, error) {
 	// App is further behind than it should be, so we need to replay blocks.
 	// We replay all blocks from appBlockHeight+1.
@@ -336,8 +333,7 @@ func (h *Handshaker) replayBlocks(proxyApp proxy.AppConns, appBlockHeight, store
 	for i := appBlockHeight + 1; i <= finalBlock; i++ {
 		log.Info("Applying block", "height", i)
 		block := h.store.LoadBlock(i)
-
-		appHash, err = sm.ExecCommitBlock(proxyApp.Consensus(), h.state, block)
+		appHash, err = sm.ExecCommitBlock(proxyApp.Consensus(), block)
 		if err != nil {
 			return nil, err
 		}
@@ -414,173 +410,6 @@ func (mock *mockProxyApp) EndBlock(height uint64) abci.ResponseEndBlock {
 	return mock.abciResponses.EndBlock
 }
 
-func (mock *mockProxyApp) Commit(validators []*abci.Validator) abci.Result {
+func (mock *mockProxyApp) Commit() abci.Result {
 	return abci.NewResultOK(mock.appHash, "")
-}
-
-//-------------------------------------
-//liaoyd
-// Open file to log all validator change and timeouts for deterministic accountability
-func OpenVAL(valFile string) (val *VAL, err error) {
-	err = EnsureDir(path.Dir(valFile), 0700)
-	if err != nil {
-		log.Error("Error ensuring ConsensusState val dir", "error", err.Error())
-		return nil, err
-	}
-
-	val, err = NewVAL(valFile)
-	LoadChangedVals(val) //load all changed to map
-	if err != nil {
-		return val, err
-	}
-	return val, nil
-}
-
-func CatchupValidator(val *VAL, height int, preVals *types.ValidatorSet) error {
-	fmt.Println("in func (conR *ConsensusReactor) catchupValidator(val *VAL) error")
-	//TODO
-	// height := conR.conS.Height
-	fmt.Println("height:", height)
-	// gr, found, err := val.group.SearchMaxLower("#HEIGHT: ", auto.MakeSimpleSearchFunc("#HEIGHT: ", height))
-	gr, _, _ := val.group.SearchMaxLower("#HEIGHT: ", makeHeightSearchFunc(height))
-
-	if gr == nil {
-		fmt.Println("gr is nil!!!!!!!!!")
-		return nil
-	}
-	// if gr.curIndex == 0 { //don't need to update validator
-	// 	return nil
-	// }
-	for { //TODO update validator
-		line, err := gr.ReadLine()
-		if err != nil {
-			if err == io.EOF { //no new line don't need to update validator
-				break
-			} else {
-				return err
-			}
-		}
-		if err = readReplayValMessage([]byte(line), preVals); err != nil {
-			return err
-		}
-		fmt.Println("line:", line)
-	}
-	return nil
-}
-
-func readReplayValMessage(msgBytes []byte, preVals *types.ValidatorSet) error {
-	fmt.Println("func (conR *ConsensusReactor) readReplayMessage(msgBytes []byte, newStepCh chan interface{}) error")
-	// Skip over empty and meta lines
-	if len(msgBytes) == 0 || msgBytes[0] == '#' { //TODO
-		return nil
-	}
-	var err error
-	var msg TimedVALMessage
-	wire.ReadJSON(&msg, msgBytes, &err)
-	if err != nil {
-		fmt.Println("MsgBytes:", msgBytes, string(msgBytes))
-		return fmt.Errorf("Error reading json data: %v", err)
-	}
-	// fmt.Println("msg.Msg:", msg.Msg)
-	// for logging
-	switch m := msg.Msg.(type) {
-	case *types.PreVal:
-		// fmt.Println("PreVal")
-		var vals []*abci.Validator
-		for _, val := range m.ValidatorSet.Validators {
-			// fmt.Println("val:", val)
-			vals = append(
-				vals,
-				&abci.Validator{
-					PubKey: val.PubKey.Bytes(),
-					Power:  uint64(val.VotingPower),
-				},
-			)
-		}
-		// fmt.Println("vals:", vals)
-		types.UpdateValidators(preVals, vals)
-		// types.DurStart <- vals
-		//TODO update validators
-		// <-types.EndStart //waiting for update end
-		return nil
-	case *types.AcceptVotes:
-		// fmt.Println("AcceptVotes")
-		var vals []*abci.Validator
-		vals = append(
-			vals,
-			&abci.Validator{
-				PubKey: m.PubKey.Bytes(),
-				Power:  m.Power,
-			},
-		)
-		// fmt.Println("vals:", vals)
-		types.UpdateValidators(preVals, vals)
-		// types.DurStart <- vals
-		// <-types.EndStart
-		return nil
-	default:
-		fmt.Println("default")
-		return fmt.Errorf("Replay: Unknown TimedVALMessage type: %v", reflect.TypeOf(msg.Msg))
-	}
-	return nil
-}
-
-func LoadChangedVals(val *VAL) error {
-	types.ValChangedEpoch = make(map[int][]*types.AcceptVotes)
-	// gr := valFile.Group.NewGroupReader(val.group)
-	gr := auto.NewGroupReader(val.group)
-	// prefix := "#HEIGHT: "
-	// var msg TimedVALMessage
-	for {
-		line, err := gr.ReadLine()
-		if err != nil {
-			if err == io.EOF { //no new line don't need to update validator
-				break
-			} else {
-				return err
-			}
-		}
-		StoreChangedValsToMap([]byte(line))
-	}
-	return nil
-}
-
-func StoreChangedValsToMap(msgBytes []byte) error {
-	fmt.Println("in func StoreChangedValsToMap(msgBytes []byte) error")
-	var err error
-	var msg TimedVALMessage
-	changed := types.ValChangedEpoch
-	if msgBytes[0] == '#' {
-		return nil
-		// height, _ := strconv.Atoi(string(msgBytes[9:]))
-		// if _, ok := changed[height]; ok {
-		// 	fmt.Println("val height error!")
-		// 	return errors.New("val height error!")
-		// }
-		// fmt.Println("make changed vals array at height:", height)
-		// changed[height] = make([]*types.AcceptVotes) //dont need to init slice
-	}
-	wire.ReadJSON(&msg, msgBytes, &err)
-	switch m := msg.Msg.(type) {
-	case *types.PreVal:
-		fmt.Println("preval break")
-		break
-	case *types.AcceptVotes:
-		fmt.Println("acceptvotes store")
-		if _, ok := changed[m.Epoch]; ok {
-			changed[m.Epoch] = append(
-				changed[m.Epoch],
-				m,
-			)
-			fmt.Println("m:", m)
-			return nil
-		} else {
-			fmt.Println("accept votes error")
-			return errors.New("accept votes error")
-		}
-	default:
-		fmt.Println("unknown type")
-		return errors.New("unknown type")
-	}
-	return nil
 }

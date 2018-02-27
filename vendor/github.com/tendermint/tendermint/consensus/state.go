@@ -18,7 +18,6 @@ import (
 	"github.com/tendermint/tendermint/proxy"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
-	ep "github.com/tendermint/tendermint/epoch"
 )
 
 //-----------------------------------------------------------------------------
@@ -95,7 +94,6 @@ const (
 	RoundStepPrecommit     = RoundStepType(0x06) // Did precommit, gossip precommits
 	RoundStepPrecommitWait = RoundStepType(0x07) // Did receive any +2/3 precommits, start timeout
 	RoundStepCommit        = RoundStepType(0x08) // Entered commit state machine
-	RoundStepTest          = RoundStepType(0x09) // for test author@liaoyd
 	// NOTE: RoundStepNewHeight acts as RoundStepCommitWait.
 )
 
@@ -117,8 +115,6 @@ func (rs RoundStepType) String() string {
 		return "RoundStepPrecommitWait"
 	case RoundStepCommit:
 		return "RoundStepCommit"
-	case RoundStepTest:
-		return "RoundStepTest"
 	default:
 		return "RoundStepUnknown" // Cannot panic.
 	}
@@ -135,7 +131,6 @@ type RoundState struct {
 	Step               RoundStepType
 	StartTime          time.Time
 	CommitTime         time.Time // Subjective time when +2/3 precommits for Block at Round were found
-	Epoch              *ep.Epoch
 	Validators         *types.ValidatorSet
 	Proposal           *types.Proposal
 	ProposalBlock      *types.Block
@@ -224,7 +219,6 @@ type PrivValidator interface {
 	GetAddress() []byte
 	SignVote(chainID string, vote *types.Vote) error
 	SignProposal(chainID string, proposal *types.Proposal) error
-	SignValidatorMsg(chainID string, msg *types.ValidatorMsg) error
 }
 
 // Tracks consensus state across block heights and rounds.
@@ -235,11 +229,11 @@ type ConsensusState struct {
 	proxyAppConn proxy.AppConnConsensus
 	blockStore   types.BlockStore
 	mempool      types.Mempool
+
 	privValidator PrivValidator // for signing votes
 
 	mtx sync.Mutex
 	RoundState
-	epoch *ep.Epoch
 	state *sm.State // State until height-1.
 
 	peerMsgQueue     chan msgInfo   // serializes msgs affecting state (proposals, block parts, votes)
@@ -262,9 +256,7 @@ type ConsensusState struct {
 	done chan struct{}
 }
 
-func NewConsensusState(config cfg.Config, state *sm.State, proxyAppConn proxy.AppConnConsensus,
-	blockStore types.BlockStore, mempool types.Mempool, epoch *ep.Epoch) *ConsensusState {
-	// fmt.Println("state.Validator in newconsensus:", state.Validators)
+func NewConsensusState(config cfg.Config, state *sm.State, proxyAppConn proxy.AppConnConsensus, blockStore types.BlockStore, mempool types.Mempool) *ConsensusState {
 	cs := &ConsensusState{
 		config:           config,
 		proxyAppConn:     proxyAppConn,
@@ -281,8 +273,7 @@ func NewConsensusState(config cfg.Config, state *sm.State, proxyAppConn proxy.Ap
 	cs.doPrevote = cs.defaultDoPrevote
 	cs.setProposal = cs.defaultSetProposal
 
-	cs.updateToStateAndEpoch(state, epoch)
-
+	cs.updateToState(state)
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
 	cs.reconstructLastCommit(state)
@@ -323,9 +314,7 @@ func (cs *ConsensusState) getRoundState() *RoundState {
 func (cs *ConsensusState) GetValidators() (int, []*types.Validator) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
-
-	_, val, _ := cs.state.GetValidators()
-	return cs.state.LastBlockHeight, val.Copy().Validators
+	return cs.state.LastBlockHeight, cs.state.Validators.Copy().Validators
 }
 
 // Sets our private validator account for signing votes.
@@ -524,8 +513,7 @@ func (cs *ConsensusState) reconstructLastCommit(state *sm.State) {
 		return
 	}
 	seenCommit := cs.blockStore.LoadSeenCommit(state.LastBlockHeight)
-	lastValidators, _, _ := state.GetValidators()
-	lastPrecommits := types.NewVoteSet(cs.config.GetString("chain_id"), state.LastBlockHeight, seenCommit.Round(), types.VoteTypePrecommit, lastValidators)
+	lastPrecommits := types.NewVoteSet(cs.config.GetString("chain_id"), state.LastBlockHeight, seenCommit.Round(), types.VoteTypePrecommit, state.LastValidators)
 
 	fmt.Printf("seenCommit are: %v\n", seenCommit)
 	fmt.Printf("lastPrecommits are: %v\n", lastPrecommits)
@@ -545,9 +533,9 @@ func (cs *ConsensusState) reconstructLastCommit(state *sm.State) {
 	cs.LastCommit = lastPrecommits
 }
 
-// Updates ConsensusState and increments height to match thatRewardScheme of state.
+// Updates ConsensusState and increments height to match that of state.
 // The round becomes 0 and cs.Step becomes RoundStepNewHeight.
-func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch) {
+func (cs *ConsensusState) updateToState(state *sm.State) {
 	if cs.CommitRound > -1 && 0 < cs.Height && cs.Height != state.LastBlockHeight {
 		PanicSanity(Fmt("updateToState() expected state height of %v but found %v",
 			cs.Height, state.LastBlockHeight))
@@ -568,9 +556,7 @@ func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	}
 
 	// Reset fields based on state.
-	_, validators, _ := state.GetValidators()
-	//liaoyd
-	// fmt.Println("validators:", validators)
+	validators := state.Validators
 	lastPrecommits := (*types.VoteSet)(nil)
 	if cs.CommitRound > -1 && cs.Votes != nil {
 		if !cs.Votes.Precommits(cs.CommitRound).HasTwoThirdsMajority() {
@@ -605,18 +591,16 @@ func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators)
 	cs.CommitRound = -1
 	cs.LastCommit = lastPrecommits
-	cs.Epoch = epoch
 
 	//fmt.Printf("State.Copy(), cs.LastValidators are: %v, state.LastValidators are: %v\n",
 	//	cs.LastValidators, state.LastValidators)
 	//debug.PrintStack()
 
-	cs.LastValidators, _, _ = state.GetValidators()
+	cs.LastValidators = state.LastValidators
 
 	cs.state = state
 
-	cs.epoch = epoch
-
+	// Finally, broadcast RoundState
 	cs.newStep()
 }
 
@@ -768,17 +752,12 @@ func (cs *ConsensusState) enterNewRound(height int, round int) {
 		return
 	}
 
-
-
 	if now := time.Now(); cs.StartTime.After(now) {
 		log.Warn("Need to set a buffer and log.Warn() here for sanity.", "startTime", cs.StartTime, "now", now)
 	}
 
 	log.Notice(Fmt("enterNewRound(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
 
-	//liaoyd
-	// fmt.Println("in func (cs *ConsensusState) enterNewRound(height int, round int)")
-	fmt.Println(cs.Validators)
 	// Increment validators if necessary
 	validators := cs.Validators
 	if cs.Round < round {
@@ -834,15 +813,12 @@ func (cs *ConsensusState) enterPropose(height int, round int) {
 
 	// Nothing more to do if we're not a validator
 	if cs.privValidator == nil {
-		fmt.Println("we are not validator yet!!!!!!!!saaaaaaad")
 		return
 	}
 
 	if !bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
-		fmt.Println("we are not proposer!!!")
 		log.Info("enterPropose: Not our turn to propose", "proposer", cs.Validators.GetProposer().Address, "privValidator", cs.privValidator)
 	} else {
-		fmt.Println("we are proposer!!!")
 		log.Info("enterPropose: Our turn to propose", "proposer", cs.Validators.GetProposer().Address, "privValidator", cs.privValidator)
 		cs.decideProposal(height, round)
 
@@ -929,18 +905,8 @@ func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts 
 	// Mempool validated transactions
 	txs := cs.mempool.Reap(cs.config.GetInt("block_size"))
 
-	var epochBytes []byte = []byte{}
-	shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
-	if shouldProposeEpoch {
-		cs.Epoch.SetNextEpoch(cs.Epoch.ProposeNextEpoch(cs.Height))
-		epochBytes = cs.Epoch.NextEpoch.Bytes()
-	}
-
-	_, val, _ := cs.state.GetValidators()
-
 	return types.MakeBlock(cs.Height, cs.state.ChainID, txs, commit,
-		cs.state.LastBlockID, val.Hash(), cs.state.AppHash,
-		epochBytes, cs.config.GetInt("block_part_size"))
+		cs.state.LastBlockID, cs.state.Validators.Hash(), cs.state.AppHash, cs.config.GetInt("block_part_size"))
 }
 
 // Enter: `timeoutPropose` after entering Propose.
@@ -999,18 +965,6 @@ func (cs *ConsensusState) defaultDoPrevote(height int, round int) {
 		log.Warn("enterPrevote: ProposalBlock is invalid", "error", err)
 		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
 		return
-	}
-
-	// Valdiate proposal block
-	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.ExData.BlockExData)
-	if proposedNextEpoch != nil {
-		err = cs.RoundState.Epoch.ValidateNextEpoch(proposedNextEpoch, height)
-		if err != nil {
-			// ProposalBlock is invalid, prevote nil.
-			log.Warn("enterPrevote: Proposal reward scheme is invalid", "error", err)
-			cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
-			return
-		}
 	}
 
 	// Prevote cs.ProposalBlock
@@ -1236,7 +1190,6 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 		return
 	}
 
-	// fmt.Println("precommits:", cs.Votes.Precommits(cs.CommitRound))
 	blockID, ok := cs.Votes.Precommits(cs.CommitRound).TwoThirdsMajority()
 	block, blockParts := cs.ProposalBlock, cs.ProposalBlockParts
 
@@ -1291,7 +1244,6 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	stateCopy := cs.state.Copy()
 	eventCache := types.NewEventCache(cs.evsw)
 
-	epochCopy := cs.epoch.Copy()
 	// Execute and commit the block, update and save the state, and update the mempool.
 	// All calls to the proxyAppConn come here.
 	// NOTE: the block.AppHash wont reflect these txs until the next block
@@ -1317,7 +1269,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	fail.Fail() // XXX
 
 	// NewHeightStep!
-	cs.updateToStateAndEpoch(stateCopy, epochCopy)
+	cs.updateToState(stateCopy)
 
 	fail.Fail() // XXX
 
@@ -1391,8 +1343,6 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 		cs.ProposalBlock = wire.ReadBinary(&types.Block{}, cs.ProposalBlockParts.GetReader(), types.MaxBlockSize, &n, &err).(*types.Block)
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
 		log.Info("Received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
-		fmt.Printf("Received complete proposal block is %v\n", cs.ProposalBlock.String())
-		fmt.Printf("block.LastCommit is %v\n", cs.ProposalBlock.LastCommit)
 		if cs.Step == RoundStepPropose && cs.isProposalComplete() {
 			// Move onto the next step
 			cs.enterPrevote(height, cs.Round)

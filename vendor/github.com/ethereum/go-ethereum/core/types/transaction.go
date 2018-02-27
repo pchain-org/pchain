@@ -62,7 +62,6 @@ type txdata struct {
 	Price, GasLimit *big.Int
 	Recipient       *common.Address `rlp:"nil"` // nil means contract creation
 	Amount          *big.Int
-	Type            uint64
 	Payload         []byte
 	V               *big.Int // signature
 	R, S            *big.Int // signature
@@ -75,7 +74,6 @@ type jsonTransaction struct {
 	GasLimit     *hexutil.Big    `json:"gas"`
 	Recipient    *common.Address `json:"to"`
 	Amount       *hexutil.Big    `json:"value"`
-	Type         *hexutil.Uint64 `json:"type"`
 	Payload      *hexutil.Bytes  `json:"input"`
 	V            *hexutil.Big    `json:"v"`
 	R            *hexutil.Big    `json:"r"`
@@ -99,7 +97,6 @@ func newTransaction(nonce uint64, to *common.Address, amount, gasLimit, gasPrice
 		Recipient:    to,
 		Payload:      data,
 		Amount:       new(big.Int),
-//		Type:         new(big.Int),
 		GasLimit:     new(big.Int),
 		Price:        new(big.Int),
 		V:            new(big.Int),
@@ -178,7 +175,6 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		GasLimit:     (*hexutil.Big)(tx.data.GasLimit),
 		Recipient:    tx.data.Recipient,
 		Amount:       (*hexutil.Big)(tx.data.Amount),
-		Type:         (*hexutil.Uint64)(&tx.data.Type),
 		Payload:      (*hexutil.Bytes)(&tx.data.Payload),
 		V:            (*hexutil.Big)(tx.data.V),
 		R:            (*hexutil.Big)(tx.data.R),
@@ -221,7 +217,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		AccountNonce: uint64(*dec.AccountNonce),
 		Recipient:    dec.Recipient,
 		Amount:       (*big.Int)(dec.Amount),
-		Type:         uint64(*dec.Type),
 		GasLimit:     (*big.Int)(dec.GasLimit),
 		Price:        (*big.Int)(dec.Price),
 		Payload:      *dec.Payload,
@@ -236,8 +231,6 @@ func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Pay
 func (tx *Transaction) Gas() *big.Int      { return new(big.Int).Set(tx.data.GasLimit) }
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Price) }
 func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
-//func (tx *Transaction) Type() *big.Int   { return new(big.Int).Set(tx.data.Type) }
-func (tx *Transaction) Type() uint64        { return tx.data.Type }
 func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
 func (tx *Transaction) CheckNonce() bool   { return true }
 
@@ -287,7 +280,6 @@ func (tx *Transaction) Size() common.StorageSize {
 func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
 		nonce:      tx.data.AccountNonce,
-		mtype:      tx.data.Type,
 		price:      new(big.Int).Set(tx.data.Price),
 		gasLimit:   new(big.Int).Set(tx.data.GasLimit),
 		to:         tx.data.Recipient,
@@ -312,11 +304,6 @@ func (tx *Transaction) Cost() *big.Int {
 	total := new(big.Int).Mul(tx.data.Price, tx.data.GasLimit)
 	total.Add(total, tx.data.Amount)
 	return total
-}
-
-// Set the type of transaction.
-func (tx *Transaction) SetType(mtype uint64) {
-	tx.data.Type = mtype
 }
 
 func (tx *Transaction) RawSignatureValues() (*big.Int, *big.Int, *big.Int) {
@@ -504,7 +491,6 @@ type Message struct {
 	amount, price, gasLimit *big.Int
 	data                    []byte
 	checkNonce              bool
-	mtype			uint64
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount, gasLimit, price *big.Int, data []byte, checkNonce bool) Message {
@@ -528,4 +514,3 @@ func (m Message) Gas() *big.Int        { return m.gasLimit }
 func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
-func (m Message) Type() uint64         { return m.mtype }

@@ -21,7 +21,7 @@ type Client interface {
 	DeliverTxAsync(tx []byte) *ReqRes
 	CheckTxAsync(tx []byte, cb func(*types.Response)) *ReqRes
 	QueryAsync(reqQuery types.RequestQuery) *ReqRes
-	CommitAsync(validators []*types.Validator) *ReqRes
+	CommitAsync() *ReqRes
 
 	FlushSync() error
 	EchoSync(msg string) (res types.Result)
@@ -30,7 +30,7 @@ type Client interface {
 	DeliverTxSync(tx []byte) (res types.Result)
 	CheckTxSync(tx []byte) (res types.Result)
 	QuerySync(reqQuery types.RequestQuery) (resQuery types.ResponseQuery, err error)
-	CommitSync(validators []*types.Validator) (res types.Result)
+	CommitSync() (res types.Result)
 
 	InitChainAsync(validators []*types.Validator) *ReqRes
 	BeginBlockAsync(hash []byte, header *types.Header) *ReqRes

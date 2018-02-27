@@ -25,6 +25,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	//"github.com/ethereum/go-ethereum/cmd/geth"
 	//"github.com/ethereum/go-ethereum/logger"
+	//"github.com/tendermint/go-config"
 )
 
 func ethermintCmd(ctx *cli.Context) error {
@@ -39,12 +40,14 @@ func ethermintCmd(ctx *cli.Context) error {
 	*/
 
 	//always start ethereum
+	fmt.Println("get in ethermintCmd")
 	stack := ethereum.MakeSystemNode(clientIdentifier, version.Version, ctx.GlobalString(RpcLaddrFlag.Name), ctx)
 
 	//emmark
 	fmt.Println("ethermintCmd->utils.StartNode(stack)")
 	utils.StartNode(stack)
 
+	fmt.Println("ethermintCmd")
 	consensus, err := getConsensus()
 	if(err != nil) {
 		cmn.Exit(cmn.Fmt("Couldn't get consensus with: %v", err))
@@ -52,6 +55,7 @@ func ethermintCmd(ctx *cli.Context) error {
 	fmt.Printf("consensus is: %s\n", consensus)
 
 	if (consensus != tmTypes.CONSENSUS_POS) {
+		fmt.Println("consensus:",consensus)
 		fmt.Println("consensus is not pos, so not start the pos prototol")
 		return nil
 	}
@@ -99,8 +103,11 @@ func ethermintCmd(ctx *cli.Context) error {
 func getConsensus() (string, error) {
 
 	genDocFile := config.GetString("genesis_file")
+	fmt.Println("genesis_file:",genDocFile)
+	fmt.Println("genDocFile :", genDocFile)
 	var genDoc *tmTypes.GenesisDoc = nil
 	if !cmn.FileExists(genDocFile) {
+		fmt.Println("Couldn't read GenesisDoc file")
 		return "", errors.New("Couldn't read GenesisDoc file")
 	}
 

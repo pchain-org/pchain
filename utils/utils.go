@@ -27,7 +27,7 @@ func GetGenDocFromFile(config cfg.Config) *types.GenesisDoc {
 		Exit(Fmt("MakeGenesisValidatorsFromFile(), Error reading GenesisDoc: %v", err))
 	}
 
-	if len(genDoc.CurrentEpoch.Validators) == 0 {
+	if len(genDoc.Validators) == 0 {
 		Exit(Fmt("MakeGenesisValidatorsFromFile(), The genesis file has no validators"))
 	}
 

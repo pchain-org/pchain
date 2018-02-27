@@ -76,7 +76,7 @@ func (app *PersistentDummyApplication) CheckTx(tx []byte) types.Result {
 	return app.app.CheckTx(tx)
 }
 
-func (app *PersistentDummyApplication) Commit(validators []*types.Validator) types.Result {
+func (app *PersistentDummyApplication) Commit() types.Result {
 	// Save
 	appHash := app.app.state.Save()
 	log.Info("Saved state", "root", appHash)

@@ -43,10 +43,6 @@ var Routes = map[string]*rpc.RPCFunc{
 	"unsafe_start_cpu_profiler": rpc.NewRPCFunc(UnsafeStartCPUProfilerResult, "filename"),
 	"unsafe_stop_cpu_profiler":  rpc.NewRPCFunc(UnsafeStopCPUProfilerResult, ""),
 	"unsafe_write_heap_profile": rpc.NewRPCFunc(UnsafeWriteHeapProfileResult, "filename"),
-
-	//validator API
-	"validator_operation": rpc.NewRPCFunc(ValidatorOperationResult, "from,epoch,power,action,target,signature"),
-	"validator_epoch": rpc.NewRPCFunc(ValidatorEpochResult, "address"),
 }
 
 func SubscribeResult(wsCtx rpctypes.WSRPCContext, event string) (ctypes.TMResult, error) {
@@ -146,17 +142,4 @@ func UnsafeStopCPUProfilerResult() (ctypes.TMResult, error) {
 
 func UnsafeWriteHeapProfileResult(filename string) (ctypes.TMResult, error) {
 	return UnsafeWriteHeapProfile(filename)
-}
-
-
-
-//--------------
-//author@liaoyd
-func ValidatorOperationResult(from string, epoch int, power uint64, action string, target string, signature []byte) (ctypes.TMResult, error) {
-	//fmt.Println("func ValidatorOperationResult(s string) (ctypes.TMResult, error)")
-	return ValidatorOperation(from, epoch, power, action, target, signature)
-}
-
-func ValidatorEpochResult(address string) (ctypes.TMResult, error) {
-	return ValidatorEpoch(address)
 }

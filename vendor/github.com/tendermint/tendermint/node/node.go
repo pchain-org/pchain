@@ -33,7 +33,6 @@ import (
 
 	_ "net/http/pprof"
 	"fmt"
-	ep "github.com/tendermint/tendermint/epoch"
 )
 
 type Node struct {
@@ -68,7 +67,6 @@ func NewNodeDefault(config cfg.Config) *Node {
 	return NewNode(config, privValidator, proxy.DefaultClientCreator(config))
 }
 
-//liaoyd
 func NewNode(config cfg.Config, privValidator *types.PrivValidator, clientCreator proxy.ClientCreator) *Node {
 
 	// Get BlockStore
@@ -77,16 +75,11 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator, clientCreato
 
 	// Get State
 	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
-	// state := sm.GetState(config, stateDB, true)
-	state := sm.GetState(config, stateDB/*, false*/)
-
-	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
-	epoch := ep.GetEpoch(config, epochDB, state.LastEpochNumber)
-	state.Epoch = epoch
+	state := sm.GetState(config, stateDB, true)
 
 	// add the chainid and number of validators to the global config
 	config.Set("chain_id", state.ChainID)
-	config.Set("num_vals", state.Epoch.Validators.Size())
+	config.Set("num_vals", state.Validators.Size())
 
 	// Create the proxyApp, which manages connections (consensus, mempool, query)
 	// and sync tendermint and the app by replaying any necessary blocks
@@ -97,12 +90,6 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator, clientCreato
 
 	// reload the state (it may have been updated by the handshake)
 	state = sm.LoadState(stateDB)
-	epoch = ep.LoadOneEpoch(epochDB, state.LastEpochNumber)
-	state.Epoch = epoch
-
-	//liaoyd
-	_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
-	fmt.Println("state.Validators:", state.Epoch.Validators)
 
 	// Transaction indexing
 	var txIndexer txindex.TxIndexer
@@ -128,8 +115,8 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator, clientCreato
 	// Decide whether to fast-sync or not
 	// We don't fast-sync when the only validator is us.
 	fastSync := config.GetBool("fast_sync")
-	if state.Epoch.Validators.Size() == 1 {
-		addr, _ := state.Epoch.Validators.GetByIndex(0)
+	if state.Validators.Size() == 1 {
+		addr, _ := state.Validators.GetByIndex(0)
 		if bytes.Equal(privValidator.Address, addr) {
 			fastSync = false
 		}
@@ -143,7 +130,7 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator, clientCreato
 	mempoolReactor := mempl.NewMempoolReactor(config, mempool)
 
 	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch)
+	consensusState := consensus.NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}

@@ -11,6 +11,7 @@ import (
 	data "github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
 	"golang.org/x/crypto/ripemd160"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 )
 
 // PubKey is part of Account and Validator.
@@ -28,7 +29,8 @@ var pubKeyMapper data.Mapper
 func init() {
 	pubKeyMapper = data.NewMapper(PubKeyS{}).
 		RegisterImplementation(PubKeyEd25519{}, NameEd25519, TypeEd25519).
-		RegisterImplementation(PubKeySecp256k1{}, NameSecp256k1, TypeSecp256k1)
+		RegisterImplementation(PubKeySecp256k1{}, NameSecp256k1, TypeSecp256k1).
+		RegisterImplementation(EtherumPubKey{}, NameEtherum, TypeEtherum)
 }
 
 // PubKeyS add json serialization to PubKey
@@ -212,4 +214,49 @@ func (pubKey PubKeySecp256k1) Equals(other PubKey) bool {
 	} else {
 		return false
 	}
+}
+
+type EtherumPubKey []byte
+
+func (pubKey EtherumPubKey) Address() []byte {
+	cKey := ethcrypto.ToECDSAPub(pubKey[:])
+	address := ethcrypto.PubkeyToAddress(*cKey)
+	return address[:]
+}
+
+func (pubKey EtherumPubKey) Bytes() []byte {
+	return wire.BinaryBytes(struct{ PubKey }{pubKey})
+}
+
+func (pubKey EtherumPubKey) KeyString() string {
+	return Fmt("EthPubKey{%X}", pubKey[:])
+}
+
+func (pubKey EtherumPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
+	msg = ethcrypto.Keccak256(msg)
+	recoveredPub, err := ethcrypto.Ecrecover(msg, sig_.(EtherumSignature).SigByte())
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(pubKey[:], recoveredPub[:])
+}
+
+func (pubKey EtherumPubKey) Equals(other PubKey) bool {
+	if otherEd, ok := other.(EtherumPubKey); ok {
+		return bytes.Equal(pubKey[:], otherEd[:])
+	} else {
+		return false
+	}
+}
+
+func (pubKey EtherumPubKey) MarshalJSON() ([]byte, error) {
+
+	return data.Encoder.Marshal(pubKey[:])
+}
+
+func (p *EtherumPubKey) UnmarshalJSON(enc []byte) error {
+	var ref []byte
+	err := data.Encoder.Unmarshal(&ref, enc)
+	copy((*p)[:], ref)
+	return err
 }

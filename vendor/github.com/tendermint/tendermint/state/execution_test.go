@@ -13,7 +13,6 @@ import (
 	"github.com/tendermint/tendermint/proxy"
 	"github.com/tendermint/tendermint/state/txindex"
 	"github.com/tendermint/tendermint/types"
-	ep "github.com/tendermint/tendermint/epoch"
 )
 
 var (
@@ -35,9 +34,6 @@ func TestApplyBlock(t *testing.T) {
 	state := state()
 	indexer := &dummyIndexer{0}
 	state.TxIndexer = indexer
-
-	epoch := epoch()
-	state.Epoch = epoch
 
 	// make block
 	block := makeBlock(1, state)
@@ -70,18 +66,13 @@ func state() *State {
 	})
 }
 
-func epoch() *ep.Epoch {
-	return &ep.Epoch{}
-}
-
 func makeBlock(num int, state *State) *types.Block {
 	prevHash := state.LastBlockID.Hash
 	prevParts := types.PartSetHeader{}
-	_,val,_ := state.GetValidators()
-	valHash := val.Hash()
+	valHash := state.Validators.Hash()
 	prevBlockID := types.BlockID{prevHash, prevParts}
 	block, _ := types.MakeBlock(num, chainID, makeTxs(num), new(types.Commit),
-		prevBlockID, valHash, state.AppHash, nil, testPartSize)
+		prevBlockID, valHash, state.AppHash, testPartSize)
 	return block
 }
 
@@ -93,7 +84,6 @@ type dummyIndexer struct {
 func (indexer *dummyIndexer) Get(hash []byte) (*types.TxResult, error) {
 	return nil, nil
 }
-
 func (indexer *dummyIndexer) AddBatch(batch *txindex.Batch) error {
 	indexer.Indexed += batch.Size()
 	return nil
