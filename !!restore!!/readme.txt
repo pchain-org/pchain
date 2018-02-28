@@ -45,7 +45,7 @@ here are the deployment steps:
 	sudo cp ./bin/ethermint /usr/local/bin/
 
 	#package the genesis.json and init chain data
-	ethermint -datadir /home/ubuntu/.ethermint init ./src/github.com/tendermint/ethermint/dev/genesis.json
+	ethermint -datadir /home/ubuntu/.ethermint init ./src/github.com/tendermint/ethermint/dev/genesis.json ./src/github.com/tendermint/ethermint/dev/epoch.json
 
 	#create default user
 	cp -r ./src/github.com/tendermint/ethermint/dev/keystore /home/ubuntu/.ethermint/keystore
