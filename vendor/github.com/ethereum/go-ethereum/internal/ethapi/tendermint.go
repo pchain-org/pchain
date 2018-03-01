@@ -5,7 +5,6 @@ import (
 	"golang.org/x/net/context"
 	"github.com/tendermint/tendermint/rpc/core/types"
 	"fmt"
-	"github.com/tendermint/go-wire"
 	/*
 	"math/big"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -33,7 +32,7 @@ func NewPublicTendermintAPI(b Backend) *PublicTendermintAPI {
 }
 
 // GasPrice returns a suggestion for a gas price.
-func (s *PublicTendermintAPI) GetBlock(ctx context.Context, blockNumber rpc.BlockNumber) (string, error) {
+func (s *PublicTendermintAPI) GetBlock(ctx context.Context, blockNumber rpc.BlockNumber) (interface{}, error) {
 
 	var result core_types.TMResult
 
@@ -49,11 +48,11 @@ func (s *PublicTendermintAPI) GetBlock(ctx context.Context, blockNumber rpc.Bloc
 	}
 
 	//fmt.Printf("tdm_getBlock: %v\n", result)
-	return result.(*core_types.ResultBlock).Block.String(), nil
+	return result.(*core_types.ResultBlock).Block, nil
 }
 
 // GasPrice returns a suggestion for a gas price.
-func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string) (string, error) {
+func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string) (interface{}, error) {
 
 	var result core_types.TMResult
 
@@ -69,12 +68,12 @@ func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string) 
 	}
 
 	//fmt.Printf("tdm_getValidator: %v\n", result)
-	return string(wire.JSONBytes(result.(*core_types.ResultValidatorEpoch))), nil
+	return result.(*core_types.ResultValidatorEpoch), nil
 }
 
 
 func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from common.Address, epoch int, power uint64,
-						action string, target string) (string, error) {
+						action string, target string) (interface{}, error) {
 	fmt.Println("in func (s *PublicTendermintAPI) SendValidatorMessage()")
 
 	var result core_types.TMResult
@@ -118,7 +117,7 @@ func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from com
 		return "", err
 	}
 
-	return string(wire.JSONBytes(result.(*core_types.ResultValidatorOperation))), nil
+	return result.(*core_types.ResultValidatorOperation), nil
 }
 
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the

@@ -148,13 +148,8 @@ func newKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
 }
 
 func NewKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
-	id := uuid.NewRandom()
-	key := &Key{
-		Id:         id,
-		Address:    crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
-		PrivateKey: privateKeyECDSA,
-	}
-	return key
+
+	return newKeyFromECDSA(privateKeyECDSA)
 }
 
 // NewKeyForDirectICAP generates a key whose address fits into < 155 bits so it can fit

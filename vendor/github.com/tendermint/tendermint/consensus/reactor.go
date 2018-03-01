@@ -1423,11 +1423,14 @@ func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (
 	if types.AcceptVoteSet[target].Sum > conR.conS.Validators.TotalVotingPower()*2/3 && !types.AcceptVoteSet[target].Maj23 {
 		fmt.Println("update validator set!!!!")
 		types.AcceptVoteSet[target].Maj23 = true
+		//these following values should be filled when join/withdraw, and not modified here
+		/*
 		types.AcceptVoteSet[target].Epoch = validatorMsg.Epoch
 		types.AcceptVoteSet[target].PubKey = validatorMsg.PubKey
 		types.AcceptVoteSet[target].Power = validatorMsg.Power
 		types.AcceptVoteSet[target].Key = target
 		types.AcceptVoteSet[target].Action = validatorMsg.Action
+		*/
 	}
 	return true, nil
 }
