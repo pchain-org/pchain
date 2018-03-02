@@ -16,10 +16,10 @@ import (
 )
 
 var totalReward          = 210000000e+18
-var preAllocated         = 100000000e+18
-var rewardFirstYear      =  20000000e+18 //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
+var preAllocated         = 178500000e+18
+var rewardFirstYear      =  5727300e+18 //release all left 31500000 PCH by 10 years
+var descendPerYear 	 =   572730e+18
 var addedPerYear         = 0
-var descendPerYear 	 =   2000000e+18
 var allocated            = 0
 var epochNumberPerYear	 = 12
 
