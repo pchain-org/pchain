@@ -115,6 +115,7 @@ func (app *EthermintApplication) DeliverTx(txBytes []byte) abciTypes.Result {
 		glog.V(logger.Debug).Infof("DeliverTx error: %v", err)
 		return abciTypes.ErrInternalError
 	}
+
 	app.CollectTx(tx)
 	return abciTypes.OK
 }
@@ -241,29 +242,33 @@ func (app *EthermintApplication) validateTx(tx *ethTypes.Transaction) error {
 		return core.ErrNonce
 	}
 
-	// Check the transaction doesn't exceed the current
-	// block limit gas.
-	// TODO
-	/*if pool.gasLimit().Cmp(tx.Gas()) < 0 {
+	etd := tx.ExtendTxData()
+	if etd == nil {
+		// Check the transaction doesn't exceed the current
+		// block limit gas.
+		// TODO
+		/*if pool.gasLimit().Cmp(tx.Gas()) < 0 {
 		return core.ErrGasLimit
 	}*/
 
-	// Transactions can't be negative. This may never happen
-	// using RLP decoded transactions but may occur if you create
-	// a transaction using the RPC for example.
-	if tx.Value().Cmp(common.Big0) < 0 {
-		return core.ErrNegativeValue
-	}
+		// Transactions can't be negative. This may never happen
+		// using RLP decoded transactions but may occur if you create
+		// a transaction using the RPC for example.
+		if tx.Value().Cmp(common.Big0) < 0 {
+			return core.ErrNegativeValue
+		}
 
-	// Transactor should have enough funds to cover the costs
-	// cost == V + GP * GL
-	if currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-		return core.ErrInsufficientFunds
-	}
+		// Transactor should have enough funds to cover the costs
+		// cost == V + GP * GL
+		if currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+			return core.ErrInsufficientFunds
+		}
 
-	intrGas := core.IntrinsicGas(tx.Data(), tx.To() == nil, true) // homestead == true
-	if tx.Gas().Cmp(intrGas) < 0 {
-		return core.ErrIntrinsicGas
+		intrGas := core.IntrinsicGas(tx.Data(), tx.To() == nil, true) // homestead == true
+		if tx.Gas().Cmp(intrGas) < 0 {
+			return core.ErrIntrinsicGas
+		}
+
 	}
 
 	return nil

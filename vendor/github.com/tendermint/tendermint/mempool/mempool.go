@@ -14,6 +14,10 @@ import (
 	cfg "github.com/tendermint/go-config"
 	"github.com/tendermint/tendermint/proxy"
 	"github.com/tendermint/tendermint/types"
+	"github.com/ethereum/go-ethereum/rlp"
+	"fmt"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 )
 
 /*
@@ -198,7 +202,26 @@ func (mem *Mempool) resCb(req *abci.Request, res *abci.Response) {
 func (mem *Mempool) resCbNormal(req *abci.Request, res *abci.Response) {
 	switch r := res.Value.(type) {
 	case *abci.Response_CheckTx:
-		if r.CheckTx.Code == abci.CodeType_OK {
+
+		var err error = nil
+		txBytes := req.GetCheckTx().Tx
+		ethtx := new(ethTypes.Transaction)
+		rlpStream := rlp.NewStream(bytes.NewBuffer(txBytes), 0)
+		if err = ethtx.DecodeRLP(rlpStream); err != nil {
+			fmt.Printf("ethtx.DecodeRLP(rlpStream) error with: %s\n", err.Error())
+		}
+		fmt.Printf("abci.Response_CheckTx, tx is %x\n, decoded eth.transaction is %s\n", txBytes, ethtx.String())
+
+		etd := ethtx.ExtendTxData()
+		if etd != nil && etd.FuncName != "" {
+			checkTxCb := rpcTxHook.GetCheckTxCb(etd.FuncName)
+			err = checkTxCb(ethtx)
+			if err != nil {
+				fmt.Printf("checkTxCb failed for %s\n", etd.FuncName)
+			}
+		}
+
+		if r.CheckTx.Code == abci.CodeType_OK && err == nil{
 			mem.counter++
 			memTx := &mempoolTx{
 				counter: mem.counter,

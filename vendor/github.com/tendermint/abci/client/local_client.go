@@ -168,6 +168,10 @@ func (app *localClient) DeliverTxSync(tx []byte) (res types.Result) {
 	app.mtx.Lock()
 	res = app.Application.DeliverTx(tx)
 	app.mtx.Unlock()
+	app.callback(
+		types.ToRequestDeliverTx(tx),
+		types.ToResponseDeliverTx(res.Code, res.Data, res.Log),
+	)
 	return res
 }
 
@@ -175,6 +179,10 @@ func (app *localClient) CheckTxSync(tx []byte) (res types.Result) {
 	app.mtx.Lock()
 	res = app.Application.CheckTx(tx)
 	app.mtx.Unlock()
+	app.callback(
+		types.ToRequestCheckTx(tx),
+		types.ToResponseCheckTx(res.Code, res.Data, res.Log),
+	)
 	return res
 }
 
@@ -189,6 +197,10 @@ func (app *localClient) CommitSync(validators []*types.Validator) (res types.Res
 	app.mtx.Lock()
 	res = app.Application.Commit(validators)
 	app.mtx.Unlock()
+	app.callback(
+		types.ToRequestCommit(validators),
+		types.ToResponseCommit(res.Code, res.Data, res.Log),
+	)
 	return res
 }
 

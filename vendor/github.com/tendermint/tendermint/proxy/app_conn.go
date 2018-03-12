@@ -16,6 +16,7 @@ type AppConnConsensus interface {
 
 	BeginBlockSync(hash []byte, header *types.Header) (err error)
 	DeliverTxAsync(tx []byte) *abcicli.ReqRes
+	DeliverTxSync(tx []byte) (res types.Result)
 	EndBlockSync(height uint64) (types.ResponseEndBlock, error)
 	CommitSync(validators []*types.Validator) (res types.Result)
 }
@@ -71,6 +72,10 @@ func (app *appConnConsensus) BeginBlockSync(hash []byte, header *types.Header) (
 
 func (app *appConnConsensus) DeliverTxAsync(tx []byte) *abcicli.ReqRes {
 	return app.appConn.DeliverTxAsync(tx)
+}
+
+func (app *appConnConsensus) DeliverTxSync(tx []byte) types.Result {
+	return app.appConn.DeliverTxSync(tx)
 }
 
 func (app *appConnConsensus) EndBlockSync(height uint64) (types.ResponseEndBlock, error) {

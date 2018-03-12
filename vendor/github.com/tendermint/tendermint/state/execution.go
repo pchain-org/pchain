@@ -13,6 +13,7 @@ import (
 	"github.com/tendermint/tendermint/epoch"
 )
 
+
 //--------------------------------------------------
 // Execute the block
 
@@ -26,7 +27,7 @@ func (s *State) ValExecBlock(eventCache types.Fireable, proxyAppConn proxy.AppCo
 	}
 
 	// Execute the block txs
-	abciResponses, err := execBlockOnProxyApp(eventCache, proxyAppConn, block)
+	abciResponses, err := execBlockOnProxyApp(eventCache, proxyAppConn, s, block)
 	if err != nil {
 		// There was some error in proxyApp
 		// TODO Report error and wait for proxyApp to be available.
@@ -39,16 +40,24 @@ func (s *State) ValExecBlock(eventCache types.Fireable, proxyAppConn proxy.AppCo
 // Executes block's transactions on proxyAppConn.
 // Returns a list of transaction results and updates to the validator set
 // TODO: Generate a bitmap or otherwise store tx validity in state.
-func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus, block *types.Block) (*ABCIResponses, error) {
-	var validTxs, invalidTxs = 0, 0
+func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus,
+				state *State, block *types.Block) (*ABCIResponses, error) {
 
-	txIndex := 0
-	abciResponses := NewABCIResponses(block)
+	abciResponses := RefreshABCIResponses(block, state, eventCache, proxyAppConn)
 
+	// Begin block
+	err := proxyAppConn.BeginBlockSync(block.Hash(), types.TM2PB.Header(block.Header))
+	if err != nil {
+		log.Warn("Error in proxyAppConn.BeginBlock", "error", err)
+		return nil, err
+	}
+	/*
 	// Execute transactions and get hash
 	proxyCb := func(req *abci.Request, res *abci.Response) {
 		switch r := res.Value.(type) {
 		case *abci.Response_DeliverTx:
+
+			fmt.Printf("Called Called\n")
 			// TODO: make use of res.Log
 			// TODO: make use of this info
 			// Blocks may include invalid txs.
@@ -56,15 +65,15 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 			txError := ""
 			txResult := r.DeliverTx
 			if txResult.Code == abci.CodeType_OK {
-				validTxs++
+				abciResponses.ValidTxs++
 			} else {
 				log.Debug("Invalid tx", "code", txResult.Code, "log", txResult.Log)
-				invalidTxs++
+				abciResponses.InvalidTxs++
 				txError = txResult.Code.String()
 			}
 
-			abciResponses.DeliverTx[txIndex] = txResult
-			txIndex++
+			abciResponses.DeliverTx[abciResponses.TxIndex] = txResult
+			abciResponses.TxIndex++
 
 			// NOTE: if we count we can access the tx from the block instead of
 			// pulling it from the req
@@ -80,20 +89,19 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 		}
 	}
 	proxyAppConn.SetResponseCallback(proxyCb)
-
-	// Begin block
-	err := proxyAppConn.BeginBlockSync(block.Hash(), types.TM2PB.Header(block.Header))
-	if err != nil {
-		log.Warn("Error in proxyAppConn.BeginBlock", "error", err)
-		return nil, err
-	}
-
+	*/
 	// Run txs of block
 	for _, tx := range block.Txs {
+		res := proxyAppConn.DeliverTxSync(tx)
+		if res.IsErr() {
+			return nil, errors.New(res.Error())
+		}
+		/*
 		proxyAppConn.DeliverTxAsync(tx)
 		if err := proxyAppConn.Error(); err != nil {
 			return nil, err
 		}
+		*/
 	}
 
 	// End block
@@ -105,7 +113,7 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 
 	valDiff := abciResponses.EndBlock.Diffs
 
-	log.Info("Executed block", "height", block.Height, "valid txs", validTxs, "invalid txs", invalidTxs)
+	log.Info("Executed block", "height", block.Height, "valid txs", abciResponses.ValidTxs, "invalid txs", abciResponses.InvalidTxs)
 	if len(valDiff) > 0 {
 		log.Info("Update to validator set", "updates", abci.ValidatorsString(valDiff))
 	}
@@ -289,7 +297,7 @@ func (s *State) indexTxs(abciResponses *ABCIResponses) {
 // Returns the application root hash (result of abci.Commit)
 func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, state *State, block *types.Block) ([]byte, error) {
 	var eventCache types.Fireable // nil
-	_, err := execBlockOnProxyApp(eventCache, appConnConsensus, block)
+	_, err := execBlockOnProxyApp(eventCache, appConnConsensus, state, block)
 	if err != nil {
 		log.Warn("Error executing block on proxy app", "height", block.Height, "err", err)
 		return nil, err
@@ -306,4 +314,3 @@ func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, state *State, bloc
 	}
 	return res.Data, nil
 }
-

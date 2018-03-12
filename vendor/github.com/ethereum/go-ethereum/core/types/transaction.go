@@ -57,6 +57,13 @@ type Transaction struct {
 	from atomic.Value
 }
 
+type ExtendTxData struct {
+	FuncName    string
+	Params      KeyValueSet
+	ValidateCb  string
+	ApplyCb     string
+}
+
 type txdata struct {
 	AccountNonce    uint64
 	Price, GasLimit *big.Int
@@ -64,26 +71,33 @@ type txdata struct {
 	Amount          *big.Int
 	Type            uint64
 	Payload         []byte
+	ExtendTxData 	*ExtendTxData
 	V               *big.Int // signature
 	R, S            *big.Int // signature
 }
 
 type jsonTransaction struct {
-	Hash         *common.Hash    `json:"hash"`
-	AccountNonce *hexutil.Uint64 `json:"nonce"`
-	Price        *hexutil.Big    `json:"gasPrice"`
-	GasLimit     *hexutil.Big    `json:"gas"`
-	Recipient    *common.Address `json:"to"`
-	Amount       *hexutil.Big    `json:"value"`
-	Type         *hexutil.Uint64 `json:"type"`
-	Payload      *hexutil.Bytes  `json:"input"`
-	V            *hexutil.Big    `json:"v"`
-	R            *hexutil.Big    `json:"r"`
-	S            *hexutil.Big    `json:"s"`
+	Hash         *common.Hash            `json:"hash"`
+	AccountNonce *hexutil.Uint64         `json:"nonce"`
+	Price        *hexutil.Big            `json:"gasPrice"`
+	GasLimit     *hexutil.Big            `json:"gas"`
+	Recipient    *common.Address         `json:"to"`
+	Amount       *hexutil.Big            `json:"value"`
+	Type         *hexutil.Uint64         `json:"type"`
+	Payload      *hexutil.Bytes          `json:"input"`
+	ExtendTxData *ExtendTxData           `json:"extendTxData"`
+	V            *hexutil.Big            `json:"v"`
+	R            *hexutil.Big            `json:"r"`
+	S            *hexutil.Big            `json:"s"`
 }
 
 func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
 	return newTransaction(nonce, &to, amount, gasLimit, gasPrice, data)
+}
+
+func NewTransactionEx(nonce uint64, to *common.Address, amount, gasLimit, gasPrice *big.Int, data []byte,
+			etd *ExtendTxData) *Transaction {
+	return newTransactionEx(nonce, to, amount, gasLimit, gasPrice, data, etd)
 }
 
 func NewContractCreation(nonce uint64, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
@@ -100,6 +114,38 @@ func newTransaction(nonce uint64, to *common.Address, amount, gasLimit, gasPrice
 		Payload:      data,
 		Amount:       new(big.Int),
 //		Type:         new(big.Int),
+		GasLimit:     new(big.Int),
+		Price:        new(big.Int),
+		V:            new(big.Int),
+		R:            new(big.Int),
+		S:            new(big.Int),
+	}
+	if amount != nil {
+		d.Amount.Set(amount)
+	}
+	if gasLimit != nil {
+		d.GasLimit.Set(gasLimit)
+	}
+	if gasPrice != nil {
+		d.Price.Set(gasPrice)
+	}
+
+	return &Transaction{data: d}
+}
+
+func newTransactionEx(nonce uint64, to *common.Address, amount, gasLimit, gasPrice *big.Int, data []byte,
+			etd *ExtendTxData) *Transaction {
+
+	if len(data) > 0 {
+		data = common.CopyBytes(data)
+	}
+	d := txdata{
+		AccountNonce: nonce,
+		Recipient:    to,
+		Payload:      data,
+		ExtendTxData: etd,
+		Amount:       new(big.Int),
+		//		Type:         new(big.Int),
 		GasLimit:     new(big.Int),
 		Price:        new(big.Int),
 		V:            new(big.Int),
@@ -180,6 +226,7 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		Amount:       (*hexutil.Big)(tx.data.Amount),
 		Type:         (*hexutil.Uint64)(&tx.data.Type),
 		Payload:      (*hexutil.Bytes)(&tx.data.Payload),
+		ExtendTxData: (*ExtendTxData)(tx.data.ExtendTxData),
 		V:            (*hexutil.Big)(tx.data.V),
 		R:            (*hexutil.Big)(tx.data.R),
 		S:            (*hexutil.Big)(tx.data.S),
@@ -225,6 +272,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		GasLimit:     (*big.Int)(dec.GasLimit),
 		Price:        (*big.Int)(dec.Price),
 		Payload:      *dec.Payload,
+		ExtendTxData: (*ExtendTxData)(dec.ExtendTxData),
 		V:            (*big.Int)(dec.V),
 		R:            (*big.Int)(dec.R),
 		S:            (*big.Int)(dec.S),
@@ -233,6 +281,7 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 }
 
 func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
+func (tx *Transaction) ExtendTxData() *ExtendTxData { return tx.data.ExtendTxData }
 func (tx *Transaction) Gas() *big.Int      { return new(big.Int).Set(tx.data.GasLimit) }
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Price) }
 func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
@@ -354,6 +403,7 @@ func (tx *Transaction) String() string {
 	GasLimit  %#x
 	Value:    %#x
 	Data:     0x%x
+	ExtendTxData:  %v
 	V:        %#x
 	R:        %#x
 	S:        %#x
@@ -368,6 +418,7 @@ func (tx *Transaction) String() string {
 		tx.data.GasLimit,
 		tx.data.Amount,
 		tx.data.Payload,
+		tx.data.ExtendTxData,
 		tx.data.V,
 		tx.data.R,
 		tx.data.S,
@@ -529,3 +580,55 @@ func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
 func (m Message) Type() uint64         { return m.mtype }
+
+
+type EtdValidateCb func() error
+type EtdApplyCb func() error
+
+var validateCbMap map[string]EtdValidateCb = make(map[string]EtdValidateCb)
+var applyCbMap    map[string]EtdApplyCb = make(map[string]EtdApplyCb)
+
+func RegisterValidateCb(name string, validateCb EtdValidateCb) error {
+
+	//fmt.Printf("RegisterValidateCb (name, validateCb) = (%s, %v)\n", name, validateCb)
+	_, ok := validateCbMap[name]
+	if ok {
+		//fmt.Printf("RegisterValidateCb return (%v, %v)\n", cb, ok)
+		return errors.New("the name has registered in ValidateCbMap")
+	}
+
+	validateCbMap[name] = validateCb
+	return nil
+}
+
+func GetValidateCb(name string) EtdValidateCb {
+
+	cb, ok := validateCbMap[name]
+	if ok {
+		return cb
+	}
+
+	return nil
+}
+
+func RegisterApplyCb(name string, applyCb EtdApplyCb) error {
+
+	_, ok := applyCbMap[name]
+	if ok {
+		return errors.New("the name has registered in ValidateCbMap")
+	}
+
+	applyCbMap[name] = applyCb
+
+	return nil
+}
+
+func GetApplyCb(name string) EtdApplyCb {
+
+	cb, ok := applyCbMap[name]
+	if ok {
+		return cb
+	}
+
+	return nil
+}

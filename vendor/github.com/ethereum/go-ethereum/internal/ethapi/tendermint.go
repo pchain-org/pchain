@@ -3,17 +3,24 @@ package ethapi
 import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/context"
-	"github.com/tendermint/tendermint/rpc/core/types"
 	"fmt"
-	/*
-	"math/big"
-	"github.com/ethereum/go-ethereum/accounts"
-	ethapi "github.com/ethereum/go-ethereum/internal/ethapi"
-	*/
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"strings"
 	"github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/tendermint/tendermint/rpc/core/types"
+)
+
+var (
+	svm_ValidateCbName string = "svm_ValidateCb"
+	svm_ApplyCbName string = "svm_ApplyCb"
+)
+
+const (
+	SVM_JOIN = "join"
+	SVM_WITHDRAW = "withdraw"
+	SVM_ACCEPT = "accept"
 )
 
 type PublicTendermintAPI struct {
@@ -72,56 +79,75 @@ func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string) 
 }
 
 
-func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from common.Address, epoch int, power uint64,
-						action string, target string) (interface{}, error) {
+func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from common.Address, epoch uint64, power uint64,
+						action string, hash string) (common.Hash, error) {
 	fmt.Println("in func (s *PublicTendermintAPI) SendValidatorMessage()")
 
-	var result core_types.TMResult
-
 	action = strings.ToLower(action)
-	if action != "join" && action != "withdraw" && action != "accept" {
-		return "", errors.New("action should be {join|withdraw|accept}")
+	if action != SVM_JOIN && action != SVM_WITHDRAW && action != SVM_ACCEPT {
+		return common.Hash{}, errors.New("action should be {join|withdraw|accept}")
 	}
 
-	targetStr := target
-	targetAddr := common.Address{}
-	if action == "accept" {
-		if !common.IsHexAddress(target) {
-			return "", errors.New("target format error; should be hex string and have length 40 for Address")
+	//targetStr := target
+	//targetAddr := common.Address{}
+	if action == SVM_ACCEPT {
+		if hash == "" {
+			return common.Hash{}, errors.New("parameter hash can not be empty or zero-length")
 		}
-		targetAddr = common.HexToAddress(target)
-		targetStr = fmt.Sprintf("%X", targetAddr.Bytes())
+		//targetAddr = common.HexToAddress(target)
+		//targetStr = fmt.Sprintf("%X", targetAddr.Bytes())
 	}
 
 	fromStr := fmt.Sprintf("%X", from.Bytes())
+	/*
 	data := fmt.Sprintf("%s-%X-%X-%s-%s", fromStr, epoch, power, action, targetStr)
 	fmt.Printf("in func (s *PublicTendermintAPI) SendValidatorMessage(), data to sign is: %v\n", data)
 
 	signature, err := s.Sign(ctx, from, data)
 	if err != nil {
-		return "", err
+		return common.Hash{}, err
 	}
-
-	params := map[string]interface{}{
+	*/
+	/*params := map[string]interface{}{
 		"from": fromStr,
 		"epoch":  epoch,
 		"power":  power,
 		"action":   action,
-		"target":   targetStr,
-		"signature":  signature,
+		"target":   target,
+	}
+	*/
+	params := types.MakeKeyValueSet(5)
+	params.Set("from", fromStr)
+	params.Set("epoch", epoch)
+	params.Set("power", power)
+	params.Set("action", action)
+	params.Set("hash", hash)
+
+	etd := &types.ExtendTxData {
+		FuncName:    "SendValidatorMessage",
+		Params:      params,
+		ValidateCb:  svm_ValidateCbName,
+		ApplyCb:     svm_ApplyCbName,
 	}
 
-	_, err = s.Client.Call("validator_operation", params, &result)
-	if err != nil {
-		fmt.Println(err)
-		return "", err
+	args := SendTxArgs {
+		From:         from,
+		To:           nil,
+		Gas:          nil,
+		GasPrice:     nil,
+		Value:        nil,
+		Data:         nil,
+		Nonce:        nil,
+		Type:         nil,
+		ExtendTxData: etd,
 	}
 
-	return result.(*core_types.ResultValidatorOperation), nil
+	return ApiBridge.SendTransaction(ctx, args)
 }
 
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
 // transaction pool.
+/*
 func (s *PublicTendermintAPI) Sign(ctx context.Context, from common.Address, dataStr string) ([]byte, error) {
 
 	fmt.Printf("(s *PublicTendermintAPI) SignAndVerify(), from: %x, data: %v\n", from, dataStr)
@@ -150,4 +176,11 @@ func (s *PublicTendermintAPI) Sign(ctx context.Context, from common.Address, dat
 	fmt.Printf("SignAndVerify(), sig is: %X\n", sig)
 
 	return sig, nil
+}
+*/
+
+func init() {
+
+	types.RegisterValidateCb(svm_ValidateCbName, func() error{ fmt.Println("svm_ValidateCb"); return nil})
+	types.RegisterApplyCb(svm_ApplyCbName, func() error { fmt.Println("svm_ApplyCb"); return nil})
 }

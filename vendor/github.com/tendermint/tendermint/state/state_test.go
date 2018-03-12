@@ -15,7 +15,7 @@ func TestStateCopyEquals(t *testing.T) {
 	config := tendermint_test.ResetConfig("state_")
 	// Get State db
 	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
-	state := GetState(config, stateDB, false)
+	state := GetState(config, stateDB/*, false*/)
 
 	stateCopy := state.Copy()
 
@@ -34,7 +34,7 @@ func TestStateSaveLoad(t *testing.T) {
 	config := tendermint_test.ResetConfig("state_")
 	// Get State db
 	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
-	state := GetState(config, stateDB, false)
+	state := GetState(config, stateDB/*, false*/)
 
 	state.LastBlockHeight += 1
 	state.Save()
@@ -50,13 +50,13 @@ func TestABCIResponsesSaveLoad(t *testing.T) {
 
 	config := tendermint_test.ResetConfig("state_")
 	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
-	state := GetState(config, stateDB, false)
+	state := GetState(config, stateDB/*, false*/)
 
 	state.LastBlockHeight += 1
 
 	// build mock responses
 	block := makeBlock(2, state)
-	abciResponses := NewABCIResponses(block)
+	abciResponses := RefreshABCIResponses(block, nil, nil, nil)
 	abciResponses.DeliverTx[0] = &abci.ResponseDeliverTx{Data: []byte("foo")}
 	abciResponses.DeliverTx[1] = &abci.ResponseDeliverTx{Data: []byte("bar"), Log: "ok"}
 	abciResponses.EndBlock = abci.ResponseEndBlock{Diffs: []*abci.Validator{
