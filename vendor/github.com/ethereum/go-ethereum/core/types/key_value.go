@@ -2,6 +2,7 @@ package types
 
 import (
 	"errors"
+	"fmt"
 )
 
 type KeyValue struct {
@@ -13,9 +14,9 @@ type KeyValueSet struct {
 	KVArray []KeyValue
 }
 
-func MakeKeyValueSet(size int) KeyValueSet{
+func MakeKeyValueSet() KeyValueSet{
 
-	return KeyValueSet{KVArray: make([]KeyValue, size)}
+	return KeyValueSet{KVArray: make([]KeyValue, 0)}
 }
 
 func (kv *KeyValueSet) Size() int {
@@ -56,4 +57,20 @@ func (kv *KeyValueSet) GetByIndex(index int) (string, interface{}, error) {
 	item := kv.KVArray[index]
 
 	return item.Key, item.Value, nil
+}
+
+func (kv *KeyValueSet) String() string {
+
+	ret := "{"
+
+	for i, item := range kv.KVArray {
+		ret += fmt.Sprintf("\"%s\":\"%v\"", item.Key, item.Value)
+		if i != len(kv.KVArray) - 1 {
+			ret += ","
+		}
+	}
+
+	ret += "}"
+
+	return ret
 }

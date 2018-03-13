@@ -46,9 +46,9 @@ func svmCheckTxCb(tx *ethTypes.Transaction) error {
 
 	params := tx.ExtendTxData().Params
 	hashInt, _ := params.Get("hash")
-	hash := tx_b2s(hashInt.([]uint8))
+	hash := string(hashInt.([]uint8))
 	actionInt, _ := params.Get("action")
-	action := tx_b2s(actionInt.([]uint8))
+	action := string(actionInt.([]uint8))
 
 	if action == SVM_ACCEPT {
 		vo := ep.LoadOperationWithHash(hash)
@@ -73,15 +73,15 @@ func svmDeliverTxCb(tx *ethTypes.Transaction) error {
 
 	params := tx.ExtendTxData().Params
 	fromStrInt, _ := params.Get("from")
-	fromStr := tx_b2s(fromStrInt.([]uint8))
+	fromStr := string(fromStrInt.([]uint8))
 	epochInt, _ := params.Get("epoch")
-	epoch := tx_b2i(epochInt.([]uint8))
+	epoch := common.BytesToNumber(epochInt.([]uint8))
 	powerInt, _ := params.Get("power")
-	power := tx_b2i(powerInt.([]uint8))
+	power := common.BytesToNumber(powerInt.([]uint8))
 	actionInt, _ := params.Get("action")
-	action := tx_b2s(actionInt.([]uint8))
+	action := string(actionInt.([]uint8))
 	hashInt, _ := params.Get("hash")
-	hash := tx_b2s(hashInt.([]uint8))
+	hash := string(hashInt.([]uint8))
 
 	vo := ep.LoadOperationWithHash(hash)
 

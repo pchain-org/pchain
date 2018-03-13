@@ -7,8 +7,11 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	st "github.com/ethereum/go-ethereum/core/state"
+	core "github.com/ethereum/go-ethereum/core"
 	"strings"
 	"github.com/syndtr/goleveldb/leveldb/errors"
+	"math/big"
 	"github.com/tendermint/tendermint/rpc/core/types"
 )
 
@@ -116,12 +119,14 @@ func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from com
 		"target":   target,
 	}
 	*/
-	params := types.MakeKeyValueSet(5)
+	params := types.MakeKeyValueSet()
 	params.Set("from", fromStr)
 	params.Set("epoch", epoch)
 	params.Set("power", power)
 	params.Set("action", action)
 	params.Set("hash", hash)
+
+	fmt.Printf("params are : %s\n", params.String())
 
 	etd := &types.ExtendTxData {
 		FuncName:    "SendValidatorMessage",
@@ -181,6 +186,79 @@ func (s *PublicTendermintAPI) Sign(ctx context.Context, from common.Address, dat
 
 func init() {
 
-	types.RegisterValidateCb(svm_ValidateCbName, func() error{ fmt.Println("svm_ValidateCb"); return nil})
-	types.RegisterApplyCb(svm_ApplyCbName, func() error { fmt.Println("svm_ApplyCb"); return nil})
+	core.RegisterValidateCb(svm_ValidateCbName, svm_ValidateCb)
+	core.RegisterApplyCb(svm_ApplyCbName, svm_ApplyCb)
+}
+
+
+func svm_ValidateCb(tx *types.Transaction, state *st.StateDB) error{
+
+	fmt.Println("svm_ValidateCb")
+
+	etd := tx.ExtendTxData()
+	fmt.Printf("params are : %s\n", etd.Params.String())
+
+	//tx from ethereum, the params have not been converted to []byte
+	fromInt, _ := etd.Params.Get("from")
+	from := common.HexToAddress(fromInt.(string))
+	actionInt, _ := etd.Params.Get("action")
+	action := actionInt.(string)
+	powerInt, _ := etd.Params.Get("power")
+	power := powerInt.(uint64)
+	biPower := big.NewInt(int64(power))
+	fmt.Printf("balance for(%s) is : (%v, %v), biPower is %v\n",
+		from.Hex(), state.GetBalance(from), state.GetLockedBalance(from), biPower.String())
+	if action == SVM_JOIN {
+		if state.GetBalance(from).Cmp(biPower) < 0 {
+			return errors.New("balance is insufficient for voting power")
+		}
+	}
+	if action == SVM_WITHDRAW {
+		if state.GetLockedBalance(from).Cmp(biPower) < 0 {
+			return errors.New("locked balance is smaller than withdrawing amount")
+		}
+	}
+	fmt.Printf("balance for(%s) is : (%v, %v), biPower is %v\n",
+		from.Hex(), state.GetBalance(from), state.GetLockedBalance(from), biPower.String())
+
+	return nil
+}
+
+
+func svm_ApplyCb(tx *types.Transaction, state *st.StateDB) error{
+
+	fmt.Println("svm_ApplyCb")
+
+	etd := tx.ExtendTxData()
+	//tx from ethereum, the params have been converted to []byte
+	fromInt, _ := etd.Params.Get("from")
+	from := common.BytesToAddress(common.FromHex(string(fromInt.([]byte))))
+	actionInt, _ := etd.Params.Get("action")
+	action := string(actionInt.([]byte))
+	powerInt, _ := etd.Params.Get("power")
+	biPower := common.BytesToBig(powerInt.([]byte))
+
+	fmt.Printf("balance for(%s) is : (%v, %v), biPower is %v\n",
+		from.Hex(), state.GetBalance(from), state.GetLockedBalance(from), biPower.String())
+	if action == SVM_JOIN {
+		if state.GetBalance(from).Cmp(biPower) < 0 {
+			return errors.New("balance is insufficient for voting power")
+		} else {
+
+			state.SubBalance(from, biPower)
+			state.AddLockedBalance(from, biPower)
+		}
+	}
+	if action == SVM_WITHDRAW {
+		if state.GetLockedBalance(from).Cmp(biPower) < 0 {
+			return errors.New("locked balance is smaller than withdrawing amount")
+		} else {
+			state.AddBalance(from, biPower)
+			state.SubLockedBalance(from, biPower)
+		}
+	}
+	fmt.Printf("balance for(%s) is : (%v, %v), biPower is %v\n",
+		from.Hex(), state.GetBalance(from), state.GetLockedBalance(from), biPower.String())
+
+	return nil
 }

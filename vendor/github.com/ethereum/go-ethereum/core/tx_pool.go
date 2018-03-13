@@ -318,8 +318,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		}
 	} else {
 		fmt.Printf("etd.ValidateCb is %s\n", etd.ValidateCb)
-		if validateCb := types.GetValidateCb(etd.ValidateCb); validateCb != nil {
-			if err = validateCb(); err != nil {
+		if validateCb := GetValidateCb(etd.ValidateCb); validateCb != nil {
+			if err = validateCb(tx, currentState); err != nil {
 				return err
 			}
 		}
