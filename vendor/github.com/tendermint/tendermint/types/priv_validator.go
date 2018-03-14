@@ -11,11 +11,10 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
-	"crypto/ecdsa"
 	crand "crypto/rand"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/accounts"
 )
 
 const (
@@ -83,15 +82,52 @@ func (privVal *PrivValidator) SetSigner(s Signer) {
 	privVal.Signer = s
 }
 
+
+func NewKeyStore(keydir string, scryptN, scryptP int) *keystore.KeyStorePassphrase {
+	return keystore.NewKeyStoreByTenermint(keydir, scryptN, scryptP)
+}
+
+
+
+func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
+	newKey, err := keystore.NewKey(crand.Reader)
+	if err != nil {
+		return nil,nil
+	}
+	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
+	privKey := crypto.EtherumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
+	fmt.Println(len(privKey), len(pubKey), len(pubKey.Address()))
+	return &PrivValidator{
+		Address:       pubKey.Address(),
+		PubKey:        pubKey,
+		PrivKey:       privKey,
+		LastHeight:    0,
+		LastRound:     0,
+		LastStep:      stepNone,
+		LastSignature: nil,
+		LastSignBytes: nil,
+		filePath:      "",
+		Signer:        NewDefaultSigner(privKey),
+	}, newKey
+
+}
+
 // Generates a new validator with private key.
 func GenPrivValidator() *PrivValidator {
-	privateKeyECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), crand.Reader)
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+	//password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
+	ks := keystore.NewKeyStoreByTenermint("", scryptN, scryptP)
+	newKey, err := keystore.NewKey(crand.Reader)
 	if err != nil {
 		return nil
 	}
-	newKey := keystore.NewKeyFromECDSA(privateKeyECDSA)
+	a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
+	if err := ks.StoreKey(a.URL.Path, newKey, ""); err != nil {
+		return nil
+	}
 	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
-	privKey := crypto.EtherumPrivKey(ethcrypto.FromECDSA(newKey.PrivateKey))
+	privKey := crypto.EtherumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
 	fmt.Println(len(privKey), len(pubKey), len(pubKey.Address()))
 	return &PrivValidator{
 		Address:       pubKey.Address(),
