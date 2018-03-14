@@ -76,11 +76,11 @@ func init_em_files(coreGenesis core.Genesis, privValidator *types.PrivValidator)
 			ChainID: cmn.Fmt("test-chain-%v", cmn.RandStr(6)),
 			Consensus: types.CONSENSUS_POS,
 			RewardScheme: types.RewardSchemeDoc {
-				TotalReward : "210000000000000000000000000",
-				PreAllocated : "100000000000000000000000000",
-				AddedPerYear : "0",
-				RewardFirstYear : "20000000000000000000000000", //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
-				DescendPerYear : "2000000000000000000000000",
+  				TTotalReward :     "210000000000000000000000000",
+                PreAllocated :    "178500000000000000000000000",
+				AddedPerYear :    "0",
+				RewardFirstYear :   "5727300000000000000000000",
+				DescendPerYear :     "572730000000000000000000",
 				Allocated : "0",
 			},
 			CurrentEpoch: types.OneEpochDoc{
