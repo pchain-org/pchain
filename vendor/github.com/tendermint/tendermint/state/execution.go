@@ -186,7 +186,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 		abciResponses.EndBlock.Diffs = <-types.EndChannel
 		// fmt.Println("Diffs after:", abciResponses.EndBlock.Diffs)
 
-		s.Epoch.EnterNewEpoch(block.Height, abciResponses.EndBlock.Diffs)
+		s.Epoch.EnterNewEpoch(block.Height)
 
 	} else if err != nil {
 		log.Warn(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
