@@ -112,7 +112,9 @@ func (a *ABCIResponses) ResCb(req *abci.Request, res *abci.Response) {
 			etd := ethtx.ExtendTxData()
 			if etd != nil && etd.FuncName != "" {
 				deliverTxCb := rpcTxHook.GetDeliverTxCb(etd.FuncName)
-				deliverTxCb(ethtx)
+				if deliverTxCb != nil {
+					deliverTxCb(ethtx)
+				}
 			}
 
 			a.ValidTxs++

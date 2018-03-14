@@ -105,7 +105,10 @@ type TxPool struct {
 	homestead bool
 }
 
+var TxPoolSigner types.Signer = nil
+
 func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
+
 	pool := &TxPool{
 		config:       config,
 		signer:       types.NewEIP155Signer(config.ChainId),
@@ -122,6 +125,8 @@ func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentState
 		events:       eventMux.Subscribe(ChainHeadEvent{}, GasPriceChanged{}, RemovedTransactionEvent{}),
 		quit:         make(chan struct{}),
 	}
+
+	TxPoolSigner = pool.signer
 
 	pool.resetState()
 
@@ -317,8 +322,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 			return ErrIntrinsicGas
 		}
 	} else {
-		fmt.Printf("etd.ValidateCb is %s\n", etd.ValidateCb)
-		if validateCb := GetValidateCb(etd.ValidateCb); validateCb != nil {
+		fmt.Printf("etd.FuncName is %s\n", etd.FuncName)
+		if validateCb := GetValidateCb(etd.FuncName); validateCb != nil {
 			if err = validateCb(tx, currentState); err != nil {
 				return err
 			}

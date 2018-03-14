@@ -7,16 +7,12 @@ import (
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	tmTypes "github.com/tendermint/tendermint/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	//"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
 	etdFuncName string = "SendValidatorMessage"
-)
-
-const (
-	SVM_JOIN = "join"
-	SVM_WITHDRAW = "withdraw"
-	SVM_ACCEPT = "accept"
 )
 
 type svmEntity struct {
@@ -50,7 +46,7 @@ func svmCheckTxCb(tx *ethTypes.Transaction) error {
 	actionInt, _ := params.Get("action")
 	action := string(actionInt.([]uint8))
 
-	if action == SVM_ACCEPT {
+	if action == ep.SVM_ACCEPT {
 		vo := ep.LoadOperationWithHash(hash)
 		if vo == nil {
 			return errors.New("hash " + hash + " not found in ValidatorOperation, should exist")
@@ -68,26 +64,38 @@ func svmDeliverTxCb(tx *ethTypes.Transaction) error {
 		localEntity.loaded = true
 	}
 
-	var err error = nil
+	fmt.Printf("svm_DeliverTxCb, core.TxPoolSigner is %v, must not be nil\n", core.TxPoolSigner)
+	pubKey, err := core.TxPoolSigner.PublicKey(tx)
+	//addr := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("svm_DeliverTxCb, pubKey is %x\n", pubKey/*, addr*/)
+	fmt.Printf("svm_DeliverTxCb, params are: %s\n", tx.ExtendTxData().Params.String())
+
 	txhash := tx.Hash().Hex()
 
 	params := tx.ExtendTxData().Params
 	fromStrInt, _ := params.Get("from")
 	fromStr := string(fromStrInt.([]uint8))
 	epochInt, _ := params.Get("epoch")
-	epoch := common.BytesToNumber(epochInt.([]uint8))
+	epoch := common.Bytes2Uint64(epochInt.([]uint8))
 	powerInt, _ := params.Get("power")
-	power := common.BytesToNumber(powerInt.([]uint8))
+	power := common.Bytes2Uint64(powerInt.([]uint8))
 	actionInt, _ := params.Get("action")
 	action := string(actionInt.([]uint8))
 	hashInt, _ := params.Get("hash")
 	hash := string(hashInt.([]uint8))
 
+	fmt.Printf("svm_DeliverTxCb, after decode, params are: (fromStr, epoch, power, action, hash) = (%s, %d, %d, %s, %s)\n",
+		fromStr, epoch, power, action, hash)
+
 	vo := ep.LoadOperationWithHash(hash)
 
 	epochKey := ep.VA_UNCONFIRMED_EPOCH
 
-	if action == SVM_JOIN || action == SVM_WITHDRAW {
+	if action == ep.SVM_JOIN || action == ep.SVM_WITHDRAW {
 
 		if vo != nil {
 			return errors.New("hash " + hash + " should not exist")
@@ -95,9 +103,10 @@ func svmDeliverTxCb(tx *ethTypes.Transaction) error {
 
 		vo = &ep.ValidatorOperation{
 			Validator: fromStr,
+			PubKey: pubKey,
 			TxHash: txhash,
 			Action: action,
-			Amount: int(power),
+			Amount: power,
 			Epoch: int(epoch),
 			Confirmed: false,
 		}
@@ -108,7 +117,7 @@ func svmDeliverTxCb(tx *ethTypes.Transaction) error {
 		}
 		localEntity.voMap[epochKey] = voSet
 
-	} else if action == SVM_ACCEPT {
+	} else if action == ep.SVM_ACCEPT {
 
 		if vo == nil {
 			return errors.New("hash " + hash + " should not exist")

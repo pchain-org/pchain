@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	st "github.com/ethereum/go-ethereum/core/state"
-	core "github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core"
 	"strings"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"math/big"
@@ -16,8 +16,7 @@ import (
 )
 
 var (
-	svm_ValidateCbName string = "svm_ValidateCb"
-	svm_ApplyCbName string = "svm_ApplyCb"
+	SvmFuncName string = "SendValidatorMessage"
 )
 
 const (
@@ -129,10 +128,8 @@ func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from com
 	fmt.Printf("params are : %s\n", params.String())
 
 	etd := &types.ExtendTxData {
-		FuncName:    "SendValidatorMessage",
+		FuncName:    SvmFuncName,
 		Params:      params,
-		ValidateCb:  svm_ValidateCbName,
-		ApplyCb:     svm_ApplyCbName,
 	}
 
 	args := SendTxArgs {
@@ -186,8 +183,8 @@ func (s *PublicTendermintAPI) Sign(ctx context.Context, from common.Address, dat
 
 func init() {
 
-	core.RegisterValidateCb(svm_ValidateCbName, svm_ValidateCb)
-	core.RegisterApplyCb(svm_ApplyCbName, svm_ApplyCb)
+	core.RegisterValidateCb(SvmFuncName, svm_ValidateCb)
+	core.RegisterApplyCb(SvmFuncName, svm_ApplyCb)
 }
 
 
@@ -225,6 +222,7 @@ func svm_ValidateCb(tx *types.Transaction, state *st.StateDB) error{
 }
 
 
+/*must not handle SVM_WITHDRAW here, need wait for 2 more epoch*/
 func svm_ApplyCb(tx *types.Transaction, state *st.StateDB) error{
 
 	fmt.Println("svm_ApplyCb")
@@ -249,14 +247,7 @@ func svm_ApplyCb(tx *types.Transaction, state *st.StateDB) error{
 			state.AddLockedBalance(from, biPower)
 		}
 	}
-	if action == SVM_WITHDRAW {
-		if state.GetLockedBalance(from).Cmp(biPower) < 0 {
-			return errors.New("locked balance is smaller than withdrawing amount")
-		} else {
-			state.AddBalance(from, biPower)
-			state.SubLockedBalance(from, biPower)
-		}
-	}
+
 	fmt.Printf("balance for(%s) is : (%v, %v), biPower is %v\n",
 		from.Hex(), state.GetBalance(from), state.GetLockedBalance(from), biPower.String())
 

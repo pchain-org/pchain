@@ -38,7 +38,9 @@ func BroadcastTxSync(tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
 	etd := ethtx.ExtendTxData()
 	if etd != nil && etd.FuncName != "" {
 		receiveTxCb := rpcTxHook.GetReceiveTxCb(etd.FuncName)
-		receiveTxCb()
+		if receiveTxCb != nil {
+			receiveTxCb()
+		}
 	}
 
 	resCh := make(chan *abci.Response, 1)

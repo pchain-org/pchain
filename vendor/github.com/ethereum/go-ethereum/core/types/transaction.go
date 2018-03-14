@@ -60,8 +60,6 @@ type Transaction struct {
 type ExtendTxData struct {
 	FuncName    string
 	Params      KeyValueSet
-	ValidateCb  string
-	ApplyCb     string
 }
 
 type txdata struct {

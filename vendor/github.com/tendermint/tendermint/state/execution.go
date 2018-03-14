@@ -51,45 +51,7 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 		log.Warn("Error in proxyAppConn.BeginBlock", "error", err)
 		return nil, err
 	}
-	/*
-	// Execute transactions and get hash
-	proxyCb := func(req *abci.Request, res *abci.Response) {
-		switch r := res.Value.(type) {
-		case *abci.Response_DeliverTx:
 
-			fmt.Printf("Called Called\n")
-			// TODO: make use of res.Log
-			// TODO: make use of this info
-			// Blocks may include invalid txs.
-			// reqDeliverTx := req.(abci.RequestDeliverTx)
-			txError := ""
-			txResult := r.DeliverTx
-			if txResult.Code == abci.CodeType_OK {
-				abciResponses.ValidTxs++
-			} else {
-				log.Debug("Invalid tx", "code", txResult.Code, "log", txResult.Log)
-				abciResponses.InvalidTxs++
-				txError = txResult.Code.String()
-			}
-
-			abciResponses.DeliverTx[abciResponses.TxIndex] = txResult
-			abciResponses.TxIndex++
-
-			// NOTE: if we count we can access the tx from the block instead of
-			// pulling it from the req
-			event := types.EventDataTx{
-				Height: block.Height,
-				Tx:     types.Tx(req.GetDeliverTx().Tx),
-				Data:   txResult.Data,
-				Code:   txResult.Code,
-				Log:    txResult.Log,
-				Error:  txError,
-			}
-			types.FireEventTx(eventCache, event)
-		}
-	}
-	proxyAppConn.SetResponseCallback(proxyCb)
-	*/
 	// Run txs of block
 	for _, tx := range block.Txs {
 		res := proxyAppConn.DeliverTxSync(tx)
@@ -244,6 +206,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	fail.Fail() // XXX
 
 	// save the state
+	s.Epoch.Save()
 	s.Save()
 
 	return nil

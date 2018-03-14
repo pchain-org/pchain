@@ -215,9 +215,11 @@ func (mem *Mempool) resCbNormal(req *abci.Request, res *abci.Response) {
 		etd := ethtx.ExtendTxData()
 		if etd != nil && etd.FuncName != "" {
 			checkTxCb := rpcTxHook.GetCheckTxCb(etd.FuncName)
-			err = checkTxCb(ethtx)
-			if err != nil {
-				fmt.Printf("checkTxCb failed for %s\n", etd.FuncName)
+			if checkTxCb != nil {
+				err = checkTxCb(ethtx)
+				if err != nil {
+					fmt.Printf("checkTxCb failed for %s\n", etd.FuncName)
+				}
 			}
 		}
 

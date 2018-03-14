@@ -9,6 +9,8 @@ import (
 	dbm "github.com/tendermint/go-db"
 	wire "github.com/tendermint/go-wire"
 	"strings"
+	ethCoreTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/tendermint/tendermint/types"
 )
 
 /*
@@ -35,6 +37,12 @@ table2: validator_epoch
 ]
  */
 
+const (
+	SVM_JOIN = "join"
+	SVM_WITHDRAW = "withdraw"
+	SVM_ACCEPT = "accept"
+)
+
 var VA_UNCONFIRMED_EPOCH = -1
 var VA_SEPARATOR = ";"
 var VO_Key = "ValidatorOperation"
@@ -50,10 +58,11 @@ const (
 type ValidatorOperation struct {
 
 	Validator string
+	PubKey []byte
 	Index int
 	TxHash string
 	Action string
-	Amount int
+	Amount uint64
 	Epoch  int
 	VoteSet []string //the set for voting validators; not record the voters' power
 	Confirmed bool
@@ -296,4 +305,22 @@ func (co *ValidatorOperationSet)saveOperationWithHash(hash string, operation *Va
 	fmt.Printf("saveOperationWithHash(), (buf, n) are: (%X, %v)\n", buf.Bytes(), *n)
 
 	return nil
+}
+
+
+var UnlockAssertFuncName = "UnlockAssert"
+
+func NewUnlockAssetTransaction(sender string, account string, amount uint64) (types.Tx, error){
+
+	params := ethCoreTypes.MakeKeyValueSet()
+	params.Set("sender", sender)
+	params.Set("account", account)
+	params.Set("amount", amount)
+
+	etd := &ethCoreTypes.ExtendTxData {
+		FuncName:    UnlockAssertFuncName,
+		Params:      params,
+	}
+
+	return types.NewEthTransaction(sender, etd)
 }

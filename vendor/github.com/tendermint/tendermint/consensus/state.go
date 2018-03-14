@@ -19,6 +19,8 @@ import (
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 	ep "github.com/tendermint/tendermint/epoch"
+	//ethTypes "github.com/ethereum/go-ethereum/core/types"
+	//"github.com/ethereum/go-ethereum/common"
 )
 
 //-----------------------------------------------------------------------------
@@ -928,6 +930,16 @@ func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts 
 
 	// Mempool validated transactions
 	txs := cs.mempool.Reap(cs.config.GetInt("block_size"))
+
+	epTxs, err := cs.Epoch.ProposeTransactions("proposer", cs.Height)
+	if err != nil {
+		return nil, nil
+	}
+
+	if len(epTxs) != 0 {
+		fmt.Printf("createProposalBlock(), epoch propose %v txs\n", len(epTxs))
+		txs = append(txs, epTxs...)
+	}
 
 	var epochBytes []byte = []byte{}
 	shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)

@@ -199,9 +199,9 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool,
 		return receipt, gas, err
 	} else {
 
-		glog.Infof("ApplyTransactionEx() 0, etd.ApplyCb is %v\n", etd.ApplyCb)
+		glog.Infof("ApplyTransactionEx() 0, etd.FuncName is %v\n", etd.FuncName)
 
-		if applyCb := GetApplyCb(etd.ApplyCb); applyCb != nil {
+		if applyCb := GetApplyCb(etd.FuncName); applyCb != nil {
 			if err := applyCb(tx, statedb); err != nil {
 				return nil, nil, err
 			}
