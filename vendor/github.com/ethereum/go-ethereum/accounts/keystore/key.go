@@ -147,11 +147,6 @@ func newKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
 	return key
 }
 
-func NewKeyFromECDSA(privateKeyECDSA *ecdsa.PrivateKey) *Key {
-
-	return newKeyFromECDSA(privateKeyECDSA)
-}
-
 // NewKeyForDirectICAP generates a key whose address fits into < 155 bits so it can fit
 // into the Direct ICAP spec. for simplicity and easier compatibility with other libs, we
 // retry until the first byte is 0.
@@ -179,6 +174,10 @@ func newKey(rand io.Reader) (*Key, error) {
 		return nil, err
 	}
 	return newKeyFromECDSA(privateKeyECDSA), nil
+}
+
+func NewKey(rand io.Reader) (*Key, error) {
+	return newKey(rand)
 }
 
 func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, accounts.Account, error) {
@@ -221,6 +220,10 @@ func writeKeyFile(file string, content []byte) error {
 func keyFileName(keyAddr common.Address) string {
 	ts := time.Now().UTC()
 	return fmt.Sprintf("UTC--%s--%s", toISO8601(ts), hex.EncodeToString(keyAddr[:]))
+}
+
+func KeyFileName(keyAddr common.Address) string {
+	return keyFileName(keyAddr)
 }
 
 func toISO8601(t time.Time) string {

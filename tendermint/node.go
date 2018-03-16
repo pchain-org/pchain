@@ -82,6 +82,8 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
 	blockStore := bc.NewBlockStore(blockStoreDB)
 
+	ep.VADB = dbm.NewDB("validatoraction", config.GetString("db_backend"), config.GetString("db_dir"))
+
 	// Get State And Epoch
 	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
 	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))

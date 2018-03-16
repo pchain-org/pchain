@@ -72,6 +72,11 @@ type keyStorePassphrase struct {
 	scryptP     int
 }
 
+type KeyStorePassphrase struct {
+	Ks keyStorePassphrase
+}
+
+
 func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) (*Key, error) {
 	// Load the key from the keystore and decrypt its contents
 	keyjson, err := ioutil.ReadFile(filename)
@@ -89,6 +94,11 @@ func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) 
 	return key, nil
 }
 
+func (ks KeyStorePassphrase) GetKey(addr common.Address, filename, auth string) (*Key, error) {
+	return (ks.Ks).GetKey(addr,filename,auth)
+}
+
+
 func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) error {
 	keyjson, err := EncryptKey(key, auth, ks.scryptN, ks.scryptP)
 	if err != nil {
@@ -97,12 +107,20 @@ func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) er
 	return writeKeyFile(filename, keyjson)
 }
 
+func (ks KeyStorePassphrase) StoreKey(filename string, key *Key, auth string) error {
+	return (ks.Ks).StoreKey(filename, key, auth)
+}
+
 func (ks keyStorePassphrase) JoinPath(filename string) string {
 	if filepath.IsAbs(filename) {
 		return filename
 	} else {
 		return filepath.Join(ks.keysDirPath, filename)
 	}
+}
+
+func (ks KeyStorePassphrase) JoinPath(filename string) string {
+	return (ks.Ks).JoinPath(filename)
 }
 
 // EncryptKey encrypts a key using the specified scrypt parameters into a json

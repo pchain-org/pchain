@@ -7,6 +7,10 @@ import (
 	abci "github.com/tendermint/abci/types"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"github.com/tendermint/tendermint/types"
+	"github.com/ethereum/go-ethereum/rlp"
+	"bytes"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 )
 
 //-----------------------------------------------------------------------------
@@ -23,6 +27,22 @@ func BroadcastTxAsync(tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
 
 // Returns with the response from CheckTx
 func BroadcastTxSync(tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
+
+	ethtx := new(ethTypes.Transaction)
+	rlpStream := rlp.NewStream(bytes.NewBuffer(tx), 0)
+	if err := ethtx.DecodeRLP(rlpStream); err != nil {
+		fmt.Printf("BroadcastTxSync() ethtx.DecodeRLP(rlpStream) error with: %s\n", err.Error())
+	}
+	fmt.Printf("BroadcastTxSync(), tx is %x\n, decoded eth.transaction is %s\n", tx, ethtx.String())
+
+	etd := ethtx.ExtendTxData()
+	if etd != nil && etd.FuncName != "" {
+		receiveTxCb := rpcTxHook.GetReceiveTxCb(etd.FuncName)
+		if receiveTxCb != nil {
+			receiveTxCb()
+		}
+	}
+
 	resCh := make(chan *abci.Response, 1)
 	err := mempool.CheckTx(tx, func(res *abci.Response) {
 		resCh <- res

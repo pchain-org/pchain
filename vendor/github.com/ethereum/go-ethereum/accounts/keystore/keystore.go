@@ -70,6 +70,8 @@ type KeyStore struct {
 	mu sync.RWMutex
 }
 
+
+
 type unlocked struct {
 	*Key
 	abort chan struct{}
@@ -83,6 +85,10 @@ func NewKeyStore(keydir string, scryptN, scryptP int) *KeyStore {
 	return ks
 }
 
+func NewKeyStoreByTenermint(keydir string, scryptN, scryptP int) *KeyStorePassphrase {
+	return &KeyStorePassphrase{keyStorePassphrase{keydir, scryptN, scryptP}}
+}
+
 // NewPlaintextKeyStore creates a keystore for the given directory.
 // Deprecated: Use NewKeyStore.
 func NewPlaintextKeyStore(keydir string) *KeyStore {
@@ -90,6 +96,10 @@ func NewPlaintextKeyStore(keydir string) *KeyStore {
 	ks := &KeyStore{storage: &keyStorePlain{keydir}}
 	ks.init(keydir)
 	return ks
+}
+
+func (ks *KeyStore) Init(keydir string) {
+	ks.init(keydir)
 }
 
 func (ks *KeyStore) init(keydir string) {

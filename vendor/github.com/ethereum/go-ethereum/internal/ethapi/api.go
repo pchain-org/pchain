@@ -1114,31 +1114,36 @@ func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transacti
 
 // SendTxArgs represents the arguments to sumbit a new transaction into the transaction pool.
 type SendTxArgs struct {
-	From     common.Address  `json:"from"`
-	To       *common.Address `json:"to"`
-	Gas      *hexutil.Big    `json:"gas"`
-	GasPrice *hexutil.Big    `json:"gasPrice"`
-	Value    *hexutil.Big    `json:"value"`
-	Data     hexutil.Bytes   `json:"data"`
-	Nonce    *hexutil.Uint64 `json:"nonce"`
-	Type     *hexutil.Big    `json:"type"`
+	From     common.Address     `json:"from"`
+	To       *common.Address    `json:"to"`
+	Gas      *hexutil.Big       `json:"gas"`
+	GasPrice *hexutil.Big       `json:"gasPrice"`
+	Value    *hexutil.Big       `json:"value"`
+	Data     hexutil.Bytes      `json:"data"`
+	Nonce    *hexutil.Uint64    `json:"nonce"`
+	Type     *hexutil.Big       `json:"type"`
+	ExtendTxData *types.ExtendTxData  `json:"extendTxData"`
 }
 
 // prepareSendTxArgs is a helper function that fills in default values for unspecified tx fields.
 func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
-	if args.Gas == nil {
-		args.Gas = (*hexutil.Big)(big.NewInt(defaultGas))
-	}
-	if args.GasPrice == nil {
-		price, err := b.SuggestPrice(ctx)
-		if err != nil {
-			return err
+
+	if(args.ExtendTxData == nil) {
+		if args.Gas == nil {
+			args.Gas = (*hexutil.Big)(big.NewInt(defaultGas))
 		}
-		args.GasPrice = (*hexutil.Big)(price)
+		if args.GasPrice == nil {
+			price, err := b.SuggestPrice(ctx)
+			if err != nil {
+				return err
+			}
+			args.GasPrice = (*hexutil.Big)(price)
+		}
+		if args.Value == nil {
+			args.Value = new(hexutil.Big)
+		}
 	}
-	if args.Value == nil {
-		args.Value = new(hexutil.Big)
-	}
+
 	if args.Nonce == nil {
 		nonce, err := b.GetPoolNonce(ctx, args.From)
 		if err != nil {
@@ -1151,10 +1156,15 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 }
 
 func (args *SendTxArgs) toTransaction() *types.Transaction {
-	if args.To == nil {
-		return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
+
+	if (args.ExtendTxData == nil) {
+		if args.To == nil {
+			return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
+		}
+		return types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
+	} else {
+		return types.NewTransactionEx(uint64(*args.Nonce), args.To, (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data, args.ExtendTxData)
 	}
-	return types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
 }
 
 // submitTransaction is a helper function that submits tx to txPool and logs a message.
@@ -1210,11 +1220,12 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	}
 	// Look up the wallet containing the requested signer
 	account := accounts.Account{Address: args.From}
-	//fmt.Println("(s *PublicBlockChainAPI) SendTransaction() 1")
+	fmt.Println("(s *PublicBlockChainAPI) SendTransaction() before Find()")
 	wallet, err := s.b.AccountManager().Find(account)
 	if err != nil {
 		return common.Hash{}, err
 	}
+	fmt.Println("(s *PublicBlockChainAPI) SendTransaction() after Find()")
 	// Assemble the transaction and sign with the wallet
 	tx := args.toTransaction()
 	fmt.Printf("(s *PublicBlockChainAPI) SendTransaction(), tx(%s) has nonce(%v)\n", tx.Hash(), tx.Nonce())

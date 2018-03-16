@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	abci "github.com/tendermint/abci/types"
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
@@ -55,7 +54,7 @@ type State struct {
 
 	// Intermediate results from processing
 	// Persisted separately from the state
-	abciResponses *ABCIResponses
+	//abciResponses *ABCIResponses
 }
 
 func LoadState(stateDB dbm.DB) *State {
@@ -204,35 +203,6 @@ func GetState(config cfg.Config, stateDB dbm.DB /*, valSetFromGenesis bool*/) *S
 	return state
 }
 
-//--------------------------------------------------
-// ABCIResponses holds intermediate state during block processing
-
-type ABCIResponses struct {
-	Height int
-
-	DeliverTx []*abci.ResponseDeliverTx
-	EndBlock  abci.ResponseEndBlock
-
-	txs types.Txs // reference for indexing results by hash
-}
-
-func NewABCIResponses(block *types.Block) *ABCIResponses {
-	return &ABCIResponses{
-		Height:    block.Height,
-		DeliverTx: make([]*abci.ResponseDeliverTx, block.NumTxs),
-		txs:       block.Data.Txs,
-	}
-}
-
-// Serialize the ABCIResponse
-func (a *ABCIResponses) Bytes() []byte {
-	buf, n, err := new(bytes.Buffer), new(int), new(error)
-	wire.WriteBinary(*a, buf, n, err)
-	if *err != nil {
-		PanicCrisis(*err)
-	}
-	return buf.Bytes()
-}
 
 //-----------------------------------------------------------------------------
 // Genesis

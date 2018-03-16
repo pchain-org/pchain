@@ -93,6 +93,10 @@ type State interface {
 //modified by author@liaoyd add extension module
 func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 	compiler := makeCompilerAPIs(solcPath)
+
+	txapi := NewPublicTransactionPoolAPI(apiBackend)
+	ApiBridge = APIBridge {txapi:txapi}
+
 	all := []rpc.API{
 		{
 			Namespace: "eth",
@@ -107,7 +111,7 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicTransactionPoolAPI(apiBackend),
+			Service:   txapi,
 			Public:    true,
 		}, {
 			Namespace: "txpool",

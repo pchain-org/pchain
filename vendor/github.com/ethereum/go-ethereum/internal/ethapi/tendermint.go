@@ -3,17 +3,26 @@ package ethapi
 import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/context"
-	"github.com/tendermint/tendermint/rpc/core/types"
 	"fmt"
-	/*
-	"math/big"
-	"github.com/ethereum/go-ethereum/accounts"
-	ethapi "github.com/ethereum/go-ethereum/internal/ethapi"
-	*/
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	st "github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core"
 	"strings"
 	"github.com/syndtr/goleveldb/leveldb/errors"
+	"math/big"
+	"github.com/tendermint/tendermint/rpc/core/types"
+)
+
+var (
+	SvmFuncName string = "SendValidatorMessage"
+)
+
+const (
+	SVM_JOIN = "join"
+	SVM_WITHDRAW = "withdraw"
+	SVM_ACCEPT = "accept"
 )
 
 type PublicTendermintAPI struct {
@@ -52,6 +61,21 @@ func (s *PublicTendermintAPI) GetBlock(ctx context.Context, blockNumber rpc.Bloc
 }
 
 // GasPrice returns a suggestion for a gas price.
+func (s *PublicTendermintAPI) GetCurrentEpochNumber(ctx context.Context) (int64, error) {
+
+	var result core_types.TMResult
+
+	_, err := s.Client.Call("current_epochnumber", nil, &result)
+	if err != nil {
+		fmt.Println(err)
+		return -1, err
+	}
+
+	//fmt.Printf("tdm_getBlock: %v\n", result)
+	return int64(result.(*core_types.ResultUint64).Value), nil
+}
+
+// GasPrice returns a suggestion for a gas price.
 func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string) (interface{}, error) {
 
 	var result core_types.TMResult
@@ -72,56 +96,75 @@ func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string) 
 }
 
 
-func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from common.Address, epoch int, power uint64,
-						action string, target string) (interface{}, error) {
+func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from common.Address, epoch uint64, power uint64,
+						action string, hash string) (common.Hash, error) {
 	fmt.Println("in func (s *PublicTendermintAPI) SendValidatorMessage()")
 
-	var result core_types.TMResult
-
 	action = strings.ToLower(action)
-	if action != "join" && action != "withdraw" && action != "accept" {
-		return "", errors.New("action should be {join|withdraw|accept}")
+	if action != SVM_JOIN && action != SVM_WITHDRAW && action != SVM_ACCEPT {
+		return common.Hash{}, errors.New("action should be {join|withdraw|accept}")
 	}
 
-	targetStr := target
-	targetAddr := common.Address{}
-	if action == "accept" {
-		if !common.IsHexAddress(target) {
-			return "", errors.New("target format error; should be hex string and have length 40 for Address")
+	//targetStr := target
+	//targetAddr := common.Address{}
+	if action == SVM_ACCEPT {
+		if hash == "" {
+			return common.Hash{}, errors.New("parameter hash can not be empty or zero-length")
 		}
-		targetAddr = common.HexToAddress(target)
-		targetStr = fmt.Sprintf("%X", targetAddr.Bytes())
+		//targetAddr = common.HexToAddress(target)
+		//targetStr = fmt.Sprintf("%X", targetAddr.Bytes())
 	}
 
 	fromStr := fmt.Sprintf("%X", from.Bytes())
+	/*
 	data := fmt.Sprintf("%s-%X-%X-%s-%s", fromStr, epoch, power, action, targetStr)
 	fmt.Printf("in func (s *PublicTendermintAPI) SendValidatorMessage(), data to sign is: %v\n", data)
 
 	signature, err := s.Sign(ctx, from, data)
 	if err != nil {
-		return "", err
+		return common.Hash{}, err
 	}
-
-	params := map[string]interface{}{
+	*/
+	/*params := map[string]interface{}{
 		"from": fromStr,
 		"epoch":  epoch,
 		"power":  power,
 		"action":   action,
-		"target":   targetStr,
-		"signature":  signature,
+		"target":   target,
+	}
+	*/
+	params := types.MakeKeyValueSet()
+	params.Set("from", fromStr)
+	params.Set("epoch", epoch)
+	params.Set("power", power)
+	params.Set("action", action)
+	params.Set("hash", hash)
+
+	fmt.Printf("params are : %s\n", params.String())
+
+	etd := &types.ExtendTxData {
+		FuncName:    SvmFuncName,
+		Params:      params,
 	}
 
-	_, err = s.Client.Call("validator_operation", params, &result)
-	if err != nil {
-		fmt.Println(err)
-		return "", err
+	args := SendTxArgs {
+		From:         from,
+		To:           nil,
+		Gas:          nil,
+		GasPrice:     nil,
+		Value:        nil,
+		Data:         nil,
+		Nonce:        nil,
+		Type:         nil,
+		ExtendTxData: etd,
 	}
 
-	return result.(*core_types.ResultValidatorOperation), nil
+	return ApiBridge.SendTransaction(ctx, args)
 }
 
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
 // transaction pool.
+/*
 func (s *PublicTendermintAPI) Sign(ctx context.Context, from common.Address, dataStr string) ([]byte, error) {
 
 	fmt.Printf("(s *PublicTendermintAPI) SignAndVerify(), from: %x, data: %v\n", from, dataStr)
@@ -150,4 +193,78 @@ func (s *PublicTendermintAPI) Sign(ctx context.Context, from common.Address, dat
 	fmt.Printf("SignAndVerify(), sig is: %X\n", sig)
 
 	return sig, nil
+}
+*/
+
+func init() {
+
+	core.RegisterValidateCb(SvmFuncName, svm_ValidateCb)
+	core.RegisterApplyCb(SvmFuncName, svm_ApplyCb)
+}
+
+
+func svm_ValidateCb(tx *types.Transaction, state *st.StateDB) error{
+
+	fmt.Println("svm_ValidateCb")
+
+	etd := tx.ExtendTxData()
+	fmt.Printf("params are : %s\n", etd.Params.String())
+
+	//tx from ethereum, the params have not been converted to []byte
+	fromInt, _ := etd.Params.Get("from")
+	from := common.HexToAddress(fromInt.(string))
+	actionInt, _ := etd.Params.Get("action")
+	action := actionInt.(string)
+	powerInt, _ := etd.Params.Get("power")
+	power := powerInt.(uint64)
+	biPower := big.NewInt(int64(power))
+	fmt.Printf("balance for(%s) is : (%v, %v), biPower is %v\n",
+		from.Hex(), state.GetBalance(from), state.GetLockedBalance(from), biPower.String())
+	if action == SVM_JOIN {
+		if state.GetBalance(from).Cmp(biPower) < 0 {
+			return errors.New("balance is insufficient for voting power")
+		}
+	}
+	if action == SVM_WITHDRAW {
+		if state.GetLockedBalance(from).Cmp(biPower) < 0 {
+			return errors.New("locked balance is smaller than withdrawing amount")
+		}
+	}
+	fmt.Printf("balance for(%s) is : (%v, %v), biPower is %v\n",
+		from.Hex(), state.GetBalance(from), state.GetLockedBalance(from), biPower.String())
+
+	return nil
+}
+
+
+/*must not handle SVM_WITHDRAW here, need wait for 2 more epoch*/
+func svm_ApplyCb(tx *types.Transaction, state *st.StateDB) error{
+
+	fmt.Println("svm_ApplyCb")
+
+	etd := tx.ExtendTxData()
+	//tx from ethereum, the params have been converted to []byte
+	fromInt, _ := etd.Params.Get("from")
+	from := common.BytesToAddress(common.FromHex(string(fromInt.([]byte))))
+	actionInt, _ := etd.Params.Get("action")
+	action := string(actionInt.([]byte))
+	powerInt, _ := etd.Params.Get("power")
+	biPower := common.BytesToBig(powerInt.([]byte))
+
+	fmt.Printf("balance for(%s) is : (%v, %v), biPower is %v\n",
+		from.Hex(), state.GetBalance(from), state.GetLockedBalance(from), biPower.String())
+	if action == SVM_JOIN {
+		if state.GetBalance(from).Cmp(biPower) < 0 {
+			return errors.New("balance is insufficient for voting power")
+		} else {
+
+			state.SubBalance(from, biPower)
+			state.AddLockedBalance(from, biPower)
+		}
+	}
+
+	fmt.Printf("balance for(%s) is : (%v, %v), biPower is %v\n",
+		from.Hex(), state.GetBalance(from), state.GetLockedBalance(from), biPower.String())
+
+	return nil
 }

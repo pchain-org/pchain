@@ -78,7 +78,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	for i, tx := range block.Transactions() {
 		//fmt.Println("tx:", i)
 		statedb.StartRecord(tx.Hash(), block.Hash(), i)
-		receipt, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
+		//receipt, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
+		totalUsedMoney := big.NewInt(0)
+		receipt, _, err := ApplyTransactionEx(p.config, p.bc, gp, statedb, header, tx,
+							totalUsedGas, totalUsedMoney, cfg)
 		glog.Infof("Process() 1, totalUsedGas is %v\n", totalUsedGas)
 		if err != nil {
 			return nil, nil, nil, err
@@ -136,6 +139,7 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 	glog.V(logger.Debug).Infoln(receipt)
 	glog.Infof("ApplyTransaction() 3, usedGas is %v\n", usedGas)
 	glog.Infof("ApplyTransaction(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
+
 	return receipt, gas, err
 }
 
@@ -145,47 +149,77 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 // indicating the block was invalid.
 func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header,
 			tx *types.Transaction, usedGas *big.Int, totalUsedMoney *big.Int, cfg vm.Config) (*types.Receipt, *big.Int, error) {
-	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
-	if err != nil {
-		return nil, nil, err
-	}
-	// Create a new context to be used in the EVM environment
-	context := NewEVMContext(msg, header, bc)
-	// Create a new environment which holds all relevant information
-	// about the transaction and calling mechanisms.
-	vmenv := vm.NewEVM(context, statedb, config, cfg)
 
-	// Apply the transaction to the current state (included in the env)
-	coinbase := header.Coinbase
-	glog.Infof("ApplyTransactionEx(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
-	glog.Infof("ApplyTransactionEx() 0, totalUsedMoney is %v\n", totalUsedMoney)
-	_, gas, money, err := ApplyMessageEx(vmenv, msg, gp)
-	if err != nil {
-		return nil, nil, err
-	}
-	glog.Infof("ApplyTransactionEx() 1, money is %v\n", money)
-	// Update the state with pending changes
-	usedGas.Add(usedGas, gas)
-	totalUsedMoney.Add(totalUsedMoney, money)
-	glog.Infof("ApplyTransactionEx() 2, totalUsedMoney is %v\n", totalUsedMoney)
-	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
-	// based on the eip phase, we're passing wether the root touch-delete accounts.
-	receipt := types.NewReceipt(statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes(), usedGas)
-	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = new(big.Int).Set(gas)
-	// if the transaction created a contract, store the creation address in the receipt.
-	if msg.To() == nil {
-		receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
-	}
+	etd := tx.ExtendTxData()
 
-	// Set the receipt logs and create a bloom for filtering
-	receipt.Logs = statedb.GetLogs(tx.Hash())
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	if  etd == nil {
+		msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
+		if err != nil {
+			return nil, nil, err
+		}
 
-	glog.V(logger.Debug).Infoln(receipt)
-	glog.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
-	glog.Infof("ApplyTransactionEx(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
-	return receipt, gas, err
+		// Create a new context to be used in the EVM environment
+		context := NewEVMContext(msg, header, bc)
+		// Create a new environment which holds all relevant information
+		// about the transaction and calling mechanisms.
+		vmenv := vm.NewEVM(context, statedb, config, cfg)
+
+		// Apply the transaction to the current state (included in the env)
+		coinbase := header.Coinbase
+		glog.Infof("ApplyTransactionEx(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
+		glog.Infof("ApplyTransactionEx() 0, totalUsedMoney is %v\n", totalUsedMoney)
+		_, gas, money, err := ApplyMessageEx(vmenv, msg, gp)
+		if err != nil {
+			return nil, nil, err
+		}
+		glog.Infof("ApplyTransactionEx() 1, money is %v\n", money)
+		// Update the state with pending changes
+		usedGas.Add(usedGas, gas)
+		totalUsedMoney.Add(totalUsedMoney, money)
+		glog.Infof("ApplyTransactionEx() 2, totalUsedMoney is %v\n", totalUsedMoney)
+
+		// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
+		// based on the eip phase, we're passing wether the root touch-delete accounts.
+		receipt := types.NewReceipt(statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes(), usedGas)
+		receipt.TxHash = tx.Hash()
+		receipt.GasUsed = new(big.Int).Set(gas)
+		// if the transaction created a contract, store the creation address in the receipt.
+		if msg.To() == nil {
+			receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
+		}
+
+		// Set the receipt logs and create a bloom for filtering
+		receipt.Logs = statedb.GetLogs(tx.Hash())
+		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+
+		glog.V(logger.Debug).Infoln(receipt)
+		glog.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
+		glog.Infof("ApplyTransactionEx(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
+
+		return receipt, gas, err
+	} else {
+
+		glog.Infof("ApplyTransactionEx() 0, etd.FuncName is %v\n", etd.FuncName)
+
+		if applyCb := GetApplyCb(etd.FuncName); applyCb != nil {
+			if err := applyCb(tx, statedb); err != nil {
+				return nil, nil, err
+			}
+		}
+
+		receipt := types.NewReceipt(statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes(), usedGas)
+		receipt.TxHash = tx.Hash()
+		receipt.GasUsed = big.NewInt(0)
+
+		// Set the receipt logs and create a bloom for filtering
+		receipt.Logs = statedb.GetLogs(tx.Hash())
+		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+
+		glog.V(logger.Debug).Infoln(receipt)
+		glog.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
+
+		return receipt, big.NewInt(0), nil
+	}
 }
 
 // AccumulateRewards credits the coinbase of the given block with the

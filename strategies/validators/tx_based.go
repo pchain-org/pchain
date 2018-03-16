@@ -53,7 +53,7 @@ func (strategy *ValidatorsStrategy) CollectTx(tx *ethTypes.Transaction) {
 
 func (strategy *ValidatorsStrategy) GetUpdatedValidators() []*tmTypes.GenesisValidator {
 	glog.V(logger.Debug).Infof("(strategy *TxBasedValidatorsStrategy) GetUpdatedValidators():%v", strategy.currentValidators)
-	return strategy.currentValidators
+	return []*tmTypes.GenesisValidator{}
 }
 
 func (strategy *ValidatorsStrategy)AccumulateRewards(statedb *state.StateDB, header *ethTypes.Header,

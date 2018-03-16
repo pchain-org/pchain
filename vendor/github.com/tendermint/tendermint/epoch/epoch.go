@@ -377,9 +377,29 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height int) (bool, error) {
 	return false, nil
 }
 
-func (epoch *Epoch) EnterNewEpoch(height int, diffs []*abciTypes.Validator) (*Epoch, error) {
+func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, error) {
+
 	if height == epoch.EndBlock + 1 {
 		if epoch.NextEpoch != nil {
+
+			diffs := make([]*abciTypes.Validator, 0)
+			voSet := LoadValidatorOperationSet( epoch.Number + 1 )
+			if voSet != nil {
+				for _, voArr := range voSet.Operations {
+					for i:=0; i<len(voArr); i++ {
+						vo := voArr[i]
+						if vo.Action == SVM_JOIN {
+
+							val := &abciTypes.Validator{
+								PubKey: vo.PubKey,
+								Power: vo.Amount,
+							}
+							diffs = append(diffs, val)
+						}
+					}
+				}
+			}
+
 			// Set the End Time for current Epoch and Save it
 			epoch.EndTime = time.Now()
 			epoch.Save()
@@ -535,6 +555,31 @@ func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool{
 	}
 
 	return true
+}
+
+func (epoch *Epoch) ProposeTransactions(sender string, blockHeight int) (tmTypes.Txs, error) {
+
+	txs := make([]tmTypes.Tx,0)
+
+	if blockHeight == epoch.EndBlock && epoch.Number > 1 {
+		voSet := LoadValidatorOperationSet( epoch.Number - 2 )
+		if voSet != nil {
+			for validator, voArr := range voSet.Operations {
+				for i:=0; i<len(voArr); i++ {
+					vo := voArr[i]
+					if vo.Action == SVM_WITHDRAW {
+						tx, err := NewUnlockAssetTransaction(sender, validator, vo.Amount)
+						if err != nil {
+							return tmTypes.Txs{}, err
+						}
+						txs = append(txs, tx)
+					}
+				}
+			}
+		}
+	}
+
+	return txs, nil
 }
 
 func (epoch *Epoch) String() string {

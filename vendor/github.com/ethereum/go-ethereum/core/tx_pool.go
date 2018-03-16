@@ -105,7 +105,10 @@ type TxPool struct {
 	homestead bool
 }
 
+var TxPoolSigner types.Signer = nil
+
 func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
+
 	pool := &TxPool{
 		config:       config,
 		signer:       types.NewEIP155Signer(config.ChainId),
@@ -122,6 +125,8 @@ func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentState
 		events:       eventMux.Subscribe(ChainHeadEvent{}, GasPriceChanged{}, RemovedTransactionEvent{}),
 		quit:         make(chan struct{}),
 	}
+
+	TxPoolSigner = pool.signer
 
 	pool.resetState()
 
@@ -291,29 +296,38 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 		return ErrNonce
 	}
 
-	// Check the transaction doesn't exceed the current
-	// block limit gas.
-	/* emmark*/
-	if pool.gasLimit().Cmp(tx.Gas()) < 0 {
-		return ErrGasLimit
-	}
+	etd := tx.ExtendTxData()
+	if etd == nil {
+		// Check the transaction doesn't exceed the current
+		// block limit gas.
+		if pool.gasLimit().Cmp(tx.Gas()) < 0 {
+			return ErrGasLimit
+		}
 
-	// Transactions can't be negative. This may never happen
-	// using RLP decoded transactions but may occur if you create
-	// a transaction using the RPC for example.
-	if tx.Value().Cmp(common.Big0) < 0 {
-		return ErrNegativeValue
-	}
+		// Transactions can't be negative. This may never happen
+		// using RLP decoded transactions but may occur if you create
+		// a transaction using the RPC for example.
+		if tx.Value().Cmp(common.Big0) < 0 {
+			return ErrNegativeValue
+		}
 
-	// Transactor should have enough funds to cover the costs
-	// cost == V + GP * GL
-	if currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-		return ErrInsufficientFunds
-	}
+		// Transactor should have enough funds to cover the costs
+		// cost == V + GP * GL
+		if currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+			return ErrInsufficientFunds
+		}
 
-	intrGas := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
-	if tx.Gas().Cmp(intrGas) < 0 {
-		return ErrIntrinsicGas
+		intrGas := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
+		if tx.Gas().Cmp(intrGas) < 0 {
+			return ErrIntrinsicGas
+		}
+	} else {
+		fmt.Printf("etd.FuncName is %s\n", etd.FuncName)
+		if validateCb := GetValidateCb(etd.FuncName); validateCb != nil {
+			if err = validateCb(tx, currentState); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

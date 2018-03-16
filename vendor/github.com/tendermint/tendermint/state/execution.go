@@ -13,6 +13,7 @@ import (
 	"github.com/tendermint/tendermint/epoch"
 )
 
+
 //--------------------------------------------------
 // Execute the block
 
@@ -26,7 +27,7 @@ func (s *State) ValExecBlock(eventCache types.Fireable, proxyAppConn proxy.AppCo
 	}
 
 	// Execute the block txs
-	abciResponses, err := execBlockOnProxyApp(eventCache, proxyAppConn, block)
+	abciResponses, err := execBlockOnProxyApp(eventCache, proxyAppConn, s, block)
 	if err != nil {
 		// There was some error in proxyApp
 		// TODO Report error and wait for proxyApp to be available.
@@ -39,47 +40,10 @@ func (s *State) ValExecBlock(eventCache types.Fireable, proxyAppConn proxy.AppCo
 // Executes block's transactions on proxyAppConn.
 // Returns a list of transaction results and updates to the validator set
 // TODO: Generate a bitmap or otherwise store tx validity in state.
-func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus, block *types.Block) (*ABCIResponses, error) {
-	var validTxs, invalidTxs = 0, 0
+func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus,
+				state *State, block *types.Block) (*ABCIResponses, error) {
 
-	txIndex := 0
-	abciResponses := NewABCIResponses(block)
-
-	// Execute transactions and get hash
-	proxyCb := func(req *abci.Request, res *abci.Response) {
-		switch r := res.Value.(type) {
-		case *abci.Response_DeliverTx:
-			// TODO: make use of res.Log
-			// TODO: make use of this info
-			// Blocks may include invalid txs.
-			// reqDeliverTx := req.(abci.RequestDeliverTx)
-			txError := ""
-			txResult := r.DeliverTx
-			if txResult.Code == abci.CodeType_OK {
-				validTxs++
-			} else {
-				log.Debug("Invalid tx", "code", txResult.Code, "log", txResult.Log)
-				invalidTxs++
-				txError = txResult.Code.String()
-			}
-
-			abciResponses.DeliverTx[txIndex] = txResult
-			txIndex++
-
-			// NOTE: if we count we can access the tx from the block instead of
-			// pulling it from the req
-			event := types.EventDataTx{
-				Height: block.Height,
-				Tx:     types.Tx(req.GetDeliverTx().Tx),
-				Data:   txResult.Data,
-				Code:   txResult.Code,
-				Log:    txResult.Log,
-				Error:  txError,
-			}
-			types.FireEventTx(eventCache, event)
-		}
-	}
-	proxyAppConn.SetResponseCallback(proxyCb)
+	abciResponses := RefreshABCIResponses(block, state, eventCache, proxyAppConn)
 
 	// Begin block
 	err := proxyAppConn.BeginBlockSync(block.Hash(), types.TM2PB.Header(block.Header))
@@ -90,10 +54,16 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 
 	// Run txs of block
 	for _, tx := range block.Txs {
+		res := proxyAppConn.DeliverTxSync(tx)
+		if res.IsErr() {
+			return nil, errors.New(res.Error())
+		}
+		/*
 		proxyAppConn.DeliverTxAsync(tx)
 		if err := proxyAppConn.Error(); err != nil {
 			return nil, err
 		}
+		*/
 	}
 
 	// End block
@@ -105,7 +75,7 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 
 	valDiff := abciResponses.EndBlock.Diffs
 
-	log.Info("Executed block", "height", block.Height, "valid txs", validTxs, "invalid txs", invalidTxs)
+	log.Info("Executed block", "height", block.Height, "valid txs", abciResponses.ValidTxs, "invalid txs", abciResponses.InvalidTxs)
 	if len(valDiff) > 0 {
 		log.Info("Update to validator set", "updates", abci.ValidatorsString(valDiff))
 	}
@@ -215,7 +185,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 		abciResponses.EndBlock.Diffs = <-types.EndChannel
 		// fmt.Println("Diffs after:", abciResponses.EndBlock.Diffs)
 
-		s.Epoch, _ = s.Epoch.EnterNewEpoch(block.Height, abciResponses.EndBlock.Diffs)
+		s.Epoch, _ = s.Epoch.EnterNewEpoch(block.Height)
 
 	} else if err != nil {
 		log.Warn(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
@@ -235,6 +205,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	fail.Fail() // XXX
 
 	// save the state
+	s.Epoch.Save()
 	s.Save()
 	return nil
 }
@@ -287,7 +258,7 @@ func (s *State) indexTxs(abciResponses *ABCIResponses) {
 // Returns the application root hash (result of abci.Commit)
 func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, state *State, block *types.Block) ([]byte, error) {
 	var eventCache types.Fireable // nil
-	_, err := execBlockOnProxyApp(eventCache, appConnConsensus, block)
+	_, err := execBlockOnProxyApp(eventCache, appConnConsensus, state, block)
 	if err != nil {
 		log.Warn("Error executing block on proxy app", "height", block.Height, "err", err)
 		return nil, err
@@ -304,4 +275,3 @@ func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, state *State, bloc
 	}
 	return res.Data, nil
 }
-

@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"unsafe"
 )
 
 func ToHex(b []byte) string {
@@ -263,4 +264,34 @@ func ByteSliceToInterface(slice [][]byte) (ret []interface{}) {
 	}
 
 	return
+}
+
+
+const INT_SIZE int = int(unsafe.Sizeof(0))
+
+//decide the system endian; true means big endian
+func isBigEndian() bool {
+	var i int = 0x1
+	bs := (*[INT_SIZE]byte)(unsafe.Pointer(&i))
+	if bs[0] == 0 {
+		return false
+	}
+
+	return true
+}
+
+func Bytes2Uint64(b []byte) uint64 {
+
+	data := []byte{0,0,0,0,0,0,0,0}
+	blen := len(b)
+
+	for i:=1; i<=blen; i++ {
+		data[8-i] = b[len(b)-i]
+	}
+
+	if isBigEndian() {
+		return binary.BigEndian.Uint64(data)
+	} else {
+		return binary.LittleEndian.Uint64(data)
+	}
 }
