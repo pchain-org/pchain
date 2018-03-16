@@ -757,6 +757,7 @@ func (m *RequestQuery) GetProve() bool {
 
 type RequestCommit struct {
 	Validators []*Validator `protobuf:"bytes,1,rep,name=validators" json:"validators,omitempty"`
+	RewardPerBlock string `protobuf:"bytes,2,rep,name=rewardperblock" json:"rewardperblock,omitempty"`
 }
 
 func (m *RequestCommit) Reset()                    { *m = RequestCommit{} }
