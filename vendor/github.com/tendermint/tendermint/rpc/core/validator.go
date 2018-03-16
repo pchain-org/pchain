@@ -2,7 +2,7 @@ package core
 
 import (
 	cm "github.com/tendermint/tendermint/consensus"
-	types "github.com/tendermint/tendermint/types"
+	"github.com/tendermint/tendermint/types"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"fmt"
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -10,6 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+func CurrentEpochNumber() (*ctypes.ResultUint64, error) {
+	return &ctypes.ResultUint64{Value: uint64(consensusState.GetRoundState().Epoch.Number)}, nil
+}
 
 func Validators() (*ctypes.ResultValidators, error) {
 	blockHeight, validators := consensusState.GetValidators()

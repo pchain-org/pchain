@@ -61,6 +61,21 @@ func (s *PublicTendermintAPI) GetBlock(ctx context.Context, blockNumber rpc.Bloc
 }
 
 // GasPrice returns a suggestion for a gas price.
+func (s *PublicTendermintAPI) GetCurrentEpochNumber(ctx context.Context) (int64, error) {
+
+	var result core_types.TMResult
+
+	_, err := s.Client.Call("current_epochnumber", nil, &result)
+	if err != nil {
+		fmt.Println(err)
+		return -1, err
+	}
+
+	//fmt.Printf("tdm_getBlock: %v\n", result)
+	return int64(result.(*core_types.ResultUint64).Value), nil
+}
+
+// GasPrice returns a suggestion for a gas price.
 func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string) (interface{}, error) {
 
 	var result core_types.TMResult
