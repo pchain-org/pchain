@@ -13,30 +13,31 @@ import (
 	"io/ioutil"
 	"sync"
 	"strconv"
+	"math/big"
 )
 
-var totalReward          = 210000000e+18
-var preAllocated         = 178500000e+18
-var rewardFirstYear      =  5727300e+18 //release all left 31500000 PCH by 10 years
-var descendPerYear 	 =   572730e+18
-var addedPerYear         = 0
-var allocated            = 0
-var epochNumberPerYear	 = 12
+//var totalReward          = 210000000e+18
+//var preAllocated         = 178500000e+18
+//var rewardFirstYear      =  5727300e+18 //release all left 31500000 PCH by 10 years
+//var descendPerYear 	 =   572730e+18
+//var addedPerYear         = 0
+//var allocated            = 0
+//var epochNumberPerYear	 = 525600
 
 type RewardScheme struct {
 	mtx sync.Mutex
 	db dbm.DB
 
-	totalReward int
-	preAllocated int
-	rewardFirstYear int
-	addedPerYear int
-	descendPerYear int
-	allocated int
+	totalReward *big.Int
+	preAllocated *big.Int
+	rewardFirstYear *big.Int
+	addedPerYear *big.Int
+	descendPerYear *big.Int
+	allocated *big.Int
 	epochNumberPerYear int
 }
 
-var rewardSchemeKey = []byte("REWARDSCHEME")
+const rewardSchemeKey = "REWARDSCHEME"
 
 
 //roughly one epoch one month
@@ -62,7 +63,7 @@ func GetRewardScheme(config cfg.Config, rsDB dbm.DB) *RewardScheme {
 
 	fmt.Printf("GetRewardScheme() 2, reward scheme is: %v\n", rs)
 
-	if rs.totalReward <= 0 {
+	if rs.totalReward.Sign() != 1 { // total reward <= 0
 		fmt.Printf("GetRewardScheme() 3, reward scheme checked failed\n")
 		os.Exit(1)
 	}
@@ -71,7 +72,7 @@ func GetRewardScheme(config cfg.Config, rsDB dbm.DB) *RewardScheme {
 }
 
 func LoadRewardScheme(db dbm.DB) *RewardScheme {
-	return loadRewardScheme(db, rewardSchemeKey)
+	return loadRewardScheme(db, []byte(rewardSchemeKey))
 }
 
 func loadRewardScheme(db dbm.DB, key []byte) *RewardScheme {
@@ -112,12 +113,13 @@ func MakeRewardSchemeFromFile(db dbm.DB, genFile string) *RewardScheme {
 
 func MakeRewardScheme(db dbm.DB, rsDoc *tmTypes.RewardSchemeDoc) *RewardScheme {
 
-	totalReward,_ := strconv.Atoi(rsDoc.TotalReward)
-	preAllocated,_ := strconv.Atoi(rsDoc.PreAllocated)
-	addedPerYear,_ := strconv.Atoi(rsDoc.AddedPerYear)
-	rewardFirstYear,_ := strconv.Atoi(rsDoc.RewardFirstYear)
-	descendPerYear,_ := strconv.Atoi(rsDoc.DescendPerYear)
-	allocated,_ := strconv.Atoi(rsDoc.Allocated)
+	totalReward,_ := new(big.Int).SetString(rsDoc.TotalReward, 10)
+	preAllocated,_ := new(big.Int).SetString(rsDoc.PreAllocated, 10)
+	addedPerYear,_ := new(big.Int).SetString(rsDoc.AddedPerYear, 10)
+	rewardFirstYear,_ := new(big.Int).SetString(rsDoc.RewardFirstYear, 10)
+	descendPerYear,_ := new(big.Int).SetString(rsDoc.DescendPerYear, 10)
+	allocated,_ := new(big.Int).SetString(rsDoc.Allocated, 10)
+	epochNumberPerYear, _ := strconv.Atoi(rsDoc.EpochNumberPerYear)
 
 	rs := &RewardScheme{
 		db : db,
@@ -127,6 +129,7 @@ func MakeRewardScheme(db dbm.DB, rsDoc *tmTypes.RewardSchemeDoc) *RewardScheme {
 		rewardFirstYear : rewardFirstYear,
 		descendPerYear : descendPerYear,
 		allocated : allocated,
+		epochNumberPerYear : epochNumberPerYear,
 	}
 
 	return rs
@@ -141,6 +144,7 @@ func (rs *RewardScheme) MakeRewardSchemeDoc() *tmTypes.RewardSchemeDoc {
 		RewardFirstYear	: fmt.Sprintf("%v", rs.rewardFirstYear),
 		DescendPerYear : fmt.Sprintf("%v", rs.descendPerYear),
 		Allocated : fmt.Sprintf("%v", rs.allocated),
+		EpochNumberPerYear: fmt.Sprintf("%v", rs.epochNumberPerYear),
 	}
 
 	return rsDoc
@@ -153,8 +157,8 @@ func (rs *TxScheme) saveTotalReward(height int) []byte {
 func (rs *RewardScheme) Save() {
 	rs.mtx.Lock()
 	defer rs.mtx.Unlock()
-	fmt.Printf("(rs *RewardScheme) Save(), (rewardSchemeKey, ts.Bytes()) are: (%v,%v\n", rewardSchemeKey, rs.Bytes())
-	rs.db.SetSync(rewardSchemeKey, rs.Bytes())
+	fmt.Printf("(rs *RewardScheme) Save(), (rewardSchemeKey, ts.Bytes()) are: (%s,%s\n", rewardSchemeKey, rs.Bytes())
+	rs.db.SetSync([]byte(rewardSchemeKey), rs.Bytes())
 }
 
 func (rs *RewardScheme) Bytes() []byte {
@@ -166,14 +170,14 @@ func (rs *RewardScheme) Bytes() []byte {
 	if *err != nil {
 		fmt.Printf("Epoch get bytes error: %v", err)
 	}
-	fmt.Printf("(rs *TxScheme) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
+	fmt.Printf("(rs *RewardScheme) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
 	return buf.Bytes()
 }
 
 
 func (rs *RewardScheme) String() string {
 
-	return fmt.Sprintf("TxScheme : {" +
+	return fmt.Sprintf("RewardScheme : {" +
 		"db : _,\n" +
 		"totalReward : %v,\n" +
 		"preAllocated : %v,\n" +
@@ -181,11 +185,13 @@ func (rs *RewardScheme) String() string {
 		"rewardFirstYear : %v,\n" +
 		"descendAmountPerYear : %v,\n" +
 		"allocated : %v,\n" +
+		"epochNumberPerYear : %v,\n" +
 		"}",
 		rs.totalReward,
 		rs.preAllocated,
 		rs.addedPerYear,
 		rs.rewardFirstYear,
 		rs.descendPerYear,
-		rs.allocated)
+		rs.allocated,
+		rs.epochNumberPerYear)
 }

@@ -280,7 +280,6 @@ func NewConsensusState(config cfg.Config, state *sm.State, proxyAppConn proxy.Ap
 	cs.decideProposal = cs.defaultDecideProposal
 	cs.doPrevote = cs.defaultDoPrevote
 	cs.setProposal = cs.defaultSetProposal
-
 	cs.updateToStateAndEpoch(state, epoch)
 
 	// Don't call scheduleRound0 yet.
@@ -1291,7 +1290,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	stateCopy := cs.state.Copy()
 	eventCache := types.NewEventCache(cs.evsw)
 
-	epochCopy := cs.epoch.Copy()
+	// epochCopy := cs.epoch.Copy()
 	// Execute and commit the block, update and save the state, and update the mempool.
 	// All calls to the proxyAppConn come here.
 	// NOTE: the block.AppHash wont reflect these txs until the next block
@@ -1317,7 +1316,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	fail.Fail() // XXX
 
 	// NewHeightStep!
-	cs.updateToStateAndEpoch(stateCopy, epochCopy)
+	cs.updateToStateAndEpoch(stateCopy, stateCopy.Epoch)
 
 	fail.Fail() // XXX
 

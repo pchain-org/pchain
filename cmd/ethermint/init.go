@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 func initCmd(ctx *cli.Context) error {
@@ -98,13 +99,14 @@ func init_em_files(ethGenesisPath string) {
 					RewardFirstYear :   "5727300000000000000000000",
 					DescendPerYear :     "572730000000000000000000",
 					Allocated : "0",
+					EpochNumberPerYear: "525600",
 				},
 				CurrentEpoch: types.OneEpochDoc{
 					Number :		"0",
 					RewardPerBlock :	"368267746913580247",
 					StartBlock :		"0",
 					EndBlock :		"1295999",
-					StartTime :		"0",
+					StartTime :		time.Now().Format(time.RFC3339Nano),
 					EndTime :		"0",//not accurate for current epoch
 					BlockGenerated :	"0",
 					Status :		"0",

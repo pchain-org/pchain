@@ -145,14 +145,14 @@ func (s *State) Bytes() []byte {
 
 // Mutate state variables to match block and validators
 // after running EndBlock
-func (s *State) SetBlockAndEpoch(header *types.Header, blockPartsHeader types.PartSetHeader, epochNumber int) {
+func (s *State) SetBlockAndEpoch(header *types.Header, blockPartsHeader types.PartSetHeader) {
 
 	s.setBlockAndEpoch(header.Height, types.BlockID{header.Hash(), blockPartsHeader},
-				header.Time, epochNumber)
+				header.Time)
 }
 
 func (s *State) setBlockAndEpoch(
-	height int, blockID types.BlockID, blockTime time.Time, epochNumber int) {
+	height int, blockID types.BlockID, blockTime time.Time) {
 
 	s.LastBlockHeight = height
 	s.LastBlockID = blockID

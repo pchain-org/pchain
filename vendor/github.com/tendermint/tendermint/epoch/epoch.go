@@ -16,6 +16,7 @@ import (
 	abciTypes "github.com/tendermint/abci/types"
 	"strconv"
 	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 )
 
 var log = logger.New("module", "epoch")
@@ -37,7 +38,7 @@ type Epoch struct {
 	RS *RewardScheme
 
 	Number int
-	RewardPerBlock int
+	RewardPerBlock *big.Int
 	StartBlock int
 	EndBlock int
 	StartTime time.Time
@@ -64,10 +65,10 @@ type Epoch struct {
 	Validate(other Epoch, checkNextEpoch bool) error //check if equal to anoter rewardscheme
  */
 
-var epochKey = []byte("EPOCH")
+const epochKey = "EPOCH"
 
 func calcEpochKeyWithHeight(number int) []byte {
-	return []byte(string(epochKey) + fmt.Sprintf(":%v", number))
+	return []byte(epochKey + fmt.Sprintf(":%v", number))
 }
 
 
@@ -113,9 +114,17 @@ func GetEpoch(config cfg.Config, epochDB dbm.DB, number int) *Epoch {
 
 func LoadOneEpoch(db dbm.DB, epochNumber int) *Epoch {
 	epoch := loadOneEpoch(db, epochNumber)
+	rewardscheme := LoadRewardScheme(db)
+	epoch.RS = rewardscheme
 
-	epoch.PreviousEpoch = loadOneEpoch(db, epochNumber-1)
-	epoch.NextEpoch = loadOneEpoch(db, epochNumber+1)
+	epoch.PreviousEpoch = loadOneEpoch(db, epochNumber - 1)
+	if epoch.PreviousEpoch != nil {
+		epoch.PreviousEpoch.RS = rewardscheme
+	}
+	epoch.NextEpoch = loadOneEpoch(db, epochNumber + 1)
+	if epoch.NextEpoch != nil {
+		epoch.NextEpoch.RS = rewardscheme
+	}
 
 	return epoch
 }
@@ -160,11 +169,11 @@ func MakeEpochFromFile(db dbm.DB, genesisFile string) *Epoch {
 func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc) *Epoch {
 
 	number, _ := strconv.Atoi(oneEpoch.Number)
-	RewardPerBlock, _ := strconv.Atoi(oneEpoch.RewardPerBlock)
-	StartBlock, _ := strconv.Atoi(oneEpoch.StartBlock)
-	EndBlock, _ := strconv.Atoi(oneEpoch.EndBlock)
-	StartTime, _ := time.Parse(tmTypes.TimeLayout, oneEpoch.StartTime)
-	EndTime, _ := time.Parse(tmTypes.TimeLayout, oneEpoch.EndTime)
+	RewardPerBlock, _ :=  new(big.Int).SetString(oneEpoch.RewardPerBlock, 10)
+	StartBlock, _ :=  strconv.Atoi(oneEpoch.StartBlock)
+	EndBlock, _ :=  strconv.Atoi(oneEpoch.EndBlock)
+	StartTime, _ := time.Parse(time.RFC3339Nano, oneEpoch.StartTime)
+	EndTime, _ := time.Parse(time.RFC3339Nano, oneEpoch.EndTime)
 	BlockGenerated, _ := strconv.Atoi(oneEpoch.BlockGenerated)
 	Status, _ := strconv.Atoi(oneEpoch.Status)
 
@@ -218,8 +227,8 @@ func (epoch *Epoch) MakeOneEpochDoc() *tmTypes.OneEpochDoc {
 		RewardPerBlock : fmt.Sprintf("%v", epoch.RewardPerBlock),
 		StartBlock : fmt.Sprintf("%v", epoch.StartBlock),
 		EndBlock : fmt.Sprintf("%v", epoch.EndBlock),
-		StartTime : epoch.StartTime.Format(tmTypes.TimeLayout),
-		EndTime : epoch.EndTime.Format(tmTypes.TimeLayout),
+		StartTime : epoch.StartTime.Format(time.RFC3339Nano),
+		EndTime : epoch.EndTime.Format(time.RFC3339Nano),
 		BlockGenerated : fmt.Sprintf("%v", epoch.BlockGenerated),
 		Status : fmt.Sprintf("%v", epoch.Status),
 		Validators: validators,
@@ -232,7 +241,7 @@ func (epoch *Epoch) Save() {
 
 	epoch.mtx.Lock()
 	defer epoch.mtx.Unlock()
-	fmt.Printf("(ts *TxScheme) Save(), (rewardSchemeKey, ts.Bytes()) are: (%v,%v\n", calcEpochKeyWithHeight(epoch.Number), epoch.Bytes())
+	fmt.Printf("(epoch *Epoch) Save(), (EPOCH, ts.Bytes()) are: (%s,%v\n", calcEpochKeyWithHeight(epoch.Number), epoch.Bytes())
 	epoch.db.SetSync(calcEpochKeyWithHeight(epoch.Number), epoch.Bytes())
 
 	if epoch.NextEpoch != nil && epoch.NextEpoch.Status == EPOCH_VOTED_NOT_SAVED {
@@ -262,14 +271,14 @@ func FromBytes(buf []byte) *Epoch {
 
 func (epoch *Epoch) Bytes() []byte {
 	buf, n, err := new(bytes.Buffer), new(int), new(error)
-	fmt.Printf("(ts *TxScheme) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
+	fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
 
 	epochDoc := epoch.MakeOneEpochDoc()
 	wire.WriteBinary(epochDoc, buf, n, err)
 	if *err != nil {
 		fmt.Printf("Epoch get bytes error: %v", err)
 	}
-	fmt.Printf("(ts *TxScheme) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
+	fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
 	return buf.Bytes()
 }
 
@@ -288,6 +297,10 @@ func (epoch *Epoch) ValidateNextEpoch(next *Epoch, height int) error {
 
 //check if need propose next epoch
 func (epoch *Epoch) ShouldProposeNextEpoch(curBlockHeight int) bool {
+	// If next epoch already proposed, then no need propose again
+	if epoch.NextEpoch != nil {
+		return false;
+	}
 
 	//the epoch's end time is too rough to estimate,
 	//so use generated block number in this epoch to decide if should propose next epoch parameters
@@ -298,7 +311,6 @@ func (epoch *Epoch) ShouldProposeNextEpoch(curBlockHeight int) bool {
 	passRate := (fCurBlockHeight - fStartBlock) / (fEndBlock - fStartBlock)
 
 	shouldPropose := (0.75 <= passRate) && (passRate < 1.0)
-
 	return shouldPropose
 }
 
@@ -365,14 +377,15 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height int) (bool, error) {
 	return false, nil
 }
 
-func (epoch *Epoch) EnterNewEpoch(height int, diffs []*abciTypes.Validator) error {
-
+func (epoch *Epoch) EnterNewEpoch(height int, diffs []*abciTypes.Validator) (*Epoch, error) {
 	if height == epoch.EndBlock + 1 {
 		if epoch.NextEpoch != nil {
-
-			epoch.NextEpoch.PreviousEpoch = epoch
+			// Set the End Time for current Epoch and Save it
+			epoch.EndTime = time.Now()
+			epoch.Save()
+			// Now move to Next Epoch
 			epoch = epoch.NextEpoch
-
+			epoch.StartTime = time.Now()
 			// update the validator set with the latest abciResponses
 			err := tmTypes.UpdateValidators(epoch.Validators, diffs)
 			if err != nil {
@@ -383,24 +396,32 @@ func (epoch *Epoch) EnterNewEpoch(height int, diffs []*abciTypes.Validator) erro
 			epoch.Validators.IncrementAccum(1)
 
 			epoch.NextEpoch = nil //suppose we will not generate a more epoch after next-epoch
+			epoch.Save()
+			fmt.Printf("Enter into New Epoch %v \n", epoch)
+			return epoch, nil
 		} else {
-			return NextEpochNotExist
+			return nil, NextEpochNotExist
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 func (epoch *Epoch) Copy() *Epoch {
+	return epoch.copy(true)
+}
 
-	var previousEpoch *Epoch = nil
-	if epoch.PreviousEpoch != nil {
-		previousEpoch = epoch.PreviousEpoch.Copy()
-	}
+func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
 
-	var nextEpoch *Epoch = nil
-	if epoch.NextEpoch != nil {
-		nextEpoch = epoch.NextEpoch.Copy()
+	var previousEpoch, nextEpoch *Epoch
+	if (copyPrevNext) {
+		if epoch.PreviousEpoch != nil {
+			previousEpoch = epoch.PreviousEpoch.copy(false)
+		}
+
+		if epoch.NextEpoch != nil {
+			nextEpoch = epoch.NextEpoch.copy(false)
+		}
 	}
 
 	return &Epoch {
@@ -424,17 +445,17 @@ func (epoch *Epoch) Copy() *Epoch {
 	}
 }
 
-func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock, blocksOfNextEpoch int) {
+func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock *big.Int, blocksOfNextEpoch int) {
 
 	//var totalReward          = 210000000e+18
 	//var preAllocated         = 100000000e+18
 	var rewardFirstYear      = epoch.RS.rewardFirstYear //20000000e+18 //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
 	var addedPerYear         = epoch.RS.addedPerYear	//0
-	var descendPerYear = epoch.RS.descendPerYear //2000000e+18
+	var descendPerYear       = epoch.RS.descendPerYear //2000000e+18
 	//var allocated            = epoch.RS.allocated //0
 	var epochNumberPerYear	 = epoch.RS.epochNumberPerYear //12
 
-	zeroEpoch := loadOneEpoch(epoch.db, 1)
+	zeroEpoch := loadOneEpoch(epoch.db, 0)
 	initStartTime := zeroEpoch.StartTime
 
 	//from 0 year
@@ -445,12 +466,9 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock, bl
 
 	epochLeftThisYear := epochNumberPerYear - epoch.Number % epochNumberPerYear - 1
 
-	rewardPerBlock = 0
 	blocksOfNextEpoch = 0
 
 	if epochLeftThisYear == 0 { //to another year
-
-		rewardPerEpochNextYear := (rewardFirstYear + (addedPerYear - descendPerYear) * nextYear) / epochNumberPerYear
 
 		nextYearStartTime := initStartTime.AddDate(nextYear, 0, 0)
 
@@ -462,7 +480,9 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock, bl
 
 		blocksOfNextEpoch = int(epochTimePerEpochLeftNextYear / timePerBlockThisEpoch)
 
-		rewardPerBlock = rewardPerEpochNextYear / blocksOfNextEpoch
+		rewardPerEpochNextYear := calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear, int64(nextYear), int64(epochNumberPerYear))
+
+		rewardPerBlock = new(big.Int).Div(rewardPerEpochNextYear, big.NewInt(int64(blocksOfNextEpoch)))
 
 	} else {
 
@@ -474,12 +494,21 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock, bl
 
 		blocksOfNextEpoch = int(epochTimePerEpochLeftThisYear / timePerBlockThisEpoch)
 
-		rewardPerEpochThisYear := (rewardFirstYear + (addedPerYear - descendPerYear) * thisYear) / epochNumberPerYear
+		rewardPerEpochThisYear := calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear, int64(thisYear), int64(epochNumberPerYear))
 
-		rewardPerBlock = rewardPerEpochThisYear / blocksOfNextEpoch
+		rewardPerBlock = new(big.Int).Div(rewardPerEpochThisYear, big.NewInt(int64(blocksOfNextEpoch)))
 
 	}
 	return rewardPerBlock, blocksOfNextEpoch
+}
+
+/*
+	Abstract function to calculate the reward of each Epoch by year
+	rewardPerEpochNextYear := (rewardFirstYear + (addedPerYear - descendPerYear) * year) / epochNumberPerYear
+ */
+func calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear *big.Int, year, epochNumberPerYear int64) *big.Int {
+	result := new(big.Int).Sub(addedPerYear, descendPerYear)
+	return result.Mul(result,big.NewInt(year)).Add(result, rewardFirstYear).Div(result, big.NewInt(epochNumberPerYear))
 }
 
 func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool{
@@ -492,7 +521,7 @@ func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool{
 		return true
 	}
 
-	if !(epoch.Number == other.Number && epoch.RewardPerBlock == other.RewardPerBlock &&
+	if !(epoch.Number == other.Number && epoch.RewardPerBlock.Cmp(other.RewardPerBlock) == 0 &&
 		epoch.StartBlock == other.StartBlock && epoch.EndBlock == other.EndBlock &&
 		epoch.Validators.Equals(other.Validators)) {
 		return false
@@ -510,14 +539,17 @@ func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool{
 
 func (epoch *Epoch) String() string {
 	return fmt.Sprintf("Epoch : {" +
-		"Height : %v,\n" +
+		"Number : %v,\n" +
 		"RewardPerBlock : %v,\n" +
 		"StartBlock : %v,\n" +
 		"EndBlock : %v,\n" +
 		"StartTime : %v,\n" +
 		"EndTime : %v,\n" +
-		"BlockGenerated : %v\n" +
-		"Status : %v\n" +
+		"BlockGenerated : %v,\n" +
+		"Status : %v,\n" +
+		"Next Epoch : %v,\n" +
+		"Prev Epoch : %v,\n" +
+		"Contains RS : %v, \n" +
 		"}",
 		epoch.Number,
 		epoch.RewardPerBlock,
@@ -526,5 +558,9 @@ func (epoch *Epoch) String() string {
 		epoch.StartTime,
 		epoch.EndTime,
 		epoch.BlockGenerated,
-		epoch.Status)
+		epoch.Status,
+		epoch.NextEpoch,
+		epoch.PreviousEpoch,
+			epoch.RS != nil,
+		)
 }

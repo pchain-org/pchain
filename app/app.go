@@ -133,7 +133,7 @@ func (app *EthermintApplication) EndBlock(height uint64) abciTypes.ResponseEndBl
 }
 
 // Commit commits the block and returns a hash of the current state
-func (app *EthermintApplication) Commit(validators []*abciTypes.Validator) abciTypes.Result {
+func (app *EthermintApplication) Commit(validators []*abciTypes.Validator, rewardPerBlock string) abciTypes.Result {
 	blockHash, err := app.backend.Commit(app.Receiver())
 	if err != nil {
 		glog.V(logger.Debug).Infof("Error getting latest ethereum state: %v", err)
@@ -141,7 +141,9 @@ func (app *EthermintApplication) Commit(validators []*abciTypes.Validator) abciT
 	}
 
 	app.strategy.SetValidators(tmTypes.FromAbciValidators(validators))
-	app.backend.AccumulateRewards(app.strategy)
+	// Convert to big.Int back from String
+	rewardPerBlockInt, _ := new(big.Int).SetString(rewardPerBlock, 0)
+	app.backend.AccumulateRewards(app.strategy, rewardPerBlockInt)
 
 	return abciTypes.NewResultOK(blockHash[:], "")
 }

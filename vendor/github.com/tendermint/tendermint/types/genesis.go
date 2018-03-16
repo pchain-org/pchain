@@ -23,10 +23,6 @@ var GenDocKey = []byte("GenDocKey")
 var CONSENSUS_POS string = "pos"
 var CONSENSUS_POW string = "pow"
 
-
-var TimeLayout = "1970-01-01 00:00:00"
-
-
 type GenesisValidator struct {
 	EthAccount common.Address `json:"eth_account"`
 	PubKey crypto.PubKey      `json:"pub_key"`
@@ -53,6 +49,7 @@ type RewardSchemeDoc struct {
 	RewardFirstYear		string		`json:"reward_first_year"`
 	DescendPerYear		string		`json:"descend_per_year"`
 	Allocated		string		`json:"allocated"`
+	EpochNumberPerYear		string		`json:"epoch_no_per_year"`
 }
 
 type GenesisDoc struct {

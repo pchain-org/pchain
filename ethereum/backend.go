@@ -49,6 +49,7 @@ type work struct {
 
 	totalUsedGas *big.Int
 	totalUsedMoney *big.Int
+	rewardPerBlock *big.Int
 	gp           *core.GasPool
 
 	//emmark for pre-check
@@ -389,14 +390,15 @@ func (w *work) deliverTx(blockchain *core.BlockChain, config *eth.Config, blockH
 
 //----------------------------------------------------------------------
 
-func (b *Backend) AccumulateRewards(strategy emtTypes.Strategy) {
-	b.pending.accumulateRewards(strategy)
+func (b *Backend) AccumulateRewards(strategy emtTypes.Strategy, rewardPerBlock *big.Int) {
+	b.pending.accumulateRewards(strategy, rewardPerBlock)
 }
 
-func (p *pending) accumulateRewards(strategy emtTypes.Strategy) {
+func (p *pending) accumulateRewards(strategy emtTypes.Strategy, rewardPerBlock *big.Int) {
 	p.commitMutex.Lock()
 	defer p.commitMutex.Unlock()
-
+	// set the epoch reward per block
+	p.work.rewardPerBlock = rewardPerBlock
 	p.work.accumulateRewards(strategy)
 }
 
@@ -405,7 +407,7 @@ func (w *work) accumulateRewards(strategy emtTypes.Strategy) {
 	glog.V(logger.Debug).Infof("(w *work) accumulateRewards(), w.header.GasUsed is %v, w.totalUsedGas is %v, w.totalUsedMoney is %v, validators are: %v",
 		w.header.GasUsed, w.totalUsedGas, w.totalUsedMoney, tmTypes.GenesisValidatorsString(strategy.GetUpdatedValidators()))
 	w.header.GasUsed = w.totalUsedGas
-	strategy.AccumulateRewards(w.state, w.header, []*ethTypes.Header{}, w.totalUsedMoney)
+	strategy.AccumulateRewards(w.state, w.header, []*ethTypes.Header{}, w.totalUsedMoney, w.rewardPerBlock)
 	//core.AccumulateRewards(w.state, w.header, []*ethTypes.Header{})
 	glog.V(logger.Debug).Infof("(w *work) accumulateRewards() end")
 }

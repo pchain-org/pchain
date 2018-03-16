@@ -414,7 +414,7 @@ func (mock *mockProxyApp) EndBlock(height uint64) abci.ResponseEndBlock {
 	return mock.abciResponses.EndBlock
 }
 
-func (mock *mockProxyApp) Commit(validators []*abci.Validator) abci.Result {
+func (mock *mockProxyApp) Commit(validators []*abci.Validator, rewardPerBlock string) abci.Result {
 	return abci.NewResultOK(mock.appHash, "")
 }
 

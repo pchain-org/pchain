@@ -478,7 +478,6 @@ func InitStateAndEpoch(config cfg.Config, stateDB dbm.DB, epochDB dbm.DB) (state
 			fmt.Printf("InitStateAndEpoch(), Reward Scheme information emitted\n")
 			os.Exit(1)
 		}
-
 		epoch = ep.LoadOneEpoch(epochDB, state.LastEpochNumber)
 		if epoch == nil {
 			fmt.Printf("InitStateAndEpoch(), epoch information emitted\n")

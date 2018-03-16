@@ -19,7 +19,7 @@ type Application interface {
 	BeginBlock(hash []byte, header *Header)  // Signals the beginning of a block
 	DeliverTx(tx []byte) Result              // Deliver a tx for full processing
 	EndBlock(height uint64) ResponseEndBlock // Signals the end of a block, returns changes to the validator set
-	Commit(validators []*Validator) Result                          // Commit the state and return the application Merkle root hash
+	Commit(validators []*Validator, rewardPerBlock string) Result                          // Commit the state and return the application Merkle root hash
 }
 
 //------------------------------------
@@ -66,7 +66,7 @@ func (app *GRPCApplication) Query(ctx context.Context, req *RequestQuery) (*Resp
 }
 
 func (app *GRPCApplication) Commit(ctx context.Context, req *RequestCommit) (*ResponseCommit, error) {
-	r := app.app.Commit(req.Validators)
+	r := app.app.Commit(req.Validators, req.RewardPerBlock)
 	return &ResponseCommit{r.Code, r.Data, r.Log}, nil
 }
 

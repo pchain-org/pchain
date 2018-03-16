@@ -10,8 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	tmTypes "github.com/tendermint/tendermint/types"
 	"math/big"
-	emTypes "github.com/tendermint/ethermint/types"
-	"runtime/debug"
 )
 
 type ValidatorsStrategy struct {
@@ -59,13 +57,11 @@ func (strategy *ValidatorsStrategy) GetUpdatedValidators() []*tmTypes.GenesisVal
 }
 
 func (strategy *ValidatorsStrategy)AccumulateRewards(statedb *state.StateDB, header *ethTypes.Header,
-							uncles []*ethTypes.Header, totalUsedMoney *big.Int) {
-
-	debug.PrintStack()
+							uncles []*ethTypes.Header, totalUsedMoney *big.Int, rewardPerBlock *big.Int) {
 
 	glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() start, with %v validators\n", len(strategy.currentValidators))
 
-	reward := new(big.Int).Set(emTypes.RewardPerBlock)
+	reward := new(big.Int).Set(rewardPerBlock)
 	glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 0, reward is: %v, gasUsed is: %v, totalUsedMoney is: %v\n",
 			reward, header.GasUsed, totalUsedMoney)
 
@@ -76,26 +72,22 @@ func (strategy *ValidatorsStrategy)AccumulateRewards(statedb *state.StateDB, hea
 		totalAmount += abs(v.Amount)
 	}
 
-	if(totalAmount == 0) {
+	if totalAmount == 0 {
 		glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 1, totalAmount is 0, just return\n")
 		return
 	}
 
 	glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 2, total reward is: %v, total amount is: %v\n", reward, totalAmount)
-	reward.Div(reward, big.NewInt(totalAmount))
-	glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 3, reward per amount is: %v\n", reward)
 
 	for _, v := range strategy.currentValidators {
-
 		balance := statedb.GetBalance(v.EthAccount)
-		indReward := big.NewInt(1)
-		glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 5, individual (%x) reward is: %v, balance is: %v\n", v.EthAccount, indReward, balance)
-		indReward.Mul(reward, big.NewInt(v.Amount))
-		glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 6, individual reward is: %v\n", indReward)
+		glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 3, before the reward, individual (%x) balance is: %v\n", v.EthAccount, balance)
+		indReward := big.NewInt(1).Mul(reward, big.NewInt(v.Amount))
+		indReward.Div(indReward, big.NewInt(totalAmount))
+		glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 4, individual reward is: %v\n", indReward)
 		statedb.AddBalance(v.EthAccount, indReward)
 		balance = statedb.GetBalance(v.EthAccount)
-		glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 8, individual reward is: %v, balance is: %v\n",
-			indReward, balance)
+		glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 5, individual reward is: %v, balance is: %v\n", indReward, balance)
 	}
 
 	glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() end\n")

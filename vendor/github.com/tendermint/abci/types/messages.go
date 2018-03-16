@@ -2,7 +2,6 @@ package types
 
 import (
 	"io"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/tendermint/go-wire"
 )
@@ -43,9 +42,9 @@ func ToRequestCheckTx(txBytes []byte) *Request {
 	}
 }
 
-func ToRequestCommit(validators []*Validator) *Request {
+func ToRequestCommit(validators []*Validator, rewardPerBlock string) *Request {
 	return &Request{
-		Value: &Request_Commit{&RequestCommit{Validators: validators}},
+		Value: &Request_Commit{&RequestCommit{Validators: validators, RewardPerBlock: rewardPerBlock}},
 	}
 }
 

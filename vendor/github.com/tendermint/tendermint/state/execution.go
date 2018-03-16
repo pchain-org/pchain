@@ -197,6 +197,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	nextEpochInBlock := epoch.FromBytes(block.ExData.BlockExData)
 	if nextEpochInBlock != nil {
 		s.Epoch.SetNextEpoch(nextEpochInBlock)
+		s.Epoch.NextEpoch.RS = s.Epoch.RS
 		s.Epoch.NextEpoch.Status = epoch.EPOCH_VOTED_NOT_SAVED
 		s.Epoch.Save()
 	}
@@ -204,8 +205,6 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	fail.Fail() // XXX
 
 	//here handles if need to enter next epoch
-	epochNumber := s.Epoch.Number
-
 	ok, err := s.Epoch.ShouldEnterNewEpoch(block.Height)
 	if ok && err == nil {
 
@@ -216,7 +215,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 		abciResponses.EndBlock.Diffs = <-types.EndChannel
 		// fmt.Println("Diffs after:", abciResponses.EndBlock.Diffs)
 
-		s.Epoch.EnterNewEpoch(block.Height, abciResponses.EndBlock.Diffs)
+		s.Epoch, _ = s.Epoch.EnterNewEpoch(block.Height, abciResponses.EndBlock.Diffs)
 
 	} else if err != nil {
 		log.Warn(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
@@ -225,7 +224,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	}
 
 	//here handles when enter new epoch
-	s.SetBlockAndEpoch(block.Header, partsHeader, epochNumber)
+	s.SetBlockAndEpoch(block.Header, partsHeader)
 
 	// lock mempool, commit state, update mempoool
 	err = s.CommitStateUpdateMempool(proxyAppConn, block, mempool)
@@ -237,7 +236,6 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 
 	// save the state
 	s.Save()
-
 	return nil
 }
 
@@ -250,7 +248,7 @@ func (s *State) CommitStateUpdateMempool(proxyAppConn proxy.AppConnConsensus, bl
 
 	// Commit block, get hash back
 	lastValidators,_,_ := s.GetValidators()
-	res := proxyAppConn.CommitSync(lastValidators.ToAbciValidators())
+	res := proxyAppConn.CommitSync(lastValidators.ToAbciValidators(), s.Epoch.RewardPerBlock.String())
 	if res.IsErr() {
 		log.Warn("Error in proxyAppConn.CommitSync", "error", res)
 		return res
@@ -296,7 +294,7 @@ func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, state *State, bloc
 	}
 	// Commit block, get hash back
 	lastValidators, _, _ := state.GetValidators()
-	res := appConnConsensus.CommitSync(lastValidators.ToAbciValidators())
+	res := appConnConsensus.CommitSync(lastValidators.ToAbciValidators(), state.Epoch.RewardPerBlock.String())
 	if res.IsErr() {
 		log.Warn("Error in proxyAppConn.CommitSync", "error", res)
 		return nil, res

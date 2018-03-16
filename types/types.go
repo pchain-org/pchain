@@ -16,5 +16,5 @@ type Strategy interface {
 	GetValidators()(validators []*tmTypes.GenesisValidator)
 	CollectTx(tx *ethTypes.Transaction)
 	GetUpdatedValidators() []*tmTypes.GenesisValidator
-	AccumulateRewards(statedb *state.StateDB, header *ethTypes.Header, uncles []*ethTypes.Header, totalUsedMoney *big.Int)
+	AccumulateRewards(statedb *state.StateDB, header *ethTypes.Header, uncles []*ethTypes.Header, totalUsedMoney *big.Int, rewardPerBlock *big.Int)
 }
