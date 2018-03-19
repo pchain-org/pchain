@@ -57,6 +57,8 @@ func GetConfig(rootDir string) cfg.Config {
 	}
 	mapConfig.SetRequired("chain_id") // blows up if you try to use it before setting.
 	mapConfig.SetDefault("genesis_file", rootDir+"/genesis.json")
+	mapConfig.SetDefault("eth_genesis_file", rootDir+"/eth_genesis.json")
+	mapConfig.SetDefault("keystore", rootDir+"/keystore")
 	mapConfig.SetDefault("proxy_app", "tcp://127.0.0.1:46658")
 	mapConfig.SetDefault("abci", "socket")
 	mapConfig.SetDefault("moniker", "anonymous")
@@ -69,8 +71,7 @@ func GetConfig(rootDir string) cfg.Config {
 	mapConfig.SetDefault("addrbook_strict", true) // disable to allow connections locally
 	mapConfig.SetDefault("pex_reactor", false)    // enable for peer exchange
 	mapConfig.SetDefault("priv_validator_file", rootDir+"/priv_validator.json")
-	mapConfig.SetDefault("eth_genesis_file", rootDir+"/eth_genesis.json")
-	mapConfig.SetDefault("keystore", rootDir+"/keystore")
+	mapConfig.SetDefault("priv_validator_file_root", rootDir+"/priv_validator")
 	mapConfig.SetDefault("db_backend", "leveldb")
 	mapConfig.SetDefault("db_dir", rootDir+"/data")
 	mapConfig.SetDefault("log_level", "info")

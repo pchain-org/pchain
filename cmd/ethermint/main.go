@@ -29,6 +29,7 @@ var (
 )
 
 func main() {
+
 	glog.V(logger.Info).Infof("Starting ethermint")
 
 	cliApp := newCliApp(version.Version, "the ethermint command line interface")
@@ -46,6 +47,13 @@ func main() {
 			Name:        "version",
 			Usage:       "",
 			Description: "Print the version",
+		},
+
+		{
+			Action:		initEthGenesis,
+			Name:		"init_eth_genesis",
+			Usage:		"init_eth_genesis balance:\"10,10,10\"",
+			Description: "Initialize the balance of accounts",
 		},
 
 		// See consolecmd.go:

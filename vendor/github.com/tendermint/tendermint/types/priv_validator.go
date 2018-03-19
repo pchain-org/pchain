@@ -14,6 +14,7 @@ import (
 	crand "crypto/rand"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/accounts"
 )
 
 const (
@@ -95,7 +96,6 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 	}
 	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
 	privKey := crypto.EtherumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
-	fmt.Println(len(privKey), len(pubKey), len(pubKey.Address()))
 	return &PrivValidator{
 		Address:       pubKey.Address(),
 		PubKey:        pubKey,
@@ -113,8 +113,16 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 
 // Generates a new validator with private key.
 func GenPrivValidator() *PrivValidator {
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+	//password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
+	ks := keystore.NewKeyStoreByTenermint("", scryptN, scryptP)
 	newKey, err := keystore.NewKey(crand.Reader)
 	if err != nil {
+		return nil
+	}
+	a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
+	if err := ks.StoreKey(a.URL.Path, newKey, ""); err != nil {
 		return nil
 	}
 	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))

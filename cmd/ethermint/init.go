@@ -23,28 +23,84 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/console"
+	"strings"
+	"strconv"
+	"github.com/tendermint/go-crypto"
 	"time"
 )
 
 func initCmd(ctx *cli.Context) error {
 
 	// ethereum genesis.json
-	//ethGenesisPath := ctx.Args().First()
-	//if len(ethGenesisPath) == 0 {
-	//	utils.Fatalf("must supply path to genesis JSON file")
-	//}
-	coreGensis, privValidator, err := init_eth_genesis()
-	if err != nil {
-		utils.Fatalf("init eth_genesis failed")
-		return err
+	ethGenesisPath := ctx.Args().First()
+	if len(ethGenesisPath) == 0 {
+		utils.Fatalf("must supply path to genesis JSON file")
 	}
+	//coreGensis, privValidator, err := init_eth_genesis()
+	//if err != nil {
+	//	utils.Fatalf("init eth_genesis failed")
+	//	return err
+	//}
 	init_eth_blockchain(config.GetString("eth_genesis_file"), ctx)
 
-	init_em_files(*coreGensis, privValidator)
+	init_em_files(ethGenesisPath)
 	/*
 	rsTmplPath := ctx.Args().Get(1)
 	init_reward_scheme_files(rsTmplPath)
 	*/
+	return nil
+}
+
+func initEthGenesis(ctx *cli.Context) error {
+	fmt.Println("this is init_eth_genesis")
+	args := ctx.Args()
+	if len(args) != 1 {
+		utils.Fatalf("len of args is %d", len(args))
+		return nil
+	}
+	bal_str := args[0]
+	fmt.Println("balances:", bal_str)
+
+	balances_str := strings.Split(bal_str,",")
+
+	validators := createPriValidators(len(balances_str))
+
+	var coreGenesis = core.Genesis{
+		Nonce: "0xdeadbeefdeadbeef",
+		Timestamp: "0x0",
+		ParentHash: "0x0000000000000000000000000000000000000000000000000000000000000000",
+		ExtraData: "0x0",
+		GasLimit: "0x8000000",
+		Difficulty: "0x400",
+		Mixhash: "0x0000000000000000000000000000000000000000000000000000000000000000",
+		Coinbase: common.ToHex((*validators[0]).Address),
+		Alloc: map[string]struct {
+			Code    string
+			Storage map[string]string
+			Balance string
+			Nonce   string
+		}{
+		},
+	}
+	for i,validator := range validators {
+		coreGenesis.Alloc[common.ToHex(validator.Address)] = struct {
+			Code    string
+			Storage map[string]string
+			Balance string
+			Nonce   string
+		}{Balance: balances_str[i]}
+	}
+
+	contents, err := json.Marshal(coreGenesis)
+	if err != nil {
+		utils.Fatalf("marshal coreGenesis failed")
+		return  err
+	}
+	ethGenesisPath := config.GetString("eth_genesis_file")
+	if err = ioutil.WriteFile(ethGenesisPath, contents, 0654); err != nil {
+		utils.Fatalf("write eth_genesis_file failed")
+		return err
+	}
 	return nil
 }
 
@@ -68,22 +124,48 @@ func init_eth_blockchain(ethGenesisPath string, ctx *cli.Context) {
 	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
 }
 
-func init_em_files(coreGenesis core.Genesis, privValidator *types.PrivValidator) {
+func init_em_files(genesisPath string) error  {
+	gensisFile, err := os.Open(genesisPath)
+	defer gensisFile.Close()
+	if err != nil {
+		utils.Fatalf("failed to read etherume genesis file: %v", err)
+		return err
+	}
+	contents, err := ioutil.ReadAll(gensisFile)
+	if err != nil {
+		utils.Fatalf("failed to read etherume genesis file: %v", err)
+		return err
+	}
+	var coreGenesis = core.Genesis{}
+	if err := json.Unmarshal(contents, &coreGenesis); err != nil {
+		return err
+	}
+	privValPath := config.GetString("priv_validator_file")
+	if _, err := os.Stat(privValPath); os.IsNotExist(err) {
+		utils.Fatalf("failed to read privValidator file: %v", err)
+		return err
+	}
+	privValidator := types.LoadOrGenPrivValidator(privValPath)
+	if err := createGenesisDoc(&coreGenesis, privValidator); err != nil {
+		utils.Fatalf("failed to write genesis file: %v", err)
+		return err
+	}
+	return nil
+}
 
-	// if no genesis, make it using the priv val
+func createGenesisDoc(coreGenesis *core.Genesis, privValidator *types.PrivValidator) error {
 	genFile := config.GetString("genesis_file")
 	if _, err := os.Stat(genFile); os.IsNotExist(err) {
 		genDoc := types.GenesisDoc{
 			ChainID: cmn.Fmt("test-chain-%v", cmn.RandStr(6)),
 			Consensus: types.CONSENSUS_POS,
 			RewardScheme: types.RewardSchemeDoc {
-  				TotalReward :     "210000000000000000000000000",
-                PreAllocated :    "178500000000000000000000000",
-				AddedPerYear :    "0",
-				RewardFirstYear :   "5727300000000000000000000",
-				DescendPerYear :     "572730000000000000000000",
+				TotalReward : "210000000000000000000000000",
+				PreAllocated : "100000000000000000000000000",
+				AddedPerYear : "0",
+				RewardFirstYear : "5727300000000000000000000", //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
+				DescendPerYear : "572730000000000000000000",
 				Allocated : "0",
-				EpochNumberPerYear: "525600",
 			},
 			CurrentEpoch: types.OneEpochDoc{
 				Number :		"0",
@@ -97,7 +179,7 @@ func init_em_files(coreGenesis core.Genesis, privValidator *types.PrivValidator)
 			},
 		}
 
-		coinbase, amount, checkErr := checkAccount(coreGenesis)
+		coinbase, amount, checkErr := checkAccount(*coreGenesis)
 		if(checkErr != nil) {
 			glog.V(logger.Error).Infof(checkErr.Error())
 			cmn.Exit(checkErr.Error())
@@ -110,67 +192,38 @@ func init_em_files(coreGenesis core.Genesis, privValidator *types.PrivValidator)
 		}}
 		genDoc.SaveAs(genFile)
 	}
-
+	return nil
 }
 
-func init_eth_genesis() (*core.Genesis, *types.PrivValidator,error) {
-	privValFile := config.GetString("priv_validator_file")
-	var privValidator *types.PrivValidator
+
+func createPriValidators(num int) []*types.PrivValidator {
+	validators := make([]*types.PrivValidator, num)
 	var newKey *keystore.Key
-	if _, err := os.Stat(privValFile); os.IsNotExist(err) {
-		privValidator,newKey = types.GenPrivValidatorKey()
-		privValidator.SetFile(privValFile)
-		privValidator.Save()
-		scryptN := keystore.StandardScryptN
-		scryptP := keystore.StandardScryptP
-		password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
-		ks := keystore.NewKeyStoreByTenermint(config.GetString("keystore"), scryptN, scryptP)
-
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+	ks := keystore.NewKeyStoreByTenermint(config.GetString("keystore"), scryptN, scryptP)
+	privValFile := config.GetString("priv_validator_file_root")
+	for i:=0; i < num; i++ {
+		validators[i], newKey = types.GenPrivValidatorKey()
+		privKey := validators[i].PrivKey.(crypto.EtherumPrivKey)
+		pwd := common.ToHex(privKey[0:7])
+		pwd = string([]byte(pwd)[2:])
+		pwd = strings.ToUpper(pwd)
+		fmt.Println("account:",common.ToHex(validators[i].Address), "pwd:", pwd)
 		a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
-		if err := ks.StoreKey(a.URL.Path, newKey, password); err != nil {
+		if err := ks.StoreKey(a.URL.Path, newKey, pwd); err != nil {
 			utils.Fatalf("store key failed")
-			return nil, nil, err
+			return nil
 		}
-	} else {
-		if _, err := os.Stat(privValFile); err != nil {
-			if os.IsNotExist(err) {
-				utils.Fatalf("failed to read eth_genesis file: %v", err)
-			}
-			return nil, nil, err
+		if i>0 {
+			validators[i].SetFile(privValFile+strconv.Itoa(i)+".json")
+		} else {
+			validators[i].SetFile(privValFile+".json")
 		}
-		privValidator = types.LoadOrGenPrivValidator(privValFile)
+		validators[i].Save()
 	}
-	var coreGenesis = core.Genesis{
-		Nonce: "0xdeadbeefdeadbeef",
-		Timestamp: "0x0",
-		ParentHash: "0x0000000000000000000000000000000000000000000000000000000000000000",
-		ExtraData: "0x0",
-		GasLimit: "0x8000000",
-		Difficulty: "0x400",
-		Mixhash: "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Coinbase: common.ToHex((*privValidator).Address),
-		Alloc: map[string]struct {
-			Code    string
-			Storage map[string]string
-			Balance string
-			Nonce   string
-		}{
-			common.ToHex((*privValidator).Address):{Balance: "10000000000000000000000000000000000" },
-		},
-	}
-	contents, err := json.Marshal(coreGenesis)
-	if err != nil {
-		utils.Fatalf("marshal coreGenesis failed")
-		return nil, nil, err
-	}
-	ethGenesisPath := config.GetString("eth_genesis_file")
-	if err = ioutil.WriteFile(ethGenesisPath, contents, 0654); err != nil {
-		utils.Fatalf("write eth_genesis_file failed")
-		return nil, nil, err
-	}
-	return &coreGenesis, privValidator, nil
+	return validators
 }
-
 
 func checkAccount(coreGenesis core.Genesis) (common.Address, int64, error) {
 
@@ -188,7 +241,6 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, int64, error) {
 			break
 		}
 	}
-
 	if( !found ) {
 		fmt.Printf("invalidate eth_account\n")
 		return common.Address{}, int64(0), errors.New("invalidate eth_account")
@@ -225,6 +277,3 @@ func getPassPhrase(prompt string, confirmation bool) string {
 	}
 	return password
 }
-
-
-

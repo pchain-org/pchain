@@ -115,7 +115,6 @@ func (app *EthermintApplication) DeliverTx(txBytes []byte) abciTypes.Result {
 		glog.V(logger.Debug).Infof("DeliverTx error: %v", err)
 		return abciTypes.ErrInternalError
 	}
-
 	app.CollectTx(tx)
 	return abciTypes.OK
 }
