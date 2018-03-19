@@ -198,7 +198,7 @@ func (app *localClient) CommitSync(validators []*types.Validator, rewardPerBlock
 	res = app.Application.Commit(validators, rewardPerBlock)
 	app.mtx.Unlock()
 	app.callback(
-		types.ToRequestCommit(validators),
+		types.ToRequestCommit(validators, rewardPerBlock),
 		types.ToResponseCommit(res.Code, res.Data, res.Log),
 	)
 	return res

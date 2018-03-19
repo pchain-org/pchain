@@ -69,6 +69,8 @@ func GetConfig(rootDir string) cfg.Config {
 	mapConfig.SetDefault("addrbook_strict", true) // disable to allow connections locally
 	mapConfig.SetDefault("pex_reactor", false)    // enable for peer exchange
 	mapConfig.SetDefault("priv_validator_file", rootDir+"/priv_validator.json")
+	mapConfig.SetDefault("eth_genesis_file", rootDir+"/eth_genesis.json")
+	mapConfig.SetDefault("keystore", rootDir+"/keystore")
 	mapConfig.SetDefault("db_backend", "leveldb")
 	mapConfig.SetDefault("db_dir", rootDir+"/data")
 	mapConfig.SetDefault("log_level", "info")

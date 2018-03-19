@@ -77,7 +77,7 @@ func init_em_files(coreGenesis core.Genesis, privValidator *types.PrivValidator)
 			ChainID: cmn.Fmt("test-chain-%v", cmn.RandStr(6)),
 			Consensus: types.CONSENSUS_POS,
 			RewardScheme: types.RewardSchemeDoc {
-  				TTotalReward :     "210000000000000000000000000",
+  				TotalReward :     "210000000000000000000000000",
                 PreAllocated :    "178500000000000000000000000",
 				AddedPerYear :    "0",
 				RewardFirstYear :   "5727300000000000000000000",
