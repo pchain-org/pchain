@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"github.com/tendermint/go-crypto"
 	"time"
+	"crypto"
 )
 
 func initCmd(ctx *cli.Context) error {
@@ -166,6 +167,7 @@ func createGenesisDoc(coreGenesis *core.Genesis, privValidator *types.PrivValida
 				RewardFirstYear : "5727300000000000000000000", //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
 				DescendPerYear : "572730000000000000000000",
 				Allocated : "0",
+				EpochNumberPerYear: "12",
 			},
 			CurrentEpoch: types.OneEpochDoc{
 				Number :		"0",
