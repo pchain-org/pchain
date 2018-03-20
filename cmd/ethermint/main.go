@@ -60,6 +60,9 @@ func main() {
 		gethmain.ConsoleCommand,
 		gethmain.AttachCommand,
 		gethmain.JavascriptCommand,
+
+		gethmain.WalletCommand,
+		gethmain.AccountCommand,
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 

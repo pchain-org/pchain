@@ -179,6 +179,9 @@ nodes.
 	}
 )
 
+var WalletCommand = walletCommand
+var AccountCommand = accountCommand
+
 func accountList(ctx *cli.Context) error {
 	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
 
