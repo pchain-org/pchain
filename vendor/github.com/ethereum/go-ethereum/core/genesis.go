@@ -52,6 +52,7 @@ type Genesis struct {
 		Storage map[string]string
 		Balance string
 		Nonce   string
+		Amount  string
 	}
 }
 

@@ -27,8 +27,39 @@ import (
 	"strconv"
 	"github.com/tendermint/go-crypto"
 	"time"
-	"crypto"
+	"regexp"
 )
+
+type BalaceAmount struct {
+	balance string
+	amount string
+}
+
+type InvalidArgs struct {
+	args string
+}
+
+func (invalid InvalidArgs) Error() string {
+	return "invalid args:"+invalid.args
+}
+
+func parseBalaceAmount(s string) ([]*BalaceAmount,error){
+	r, _ := regexp.Compile("\\{[\\ \\t]*\\d+(\\.\\d+)?[\\ \\t]*\\,[\\ \\t]*\\d+(\\.\\d+)?[\\ \\t]*\\}")
+	parse_strs := r.FindAllString(s, -1)
+	if len(parse_strs) == 0 {
+		return nil, InvalidArgs{s}
+	}
+	balanceAmounts := make([]*BalaceAmount, len(parse_strs))
+	for i,v := range parse_strs {
+		length := len(v)
+		balanceAmount := strings.Split(v[1:length-1],",")
+		if len(balanceAmount) != 2 {
+			return nil, InvalidArgs{s}
+		}
+		balanceAmounts[i] = &BalaceAmount{strings.TrimSpace(balanceAmount[0]),strings.TrimSpace(balanceAmount[1])}
+	}
+	return balanceAmounts,nil
+}
 
 func initCmd(ctx *cli.Context) error {
 
@@ -60,11 +91,13 @@ func initEthGenesis(ctx *cli.Context) error {
 		return nil
 	}
 	bal_str := args[0]
-	fmt.Println("balances:", bal_str)
+	balanceAmounts, err := parseBalaceAmount(bal_str)
+	if err != nil {
+		utils.Fatalf("init eth_genesis_file failed")
+		return err
+	}
 
-	balances_str := strings.Split(bal_str,",")
-
-	validators := createPriValidators(len(balances_str))
+	validators := createPriValidators(len(balanceAmounts))
 
 	var coreGenesis = core.Genesis{
 		Nonce: "0xdeadbeefdeadbeef",
@@ -80,6 +113,7 @@ func initEthGenesis(ctx *cli.Context) error {
 			Storage map[string]string
 			Balance string
 			Nonce   string
+			Amount  string
 		}{
 		},
 	}
@@ -89,7 +123,8 @@ func initEthGenesis(ctx *cli.Context) error {
 			Storage map[string]string
 			Balance string
 			Nonce   string
-		}{Balance: balances_str[i]}
+			Amount  string
+		}{Balance: balanceAmounts[i].balance, Amount:balanceAmounts[i].amount}
 	}
 
 	contents, err := json.Marshal(coreGenesis)
@@ -239,6 +274,7 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, int64, error) {
 		fmt.Printf("checkAccount(), address is %x\n", address)
 		if coinbase == address {
 			balance = common.String2Big(account.Balance)
+			amount, _ = strconv.ParseInt(account.Amount, 10, 64)
 			found = true
 			break
 		}
