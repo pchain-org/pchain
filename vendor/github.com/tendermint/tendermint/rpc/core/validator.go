@@ -8,10 +8,27 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/tendermint/tendermint/epoch"
 )
 
 func CurrentEpochNumber() (*ctypes.ResultUint64, error) {
 	return &ctypes.ResultUint64{Value: uint64(consensusState.GetRoundState().Epoch.Number)}, nil
+}
+
+func Epoch(number int)  (*ctypes.ResultEpoch, error) {
+
+	curEpoch := consensusState.GetRoundState().Epoch
+	if number < 0 || number > curEpoch.Number {
+		return nil, errors.New("epoch number out of range")
+	}
+
+	if number == curEpoch.Number {
+		return &ctypes.ResultEpoch{Epoch: curEpoch.MakeOneEpochDoc()}, nil
+	}
+
+	spEpoch := epoch.LoadOneEpoch(curEpoch.GetDB(), number)
+
+	return &ctypes.ResultEpoch{Epoch: spEpoch.MakeOneEpochDoc()}, nil
 }
 
 func Validators() (*ctypes.ResultValidators, error) {

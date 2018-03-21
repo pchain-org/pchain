@@ -19,6 +19,7 @@ var Routes = map[string]*rpc.RPCFunc{
 	"genesis":              rpc.NewRPCFunc(GenesisResult, ""),
 	"block":                rpc.NewRPCFunc(BlockResult, "height"),
 	"current_epochnumber":rpc.NewRPCFunc(CurrentEpochNumberResult, ""),
+	"epoch":                rpc.NewRPCFunc(EpochResult, "number"),
 	"commit":               rpc.NewRPCFunc(CommitResult, "height"),
 	"tx":                   rpc.NewRPCFunc(TxResult, "hash,prove"),
 	"validators":           rpc.NewRPCFunc(ValidatorsResult, ""),
@@ -84,6 +85,10 @@ func BlockResult(height int) (ctypes.TMResult, error) {
 
 func CurrentEpochNumberResult() (ctypes.TMResult, error) {
 	return CurrentEpochNumber()
+}
+
+func EpochResult(number int) (ctypes.TMResult, error) {
+	return Epoch(number)
 }
 
 func CommitResult(height int) (ctypes.TMResult, error) {

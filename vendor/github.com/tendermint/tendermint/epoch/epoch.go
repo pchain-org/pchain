@@ -51,20 +51,6 @@ type Epoch struct {
 	NextEpoch *Epoch
 }
 
-/*
-
-
-	ShouldEnterNewEpoch(height int) (bool, error)
-	EnterNewEpoch(height int) error //enter new epoch and apply its parameters
-
-	SaveCurrentEpochNumber() //save to db
-	Save() //save to db
-	Copy() Epoch //copy another instance
-	String() string //format to string
-
-	Validate(other Epoch, checkNextEpoch bool) error //check if equal to anoter rewardscheme
- */
-
 const epochKey = "EPOCH"
 
 func calcEpochKeyWithHeight(number int) []byte {
@@ -267,7 +253,12 @@ func FromBytes(buf []byte) *Epoch {
 		ts := MakeOneEpoch(nil, oneEpoch)
 		fmt.Printf("loadEpoch(), reward scheme is: %v\n", ts)
 		return ts
-	}}
+	}
+}
+
+func (epoch *Epoch) GetDB() dbm.DB {
+	return epoch.db
+}
 
 func (epoch *Epoch) Bytes() []byte {
 	buf, n, err := new(bytes.Buffer), new(int), new(error)

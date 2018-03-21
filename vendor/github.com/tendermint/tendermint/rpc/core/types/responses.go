@@ -159,6 +159,10 @@ type ResultValidatorEpoch struct{
 	Epoch	*epoch.Epoch		`json:"epoch"`
 }
 
+type ResultEpoch struct{
+	Epoch	*types.OneEpochDoc		`json:"epoch"`
+}
+
 type ResultUint64 struct {
 	Value uint64
 }
@@ -207,6 +211,7 @@ const (
 	// 0xb bytes for extension
 	ResultTypeValidatorOperation = byte(0xb0)
 	ResultTypeValidatorEpoch = byte(0xb1)
+	ResultTypeEpoch = byte(0xb2)
 
 	//the basic type, from 0xff
 	ResultTypeUint64 = byte(0xff)
@@ -246,5 +251,6 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{&ResultABCIInfo{}, ResultTypeABCIInfo},
 	wire.ConcreteType{&ResultValidatorOperation{}, ResultTypeValidatorOperation},
 	wire.ConcreteType{&ResultValidatorEpoch{}, ResultTypeValidatorEpoch},
+	wire.ConcreteType{&ResultEpoch{}, ResultTypeEpoch},
 	wire.ConcreteType{&ResultUint64{}, ResultTypeUint64},
 )
