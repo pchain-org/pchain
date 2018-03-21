@@ -108,7 +108,7 @@ func (voteSet *VoteSet) Type() byte {
 }
 
 func (voteSet *VoteSet) Votes() []*Vote {
-	return votes
+	return voteSet.votes
 }
 
 func (voteSet *VoteSet) Size() int {
@@ -454,9 +454,9 @@ func (voteSet *VoteSet) StringShort() string {
 }
 
 // Split vote set into parts
-func (voteSet *VoteSet) MakePartSet(partSize int) *PartSet {
-        return NewPartSetFromData(wire.BinaryBytes(VoteSet), partSize)
-}
+//func (voteSet *VoteSet) MakePartSet(partSize int) *PartSet {
+//        return NewPartSetFromData(wire.BinaryBytes(VoteSet), partSize)
+//}
 
 //--------------------------------------------------------------------------------
 // Commit

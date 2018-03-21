@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"sync"
 	"time"
+	"strings"
 
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-p2p"
@@ -378,6 +379,7 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 }
 
 // Send HasVoteMessage to the proposer
+/*
 func (conR *ConsensusReactor) sendHasVoteMessage(vote *types.Vote) {
 	msg := &HasVoteMessage{
 		Height: vote.Height,
@@ -387,23 +389,24 @@ func (conR *ConsensusReactor) sendHasVoteMessage(vote *types.Vote) {
 	}
 
 	// Get proposer's peer info from the peer set
-	peer := conR.Switch.peers.Get(conR.conS.proposerPeerKey)
+	peer := conR.Switch.Peers().Get(conR.conS.ProposerPeerKey)
 
 	if peer == nil {
-		fmt.Printf("Send HasVoteMsg: validator (peer %s vote height %d) not found proposer (peer %s).", conR.conS.ValPeerKey(), vote.Height, conR.conS.proposerPeerKey)
+		fmt.Printf("Send HasVoteMsg: validator (peer %s vote height %d) not found proposer (peer %s).", conR.conS.ValPeerKey(), vote.Height, conR.conS.ProposerPeerKey)
 
 		return
 	} else {
 		ps := peer.Data.Get(PeerStateKey).(*PeerState)
 		prs := ps.GetRoundState()
 
-		fmt.Printf("Send HasVoteMsg: validator (peer %s vote height %d), proposer (peer %s vote_height %d).", conR.conS.ValPeerKey(), vote.Height, conR.conS.proposerPeerKey, prs.Height)
+		fmt.Printf("Send HasVoteMsg: validator (peer %s vote height %d), proposer (peer %s vote_height %d).", conR.conS.ValPeerKey(), vote.Height, conR.conS.ProposerPeerKey, prs.Height)
 
 		if prs.Height == vote.Height {
 			peer.TrySend(StateChannel, struct{ ConsensusMessage }{msg})
 		}
 	}
 }
+*/
 
 func makeRoundStepMessages(rs *RoundState) (nrsMsg *NewRoundStepMessage, csMsg *CommitStepMessage) {
 	nrsMsg = &NewRoundStepMessage{
@@ -474,11 +477,11 @@ OUTER_LOOP:
 				msg := &VotesAggrPartMessage{
 					Height: rs.Height,
 					Round:  rs.Round,
-					Type:   RoundStepPrevote,
+					Type:   types.VoteTypePrevote,
 					Part:   part,
 				}
 				if peer.Send(DataChannel, struct{ ConsensusMessage }{msg}) {
-					ps.SetHasPrevoteMaj23Parts(prs.Height, prs.Round, index)
+					ps.SetHasMaj23VotesPart(prs.Height, prs.Round, types.VoteTypePrevote, index)
 				}
 
 				fmt.Printf("gossipDataRoutine: Validator (addr %v proposer %d) send prevote aggr part (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), rs.Height, rs.Round, index)
@@ -487,17 +490,17 @@ OUTER_LOOP:
 			}
 		}
 		// Send precommits parts?
-		if rs.PrecommitMaj23.HasHeader(prs.PrecommitMaj23PartsHeader) {
-			if index, ok := rs.PrecommitMaj23.BitArray().Sub(prs.PrecommitMaj23Parts.Copy()).PickRandom(); ok {
-				part := rs.PrecommitMaj23.GetPart(index)
+		if rs.PrecommitMaj23Parts.HasHeader(prs.PrecommitMaj23PartsHeader) {
+			if index, ok := rs.PrecommitMaj23Parts.BitArray().Sub(prs.PrecommitMaj23Parts.Copy()).PickRandom(); ok {
+				part := rs.PrecommitMaj23Parts.GetPart(index)
 				msg := &VotesAggrPartMessage{
 					Height: rs.Height,
 					Round:  rs.Round,
-					Type:   RoundStepPrecommit,
+					Type:   types.VoteTypePrecommit,
 					Part:   part,
 				}
 				if peer.Send(DataChannel, struct{ ConsensusMessage }{msg}) {
-					ps.SetHasPrecommitMaj23Parts(prs.Height, prs.Round, index)
+					ps.SetHasMaj23VotesPart(prs.Height, prs.Round, types.VoteTypePrecommit, index)
 				}
 
 				fmt.Printf("gossipDataRoutine: Validator (addr %v proposer %d) send precommit aggr part (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), rs.Height, rs.Round, index)
@@ -509,7 +512,7 @@ OUTER_LOOP:
 
 		// If the peer is on a previous height, help catch up.
 		if (0 < prs.Height) && (prs.Height < rs.Height) {
-			fmt.Printf("gossipDataRoutine: Validator (addr %v proposer %d) skip catchup (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), prs.Height, prs.Round, index)
+			fmt.Printf("gossipDataRoutine: Validator (addr %v proposer %d) skip catchup (height %d round %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), prs.Height, prs.Round)
 
 /*
 			//log.Info("Data catchup", "height", rs.Height, "peerHeight", prs.Height, "peerProposalBlockParts", prs.ProposalBlockParts)
@@ -660,16 +663,16 @@ OUTER_LOOP:
 
 			time.Sleep(peerGossipSleepDuration)
 			continue OUTER_LOOP
-		} else if {
+		} else {
 			fmt.Printf("gossipVoteRoutine: Validator (addr %v) is not proposer for vote (height %d round %d POLRound %d)\n", conR.conS.privValidator.GetAddress(), rs.Height, rs.Proposal.POLRound)
 
-			if strings.Compare(peer.Key(), conR.conS.proposerPeerKey) != 0 {
-				fmt.Printf("gossipVoteRoutine: Peer (key %s) is not proposer on validator (addr %v) not send vote (height %d round %d POLRound %d)\n", peer.Key(), conR.conS.privValidator.GetAddress(), rs.Height, rs.Proposal.POLRound)
+			if strings.Compare(peer.PeerKey(), conR.conS.ProposerPeerKey) != 0 {
+				fmt.Printf("gossipVoteRoutine: Peer (key %s) is not proposer on validator (addr %v) not send vote (height %d round %d POLRound %d)\n", peer.PeerKey(), conR.conS.privValidator.GetAddress(), rs.Height, rs.Proposal.POLRound)
 
 				time.Sleep(peerGossipSleepDuration)
 				continue OUTER_LOOP
 			} else {
-				fmt.Printf("gossipVoteRoutine: Peer (key %s) is proposer on validator (addr %v) send vote (height %d round %d POLRound %d)\n", peer.Key(), conR.conS.privValidator.GetAddress(), rs.Height, rs.Proposal.POLRound)
+				fmt.Printf("gossipVoteRoutine: Peer (key %s) is proposer on validator (addr %v) send vote (height %d round %d POLRound %d)\n", peer.PeerKey(), conR.conS.privValidator.GetAddress(), rs.Height, rs.Proposal.POLRound)
 			}
 		}
 
@@ -871,8 +874,10 @@ type PeerRoundState struct {
 	LastCommit               *BitArray           // All commit precommits of commit for last height.
 	CatchupCommitRound       int                 // Round that we have commit for. Not necessarily unique. -1 if none.
 	CatchupCommit            *BitArray           // All commit precommits peer has for this height & CatchupCommitRound
+	PrevoteAggr		 bool
 	PrevoteMaj23PartsHeader  types.PartSetHeader //
 	PrevoteMaj23Parts        *BitArray           //
+	PrecommitAggr		 bool
 	PrecommitMaj23PartsHeader  types.PartSetHeader //
 	PrecommitMaj23Parts        *BitArray           //
 }
@@ -984,35 +989,31 @@ func (ps *PeerState) SetHasMaj23Votes(votesAggr *types.VotesAggr) {
 	}
 
 	if votesAggr.Type == types.VoteTypePrevote {
-/*
 		if ps.PrevoteAggr {
 			return
 		}
 
 		ps.PrevoteAggr = true
-*/
 		ps.PrevoteMaj23PartsHeader = votesAggr.VotePartsHeader
-		ps.PrevoteMajParts = NewBitArray(votesAggr.VotePartsHeader.Total)
+		ps.PrevoteMaj23Parts = NewBitArray(votesAggr.VotePartsHeader.Total)
 	} else if votesAggr.Type == types.VoteTypePrecommit {
-/*
 		if ps.PrecommitAggr {
 			return
 		}
 
 		ps.PrecommitAggr = true
-*/
 		ps.PrecommitMaj23PartsHeader = votesAggr.VotePartsHeader
-		ps.PrecommitMajParts = NewBitArray(votesAggr.VotePartsHeader.Total)
+		ps.PrecommitMaj23Parts = NewBitArray(votesAggr.VotePartsHeader.Total)
 	} else {
 		panic(Fmt("Invalid VotesAggr type %d", votesAggr.Type))
 	}
 }
 
 // Received VotesAggr part, save it based on the type
-func (ps *PeerState) SetHasMaj23VotesPart(height int, round int, type int, index int) {
-	if type == types.VoteTypePrevote {
+func (ps *PeerState) SetHasMaj23VotesPart(height int, round int, votetype byte, index int) {
+	if votetype == types.VoteTypePrevote {
 		ps.SetHasMaj23PrevotePart(height, round, index)
-	} else if type == types.VoteTypePrecommit {
+	} else if votetype == types.VoteTypePrecommit {
 		ps.SetHasMaj23PrecommitPart(height, round, index)
 	}
 }
@@ -1332,6 +1333,7 @@ const (
 	msgTypeHasVote      = byte(0x15)
 	msgTypeVoteSetMaj23 = byte(0x16)
 	msgTypeVoteSetBits  = byte(0x17)
+	msgTypeVotesAggrPart= byte(0x18)
 	//new liaoyd
 	msgTypeTest = byte(0x03)
 )

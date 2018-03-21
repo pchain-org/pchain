@@ -11,6 +11,7 @@ import (
 	//"runtime/debug"
 
 	"github.com/ebuchman/fail-test"
+	p2p "github.com/tendermint/go-p2p"
 
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
@@ -140,6 +141,7 @@ type RoundState struct {
 	Proposal           *types.Proposal
 	ProposalBlock      *types.Block
 	ProposalBlockParts *types.PartSet
+	ProposerPeerKey	   string		// Proposer's peer key
 	LockedRound        int
 	LockedBlock        *types.Block
 	LockedBlockParts   *types.PartSet
@@ -243,8 +245,7 @@ type ConsensusState struct {
 	mempool      types.Mempool
 	privValidator PrivValidator // for signing votes
 
-	nodeInfo	*NodeInfo	// Validator's node info (ip, port, etc)
-	proposerPeerKey	string		// Proposer's peer key
+	nodeInfo	*p2p.NodeInfo	// Validator's node info (ip, port, etc)
 
 	mtx sync.Mutex
 	RoundState
@@ -345,16 +346,16 @@ func (cs *ConsensusState) SetPrivValidator(priv PrivValidator) {
 }
 
 // Sets our private validator account for signing votes.
-func (cs *ConsensusState) GetProposer() (proposer *Validator) {
+func (cs *ConsensusState) GetProposer() (*types.Validator) {
 	return cs.Validators.GetProposer()
 }
 
 // Returns true if this validator is the proposer.
 func (cs *ConsensusState) IsProposer() bool {
 	if bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
-		return TRUE
+		return true
 	} else {
-		return FALSE
+		return false
 	}
 }
 
@@ -503,7 +504,7 @@ func (cs *ConsensusState) SetProposalAndBlock(proposal *types.Proposal, block *t
 }
 
 // Set node info wich is about current validator's peer info
-func (cs *ConsensusState) SetNodeInfo(nodeInfo *NodeInfo) {
+func (cs *ConsensusState) SetNodeInfo(nodeInfo *p2p.NodeInfo) {
 	cs.nodeInfo = nodeInfo
 }
 
@@ -905,7 +906,7 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 		block, blockParts = cs.LockedBlock, cs.LockedBlockParts
 	} else {
 		// Need to find some way to get current validators nodeInfo
-		proposerPeerKey = cs.nodeInfo.ListenAddr()
+		proposerPeerKey = cs.nodeInfo.ListenAddres()
 
 		// Create a new proposal block from state/txs from the mempool.
 		block, blockParts = cs.createProposalBlock()
@@ -1483,28 +1484,28 @@ func (cs *ConsensusState) setMaj23VotesAggr(votesAggr *types.VotesAggr) error {
 		}
 		
 		cs.PrevoteAggr = votesAggr
-		cs.PrevoteMaj23 = types.NewPartSetFromHeader(votesAggr.VotePartsHeader)
+		cs.PrevoteMaj23Parts = types.NewPartSetFromHeader(votesAggr.VotePartsHeader)
 	} else if votesAggr.Type == types.VoteTypePrecommit {
 		if cs.PrecommitAggr != nil {
 			return nil
 		}
 		
 		cs.PrecommitAggr = votesAggr
-		cs.PrecommitMaj23 = types.NewPartSetFromHeader(votesAggr.VotePartsHeader)
+		cs.PrecommitMaj23Parts = types.NewPartSetFromHeader(votesAggr.VotePartsHeader)
 	}
 
 	return nil
 }
 
-func (cs *ConsensusState) addMaj23VotesPart(height int, part *types.Part, type byte, verify bool) (added bool, err error) {
-	if type == RoundStepPrevote {
-		return cs.addPrevotesAggrPart(height, part, bool)
+func (cs *ConsensusState) addMaj23VotesPart(height int, part *types.Part, votetype byte, verify bool) (added bool, err error) {
+	if votetype == types.VoteTypePrevote {
+		return cs.addPrevotesAggrPart(height, part, true)
 	} else {
-		if type != RoundStepCommit {
-			panic(Fmt("Invalid VotesAggrPart type %d", type))
+		if votetype != types.VoteTypePrecommit {
+			panic(Fmt("Invalid VotesAggrPart type %d", votetype))
 		}
 
-		return cs.addPrecommitsAggrPart(height, part, bool)
+		return cs.addPrecommitsAggrPart(height, part, true)
 	}
 }
 
@@ -1533,7 +1534,7 @@ func (cs *ConsensusState) addPrevotesAggrPart(height int, part *types.Part, veri
 		fmt.Printf("Received complete prevote vote set %v\n", cs.PrevoteAggr.String())
 
 		for _, vote := range cs.PrevoteMaj23.Votes {
-			if (vote.Height != cs.Height || vote.Round != cs.Round {
+			if (vote.Height != cs.Height || vote.Round != cs.Round) {
 				fmt.Printf("Invalid Vote (H %d R %d) current state (H %d %d)\n", vote.Height, vote.Round, cs.Height, cs.Round)
 			}
 
@@ -1581,7 +1582,7 @@ func (cs *ConsensusState) addPrecommitsAggrPart(height int, part *types.Part, ve
 		fmt.Printf("Received complete precommit vote set %v\n", cs.PrecommitAggr.String())
 
 		for _, vote := range cs.PrecommitMaj23.Votes {
-			if (vote.Height != cs.Height || vote.Round != cs.Round {
+			if (vote.Height != cs.Height || vote.Round != cs.Round) {
 				fmt.Printf("Invalid Vote (H %d R %d) current state (H %d %d)\n", vote.Height, vote.Round, cs.Height, cs.Round)
 			}
 
@@ -1671,13 +1672,13 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 
 	// A prevote/precommit for this height?
 	if vote.Height == cs.Height {
-		height := cs.Height
+//		height := cs.Height
 		added, err = cs.Votes.AddVote(vote, peerKey)
 		if added {
 			// If 2/3+ votes received, send them to other validators
 			if cs.Votes.Prevotes(cs.Round).HasTwoThirdsMajority() ||
 			   cs.Votes.Precommits(cs.Round).HasTwoThirdsMajority() {
-				cs.sendMaj23Vote(cs.Type)
+				cs.sendMaj23Vote(vote.Type)
 			}
 
 /*
@@ -1745,8 +1746,9 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 			default:
 				PanicSanity(Fmt("Unexpected vote type %X", vote.Type)) // Should not happen.
 			}
-		}
 */
+		}
+
 		// Either duplicate, or error upon cs.Votes.AddByIndex()
 		return
 	} else {
@@ -1793,35 +1795,37 @@ func (cs *ConsensusState) signAddVote(type_ byte, hash []byte, header types.Part
 }
 
 // Build the 2/3+ vote set parts and send them to other validators
-func (cs *ConsensusState) sendMaj23Vote(type byte) {
-	votes         []*Vote 
+func (cs *ConsensusState) sendMaj23Vote(votetype byte) {
+	var votes []*types.Vote 
 
-	if type == types.VoteTypePrevote {
+	if votetype == types.VoteTypePrevote {
 		votes = cs.Votes.Prevotes(cs.Round).Votes()
-	} else if type == types.VoteTypePrecommit {
+	} else if votetype == types.VoteTypePrecommit {
 		votes = cs.Votes.Precommits(cs.Round).Votes()
 	}
 
-	Maj23VoteSet, voteSetParts := types.MakeMaj23VoteSet(len(votes))
+	Maj23VoteSet, voteSetParts := types.MakeMaj23VoteSet(votes, 100)
 
-	votesAggr := types.MakeVotesAggr(cs.Height, cs.Round, cs.Type, voteSetParts.Header(), cs.Validators.Size())
+	fmt.Printf("Generate Maj23VoteSet %#v\n", Maj23VoteSet)
 
-	if type == types.VoteTypePrevote {
+	votesAggr := types.MakeVotesAggr(cs.Height, cs.Round, votetype, voteSetParts.Header(), cs.Validators.Size())
+
+	if votetype == types.VoteTypePrevote {
 		cs.PrevoteMaj23Parts = voteSetParts
-	} else if type == types.VoteTypePrecommit {
-		cs.PrecommitMaj23Parts = voteParts
+	} else if votetype == types.VoteTypePrecommit {
+		cs.PrecommitMaj23Parts = voteSetParts
 	}
 
 	// send votes aggregate header on internal msg queue
 	cs.sendInternalMessage(msgInfo{&Maj23VotesAggrMessage{votesAggr}, ""})
 
 	// send block parts on internal msg queue
-	for i := 0; i < votesAggrParts.Total(); i++ {
-		part := votesAggrParts.GetPart(i)
-		cs.sendInternalMessage(msgInfo{&VotesAggrPartMessage{cs.Height, cs.Round, type, part}, ""})
+	for i := 0; i < voteSetParts.Total(); i++ {
+		part := voteSetParts.GetPart(i)
+		cs.sendInternalMessage(msgInfo{&VotesAggrPartMessage{cs.Height, cs.Round, votetype, part}, ""})
 	}
 
-	fmt.Printf("Build and send Maj 2/3+ for (height %d round %d type %d)\n", cs.Height, cs.Round, cs.Type)
+	fmt.Printf("Build and send Maj 2/3+ for (height %d round %d type %d)\n", cs.Height, cs.Round, votetype)
 
 	fmt.Printf("Vote Aggre %#v\n", votesAggr)
 }

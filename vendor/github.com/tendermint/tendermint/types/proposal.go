@@ -29,7 +29,7 @@ type Proposal struct {
 }
 
 // polRound: -1 if no polRound.
-func NewProposal(height int, round int, blockPartsHeader PartSetHeader, polRound int, polBlockID BlockID peerKey string) *Proposal {
+func NewProposal(height int, round int, blockPartsHeader PartSetHeader, polRound int, polBlockID BlockID, peerKey string) *Proposal {
 	return &Proposal{
 		Height:           height,
 		Round:            round,
