@@ -44,11 +44,11 @@ here are the deployment steps:
 	#make it simple to run 'ethermint'
 	sudo cp ./bin/ethermint /usr/local/bin/
 
-	#package the genesis.json and init chain data
-	ethermint -datadir /home/ubuntu/.ethermint init ./src/github.com/tendermint/ethermint/dev/genesis.json
+	#create 5(you can change it) accounts with specified balance, will generate eth_genesis.json
+	ethermint --datadir /home/ubuntu/.ethermint init_eth_genesis "10000000000000000000000000000000000, 10000000000000000000000000000000000, 10000000000000000000000000000000000, 10000000000000000000000000000000000, 10000000000000000000000000000000000"
 
-	#create default user
-	cp -r ./src/github.com/tendermint/ethermint/dev/keystore /home/ubuntu/.ethermint/keystore
+	#generate the pchain genesis.json with epoch/reward scheme parameters
+	ethermint -datadir /home/ubuntu/.ethermint init /home/ubuntu/.ethermint/eth_genesis.json
 
 	#start ehtermint node, run_debug.sh with more log output
 	./run.sh
