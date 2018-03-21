@@ -94,13 +94,14 @@ func (s *PublicTendermintAPI) GetEpoch(ctx context.Context, number uint64) (inte
 }
 
 // GasPrice returns a suggestion for a gas price.
-func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string) (interface{}, error) {
+func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string, epoch uint64) (interface{}, error) {
 
 	var result core_types.TMResult
 
 	//fmt.Printf("GetValidator() called with address: %v\n", address)
 	params := map[string]interface{}{
-		"address":  address,
+		"address":  strings.ToLower(address),
+		"epoch": epoch,
 	}
 
 	_, err := s.Client.Call("validator_epoch", params, &result)
@@ -112,7 +113,39 @@ func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string) 
 	//fmt.Printf("tdm_getValidator: %v\n", result)
 	return result.(*core_types.ResultValidatorEpoch), nil
 }
+func (s *PublicTendermintAPI) GetUnconfirmedValidatorsOperation(ctx context.Context) (interface{}, error){
 
+	var result core_types.TMResult
+
+	//fmt.Printf("GetUnconfirmedValidatorsOperation() called\n")
+
+	_, err := s.Client.Call("unconfirmed_vo", nil, &result)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+
+	//fmt.Printf("tdm_getValidator: %v\n", result)
+	return result.(*core_types.ResultValidatorsOperation), nil
+}
+
+func (s *PublicTendermintAPI) GetConfirmedValidatorsOperation(ctx context.Context, epoch uint64) (interface{}, error){
+	var result core_types.TMResult
+
+	//fmt.Printf("GetValidator() called with address: %v\n", address)
+	params := map[string]interface{}{
+		"epoch": epoch,
+	}
+
+	_, err := s.Client.Call("confirmed_vo", params, &result)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+
+	//fmt.Printf("tdm_getValidator: %v\n", result)
+	return result.(*core_types.ResultValidatorsOperation), nil
+}
 
 func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from common.Address, epoch uint64, power uint64,
 						action string, hash string) (common.Hash, error) {

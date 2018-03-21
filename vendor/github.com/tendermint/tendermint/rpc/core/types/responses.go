@@ -9,7 +9,7 @@ import (
 	"github.com/tendermint/go-rpc/types"
 	"github.com/tendermint/go-wire"
 	"github.com/tendermint/tendermint/types"
-	"github.com/tendermint/tendermint/epoch"
+	ep "github.com/tendermint/tendermint/epoch"
 )
 
 type ResultBlockchainInfo struct {
@@ -153,10 +153,16 @@ type ResultValidatorEpochValidator struct {
 	Operation   *ResultValidatorOperationSimple `json:"operation"`
 }
 
+type ResultValidatorsOperation struct {
+	VOArray []*ep.ValidatorOperation
+}
+
 type ResultValidatorEpoch struct{
-	BlockHeight int                `json:"block_height"`
-	Validators  []*ResultValidatorEpochValidator `json:"validators"`
-	Epoch	*epoch.Epoch		`json:"epoch"`
+	//BlockHeight int                `json:"block_height"`
+	//Validators  []*ResultValidatorEpochValidator `json:"validators"`
+	//Epoch	*epoch.Epoch		`json:"epoch"`
+	EpochNumber int
+	Validator   *types.GenesisValidator
 }
 
 type ResultEpoch struct{
@@ -212,6 +218,7 @@ const (
 	ResultTypeValidatorOperation = byte(0xb0)
 	ResultTypeValidatorEpoch = byte(0xb1)
 	ResultTypeEpoch = byte(0xb2)
+	ResultTypeValidatorsOperation = byte(0xb3)
 
 	//the basic type, from 0xff
 	ResultTypeUint64 = byte(0xff)
@@ -252,5 +259,6 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{&ResultValidatorOperation{}, ResultTypeValidatorOperation},
 	wire.ConcreteType{&ResultValidatorEpoch{}, ResultTypeValidatorEpoch},
 	wire.ConcreteType{&ResultEpoch{}, ResultTypeEpoch},
+	wire.ConcreteType{&ResultValidatorsOperation{}, ResultTypeValidatorsOperation},
 	wire.ConcreteType{&ResultUint64{}, ResultTypeUint64},
 )

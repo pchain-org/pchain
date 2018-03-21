@@ -48,7 +48,9 @@ var Routes = map[string]*rpc.RPCFunc{
 
 	//validator API
 	"validator_operation": rpc.NewRPCFunc(ValidatorOperationResult, "from,epoch,power,action,target,signature"),
-	"validator_epoch": rpc.NewRPCFunc(ValidatorEpochResult, "address"),
+	"validator_epoch": rpc.NewRPCFunc(ValidatorEpochResult, "address,epoch"),
+	"unconfirmed_vo": rpc.NewRPCFunc(UnconfirmedValidatorsOperationResult, ""),
+	"confirmed_vo": rpc.NewRPCFunc(ConfirmedValidatorsOperationResult, "epoch"),
 }
 
 func SubscribeResult(wsCtx rpctypes.WSRPCContext, event string) (ctypes.TMResult, error) {
@@ -167,6 +169,14 @@ func ValidatorOperationResult(from string, epoch int, power uint64, action strin
 	return ValidatorOperation(from, epoch, power, action, target, signature)
 }
 
-func ValidatorEpochResult(address string) (ctypes.TMResult, error) {
-	return ValidatorEpoch(address)
+func ValidatorEpochResult(address string, epoch int) (ctypes.TMResult, error) {
+	return ValidatorEpoch(address, epoch)
+}
+
+func UnconfirmedValidatorsOperationResult() (ctypes.TMResult, error) {
+	return UnconfirmedValidatorsOperation()
+}
+
+func ConfirmedValidatorsOperationResult(epoch int) (ctypes.TMResult, error) {
+	return ConfirmedValidatorsOperation(epoch)
 }

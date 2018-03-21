@@ -8,7 +8,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/tendermint/tendermint/epoch"
+	ep "github.com/tendermint/tendermint/epoch"
 )
 
 func CurrentEpochNumber() (*ctypes.ResultUint64, error) {
@@ -26,7 +26,7 @@ func Epoch(number int)  (*ctypes.ResultEpoch, error) {
 		return &ctypes.ResultEpoch{Epoch: curEpoch.MakeOneEpochDoc()}, nil
 	}
 
-	spEpoch := epoch.LoadOneEpoch(curEpoch.GetDB(), number)
+	spEpoch := ep.LoadOneEpoch(curEpoch.GetDB(), number)
 
 	return &ctypes.ResultEpoch{Epoch: spEpoch.MakeOneEpochDoc()}, nil
 }
@@ -91,9 +91,43 @@ func ValidatorOperation(from string, epoch int, power uint64, action string, tar
 	}, nil
 }
 
-func ValidatorEpoch(address string) (*ctypes.ResultValidatorEpoch, error) {
-	//fmt.Println("in func ValidatorEpoch(address string) (*ctypes.ResultValidatorEpoch, error)")
+func ValidatorEpoch(address string, epoch int) (*ctypes.ResultValidatorEpoch, error) {
 
+	//fmt.Println("in func ValidatorEpoch(address string) (*ctypes.ResultValidatorEpoch, error)")
+	curEpoch := consensusState.GetRoundState().Epoch
+	if epoch < 0 || epoch > curEpoch.Number {
+		return nil, errors.New("epoch number out of range")
+	}
+
+	vals := []*types.Validator{}
+
+	if epoch == curEpoch.Number {
+		vals = curEpoch.Validators.Validators
+	}
+
+	spEpoch := ep.LoadOneEpoch(curEpoch.GetDB(), epoch)
+	vals = spEpoch.Validators.Validators
+
+	var validator *types.Validator = nil
+	for i:=0; i<len(vals); i++ {
+		fmt.Println("in func ValidatorEpoch(), string is %s, address is %s",
+				address, fmt.Sprintf("%x", vals[i].Address))
+		if address == fmt.Sprintf("%x", vals[i].Address) {
+			validator = vals[i]
+			break
+		}
+	}
+
+	return &ctypes.ResultValidatorEpoch{
+		EpochNumber: epoch,
+		Validator: &types.GenesisValidator {
+				EthAccount: common.BytesToAddress(validator.Address),
+				PubKey: validator.PubKey,
+				Amount: validator.VotingPower,
+				Name: "",
+		},
+	}, nil
+	/*
 	blockHeight, validators := consensusState.GetValidators()
 	//fmt.Printf("in func GetValidators returns: %v\n", validators)
 	//fmt.Printf("in func GetValidators address is : %v\n", address)
@@ -167,6 +201,33 @@ func ValidatorEpoch(address string) (*ctypes.ResultValidatorEpoch, error) {
 	}
 
 	return result, err
+	*/
+}
+
+func UnconfirmedValidatorsOperation() (*ctypes.ResultValidatorsOperation, error){
+	return getValidatorsOperation(ep.VA_UNCONFIRMED_EPOCH)
+}
+
+func ConfirmedValidatorsOperation(epoch int) (*ctypes.ResultValidatorsOperation, error){
+	return getValidatorsOperation(epoch)
+}
+
+func getValidatorsOperation(epoch int) (*ctypes.ResultValidatorsOperation, error){
+
+	curEpoch := consensusState.GetRoundState().Epoch
+	if epoch < ep.VA_UNCONFIRMED_EPOCH || epoch > curEpoch.Number {
+		return nil, errors.New("epoch number out of range")
+	}
+	voSet := ep.LoadValidatorOperationSet(epoch)
+
+	resultVoArr := make([]*ep.ValidatorOperation,0)
+	if voSet != nil {
+		for _, voArr := range voSet.Operations {
+			resultVoArr = append(resultVoArr, voArr...)
+		}
+	}
+
+	return &ctypes.ResultValidatorsOperation{VOArray: resultVoArr}, nil
 }
 
 func signHash(data []byte) []byte {
