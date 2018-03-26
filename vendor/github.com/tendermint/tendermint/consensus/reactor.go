@@ -1333,7 +1333,8 @@ const (
 	msgTypeHasVote      = byte(0x15)
 	msgTypeVoteSetMaj23 = byte(0x16)
 	msgTypeVoteSetBits  = byte(0x17)
-	msgTypeVotesAggrPart= byte(0x18)
+	msgTypeMaj23VotesAggr= byte(0x18)
+	msgTypeVotesAggrPart= byte(0x1a)
 	//new liaoyd
 	msgTypeTest = byte(0x03)
 )
@@ -1347,11 +1348,12 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{&ProposalMessage{}, msgTypeProposal},
 	wire.ConcreteType{&ProposalPOLMessage{}, msgTypeProposalPOL},
 	wire.ConcreteType{&BlockPartMessage{}, msgTypeBlockPart},
-	wire.ConcreteType{&VotesAggrPartMessage{}, msgTypeVotesAggrPart},
 	wire.ConcreteType{&VoteMessage{}, msgTypeVote},
 	wire.ConcreteType{&HasVoteMessage{}, msgTypeHasVote},
 	wire.ConcreteType{&VoteSetMaj23Message{}, msgTypeVoteSetMaj23},
 	wire.ConcreteType{&VoteSetBitsMessage{}, msgTypeVoteSetBits},
+	wire.ConcreteType{&Maj23VotesAggrMessage{}, msgTypeMaj23VotesAggr},
+	wire.ConcreteType{&VotesAggrPartMessage{}, msgTypeVotesAggrPart},
 	//new liaoyd
 	wire.ConcreteType{&TestMessage{}, msgTypeTest},
 )

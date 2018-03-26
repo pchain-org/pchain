@@ -91,11 +91,12 @@ func (va *Maj23VoteSet) MakePartSet(partSize int) *PartSet {
 
 // Fill votes from passed in parameter
 func (va *Maj23VoteSet) AddVotes(votes []*Vote) {
-	for i, vote := range va.Votes {
-		if votes[i] != nil {
+	for i, vote := range votes {
+		if vote != nil {
 			// Use voting power 0 temproralily
 			va.addVerifiedVote(vote, 0)
 		}
+		fmt.Printf("%d votes added\n", i)
         }    
 }
 
