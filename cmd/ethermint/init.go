@@ -28,6 +28,7 @@ import (
 	"github.com/tendermint/go-crypto"
 	"time"
 	"regexp"
+	"bytes"
 )
 
 type BalaceAmount struct {
@@ -176,20 +177,28 @@ func init_em_files(genesisPath string) error  {
 	if err := json.Unmarshal(contents, &coreGenesis); err != nil {
 		return err
 	}
-	privValPath := config.GetString("priv_validator_file")
-	if _, err := os.Stat(privValPath); os.IsNotExist(err) {
-		utils.Fatalf("failed to read privValidator file: %v", err)
-		return err
-	}
-	privValidator := types.LoadOrGenPrivValidator(privValPath)
-	if err := createGenesisDoc(&coreGenesis, privValidator); err != nil {
+	privValPath := config.GetString("priv_validator_file_root")
+	privValidators := LoadAllPrivValidators(len(coreGenesis.Alloc), privValPath)
+	if err := createGenesisDoc(&coreGenesis, privValidators); err != nil {
 		utils.Fatalf("failed to write genesis file: %v", err)
 		return err
 	}
 	return nil
 }
 
-func createGenesisDoc(coreGenesis *core.Genesis, privValidator *types.PrivValidator) error {
+func LoadAllPrivValidators(num int, prefix string) ([]*types.PrivValidator){
+	privValidators := make([]*types.PrivValidator, num)
+	for i := 0; i < num; i++ {
+		if i > 0 {
+			privValidators[i] = types.LoadOrGenPrivValidator(prefix + strconv.Itoa(i) + ".json")
+		} else {
+			privValidators[i] = types.LoadOrGenPrivValidator(prefix + ".json")
+		}
+	}
+	return privValidators
+}
+
+func createGenesisDoc(coreGenesis *core.Genesis, privValidators []*types.PrivValidator) error {
 	genFile := config.GetString("genesis_file")
 	if _, err := os.Stat(genFile); os.IsNotExist(err) {
 		genDoc := types.GenesisDoc{
@@ -216,17 +225,30 @@ func createGenesisDoc(coreGenesis *core.Genesis, privValidator *types.PrivValida
 			},
 		}
 
-		coinbase, amount, checkErr := checkAccount(*coreGenesis)
+		_, _, checkErr := checkAccount(*coreGenesis)
 		if(checkErr != nil) {
 			glog.V(logger.Error).Infof(checkErr.Error())
 			cmn.Exit(checkErr.Error())
 		}
 
-		genDoc.CurrentEpoch.Validators = []types.GenesisValidator{types.GenesisValidator{
-			EthAccount: coinbase,
-			PubKey: privValidator.PubKey,
-			Amount: amount,
-		}}
+		genDoc.CurrentEpoch.Validators = make([]types.GenesisValidator, len(privValidators))
+		idx := 0
+		for k,v := range coreGenesis.Alloc {
+			addr,privValidator, checkErr := checkPrivValidatorAccount(k, privValidators)
+			if(checkErr != nil){
+				glog.V(logger.Error).Infof(checkErr.Error())
+				cmn.Exit(checkErr.Error())
+			}
+			balance := common.String2Big(v.Balance)
+			amount, _ := strconv.ParseInt(v.Amount, 10, 64)
+			if ( balance.Cmp(big.NewInt(amount)) < 0) {
+				fmt.Printf("balance is not enough to be support validator's amount, balance is %v, amount is %v\n",
+					balance, amount)
+				return errors.New("no enough balance")
+			}
+			genDoc.CurrentEpoch.Validators[idx] = types.GenesisValidator{EthAccount: addr,PubKey:privValidator.PubKey,Amount:amount}
+			idx ++
+		}
 		genDoc.SaveAs(genFile)
 	}
 	return nil
@@ -291,6 +313,25 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, int64, error) {
 	}
 
 	return coinbase, amount, nil
+}
+
+func checkPrivValidatorAccount(addr string, privValidators []*types.PrivValidator) (common.Address, *types.PrivValidator,error) {
+
+	address := common.HexToAddress(addr)
+	found := false
+	var Validator *types.PrivValidator
+	for _,v := range privValidators {
+		if bytes.Equal(address[:], v.Address[:]) {
+			found = true
+			Validator = v
+			break;
+		}
+	}
+	if( !found ) {
+		fmt.Printf("invalidate eth_account\n")
+		return common.Address{},nil, errors.New("invalidate eth_account")
+	}
+	return address,Validator,nil
 }
 
 // getPassPhrase retrieves the passwor associated with an account, either fetched
