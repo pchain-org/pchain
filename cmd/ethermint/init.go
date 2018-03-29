@@ -28,7 +28,6 @@ import (
 	"github.com/tendermint/go-crypto"
 	"time"
 	"regexp"
-	"bytes"
 )
 
 type BalaceAmount struct {
@@ -115,17 +114,22 @@ func initEthGenesis(ctx *cli.Context) error {
 			Balance string
 			Nonce   string
 			Amount  string
+			PubKey  string
 		}{
 		},
 	}
 	for i,validator := range validators {
-		coreGenesis.Alloc[common.ToHex(validator.Address)] = struct {
-			Code    string
-			Storage map[string]string
-			Balance string
-			Nonce   string
-			Amount  string
-		}{Balance: balanceAmounts[i].balance, Amount:balanceAmounts[i].amount}
+		if otherEd, ok := validator.PubKey.(crypto.EtherumPubKey); ok{
+			coreGenesis.Alloc[common.ToHex(validator.Address)] = struct {
+				Code    string
+				Storage map[string]string
+				Balance string
+				Nonce   string
+				Amount  string
+				PubKey  string
+			}{Balance: balanceAmounts[i].balance, Amount:balanceAmounts[i].amount, PubKey: common.ToHex(otherEd[:])}
+		}
+
 	}
 
 	contents, err := json.Marshal(coreGenesis)
@@ -177,28 +181,15 @@ func init_em_files(genesisPath string) error  {
 	if err := json.Unmarshal(contents, &coreGenesis); err != nil {
 		return err
 	}
-	privValPath := config.GetString("priv_validator_file_root")
-	privValidators := LoadAllPrivValidators(len(coreGenesis.Alloc), privValPath)
-	if err := createGenesisDoc(&coreGenesis, privValidators); err != nil {
+	if err := createGenesisDoc(&coreGenesis); err != nil {
 		utils.Fatalf("failed to write genesis file: %v", err)
 		return err
 	}
 	return nil
 }
 
-func LoadAllPrivValidators(num int, prefix string) ([]*types.PrivValidator){
-	privValidators := make([]*types.PrivValidator, num)
-	for i := 0; i < num; i++ {
-		if i > 0 {
-			privValidators[i] = types.LoadOrGenPrivValidator(prefix + strconv.Itoa(i) + ".json")
-		} else {
-			privValidators[i] = types.LoadOrGenPrivValidator(prefix + ".json")
-		}
-	}
-	return privValidators
-}
 
-func createGenesisDoc(coreGenesis *core.Genesis, privValidators []*types.PrivValidator) error {
+func createGenesisDoc(coreGenesis *core.Genesis) error {
 	genFile := config.GetString("genesis_file")
 	if _, err := os.Stat(genFile); os.IsNotExist(err) {
 		genDoc := types.GenesisDoc{
@@ -231,14 +222,9 @@ func createGenesisDoc(coreGenesis *core.Genesis, privValidators []*types.PrivVal
 			cmn.Exit(checkErr.Error())
 		}
 
-		genDoc.CurrentEpoch.Validators = make([]types.GenesisValidator, len(privValidators))
+		genDoc.CurrentEpoch.Validators = make([]types.GenesisValidator, len(coreGenesis.Alloc))
 		idx := 0
 		for k,v := range coreGenesis.Alloc {
-			addr,privValidator, checkErr := checkPrivValidatorAccount(k, privValidators)
-			if(checkErr != nil){
-				glog.V(logger.Error).Infof(checkErr.Error())
-				cmn.Exit(checkErr.Error())
-			}
 			balance := common.String2Big(v.Balance)
 			amount, _ := strconv.ParseInt(v.Amount, 10, 64)
 			if ( balance.Cmp(big.NewInt(amount)) < 0) {
@@ -246,7 +232,7 @@ func createGenesisDoc(coreGenesis *core.Genesis, privValidators []*types.PrivVal
 					balance, amount)
 				return errors.New("no enough balance")
 			}
-			genDoc.CurrentEpoch.Validators[idx] = types.GenesisValidator{EthAccount: addr,PubKey:privValidator.PubKey,Amount:amount}
+			genDoc.CurrentEpoch.Validators[idx] = types.GenesisValidator{EthAccount: common.HexToAddress(k), PubKey:crypto.EtherumPubKey(common.FromHex(v.PubKey)), Amount:amount}
 			idx ++
 		}
 		genDoc.SaveAs(genFile)
@@ -311,27 +297,7 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, int64, error) {
 			balance, amount)
 		return common.Address{}, int64(0), errors.New("no enough balance")
 	}
-
 	return coinbase, amount, nil
-}
-
-func checkPrivValidatorAccount(addr string, privValidators []*types.PrivValidator) (common.Address, *types.PrivValidator,error) {
-
-	address := common.HexToAddress(addr)
-	found := false
-	var Validator *types.PrivValidator
-	for _,v := range privValidators {
-		if bytes.Equal(address[:], v.Address[:]) {
-			found = true
-			Validator = v
-			break;
-		}
-	}
-	if( !found ) {
-		fmt.Printf("invalidate eth_account\n")
-		return common.Address{},nil, errors.New("invalidate eth_account")
-	}
-	return address,Validator,nil
 }
 
 // getPassPhrase retrieves the passwor associated with an account, either fetched
