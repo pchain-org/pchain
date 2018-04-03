@@ -21,10 +21,10 @@ package storage
 import (
 	"sync"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 )
-
+var logger = plogger.GetLogger("ethereum")
 const (
 	memTreeLW              = 2  // log2(subtree count) of the subtrees
 	memTreeFLW             = 14 // log2(subtree count) of the root layer
@@ -287,11 +287,11 @@ func (s *MemStore) removeOldest() {
 	}
 
 	if node.entry.dbStored != nil {
-		glog.V(logger.Detail).Infof("Memstore Clean: Waiting for chunk %v to be saved", node.entry.Key.Log())
+		logger.Debugf("Memstore Clean: Waiting for chunk %v to be saved", node.entry.Key.Log())
 		<-node.entry.dbStored
-		glog.V(logger.Detail).Infof("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log())
+		logger.Debugf("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log())
 	} else {
-		glog.V(logger.Detail).Infof("Memstore Clean: Chunk %v already in DB. Ready to delete.", node.entry.Key.Log())
+		logger.Debugf("Memstore Clean: Chunk %v already in DB. Ready to delete.", node.entry.Key.Log())
 	}
 
 	if node.entry.SData != nil {

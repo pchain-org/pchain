@@ -8,10 +8,10 @@ import (
 
 	"github.com/tendermint/tendermint/config/tendermint_test"
 
+	"github.com/tendermint/abci/example/dummy"
 	"github.com/tendermint/go-events"
 	"github.com/tendermint/go-p2p"
 	"github.com/tendermint/tendermint/types"
-	"github.com/tendermint/abci/example/dummy"
 )
 
 func init() {
@@ -98,7 +98,7 @@ func TestVotingPowerChange(t *testing.T) {
 	}, css)
 
 	//---------------------------------------------------------------------------
-	log.Info("---------------------------- Testing changing the voting power of one validator a few times")
+	logger.Info("---------------------------- Testing changing the voting power of one validator a few times")
 
 	val1PubKey := css[0].privValidator.(*types.PrivValidator).PubKey
 	updateValidatorTx := dummy.MakeValSetChangeTx(val1PubKey.Bytes(), 25)
@@ -159,7 +159,7 @@ func TestValidatorSetChanges(t *testing.T) {
 	}, css)
 
 	//---------------------------------------------------------------------------
-	log.Info("---------------------------- Testing adding one validator")
+	logger.Info("---------------------------- Testing adding one validator")
 
 	newValidatorPubKey1 := css[nVals].privValidator.(*types.PrivValidator).PubKey
 	newValidatorTx1 := dummy.MakeValSetChangeTx(newValidatorPubKey1.Bytes(), uint64(testMinPower))
@@ -185,7 +185,7 @@ func TestValidatorSetChanges(t *testing.T) {
 	waitForAndValidateBlock(t, nPeers, activeVals, eventChans, css)
 
 	//---------------------------------------------------------------------------
-	log.Info("---------------------------- Testing changing the voting power of one validator")
+	logger.Info("---------------------------- Testing changing the voting power of one validator")
 
 	updateValidatorPubKey1 := css[nVals].privValidator.(*types.PrivValidator).PubKey
 	updateValidatorTx1 := dummy.MakeValSetChangeTx(updateValidatorPubKey1.Bytes(), 25)
@@ -201,7 +201,7 @@ func TestValidatorSetChanges(t *testing.T) {
 	}
 
 	//---------------------------------------------------------------------------
-	log.Info("---------------------------- Testing adding two validators at once")
+	logger.Info("---------------------------- Testing adding two validators at once")
 
 	newValidatorPubKey2 := css[nVals+1].privValidator.(*types.PrivValidator).PubKey
 	newValidatorTx2 := dummy.MakeValSetChangeTx(newValidatorPubKey2.Bytes(), uint64(testMinPower))
@@ -217,7 +217,7 @@ func TestValidatorSetChanges(t *testing.T) {
 	waitForAndValidateBlock(t, nPeers, activeVals, eventChans, css)
 
 	//---------------------------------------------------------------------------
-	log.Info("---------------------------- Testing removing two validators at once")
+	logger.Info("---------------------------- Testing removing two validators at once")
 
 	removeValidatorTx2 := dummy.MakeValSetChangeTx(newValidatorPubKey2.Bytes(), 0)
 	removeValidatorTx3 := dummy.MakeValSetChangeTx(newValidatorPubKey3.Bytes(), 0)
@@ -253,7 +253,7 @@ func waitForAndValidateBlock(t *testing.T, n int, activeVals map[string]struct{}
 	timeoutWaitGroup(t, n, func(wg *sync.WaitGroup, j int) {
 		newBlockI := <-eventChans[j]
 		newBlock := newBlockI.(types.EventDataNewBlock).Block
-		log.Warn("Got block", "height", newBlock.Height, "validator", j)
+		logger.Warn("Got block", " height:", newBlock.Height, " validator:", j)
 		err := validateBlock(newBlock, activeVals)
 		if err != nil {
 			t.Fatal(err)
@@ -264,7 +264,7 @@ func waitForAndValidateBlock(t *testing.T, n int, activeVals map[string]struct{}
 
 		eventChans[j] <- struct{}{}
 		wg.Done()
-		log.Warn("Done wait group", "height", newBlock.Height, "validator", j)
+		logger.Warn("Done wait group", " height:", newBlock.Height, " validator:", j)
 	}, css)
 }
 

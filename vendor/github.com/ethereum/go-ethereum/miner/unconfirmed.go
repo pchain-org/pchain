@@ -22,8 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 // headerRetriever is used by the unconfirmed block set to verify whether a previously
@@ -80,7 +78,7 @@ func (set *unconfirmedBlocks) Insert(index uint64, hash common.Hash) {
 		set.blocks.Move(-1).Link(item)
 	}
 	// Display a log for the user to notify of a new mined block unconfirmed
-	glog.V(logger.Info).Infof("🔨  mined potential block #%d [%x…], waiting for %d blocks to confirm", index, hash.Bytes()[:4], set.depth)
+	logger.Infof("🔨  mined potential block #%d [%x…], waiting for %d blocks to confirm", index, hash.Bytes()[:4], set.depth)
 }
 
 // Shift drops all unconfirmed blocks from the set which exceed the unconfirmed sets depth
@@ -100,11 +98,11 @@ func (set *unconfirmedBlocks) Shift(height uint64) {
 		header := set.chain.GetHeaderByNumber(next.index)
 		switch {
 		case header == nil:
-			glog.V(logger.Warn).Infof("failed to retrieve header of mined block #%d [%x…]", next.index, next.hash.Bytes()[:4])
+			logger.Warnf("failed to retrieve header of mined block #%d [%x…]", next.index, next.hash.Bytes()[:4])
 		case header.Hash() == next.hash:
-			glog.V(logger.Info).Infof("🔗  mined block #%d [%x…] reached canonical chain", next.index, next.hash.Bytes()[:4])
+			logger.Infof("🔗  mined block #%d [%x…] reached canonical chain", next.index, next.hash.Bytes()[:4])
 		default:
-			glog.V(logger.Info).Infof("⑂ mined block #%d [%x…] became a side fork", next.index, next.hash.Bytes()[:4])
+			logger.Infof("⑂ mined block #%d [%x…] became a side fork", next.index, next.hash.Bytes()[:4])
 		}
 		// Drop the block out of the ring
 		if set.blocks.Value == set.blocks.Next().Value {

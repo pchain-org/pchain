@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/tendermint/go-logger"
+	"github.com/pchain/common/plogger"
 )
 
-var log = logger.New("module", "abci-server")
+var logger = plogger.GetLogger("abci-server")

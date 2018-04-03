@@ -22,10 +22,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 )
-
+var logger = plogger.GetLogger("ethereum")
 /*
 DPA provides the client API entrypoints Store and Retrieve to store and retrieve
 It can store anything that has a byte slice representation, so files or serialised objects etc.
@@ -131,17 +131,17 @@ func (self *DPA) retrieveLoop() {
 	for i := 0; i < maxRetrieveProcesses; i++ {
 		go self.retrieveWorker()
 	}
-	glog.V(logger.Detail).Infof("dpa: retrieve loop spawning %v workers", maxRetrieveProcesses)
+	logger.Debugf("dpa: retrieve loop spawning %v workers", maxRetrieveProcesses)
 }
 
 func (self *DPA) retrieveWorker() {
 	for chunk := range self.retrieveC {
-		glog.V(logger.Detail).Infof("dpa: retrieve loop : chunk %v", chunk.Key.Log())
+		logger.Debugf("dpa: retrieve loop : chunk %v", chunk.Key.Log())
 		storedChunk, err := self.Get(chunk.Key)
 		if err == notFound {
-			glog.V(logger.Detail).Infof("chunk %v not found", chunk.Key.Log())
+			logger.Debugf("chunk %v not found", chunk.Key.Log())
 		} else if err != nil {
-			glog.V(logger.Detail).Infof("error retrieving chunk %v: %v", chunk.Key.Log(), err)
+			logger.Debugf("error retrieving chunk %v: %v", chunk.Key.Log(), err)
 		} else {
 			chunk.SData = storedChunk.SData
 			chunk.Size = storedChunk.Size
@@ -162,7 +162,7 @@ func (self *DPA) storeLoop() {
 	for i := 0; i < maxStoreProcesses; i++ {
 		go self.storeWorker()
 	}
-	glog.V(logger.Detail).Infof("dpa: store spawning %v workers", maxStoreProcesses)
+	logger.Debugf("dpa: store spawning %v workers", maxStoreProcesses)
 }
 
 func (self *DPA) storeWorker() {
@@ -170,7 +170,7 @@ func (self *DPA) storeWorker() {
 	for chunk := range self.storeC {
 		self.Put(chunk)
 		if chunk.wg != nil {
-			glog.V(logger.Detail).Infof("dpa: store processor %v", chunk.Key.Log())
+			logger.Debugf("dpa: store processor %v", chunk.Key.Log())
 			chunk.wg.Done()
 
 		}
@@ -203,17 +203,17 @@ func (self *dpaChunkStore) Get(key Key) (chunk *Chunk, err error) {
 	chunk, err = self.netStore.Get(key)
 	// timeout := time.Now().Add(searchTimeout)
 	if chunk.SData != nil {
-		glog.V(logger.Detail).Infof("DPA.Get: %v found locally, %d bytes", key.Log(), len(chunk.SData))
+		logger.Debugf("DPA.Get: %v found locally, %d bytes", key.Log(), len(chunk.SData))
 		return
 	}
 	// TODO: use self.timer time.Timer and reset with defer disableTimer
 	timer := time.After(searchTimeout)
 	select {
 	case <-timer:
-		glog.V(logger.Detail).Infof("DPA.Get: %v request time out ", key.Log())
+		logger.Debugf("DPA.Get: %v request time out ", key.Log())
 		err = notFound
 	case <-chunk.Req.C:
-		glog.V(logger.Detail).Infof("DPA.Get: %v retrieved, %d bytes (%p)", key.Log(), len(chunk.SData), chunk)
+		logger.Debugf("DPA.Get: %v retrieved, %d bytes (%p)", key.Log(), len(chunk.SData), chunk)
 	}
 	return
 }
@@ -222,18 +222,18 @@ func (self *dpaChunkStore) Get(key Key) (chunk *Chunk, err error) {
 func (self *dpaChunkStore) Put(entry *Chunk) {
 	chunk, err := self.localStore.Get(entry.Key)
 	if err != nil {
-		glog.V(logger.Detail).Infof("DPA.Put: %v new chunk. call netStore.Put", entry.Key.Log())
+		logger.Debugf("DPA.Put: %v new chunk. call netStore.Put", entry.Key.Log())
 		chunk = entry
 	} else if chunk.SData == nil {
-		glog.V(logger.Detail).Infof("DPA.Put: %v request entry found", entry.Key.Log())
+		logger.Debugf("DPA.Put: %v request entry found", entry.Key.Log())
 		chunk.SData = entry.SData
 		chunk.Size = entry.Size
 	} else {
-		glog.V(logger.Detail).Infof("DPA.Put: %v chunk already known", entry.Key.Log())
+		logger.Debugf("DPA.Put: %v chunk already known", entry.Key.Log())
 		return
 	}
 	// from this point on the storage logic is the same with network storage requests
-	glog.V(logger.Detail).Infof("DPA.Put %v: %v", self.n, chunk.Key.Log())
+	logger.Debugf("DPA.Put %v: %v", self.n, chunk.Key.Log())
 	self.n++
 	self.netStore.Put(chunk)
 }

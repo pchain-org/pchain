@@ -23,12 +23,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"github.com/rcrowley/go-metrics"
 	"github.com/rcrowley/go-metrics/exp"
 )
-
+var logger = plogger.GetLogger("ethereum")
 // MetricsEnabledFlag is the CLI flag name to use to enable metrics collections.
 var MetricsEnabledFlag = "metrics"
 
@@ -41,7 +41,7 @@ var Enabled = false
 func init() {
 	for _, arg := range os.Args {
 		if strings.TrimLeft(arg, "-") == MetricsEnabledFlag {
-			glog.V(logger.Info).Infof("Enabling metrics collection")
+			logger.Infof("Enabling metrics collection")
 			Enabled = true
 		}
 	}
@@ -102,7 +102,7 @@ func CollectProcessMetrics(refresh time.Duration) {
 		diskWrites = metrics.GetOrRegisterMeter("system/disk/writecount", metrics.DefaultRegistry)
 		diskWriteBytes = metrics.GetOrRegisterMeter("system/disk/writedata", metrics.DefaultRegistry)
 	} else {
-		glog.V(logger.Debug).Infof("failed to read disk metrics: %v", err)
+		logger.Debugf("failed to read disk metrics: %v", err)
 	}
 	// Iterate loading the different stats and updating the meters
 	for i := 1; ; i++ {

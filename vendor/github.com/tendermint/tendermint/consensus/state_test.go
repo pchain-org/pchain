@@ -376,7 +376,7 @@ func TestLockNoPOL(t *testing.T) {
 	///
 
 	<-newRoundCh
-	log.Notice("#### ONTO ROUND 1")
+	logger.Info("#### ONTO ROUND 1")
 	/*
 		Round2 (cs1, B) // B B2
 	*/
@@ -421,7 +421,7 @@ func TestLockNoPOL(t *testing.T) {
 	<-timeoutWaitCh
 
 	<-newRoundCh
-	log.Notice("#### ONTO ROUND 2")
+	logger.Info("#### ONTO ROUND 2")
 	/*
 		Round3 (vs2, _) // B, B2
 	*/
@@ -462,7 +462,7 @@ func TestLockNoPOL(t *testing.T) {
 	incrementRound(vs2)
 
 	<-newRoundCh
-	log.Notice("#### ONTO ROUND 3")
+	logger.Info("#### ONTO ROUND 3")
 	/*
 		Round4 (vs2, C) // B C // B C
 	*/
@@ -503,7 +503,7 @@ func TestLockPOLRelock(t *testing.T) {
 	newRoundCh := subscribeToEvent(cs1.evsw, "tester", types.EventStringNewRound(), 1)
 	newBlockCh := subscribeToEvent(cs1.evsw, "tester", types.EventStringNewBlockHeader(), 1)
 
-	log.Debug("vs2 last round", "lr", vs2.PrivValidator.LastRound)
+	logger.Debug("vs2 last round", " lr:", vs2.PrivValidator.LastRound)
 
 	// everything done from perspective of cs1
 
@@ -549,7 +549,7 @@ func TestLockPOLRelock(t *testing.T) {
 	cs1.SetProposalAndBlock(prop, propBlock, propBlockParts, "some peer")
 
 	<-newRoundCh
-	log.Notice("### ONTO ROUND 1")
+	logger.Info("### ONTO ROUND 1")
 
 	/*
 		Round2 (vs2, C) // B C C C // C C C _)
@@ -660,7 +660,7 @@ func TestLockPOLUnlock(t *testing.T) {
 	cs1.SetProposalAndBlock(prop, propBlock, propBlockParts, "some peer")
 
 	<-newRoundCh
-	log.Notice("#### ONTO ROUND 1")
+	logger.Info("#### ONTO ROUND 1")
 	/*
 		Round2 (vs2, C) // B nil nil nil // nil nil nil _
 
@@ -732,7 +732,7 @@ func TestLockPOLSafety1(t *testing.T) {
 			panic("failed to update validator")
 		}*/
 
-	log.Warn("old prop", "hash", fmt.Sprintf("%X", propBlock.Hash()))
+	logger.Warn("old prop", " hash:", fmt.Sprintf("%X", propBlock.Hash()))
 
 	// we do see them precommit nil
 	signAddVotes(cs1, types.VoteTypePrecommit, nil, types.PartSetHeader{}, vs2, vs3, vs4)
@@ -747,7 +747,7 @@ func TestLockPOLSafety1(t *testing.T) {
 	cs1.SetProposalAndBlock(prop, propBlock, propBlockParts, "some peer")
 
 	<-newRoundCh
-	log.Notice("### ONTO ROUND 1")
+	logger.Info("### ONTO ROUND 1")
 	/*Round2
 	// we timeout and prevote our lock
 	// a polka happened but we didn't see it!
@@ -766,7 +766,7 @@ func TestLockPOLSafety1(t *testing.T) {
 	if rs.LockedBlock != nil {
 		panic("we should not be locked!")
 	}
-	log.Warn("new prop", "hash", fmt.Sprintf("%X", propBlockHash))
+	logger.Warn("new prop", " hash:", fmt.Sprintf("%X", propBlockHash))
 	// go to prevote, prevote for proposal block
 	<-voteCh
 	validatePrevote(t, cs1, 1, vss[0], propBlockHash)
@@ -787,7 +787,7 @@ func TestLockPOLSafety1(t *testing.T) {
 
 	<-newRoundCh
 
-	log.Notice("### ONTO ROUND 2")
+	logger.Info("### ONTO ROUND 2")
 	/*Round3
 	we see the polka from round 1 but we shouldn't unlock!
 	*/
@@ -806,7 +806,7 @@ func TestLockPOLSafety1(t *testing.T) {
 	// add prevotes from the earlier round
 	addVotes(cs1, prevotes...)
 
-	log.Warn("Done adding prevotes!")
+	logger.Warn("Done adding prevotes!")
 
 	ensureNoNewStep(newStepCh)
 }
@@ -850,7 +850,7 @@ func TestLockPOLSafety2(t *testing.T) {
 
 	cs1.updateRoundStep(0, RoundStepPrecommitWait)
 
-	log.Notice("### ONTO Round 1")
+	logger.Info("### ONTO Round 1")
 	// jump in at round 1
 	height := cs1.Height
 	startTestRound(cs1, height, 1)
@@ -887,7 +887,7 @@ func TestLockPOLSafety2(t *testing.T) {
 	addVotes(cs1, prevotes...)
 
 	<-newRoundCh
-	log.Notice("### ONTO Round 2")
+	logger.Info("### ONTO Round 2")
 	/*Round2
 	// now we see the polka from round 1, but we shouldnt unlock
 	*/
@@ -1034,7 +1034,7 @@ func TestHalt1(t *testing.T) {
 	re = <-newRoundCh
 	rs = re.(types.EventDataRoundState).RoundState.(*RoundState)
 
-	log.Notice("### ONTO ROUND 1")
+	logger.Info("### ONTO ROUND 1")
 	/*Round2
 	// we timeout and prevote our lock
 	// a polka happened but we didn't see it!

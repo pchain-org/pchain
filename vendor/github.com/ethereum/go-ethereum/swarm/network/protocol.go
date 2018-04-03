@@ -38,15 +38,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
 	"github.com/ethereum/go-ethereum/errs"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
-
+var logger = plogger.GetLogger("ethereum")
 const (
 	Version            = 0
 	ProtocolLength     = uint64(8)
@@ -201,7 +201,7 @@ func run(requestDb *storage.LDBDatabase, depo StorageHandler, backend chequebook
 	// the main forever loop that handles incoming requests
 	for {
 		if self.hive.blockRead {
-			glog.V(logger.Warn).Infof("Cannot read network")
+			logger.Warnf("Cannot read network")
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -221,7 +221,7 @@ func (self *bzz) Drop() {
 // one cycle of the main forever loop that handles and dispatches incoming messages
 func (self *bzz) handle() error {
 	msg, err := self.rw.ReadMsg()
-	glog.V(logger.Debug).Infof("<- %v", msg)
+	logger.Debugf("<- %v", msg)
 	if err != nil {
 		return err
 	}
@@ -236,7 +236,7 @@ func (self *bzz) handle() error {
 	case statusMsg:
 		// no extra status message allowed. The one needed already handled by
 		// handleStatus
-		glog.V(logger.Debug).Infof("Status message: %v", msg)
+		logger.Debugf("Status message: %v", msg)
 		return self.protoError(ErrExtraStatusMsg, "")
 
 	case storeRequestMsg:
@@ -250,7 +250,7 @@ func (self *bzz) handle() error {
 		}
 		// last Active time is set only when receiving chunks
 		self.lastActive = time.Now()
-		glog.V(logger.Detail).Infof("incoming store request: %s", req.String())
+		logger.Debugf("incoming store request: %s", req.String())
 		// swap accounting is done within forwarding
 		self.storage.HandleStoreRequestMsg(&req, &peer{bzz: self})
 
@@ -263,7 +263,7 @@ func (self *bzz) handle() error {
 		req.from = &peer{bzz: self}
 		// if request is lookup and not to be delivered
 		if req.isLookup() {
-			glog.V(logger.Detail).Infof("self lookup for %v: responding with peers only...", req.from)
+			logger.Debugf("self lookup for %v: responding with peers only...", req.from)
 		} else if req.Key == nil {
 			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.Timeout == nil")
 		} else {
@@ -281,7 +281,7 @@ func (self *bzz) handle() error {
 			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
 		req.from = &peer{bzz: self}
-		glog.V(logger.Detail).Infof("<- peer addresses: %v", req)
+		logger.Debugf("<- peer addresses: %v", req)
 		self.hive.HandlePeersMsg(&req, &peer{bzz: self})
 
 	case syncRequestMsg:
@@ -289,7 +289,7 @@ func (self *bzz) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
-		glog.V(logger.Debug).Infof("<- sync request: %v", req)
+		logger.Debugf("<- sync request: %v", req)
 		self.lastActive = time.Now()
 		self.sync(req.SyncState)
 
@@ -299,7 +299,7 @@ func (self *bzz) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 		}
-		glog.V(logger.Debug).Infof("<- unsynced keys : %s", req.String())
+		logger.Debugf("<- unsynced keys : %s", req.String())
 		err := self.storage.HandleUnsyncedKeysMsg(&req, &peer{bzz: self})
 		self.lastActive = time.Now()
 		if err != nil {
@@ -313,7 +313,7 @@ func (self *bzz) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "<-msg %v: %v", msg, err)
 		}
-		glog.V(logger.Debug).Infof("<- delivery request: %s", req.String())
+		logger.Debugf("<- delivery request: %s", req.String())
 		err := self.storage.HandleDeliveryRequestMsg(&req, &peer{bzz: self})
 		self.lastActive = time.Now()
 		if err != nil {
@@ -327,7 +327,7 @@ func (self *bzz) handle() error {
 			if err := msg.Decode(&req); err != nil {
 				return self.protoError(ErrDecode, "<- %v: %v", msg, err)
 			}
-			glog.V(logger.Debug).Infof("<- payment: %s", req.String())
+			logger.Debugf("<- payment: %s", req.String())
 			self.swap.Receive(int(req.Units), req.Promise)
 		}
 
@@ -385,7 +385,7 @@ func (self *bzz) handleStatus() (err error) {
 	}
 
 	self.remoteAddr = self.peerAddr(status.Addr)
-	glog.V(logger.Detail).Infof("self: advertised IP: %v, peer advertised: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.selfAddr(), self.remoteAddr, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr())
+	logger.Debugf("self: advertised IP: %v, peer advertised: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.selfAddr(), self.remoteAddr, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr())
 
 	if self.swapEnabled {
 		// set remote profile for accounting
@@ -395,14 +395,14 @@ func (self *bzz) handleStatus() (err error) {
 		}
 	}
 
-	glog.V(logger.Info).Infof("Peer %08x is capable (%d/%d)", self.remoteAddr.Addr[:4], status.Version, status.NetworkId)
+	logger.Infof("Peer %08x is capable (%d/%d)", self.remoteAddr.Addr[:4], status.Version, status.NetworkId)
 	err = self.hive.addPeer(&peer{bzz: self})
 	if err != nil {
 		return self.protoError(ErrUnwanted, "%v", err)
 	}
 
 	// hive sets syncstate so sync should start after node added
-	glog.V(logger.Info).Infof("syncronisation request sent with %v", self.syncState)
+	logger.Infof("syncronisation request sent with %v", self.syncState)
 	self.syncRequest()
 
 	return nil
@@ -421,7 +421,7 @@ func (self *bzz) sync(state *syncState) error {
 	// an explicitly received nil syncstate disables syncronisation
 	if state == nil {
 		self.syncEnabled = false
-		glog.V(logger.Warn).Infof("syncronisation disabled for peer %v", self)
+		logger.Warnf("syncronisation disabled for peer %v", self)
 		state = &syncState{DbSyncState: &storage.DbSyncState{}, Synced: true}
 	} else {
 		state.synced = make(chan bool)
@@ -430,7 +430,7 @@ func (self *bzz) sync(state *syncState) error {
 			state.Start = storage.Key(start[:])
 			state.Stop = storage.Key(stop[:])
 		}
-		glog.V(logger.Debug).Infof("syncronisation requested by peer %v at state %v", self, state)
+		logger.Debugf("syncronisation requested by peer %v at state %v", self, state)
 	}
 	var err error
 	self.syncer, err = newSyncer(
@@ -443,7 +443,7 @@ func (self *bzz) sync(state *syncState) error {
 	if err != nil {
 		return self.protoError(ErrSync, "%v", err)
 	}
-	glog.V(logger.Detail).Infof("syncer set for peer %v", self)
+	logger.Debugf("syncer set for peer %v", self)
 	return nil
 }
 
@@ -490,11 +490,11 @@ func (self *bzz) store(req *storeRequestMsgData) error {
 func (self *bzz) syncRequest() error {
 	req := &syncRequestMsgData{}
 	if self.hive.syncEnabled {
-		glog.V(logger.Debug).Infof("syncronisation request to peer %v at state %v", self, self.syncState)
+		logger.Debugf("syncronisation request to peer %v at state %v", self, self.syncState)
 		req.SyncState = self.syncState
 	}
 	if self.syncState == nil {
-		glog.V(logger.Warn).Infof("syncronisation disabled for peer %v at state %v", self, self.syncState)
+		logger.Warnf("syncronisation disabled for peer %v at state %v", self, self.syncState)
 	}
 	return self.send(syncRequestMsg, req)
 }
@@ -542,7 +542,7 @@ func (self *bzz) send(msg uint64, data interface{}) error {
 	if self.hive.blockWrite {
 		return fmt.Errorf("network write blocked")
 	}
-	glog.V(logger.Detail).Infof("-> %v: %v (%T) to %v", msg, data, data, self)
+	logger.Debugf("-> %v: %v (%T) to %v", msg, data, data, self)
 	err := p2p.Send(self.rw, msg, data)
 	if err != nil {
 		self.Drop()

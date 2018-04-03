@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
@@ -46,8 +45,8 @@ func main() {
 	flag.Parse()
 
 	// Enable logging errors, we really do want to see those
-	glog.SetV(2)
-	glog.SetToStderr(true)
+	// glog.SetV(2)
+	// glog.SetToStderr(true)
 
 	// Load the test suite to run the RPC against
 	tests, err := tests.LoadBlockTests(*testFile)

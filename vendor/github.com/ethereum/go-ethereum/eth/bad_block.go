@@ -25,8 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -66,9 +65,9 @@ func sendBadBlockReport(block *types.Block, err error) {
 	client := http.Client{Timeout: 8 * time.Second}
 	resp, err := client.Post(badBlocksURL, "application/json", bytes.NewReader(jsonStr))
 	if err != nil {
-		glog.V(logger.Debug).Infoln(err)
+		logger.Debug(err)
 		return
 	}
-	glog.V(logger.Debug).Infof("Bad Block Report posted (%d)", resp.StatusCode)
+	logger.Debugf("Bad Block Report posted (%d)", resp.StatusCode)
 	resp.Body.Close()
 }

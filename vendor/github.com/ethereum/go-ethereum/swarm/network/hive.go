@@ -23,14 +23,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
-
+var logger = plogger.GetLogger("ethereum")
 // Hive is the logistic manager of the swarm
 // it uses a generic kademlia nodetable to find best peer list
 // for any target
@@ -129,7 +129,7 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 	self.listenAddr = listenAddr
 	err = self.kad.Load(self.path, nil)
 	if err != nil {
-		glog.V(logger.Warn).Infof("Warning: error reading kaddb '%s' (skipping): %v", self.path, err)
+		logger.Warnf("Warning: error reading kaddb '%s' (skipping): %v", self.path, err)
 		err = nil
 	}
 	// this loop is doing bootstrapping and maintains a healthy table
@@ -145,7 +145,7 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 			node, need, proxLimit := self.kad.Suggest()
 
 			if node != nil && len(node.Url) > 0 {
-				glog.V(logger.Detail).Infof("call known bee %v", node.Url)
+				logger.Debugf("call known bee %v", node.Url)
 				// enode or any lower level connection address is unnecessary in future
 				// discovery table is used to look it up.
 				connectPeer(node.Url)
@@ -159,21 +159,21 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 					req := &retrieveRequestMsgData{
 						Key: storage.Key(randAddr[:]),
 					}
-					glog.V(logger.Detail).Infof("call any bee near %v (PO%03d) - messenger bee: %v", randAddr, proxLimit, peers[0])
+					logger.Debugf("call any bee near %v (PO%03d) - messenger bee: %v", randAddr, proxLimit, peers[0])
 					peers[0].(*peer).retrieve(req)
 				} else {
-					glog.V(logger.Warn).Infof("no peer")
+					logger.Warnf("no peer")
 				}
-				glog.V(logger.Detail).Infof("buzz kept alive")
+				logger.Debugf("buzz kept alive")
 			} else {
-				glog.V(logger.Info).Infof("no need for more bees")
+				logger.Infof("no need for more bees")
 			}
 			select {
 			case self.toggle <- need:
 			case <-self.quit:
 				return
 			}
-			glog.V(logger.Debug).Infof("queen's address: %v, population: %d (%d)", self.addr, self.kad.Count(), self.kad.DBCount())
+			logger.Debugf("queen's address: %v, population: %d (%d)", self.addr, self.kad.Count(), self.kad.DBCount())
 		}
 	}()
 	return
@@ -192,7 +192,7 @@ func (self *Hive) keepAlive() {
 			if self.kad.DBCount() > 0 {
 				select {
 				case self.more <- true:
-					glog.V(logger.Debug).Infof("buzz wakeup")
+					logger.Debugf("buzz wakeup")
 				default:
 				}
 			}
@@ -224,7 +224,7 @@ func (self *Hive) addPeer(p *peer) error {
 		default:
 		}
 	}()
-	glog.V(logger.Detail).Infof("hi new bee %v", p)
+	logger.Debugf("hi new bee %v", p)
 	err := self.kad.On(p, loadSync)
 	if err != nil {
 		return err
@@ -235,21 +235,21 @@ func (self *Hive) addPeer(p *peer) error {
 	// to send the 6 byte self lookup
 	// we do not record as request or forward it, just reply with peers
 	p.retrieve(&retrieveRequestMsgData{})
-	glog.V(logger.Detail).Infof("'whatsup wheresdaparty' sent to %v", p)
+	logger.Debugf("'whatsup wheresdaparty' sent to %v", p)
 
 	return nil
 }
 
 // called after peer disconnected
 func (self *Hive) removePeer(p *peer) {
-	glog.V(logger.Debug).Infof("bee %v removed", p)
+	logger.Debugf("bee %v removed", p)
 	self.kad.Off(p, saveSync)
 	select {
 	case self.more <- true:
 	default:
 	}
 	if self.kad.Count() == 0 {
-		glog.V(logger.Debug).Infof("empty, all bees gone")
+		logger.Debugf("empty, all bees gone")
 	}
 }
 
@@ -265,7 +265,7 @@ func (self *Hive) getPeers(target storage.Key, max int) (peers []*peer) {
 
 // disconnects all the peers
 func (self *Hive) DropAll() {
-	glog.V(logger.Info).Infof("dropping all bees")
+	logger.Infof("dropping all bees")
 	for _, node := range self.kad.FindClosest(kademlia.Address{}, 0) {
 		node.Drop()
 	}
@@ -290,7 +290,7 @@ func (self *Hive) HandlePeersMsg(req *peersMsgData, from *peer) {
 	var nrs []*kademlia.NodeRecord
 	for _, p := range req.Peers {
 		if err := netutil.CheckRelayIP(from.remoteAddr.IP, p.IP); err != nil {
-			glog.V(logger.Detail).Infof("invalid peer IP %v from %v: %v", from.remoteAddr.IP, p.IP, err)
+			logger.Debugf("invalid peer IP %v from %v: %v", from.remoteAddr.IP, p.IP, err)
 			continue
 		}
 		nrs = append(nrs, newNodeRecord(p))
@@ -326,7 +326,7 @@ func loadSync(record *kademlia.NodeRecord, node kademlia.Node) error {
 		return fmt.Errorf("invalid type")
 	}
 	if record.Meta == nil {
-		glog.V(logger.Debug).Infof("no sync state for node record %v setting default", record)
+		logger.Debugf("no sync state for node record %v setting default", record)
 		p.syncState = &syncState{DbSyncState: &storage.DbSyncState{}}
 		return nil
 	}
@@ -334,7 +334,7 @@ func loadSync(record *kademlia.NodeRecord, node kademlia.Node) error {
 	if err != nil {
 		return fmt.Errorf("error decoding kddb record meta info into a sync state: %v", err)
 	}
-	glog.V(logger.Detail).Infof("sync state for node record %v read from Meta: %s", record, string(*(record.Meta)))
+	logger.Debugf("sync state for node record %v read from Meta: %s", record, string(*(record.Meta)))
 	p.syncState = state
 	return err
 }
@@ -344,10 +344,10 @@ func saveSync(record *kademlia.NodeRecord, node kademlia.Node) {
 	if p, ok := node.(*peer); ok {
 		meta, err := encodeSync(p.syncState)
 		if err != nil {
-			glog.V(logger.Warn).Infof("error saving sync state for %v: %v", node, err)
+			logger.Warnf("error saving sync state for %v: %v", node, err)
 			return
 		}
-		glog.V(logger.Detail).Infof("saved sync state for %v: %s", node, string(*meta))
+		logger.Debugf("saved sync state for %v: %s", node, string(*meta))
 		record.Meta = meta
 	}
 }
@@ -370,7 +370,7 @@ func (self *Hive) peers(req *retrieveRequestMsgData) {
 			for _, peer := range self.getPeers(key, int(req.MaxPeers)) {
 				addrs = append(addrs, peer.remoteAddr)
 			}
-			glog.V(logger.Debug).Infof("Hive sending %d peer addresses to %v. req.Id: %v, req.Key: %v", len(addrs), req.from, req.Id, req.Key.Log())
+			logger.Debugf("Hive sending %d peer addresses to %v. req.Id: %v, req.Key: %v", len(addrs), req.from, req.Id, req.Key.Log())
 
 			peersData := &peersMsgData{
 				Peers: addrs,

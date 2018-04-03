@@ -48,7 +48,7 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 	// Begin block
 	err := proxyAppConn.BeginBlockSync(block.Hash(), types.TM2PB.Header(block.Header))
 	if err != nil {
-		log.Warn("Error in proxyAppConn.BeginBlock", "error", err)
+		logger.Warn("Error in proxyAppConn.BeginBlock", " error:", err)
 		return nil, err
 	}
 
@@ -69,15 +69,15 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 	// End block
 	abciResponses.EndBlock, err = proxyAppConn.EndBlockSync(uint64(block.Height))
 	if err != nil {
-		log.Warn("Error in proxyAppConn.EndBlock", "error", err)
+		logger.Warn("Error in proxyAppConn.EndBlock", " error:", err)
 		return nil, err
 	}
 
 	valDiff := abciResponses.EndBlock.Diffs
 
-	log.Info("Executed block", "height", block.Height, "valid txs", abciResponses.ValidTxs, "invalid txs", abciResponses.InvalidTxs)
+	logger.Info("Executed block", " height:", block.Height, " valid txs:", validTxs, " invalid txs:", invalidTxs)
 	if len(valDiff) > 0 {
-		log.Info("Update to validator set", "updates", abci.ValidatorsString(valDiff))
+		logger.Info("Update to validator set", " updates:", abci.ValidatorsString(valDiff))
 	}
 
 	return abciResponses, nil
@@ -188,7 +188,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 		s.Epoch, _ = s.Epoch.EnterNewEpoch(block.Height)
 
 	} else if err != nil {
-		log.Warn(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
+		logger.Warnf(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
 			block.Height, s.Epoch, err))
 		return err
 	}
@@ -221,14 +221,14 @@ func (s *State) CommitStateUpdateMempool(proxyAppConn proxy.AppConnConsensus, bl
 	lastValidators,_,_ := s.GetValidators()
 	res := proxyAppConn.CommitSync(lastValidators.ToAbciValidators(), s.Epoch.RewardPerBlock.String())
 	if res.IsErr() {
-		log.Warn("Error in proxyAppConn.CommitSync", "error", res)
+		logger.Warn("Error in proxyAppConn.CommitSync", " error:", res)
 		return res
 	}
 	if res.Log != "" {
-		log.Debug("Commit.Log: " + res.Log)
+		logger.Debug("Commit.Log: " + res.Log)
 	}
 
-	log.Info("Committed state", "hash", res.Data)
+	logger.Info("Committed state", " hash:", res.Data)
 	// Set the state's new AppHash
 	s.AppHash = res.Data
 
@@ -260,18 +260,18 @@ func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, state *State, bloc
 	var eventCache types.Fireable // nil
 	_, err := execBlockOnProxyApp(eventCache, appConnConsensus, state, block)
 	if err != nil {
-		log.Warn("Error executing block on proxy app", "height", block.Height, "err", err)
+		logger.Warn("Error executing block on proxy app", " height:", block.Height, "err", err)
 		return nil, err
 	}
 	// Commit block, get hash back
 	lastValidators, _, _ := state.GetValidators()
 	res := appConnConsensus.CommitSync(lastValidators.ToAbciValidators(), state.Epoch.RewardPerBlock.String())
 	if res.IsErr() {
-		log.Warn("Error in proxyAppConn.CommitSync", "error", res)
+		logger.Warn("Error in proxyAppConn.CommitSync", " error:", res)
 		return nil, res
 	}
 	if res.Log != "" {
-		log.Info("Commit.Log: " + res.Log)
+		logger.Info("Commit.Log: " + res.Log)
 	}
 	return res.Data, nil
 }

@@ -25,11 +25,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
-
+var logger = plogger.GetLogger("ethereum")
 // Transaction Test JSON Format
 type TtTransaction struct {
 	Data     string
@@ -64,14 +64,14 @@ func RunTransactionTestsWithReader(config *params.ChainConfig, r io.Reader, skip
 	for name, test := range bt {
 		// if the test should be skipped, return
 		if skipTest[name] {
-			glog.Infoln("Skipping transaction test", name)
+			logger.Infof("Skipping transaction test", name)
 			return nil
 		}
 		// test the block
 		if err := runTransactionTest(config, test); err != nil {
 			return err
 		}
-		glog.Infoln("Transaction test passed: ", name)
+		logger.Infof("Transaction test passed: ", name)
 
 	}
 	return nil
@@ -98,7 +98,7 @@ func runTransactionTests(config *params.ChainConfig, tests map[string]Transactio
 	for name, test := range tests {
 		// if the test should be skipped, return
 		if skipTest[name] {
-			glog.Infoln("Skipping transaction test", name)
+			logger.Infof("Skipping transaction test", name)
 			return nil
 		}
 
@@ -106,7 +106,7 @@ func runTransactionTests(config *params.ChainConfig, tests map[string]Transactio
 		if err := runTransactionTest(config, test); err != nil {
 			return fmt.Errorf("%s: %v", name, err)
 		}
-		glog.Infoln("Transaction test passed: ", name)
+		logger.Infof("Transaction test passed: ", name)
 
 	}
 	return nil

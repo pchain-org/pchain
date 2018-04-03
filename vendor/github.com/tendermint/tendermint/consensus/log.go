@@ -1,14 +1,14 @@
 package consensus
 
 import (
-	"github.com/tendermint/go-logger"
+	"github.com/pchain/common/plogger"
 )
 
-var log = logger.New("module", "consensus")
+var logger = plogger.GetLogger("consensus")
 
 /*
 func init() {
-	log.SetHandler(
+	logger.SetHandler(
 		logger.LvlFilterHandler(
 			logger.LvlDebug,
 			logger.BypassHandler(),

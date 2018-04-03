@@ -30,8 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 )
@@ -92,7 +91,7 @@ out:
 			if self.Mining() {
 				self.Stop()
 				atomic.StoreInt32(&self.shouldStart, 1)
-				glog.V(logger.Info).Infoln("Mining operation aborted due to sync operation")
+				logger.Info("Mining operation aborted due to sync operation")
 			}
 		case downloader.DoneEvent, downloader.FailedEvent:
 			shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
@@ -129,7 +128,7 @@ func (self *Miner) Start(coinbase common.Address, threads int) {
 	self.threads = threads
 
 	if atomic.LoadInt32(&self.canStart) == 0 {
-		glog.V(logger.Info).Infoln("Can not start mining operation due to network sync (starts when finished)")
+		logger.Info("Can not start mining operation due to network sync (starts when finished)")
 		return
 	}
 	atomic.StoreInt32(&self.mining, 1)
@@ -138,7 +137,7 @@ func (self *Miner) Start(coinbase common.Address, threads int) {
 		self.worker.register(NewCpuAgent(i, self.pow))
 	}
 
-	glog.V(logger.Info).Infof("Starting mining operation (CPU=%d TOT=%d)\n", threads, len(self.worker.agents))
+	logger.Infof("Starting mining operation (CPU=%d TOT=%d)\n", threads, len(self.worker.agents))
 	self.worker.start()
 	self.worker.commitNewWork()
 }

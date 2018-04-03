@@ -38,7 +38,7 @@ func NewPersistentDummyApplication(dbDir string) *PersistentDummyApplication {
 	stateTree := merkle.NewIAVLTree(0, db)
 	stateTree.Load(lastBlock.AppHash)
 
-	log.Notice("Loaded state", "block", lastBlock.Height, "root", stateTree.Hash())
+	logger.Info("Loaded state", " block:", lastBlock.Height, " root:", stateTree.Hash())
 
 	return &PersistentDummyApplication{
 		app: &DummyApplication{state: stateTree},
@@ -79,7 +79,7 @@ func (app *PersistentDummyApplication) CheckTx(tx []byte) types.Result {
 func (app *PersistentDummyApplication) Commit(validators []*types.Validator, rewardPerBlock string) types.Result {
 	// Save
 	appHash := app.app.state.Save()
-	log.Info("Saved state", "root", appHash)
+	logger.Info("Saved state", " root:", appHash)
 
 	lastBlock := LastBlockInfo{
 		Height:  app.blockHeader.Height,
@@ -98,7 +98,7 @@ func (app *PersistentDummyApplication) InitChain(validators []*types.Validator) 
 	for _, v := range validators {
 		r := app.updateValidator(v)
 		if r.IsErr() {
-			log.Error("Error updating validators", "r", r)
+			logger.Error("Error updating validators", " r:", r)
 		}
 	}
 }
@@ -135,7 +135,7 @@ func LoadLastBlock(db dbm.DB) (lastBlock LastBlockInfo) {
 		wire.ReadBinaryPtr(&lastBlock, r, 0, n, err)
 		if *err != nil {
 			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
-			log.Crit(cmn.Fmt("Data has been corrupted or its spec has changed: %v\n", *err))
+			logger.Fatal("Data has been corrupted or its spec has changed: ", *err)
 		}
 		// TODO: ensure that buf is completely read.
 	}
@@ -144,7 +144,7 @@ func LoadLastBlock(db dbm.DB) (lastBlock LastBlockInfo) {
 }
 
 func SaveLastBlock(db dbm.DB, lastBlock LastBlockInfo) {
-	log.Notice("Saving block", "height", lastBlock.Height, "root", lastBlock.AppHash)
+	logger.Info("Saving block ", " height:", lastBlock.Height, " root:", lastBlock.AppHash)
 	buf, n, err := new(bytes.Buffer), new(int), new(error)
 	wire.WriteBinary(lastBlock, buf, n, err)
 	if *err != nil {

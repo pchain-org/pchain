@@ -19,9 +19,9 @@ package errs
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/pchain/common/plogger"
 )
-
+var logger = plogger.GetLogger("errs")
 /*
 Errors implements an error handler providing standardised errors for a package.
 Fields:

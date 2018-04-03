@@ -1,7 +1,7 @@
 package dummy
 
 import (
-	"github.com/tendermint/go-logger"
+	"github.com/pchain/common/plogger"
 )
 
-var log = logger.New("module", "dummy")
+var logger = plogger.GetLogger("dummy")

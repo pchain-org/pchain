@@ -23,11 +23,11 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
-
+var logger = plogger.GetLogger("ethereum")
 const (
 	manifestType = "application/bzz-manifest+json"
 )
@@ -52,7 +52,7 @@ type manifestTrieEntry struct {
 
 func loadManifest(dpa *storage.DPA, hash storage.Key, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
-	glog.V(logger.Detail).Infof("manifest lookup key: '%v'.", hash.Log())
+	logger.Debugf("manifest lookup key: '%v'.", hash.Log())
 	// retrieve manifest via DPA
 	manifestReader := dpa.Retrieve(hash)
 	return readManifest(manifestReader, hash, dpa, quitC)
@@ -70,23 +70,23 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dp
 	manifestData := make([]byte, size)
 	read, err := manifestReader.Read(manifestData)
 	if int64(read) < size {
-		glog.V(logger.Detail).Infof("Manifest %v not found.", hash.Log())
+		logger.Debugf("Manifest %v not found.", hash.Log())
 		if err == nil {
 			err = fmt.Errorf("Manifest retrieval cut short: read %v, expect %v", read, size)
 		}
 		return
 	}
 
-	glog.V(logger.Detail).Infof("Manifest %v retrieved", hash.Log())
+	logger.Debugf("Manifest %v retrieved", hash.Log())
 	man := manifestJSON{}
 	err = json.Unmarshal(manifestData, &man)
 	if err != nil {
 		err = fmt.Errorf("Manifest %v is malformed: %v", hash.Log(), err)
-		glog.V(logger.Detail).Infof("%v", err)
+		logger.Debugf("%v", err)
 		return
 	}
 
-	glog.V(logger.Detail).Infof("Manifest %v has %d entries.", hash.Log(), len(man.Entries))
+	logger.Debugf("Manifest %v has %d entries.", hash.Log(), len(man.Entries))
 
 	trie = &manifestTrie{
 		dpa: dpa,
@@ -286,7 +286,7 @@ func (self *manifestTrie) listWithPrefix(prefix string, quitC chan bool, cb func
 
 func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manifestTrieEntry, pos int) {
 
-	glog.V(logger.Detail).Infof("findPrefixOf(%s)", path)
+	logger.Debugf("findPrefixOf(%s)", path)
 
 	if len(path) == 0 {
 		return self.entries[256], 0
@@ -298,9 +298,9 @@ func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *man
 		return self.entries[256], 0
 	}
 	epl := len(entry.Path)
-	glog.V(logger.Detail).Infof("path = %v  entry.Path = %v  epl = %v", path, entry.Path, epl)
+	logger.Debugf("path = %v  entry.Path = %v  epl = %v", path, entry.Path, epl)
 	if (len(path) >= epl) && (path[:epl] == entry.Path) {
-		glog.V(logger.Detail).Infof("entry.ContentType = %v", entry.ContentType)
+		logger.Debugf("entry.ContentType = %v", entry.ContentType)
 		if entry.ContentType == manifestType {
 			err := self.loadSubTrie(entry, quitC)
 			if err != nil {

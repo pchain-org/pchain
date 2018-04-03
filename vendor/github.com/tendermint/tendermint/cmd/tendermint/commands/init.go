@@ -3,6 +3,7 @@ package commands
 import (
 	"os"
 
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/spf13/cobra"
 
 	cmn "github.com/tendermint/go-common"
@@ -40,8 +41,8 @@ func initFiles(cmd *cobra.Command, args []string) {
 			genDoc.SaveAs(genFile)
 		}
 
-		log.Notice("Initialized tendermint", "genesis", config.GetString("genesis_file"), "priv_validator", config.GetString("priv_validator_file"))
+		logger.Info("Initialized tendermint", " genesis:", config.GetString("genesis_file"), " priv_validator:", config.GetString("priv_validator_file"))
 	} else {
-		log.Notice("Already initialized", "priv_validator", config.GetString("priv_validator_file"))
+		logger.Info("Already initialized", " priv_validator:", config.GetString("priv_validator_file"))
 	}
 }

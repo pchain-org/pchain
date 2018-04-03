@@ -23,8 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -69,7 +67,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs      []*types.Log
 		gp           = new(GasPool).AddGas(block.GasLimit())
 	)
-	glog.Infof("Process() 0, totalUsedGas is %v\n", totalUsedGas)
+	logger.Infof("Process() 0, totalUsedGas is %v\n", totalUsedGas)
 	// Mutate the the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		ApplyDAOHardFork(statedb)
@@ -82,7 +80,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		totalUsedMoney := big.NewInt(0)
 		receipt, _, err := ApplyTransactionEx(p.config, p.bc, gp, statedb, header, tx,
 							totalUsedGas, totalUsedMoney, cfg)
-		glog.Infof("Process() 1, totalUsedGas is %v\n", totalUsedGas)
+		logger.Infof("Process() 1, totalUsedGas is %v\n", totalUsedGas)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -91,7 +89,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 	AccumulateRewards(statedb, header, block.Uncles())
 
-	glog.Infof("Process() 2, totalUsedGas is %v\n", totalUsedGas)
+	logger.Infof("Process() 2, totalUsedGas is %v\n", totalUsedGas)
 	return receipts, allLogs, totalUsedGas, err
 }
 
@@ -112,16 +110,16 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 
 	// Apply the transaction to the current state (included in the env)
 	coinbase := header.Coinbase
-	glog.Infof("ApplyTransaction(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
-	glog.Infof("ApplyTransaction() 0, usedGas is %v\n", usedGas)
+	logger.Infof("ApplyTransaction(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
+	logger.Infof("ApplyTransaction() 0, usedGas is %v\n", usedGas)
 	_, gas, err := ApplyMessage(vmenv, msg, gp)
 	if err != nil {
 		return nil, nil, err
 	}
-	glog.Infof("ApplyTransaction() 1, gas is %v\n", gas)
+	logger.Infof("ApplyTransaction() 1, gas is %v\n", gas)
 	// Update the state with pending changes
 	usedGas.Add(usedGas, gas)
-	glog.Infof("ApplyTransaction() 2, usedGas is %v\n", usedGas)
+	logger.Infof("ApplyTransaction() 2, usedGas is %v\n", usedGas)
 	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
 	// based on the eip phase, we're passing wether the root touch-delete accounts.
 	receipt := types.NewReceipt(statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes(), usedGas)
@@ -136,9 +134,9 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
-	glog.V(logger.Debug).Infoln(receipt)
-	glog.Infof("ApplyTransaction() 3, usedGas is %v\n", usedGas)
-	glog.Infof("ApplyTransaction(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
+	logger.Debug(receipt)
+	logger.Infof("ApplyTransaction() 3, usedGas is %v\n", usedGas)
+	logger.Infof("ApplyTransaction(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
 
 	return receipt, gas, err
 }
@@ -166,17 +164,17 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool,
 
 		// Apply the transaction to the current state (included in the env)
 		coinbase := header.Coinbase
-		glog.Infof("ApplyTransactionEx(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
-		glog.Infof("ApplyTransactionEx() 0, totalUsedMoney is %v\n", totalUsedMoney)
+	       logger.Infof("ApplyTransactionEx(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
+	       logger.Infof("ApplyTransactionEx() 0, totalUsedMoney is %v\n", totalUsedMoney)
 		_, gas, money, err := ApplyMessageEx(vmenv, msg, gp)
 		if err != nil {
 			return nil, nil, err
 		}
-		glog.Infof("ApplyTransactionEx() 1, money is %v\n", money)
+        	logger.Infof("ApplyTransactionEx() 1, money is %v\n", money)
 		// Update the state with pending changes
 		usedGas.Add(usedGas, gas)
 		totalUsedMoney.Add(totalUsedMoney, money)
-		glog.Infof("ApplyTransactionEx() 2, totalUsedMoney is %v\n", totalUsedMoney)
+	        logger.Infof("ApplyTransactionEx() 2, totalUsedMoney is %v\n", totalUsedMoney)
 
 		// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
 		// based on the eip phase, we're passing wether the root touch-delete accounts.
@@ -192,14 +190,14 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool,
 		receipt.Logs = statedb.GetLogs(tx.Hash())
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
-		glog.V(logger.Debug).Infoln(receipt)
-		glog.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
-		glog.Infof("ApplyTransactionEx(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
+        	logger.Debug(receipt)
+        	logger.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
+        	logger.Infof("ApplyTransactionEx(), coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
 
 		return receipt, gas, err
 	} else {
 
-		glog.Infof("ApplyTransactionEx() 0, etd.FuncName is %v\n", etd.FuncName)
+		logger.Infof("ApplyTransactionEx() 0, etd.FuncName is %v\n", etd.FuncName)
 
 		if applyCb := GetApplyCb(etd.FuncName); applyCb != nil {
 			if err := applyCb(tx, statedb); err != nil {
@@ -215,8 +213,8 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool,
 		receipt.Logs = statedb.GetLogs(tx.Hash())
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
-		glog.V(logger.Debug).Infoln(receipt)
-		glog.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
+		logger.Debug(receipt)
+		logger.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
 
 		return receipt, big.NewInt(0), nil
 	}
@@ -230,8 +228,8 @@ func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*t
 
 	reward := new(big.Int).Set(BlockReward)
 	coinbase := header.Coinbase
-	glog.Infof("AccumulateRewards() 0, coinbase is %x, reward is %v, statedb is %p\n",
-			coinbase, reward, statedb)
+	logger.Infof("AccumulateRewards() 0, coinbase is %x, reward is %v, statedb is %p\n",
+		coinbase, reward, statedb)
 
 	r := new(big.Int)
 	for _, uncle := range uncles {
@@ -245,7 +243,7 @@ func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*t
 		reward.Add(reward, r)
 	}
 
-	glog.Infof("AccumulateRewards() 1, coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
+	logger.Infof("AccumulateRewards() 1, coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
 	statedb.AddBalance(header.Coinbase, reward)
-	glog.Infof("AccumulateRewards() 2, coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
+	logger.Infof("AccumulateRewards() 2, coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
 }

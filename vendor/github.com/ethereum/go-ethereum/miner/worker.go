@@ -32,8 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"gopkg.in/fatih/set.v0"
@@ -278,7 +277,7 @@ func (self *worker) wait() {
 
 			if self.fullValidation {
 				if _, err := self.chain.InsertChain(types.Blocks{block}); err != nil {
-					glog.V(logger.Error).Infoln("mining err", err)
+					logger.Error("mining err", err)
 					continue
 				}
 				go self.mux.Post(core.NewMinedBlockEvent{Block: block})
@@ -286,19 +285,19 @@ func (self *worker) wait() {
 				work.state.Commit(self.config.IsEIP158(block.Number()))
 				parent := self.chain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 				if parent == nil {
-					glog.V(logger.Error).Infoln("Invalid block found during mining")
+					logger.Errorf("Invalid block found during mining")
 					continue
 				}
 
 				auxValidator := self.eth.BlockChain().AuxValidator()
 				if err := core.ValidateHeader(self.config, auxValidator, block.Header(), parent.Header(), true, false); err != nil && err != core.BlockFutureErr {
-					glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
+					logger.Error("Invalid header on mined block:", err)
 					continue
 				}
 
 				stat, err := self.chain.WriteBlock(block)
 				if err != nil {
-					glog.V(logger.Error).Infoln("error writing block to chain", err)
+					logger.Error("error writing block to chain", err)
 					continue
 				}
 
@@ -334,7 +333,7 @@ func (self *worker) wait() {
 						self.mux.Post(logs)
 					}
 					if err := core.WriteBlockReceipts(self.chainDb, block.Hash(), block.NumberU64(), receipts); err != nil {
-						glog.V(logger.Warn).Infoln("error writing block receipts:", err)
+						logger.Warnf("error writing block receipts:", err)
 					}
 				}(block, work.state.Logs(), work.receipts)
 			}
@@ -427,7 +426,7 @@ func (self *worker) commitNewWork() {
 	// this will ensure we're not going off too far in the future
 	if now := time.Now().Unix(); tstamp > now+4 {
 		wait := time.Duration(tstamp-now) * time.Second
-		glog.V(logger.Info).Infoln("We are too far in the future. Waiting for", wait)
+		logger.Info("We are too far in the future. Waiting for", wait)
 		time.Sleep(wait)
 	}
 
@@ -458,7 +457,7 @@ func (self *worker) commitNewWork() {
 	// Could potentially happen if starting to mine in an odd state.
 	err := self.makeCurrent(parent, header)
 	if err != nil {
-		glog.V(logger.Info).Infoln("Could not create new env for mining, retrying on next block.")
+		logger.Info("Could not create new env for mining, retrying on next block.")
 		return
 	}
 	// Create the current work task and check any fork transitions needed
@@ -469,7 +468,7 @@ func (self *worker) commitNewWork() {
 
 	pending, err := self.eth.TxPool().Pending()
 	if err != nil {
-		glog.Errorf("Could not fetch pending transactions: %v", err)
+		logger.Errorf("Could not fetch pending transactions: %v", err)
 		return
 	}
 
@@ -489,13 +488,11 @@ func (self *worker) commitNewWork() {
 			break
 		}
 		if err := self.commitUncle(work, uncle.Header()); err != nil {
-			if glog.V(logger.Ridiculousness) {
-				glog.V(logger.Detail).Infof("Bad uncle found and will be removed (%x)\n", hash[:4])
-				glog.V(logger.Detail).Infoln(uncle)
-			}
+			logger.Debugf("Bad uncle found and will be removed (%x)\n", hash[:4])
+			logger.Debug(uncle)
 			badUncles = append(badUncles, hash)
 		} else {
-			glog.V(logger.Debug).Infof("committing %x as uncle\n", hash[:4])
+			logger.Debugf("committing %x as uncle\n", hash[:4])
 			uncles = append(uncles, uncle.Header())
 		}
 	}
@@ -514,7 +511,7 @@ func (self *worker) commitNewWork() {
 
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
-		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles. Took %v\n", work.Block.Number(), work.tcount, len(uncles), time.Since(tstart))
+		logger.Infof("commit new work on block %v with %d txs & %d uncles. Took %v\n", work.Block.Number(), work.tcount, len(uncles), time.Since(tstart))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
 	self.push(work)
@@ -554,7 +551,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
-			glog.V(logger.Detail).Infof("Transaction (%x) is replay protected, but we haven't yet hardforked. Transaction will be ignored until we hardfork.\n", tx.Hash())
+			logger.Debugf("Transaction (%x) is replay protected, but we haven't yet hardforked. Transaction will be ignored until we hardfork.\n", tx.Hash())
 
 			txs.Pop()
 			continue
@@ -563,7 +560,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		// Ignore any transactions (and accounts subsequently) with low gas limits
 		if tx.GasPrice().Cmp(gasPrice) < 0 && !env.ownedAccounts.Has(from) {
 			// Pop the current low-priced transaction without shifting in the next from the account
-			glog.V(logger.Info).Infof("Transaction (%x) below gas price (tx=%v ask=%v). All sequential txs from this address(%x) will be ignored\n", tx.Hash().Bytes()[:4], common.CurrencyToString(tx.GasPrice()), common.CurrencyToString(gasPrice), from[:4])
+			logger.Infof("Transaction (%x) below gas price (tx=%v ask=%v). All sequential txs from this address(%x) will be ignored\n", tx.Hash().Bytes()[:4], common.CurrencyToString(tx.GasPrice()), common.CurrencyToString(gasPrice), from[:4])
 
 			env.lowGasTxs = append(env.lowGasTxs, tx)
 			txs.Pop()
@@ -577,12 +574,12 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		switch {
 		case core.IsGasLimitErr(err):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
-			glog.V(logger.Detail).Infof("Gas limit reached for (%x) in this block. Continue to try smaller txs\n", from[:4])
+			logger.Debugf("Gas limit reached for (%x) in this block. Continue to try smaller txs\n", from[:4])
 			txs.Pop()
 
 		case err != nil:
 			// Pop the current failed transaction without shifting in the next from the account
-			glog.V(logger.Detail).Infof("Transaction (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
+			logger.Debugf("Transaction (%x) failed, will be removed: %v\n", tx.Hash().Bytes()[:4], err)
 			env.failedTxs = append(env.failedTxs, tx)
 			txs.Pop()
 

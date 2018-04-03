@@ -25,8 +25,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"golang.org/x/net/context"
 	"golang.org/x/net/websocket"
 	"gopkg.in/fatih/set.v0"
@@ -76,14 +74,14 @@ func wsHandshakeValidator(allowedOrigins []string) func(*websocket.Config, *http
 		}
 	}
 
-	glog.V(logger.Debug).Infof("Allowed origin(s) for WS RPC interface %v\n", origins.List())
+	logger.Debugf("Allowed origin(s) for WS RPC interface %v\n", origins.List())
 
 	f := func(cfg *websocket.Config, req *http.Request) error {
 		origin := strings.ToLower(req.Header.Get("Origin"))
 		if allowAllOrigins || origins.Has(origin) {
 			return nil
 		}
-		glog.V(logger.Debug).Infof("origin '%s' not allowed on WS-RPC interface\n", origin)
+		logger.Debugf("origin '%s' not allowed on WS-RPC interface\n", origin)
 		return fmt.Errorf("origin %s not allowed", origin)
 	}
 

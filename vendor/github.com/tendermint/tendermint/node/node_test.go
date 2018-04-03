@@ -13,7 +13,7 @@ func TestNodeStartStop(t *testing.T) {
 	// Create & start node
 	n := NewNodeDefault(config)
 	n.Start()
-	log.Notice("Started node", "nodeInfo", n.sw.NodeInfo())
+	logger.Info("Started node", " nodeInfo:", n.sw.NodeInfo())
 
 	// Wait a bit to initialize
 	// TODO remove time.Sleep(), make asynchronous.

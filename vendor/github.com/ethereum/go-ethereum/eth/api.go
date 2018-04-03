@@ -37,8 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -123,7 +122,7 @@ func (s *PublicMinerAPI) GetWork() (work [3]string, err error) {
 	if work, err = s.agent.GetWork(); err == nil {
 		return
 	}
-	glog.V(logger.Debug).Infof("%v", err)
+	logger.Debugf("%v", err)
 	return work, fmt.Errorf("mining not ready")
 }
 

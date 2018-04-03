@@ -49,7 +49,7 @@ func NewTestReactor(channels []*ChannelDescriptor, logMessages bool) *TestReacto
 		logMessages:  logMessages,
 		msgsReceived: make(map[byte][]PeerMessage),
 	}
-	tr.BaseReactor = *NewBaseReactor(log, "TestReactor", tr)
+	tr.BaseReactor = *NewBaseReactor(logger, "TestReactor", tr)
 	return tr
 }
 
@@ -321,7 +321,7 @@ func BenchmarkSwitches(b *testing.B) {
 		}
 	}
 
-	log.Warn(Fmt("success: %v, failure: %v", numSuccess, numFailure))
+	logger.Warn("success: ", numSuccess, " failure: ", numFailure)
 
 	// Allow everything to flush before stopping switches & closing connections.
 	b.StopTimer()

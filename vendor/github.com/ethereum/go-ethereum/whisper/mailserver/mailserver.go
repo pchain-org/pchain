@@ -23,14 +23,14 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/rlp"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
-
+var logger = plogger.GetLogger("ethereum")
 const MailServerKeyName = "958e04ab302fb36ad2616a352cbac79d"
 
 type WMailServer struct {
@@ -92,18 +92,18 @@ func (s *WMailServer) Archive(env *whisper.Envelope) {
 	key := NewDbKey(env.Expiry-env.TTL, env.Hash())
 	rawEnvelope, err := rlp.EncodeToBytes(env)
 	if err != nil {
-		glog.V(logger.Error).Infof("rlp.EncodeToBytes failed: %s", err)
+		logger.Errorf("rlp.EncodeToBytes failed: %s", err)
 	} else {
 		err = s.db.Put(key.raw, rawEnvelope, nil)
 		if err != nil {
-			glog.V(logger.Error).Infof("Writing to DB failed: %s", err)
+			logger.Errorf("Writing to DB failed: %s", err)
 		}
 	}
 }
 
 func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope) {
 	if peer == nil {
-		glog.V(logger.Error).Info("Whisper peer is nil")
+		logger.Errorf("Whisper peer is nil")
 		return
 	}
 
@@ -127,7 +127,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 		var envelope whisper.Envelope
 		err = rlp.DecodeBytes(i.Value(), &envelope)
 		if err != nil {
-			glog.V(logger.Error).Infof("RLP decoding failed: %s", err)
+			logger.Errorf("RLP decoding failed: %s", err)
 		}
 
 		if topic == empty || envelope.Topic == topic {
@@ -137,7 +137,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 			} else {
 				err = s.w.SendP2PDirect(peer, &envelope)
 				if err != nil {
-					glog.V(logger.Error).Infof("Failed to send direct message to peer: %s", err)
+					logger.Errorf("Failed to send direct message to peer: %s", err)
 					return nil
 				}
 			}
@@ -146,7 +146,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 
 	err = i.Error()
 	if err != nil {
-		glog.V(logger.Error).Infof("Level DB iterator error: %s", err)
+		logger.Errorf("Level DB iterator error: %s", err)
 	}
 
 	return ret
@@ -161,12 +161,12 @@ func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) 
 	f := whisper.Filter{KeySym: s.key}
 	decrypted := request.Open(&f)
 	if decrypted == nil {
-		glog.V(logger.Warn).Infof("Failed to decrypt p2p request")
+		logger.Warnf("Failed to decrypt p2p request")
 		return false, 0, 0, topic
 	}
 
 	if len(decrypted.Payload) < 8 {
-		glog.V(logger.Warn).Infof("Undersized p2p request")
+		logger.Warnf("Undersized p2p request")
 		return false, 0, 0, topic
 	}
 
@@ -175,7 +175,7 @@ func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) 
 		src = src[1:]
 	}
 	if !bytes.Equal(peerID, src) {
-		glog.V(logger.Warn).Infof("Wrong signature of p2p request")
+		logger.Warnf("Wrong signature of p2p request")
 		return false, 0, 0, topic
 	}
 

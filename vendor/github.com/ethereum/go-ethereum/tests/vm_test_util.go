@@ -29,9 +29,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/pchain/common/plogger"
 )
+
+var logger = plogger.GetLogger("ethereum")
 
 func RunVmTestWithReader(r io.Reader, skipTests []string) error {
 	tests := make(map[string]VmTest)
@@ -130,7 +132,7 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 
 	for name, test := range tests {
 		if skipTest[name] /*|| name != "loop_stacklimit_1021"*/ {
-			glog.Infoln("Skipping VM test", name)
+			logger.Infof("Skipping VM test", name)
 			continue
 		}
 
@@ -138,7 +140,7 @@ func runVmTests(tests map[string]VmTest, skipTests []string) error {
 			return fmt.Errorf("%s %s", name, err.Error())
 		}
 
-		glog.Infoln("VM test passed: ", name)
+		logger.Infof("VM test passed: ", name)
 		//fmt.Println(string(statedb.Dump()))
 	}
 	return nil

@@ -25,8 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/light"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+
 	"golang.org/x/net/context"
 )
 
@@ -151,7 +150,7 @@ func (self *LesOdr) requestPeer(req *sentReq, peer *peer, delivered, timeout cha
 	select {
 	case <-delivered:
 	case <-time.After(hardRequestTimeout):
-		glog.V(logger.Debug).Infof("ODR hard request timeout from peer %v", peer.id)
+		logger.Debugf("ODR hard request timeout from peer %v", peer.id)
 		go self.removePeer(peer.id)
 	case <-self.stop:
 		return
@@ -237,7 +236,7 @@ func (self *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err err
 		// retrieved from network, store in db
 		req.StoreResult(self.db)
 	} else {
-		glog.V(logger.Debug).Infof("networkRequest  err = %v", err)
+		logger.Debugf("networkRequest  err = %v", err)
 	}
 	return
 }

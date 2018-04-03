@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/spf13/cobra"
 
 	. "github.com/tendermint/go-common"
@@ -90,7 +91,7 @@ func runNode(cmd *cobra.Command, args []string) {
 	// always available, remove.
 	genDocFile := config.GetString("genesis_file")
 	if !FileExists(genDocFile) {
-		log.Notice(Fmt("Waiting for genesis file %v...", genDocFile))
+		logger.Info("Waiting for genesis file ", genDocFile)
 		for {
 			time.Sleep(time.Second)
 			if !FileExists(genDocFile) {
@@ -116,7 +117,7 @@ func runNode(cmd *cobra.Command, args []string) {
 	if _, err := n.Start(); err != nil {
 		Exit(Fmt("Failed to start node: %v", err))
 	} else {
-		log.Notice("Started node", "nodeInfo", n.Switch().NodeInfo())
+		logger.Info("Started node", " nodeInfo:", n.Switch().NodeInfo())
 	}
 
 	// Trap signal, run forever.

@@ -23,10 +23,10 @@ import (
 	"os"
 	"runtime/trace"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 )
-
+var logger = plogger.GetLogger("ethereum")
 // StartGoTrace turns on tracing, writing to the given file.
 func (h *HandlerT) StartGoTrace(file string) error {
 	h.mu.Lock()
@@ -44,7 +44,7 @@ func (h *HandlerT) StartGoTrace(file string) error {
 	}
 	h.traceW = f
 	h.traceFile = file
-	glog.V(logger.Info).Infoln("trace started, writing to", h.traceFile)
+	logger.Info("trace started, writing to", h.traceFile)
 	return nil
 }
 
@@ -56,7 +56,7 @@ func (h *HandlerT) StopGoTrace() error {
 	if h.traceW == nil {
 		return errors.New("trace not in progress")
 	}
-	glog.V(logger.Info).Infoln("done writing trace to", h.traceFile)
+	logger.Info("done writing trace to", h.traceFile)
 	h.traceW.Close()
 	h.traceW = nil
 	h.traceFile = ""

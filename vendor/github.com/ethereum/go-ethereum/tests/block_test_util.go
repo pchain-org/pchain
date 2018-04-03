@@ -35,11 +35,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
-
+var logger = plogger.GetLogger("ethereum")
 // Block Test JSON Format
 type BlockTest struct {
 	Genesis *types.Block
@@ -147,14 +147,14 @@ func runBlockTests(homesteadBlock, daoForkBlock, gasPriceFork *big.Int, bt map[s
 
 	for name, test := range bt {
 		if skipTest[name] {
-			glog.Infoln("Skipping block test", name)
+			logger.Infof("Skipping block test", name)
 			continue
 		}
 		// test the block
 		if err := runBlockTest(homesteadBlock, daoForkBlock, gasPriceFork, test); err != nil {
 			return fmt.Errorf("%s: %v", name, err)
 		}
-		glog.Infoln("Block test passed: ", name)
+		logger.Infof("Block test passed: ", name)
 
 	}
 	return nil

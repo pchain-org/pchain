@@ -22,12 +22,12 @@ import (
 	"io"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/robertkrimen/otto"
 )
-
+var logger = plogger.GetLogger("ethereum")
 // bridge is a collection of JavaScript utility methods to bride the .js runtime
 // environment and the Go RPC connection backing the remote method calls.
 type bridge struct {
@@ -306,7 +306,7 @@ func setError(resp *otto.Object, code int, msg string) {
 func throwJSException(msg interface{}) otto.Value {
 	val, err := otto.ToValue(msg)
 	if err != nil {
-		glog.V(logger.Error).Infof("Failed to serialize JavaScript exception %v: %v", msg, err)
+		logger.Errorf("Failed to serialize JavaScript exception %v: %v", msg, err)
 	}
 	panic(val)
 }

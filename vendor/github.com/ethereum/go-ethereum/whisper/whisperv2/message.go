@@ -26,8 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 // Message represents an end-user data packet to transmit through the Whisper
@@ -123,7 +121,7 @@ func (self *Message) Recover() *ecdsa.PublicKey {
 	// Otherwise try and recover the signature
 	pub, err := crypto.SigToPub(self.hash(), self.Signature)
 	if err != nil {
-		glog.V(logger.Error).Infof("Could not get public key from signature: %v", err)
+		logger.Errorf("Could not get public key from signature: %v", err)
 		return nil
 	}
 	return pub

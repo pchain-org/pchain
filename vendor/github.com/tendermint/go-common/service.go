@@ -3,7 +3,7 @@ package common
 import (
 	"sync/atomic"
 
-	"github.com/tendermint/log15"
+	"github.com/sirupsen/logrus"
 )
 
 type Service interface {
@@ -47,7 +47,7 @@ Typical usage:
 		fs := &FooService{
 			// init
 		}
-		fs.BaseService = *NewBaseService(log, "FooService", fs)
+		fs.BaseService = *NewBaseService(logger, "FooService", fs)
 		return fs
 	}
 
@@ -63,8 +63,9 @@ Typical usage:
 		// stop subroutines, etc.
 	}
 */
+
 type BaseService struct {
-	log     log15.Logger
+	logger  *logrus.Logger
 	name    string
 	started uint32 // atomic
 	stopped uint32 // atomic
@@ -74,12 +75,12 @@ type BaseService struct {
 	impl Service
 }
 
-func NewBaseService(log log15.Logger, name string, impl Service) *BaseService {
+func NewBaseService(logger *logrus.Logger, name string, impl Service) *BaseService {
 	return &BaseService{
-		log:  log,
-		name: name,
-		Quit: make(chan struct{}),
-		impl: impl,
+		logger: logger,
+		name:   name,
+		Quit:   make(chan struct{}),
+		impl:   impl,
 	}
 }
 
@@ -87,13 +88,13 @@ func NewBaseService(log log15.Logger, name string, impl Service) *BaseService {
 func (bs *BaseService) Start() (bool, error) {
 	if atomic.CompareAndSwapUint32(&bs.started, 0, 1) {
 		if atomic.LoadUint32(&bs.stopped) == 1 {
-			if bs.log != nil {
-				bs.log.Warn(Fmt("Not starting %v -- already stopped", bs.name), "impl", bs.impl)
+			if bs.logger != nil {
+				bs.logger.Warn("Not starting ", bs.name, " -- already stopped, impl:", bs.impl)
 			}
 			return false, nil
 		} else {
-			if bs.log != nil {
-				bs.log.Info(Fmt("Starting %v", bs.name), "impl", bs.impl)
+			if bs.logger != nil {
+				bs.logger.Info("Starting ", bs.name, " impl:", bs.impl)
 			}
 		}
 		err := bs.impl.OnStart()
@@ -104,8 +105,8 @@ func (bs *BaseService) Start() (bool, error) {
 		}
 		return true, err
 	} else {
-		if bs.log != nil {
-			bs.log.Debug(Fmt("Not starting %v -- already started", bs.name), "impl", bs.impl)
+		if bs.logger != nil {
+			bs.logger.Debug("Not starting ", bs.name, " -- already started, impl:", bs.impl)
 		}
 		return false, nil
 	}
@@ -119,15 +120,15 @@ func (bs *BaseService) OnStart() error { return nil }
 // Implements Service
 func (bs *BaseService) Stop() bool {
 	if atomic.CompareAndSwapUint32(&bs.stopped, 0, 1) {
-		if bs.log != nil {
-			bs.log.Info(Fmt("Stopping %v", bs.name), "impl", bs.impl)
+		if bs.logger != nil {
+			bs.logger.Info("Stopping ", bs.name, " ,impl:", bs.impl)
 		}
 		bs.impl.OnStop()
 		close(bs.Quit)
 		return true
 	} else {
-		if bs.log != nil {
-			bs.log.Debug(Fmt("Stopping %v (ignoring: already stopped)", bs.name), "impl", bs.impl)
+		if bs.logger != nil {
+			bs.logger.Debug("Stopping ", bs.name, " (ignoring: already stopped) , impl:", bs.impl)
 		}
 		return false
 	}
@@ -147,8 +148,8 @@ func (bs *BaseService) Reset() (bool, error) {
 		bs.Quit = make(chan struct{})
 		return true, bs.impl.OnReset()
 	} else {
-		if bs.log != nil {
-			bs.log.Debug(Fmt("Can't reset %v. Not stopped", bs.name), "impl", bs.impl)
+		if bs.logger != nil {
+			bs.logger.Debug("Can't reset ", bs.name, ". Not stopped, impl:", bs.impl)
 		}
 		return false, nil
 	}
@@ -182,11 +183,11 @@ type QuitService struct {
 	BaseService
 }
 
-func NewQuitService(log log15.Logger, name string, impl Service) *QuitService {
-	if log != nil {
-		log.Warn("QuitService is deprecated, use BaseService instead")
+func NewQuitService(logger *logrus.Logger, name string, impl Service) *QuitService {
+	if logger != nil {
+		logger.Warn("QuitService is deprecated, use BaseService instead")
 	}
 	return &QuitService{
-		BaseService: *NewBaseService(log, name, impl),
+		BaseService: *NewBaseService(logger, name, impl),
 	}
 }

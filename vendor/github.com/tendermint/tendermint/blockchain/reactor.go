@@ -3,7 +3,6 @@ package blockchain
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"reflect"
 	"time"
 
@@ -83,7 +82,7 @@ func NewBlockchainReactor(config cfg.Config, state *sm.State, proxyAppConn proxy
 		requestsCh:   requestsCh,
 		timeoutsCh:   timeoutsCh,
 	}
-	bcR.BaseReactor = *p2p.NewBaseReactor(log, "BlockchainReactor", bcR)
+	bcR.BaseReactor = *p2p.NewBaseReactor(logger, "BlockchainReactor", bcR)
 	return bcR
 }
 
@@ -133,11 +132,11 @@ func (bcR *BlockchainReactor) RemovePeer(peer *p2p.Peer, reason interface{}) {
 func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte) {
 	_, msg, err := DecodeMessage(msgBytes)
 	if err != nil {
-		log.Warn("Error decoding message", "error", err)
+		logger.Warn("Error decoding message", " error:", err)
 		return
 	}
 
-	log.Debug("Receive", "src", src, "chID", chID, "msg", msg)
+	logger.Debug("Receive", " src:", src, " chID:", chID, " msg:", msg)
 
 	var NON_ACCOUNT string = ""
 	var NON_EPOCH int = -1
@@ -204,7 +203,7 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 		}
 
 	default:
-		log.Warn(cmn.Fmt("Unknown message type %v", reflect.TypeOf(msg)))
+		logger.Warn("Unknown message type ", reflect.TypeOf(msg))
 	}
 }
 
@@ -259,12 +258,12 @@ FOR_LOOP:
 		case _ = <-switchToConsensusTicker.C:
 			height, numPending, _ := bcR.pool.GetStatus()
 			outbound, inbound, _ := bcR.Switch.NumPeers()
-			log.Info("Consensus ticker", "numPending", numPending, "total", len(bcR.pool.requesters),
+			logger.Info("Consensus ticker", " numPending: ", numPending, " total: ", len(bcR.pool.requesters),
 				"outbound", outbound, "inbound", inbound)
 			//fmt.Printf("poolRoutine(), switchToConsensusTicker.C, numPending:%v, total:%v,outbound:%v, inbound:%v\n",
 			//	numPending, len(bcR.pool.requesters), outbound, inbound)
 			if bcR.pool.IsCaughtUp() {
-				log.Notice("Time to switch to consensus reactor!", "height", height)
+				logger.Info("Time to switch to consensus reactor!", " height: ", height)
 				bcR.pool.Stop()
 
 				_, val, _ := bcR.state.GetValidators()
@@ -282,7 +281,7 @@ FOR_LOOP:
 				//fmt.Printf("poolRoutine(), trySyncTicker.C, in for with i:%d\n", i)
 				// See if there are any blocks to sync.
 				first, second := bcR.pool.PeekTwoBlocks()
-				//log.Info("TrySync peeked", "first", first, "second", second)
+				//logger.Info("TrySync peeked", "first", first, "second", second)
 				if first == nil || second == nil {
 					// We need both to sync the first block.
 					//fmt.Printf("poolRoutine(), trySyncTicker.C, here break\n")
@@ -303,7 +302,7 @@ FOR_LOOP:
 					bcR.state.ChainID, types.BlockID{first.Hash(), firstPartsHeader}, first.Height, second.LastCommit)
 				if err != nil {
 					//fmt.Printf("poolRoutine(), validators are: %s\n", bcR.state.Validators)
-					log.Info("error in validation", "error", err)
+					logger.Info("error in validation", " error:", err)
 					bcR.pool.RedoRequest(first.Height)
 					break SYNC_LOOP
 				} else {

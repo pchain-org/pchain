@@ -41,14 +41,14 @@ func testStream(t *testing.T, app types.Application) {
 	// Start the listener
 	server, err := server.NewSocketServer("unix://test.sock", app)
 	if err != nil {
-		log.Fatal(cmn.Fmt("Error starting socket server: %v", err.Error()))
+		logger.Fatal("Error starting socket server: ", err.Error())
 	}
 	defer server.Stop()
 
 	// Connect to the socket
 	client, err := abcicli.NewSocketClient("unix://test.sock", false)
 	if err != nil {
-		log.Fatal(cmn.Fmt("Error starting socket client: %v", err.Error()))
+		logger.Fatal("Error starting socket client: ", err.Error())
 	}
 	client.Start()
 	defer client.Stop()
@@ -114,14 +114,14 @@ func testGRPCSync(t *testing.T, app *types.GRPCApplication) {
 	// Start the listener
 	server, err := server.NewGRPCServer("unix://test.sock", app)
 	if err != nil {
-		log.Fatal(cmn.Fmt("Error starting GRPC server: %v", err.Error()))
+		logger.Fatal("Error starting GRPC server: ", err.Error())
 	}
 	defer server.Stop()
 
 	// Connect to the socket
 	conn, err := grpc.Dial("unix://test.sock", grpc.WithInsecure(), grpc.WithDialer(dialerFunc))
 	if err != nil {
-		log.Fatal(cmn.Fmt("Error dialing GRPC server: %v", err.Error()))
+		logger.Fatal("Error dialing GRPC server: ", err.Error())
 	}
 	defer conn.Close()
 

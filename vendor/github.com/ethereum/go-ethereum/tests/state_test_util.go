@@ -30,10 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/params"
 )
-
+var logger = plogger.GetLogger("ethereum")
 func RunStateTestWithReader(chainConfig *params.ChainConfig, r io.Reader, skipTests []string) error {
 	tests := make(map[string]VmTest)
 	if err := readJson(r, &tests); err != nil {
@@ -109,7 +109,7 @@ func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, ski
 
 	for name, test := range tests {
 		if skipTest[name] {
-			glog.Infoln("Skipping state test", name)
+			logger.Infof("Skipping state test", name)
 			continue
 		}
 
@@ -118,7 +118,7 @@ func runStateTests(chainConfig *params.ChainConfig, tests map[string]VmTest, ski
 			return fmt.Errorf("%s: %s\n", name, err.Error())
 		}
 
-		//glog.Infoln("State test passed: ", name)
+		//logger.Infof("State test passed: ", name)
 		//fmt.Println(string(statedb.Dump()))
 	}
 	return nil

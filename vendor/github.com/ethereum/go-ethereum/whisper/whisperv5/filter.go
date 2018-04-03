@@ -21,10 +21,10 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 )
-
+var logger = plogger.GetLogger("ethereum")
 type Filter struct {
 	Src        *ecdsa.PublicKey  // Sender of the message
 	KeyAsym    *ecdsa.PrivateKey // Private Key of recipient
@@ -82,7 +82,7 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	var msg *ReceivedMessage
 	for j, watcher := range fs.watchers {
 		if p2pMessage && !watcher.AcceptP2P {
-			glog.V(logger.Detail).Infof("msg [%x], filter [%d]: p2p messages are not allowed \n", env.Hash(), j)
+			logger.Debugf("msg [%x], filter [%d]: p2p messages are not allowed \n", env.Hash(), j)
 			continue
 		}
 
@@ -94,10 +94,10 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 			if match {
 				msg = env.Open(watcher)
 				if msg == nil {
-					glog.V(logger.Detail).Infof("msg [%x], filter [%d]: failed to open \n", env.Hash(), j)
+					logger.Debugf("msg [%x], filter [%d]: failed to open \n", env.Hash(), j)
 				}
 			} else {
-				glog.V(logger.Detail).Infof("msg [%x], filter [%d]: does not match \n", env.Hash(), j)
+				logger.Debugf("msg [%x], filter [%d]: does not match \n", env.Hash(), j)
 			}
 		}
 

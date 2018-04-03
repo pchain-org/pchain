@@ -41,8 +41,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -53,8 +51,11 @@ import (
 	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rpc"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv2"
+	"github.com/pchain/common/plogger"
 	"gopkg.in/urfave/cli.v1"
 )
+
+var logger = plogger.GetLogger("ethereum")
 
 func init() {
 	cli.AppHelpTemplate = `{{.Name}} {{if .Flags}}[global options] {{end}}command{{if .Flags}} [command options]{{end}} [arguments...]
@@ -493,7 +494,7 @@ func MakeBootstrapNodes(ctx *cli.Context) []*discover.Node {
 	for _, url := range urls {
 		node, err := discover.ParseNode(url)
 		if err != nil {
-			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
+			logger.Errorf("Bootstrap URL %s: %v\n", url, err)
 			continue
 		}
 		bootnodes = append(bootnodes, node)
@@ -513,7 +514,7 @@ func MakeBootstrapNodesV5(ctx *cli.Context) []*discv5.Node {
 	for _, url := range urls {
 		node, err := discv5.ParseNode(url)
 		if err != nil {
-			glog.V(logger.Error).Infof("Bootstrap URL %s: %v\n", url, err)
+			logger.Errorf("Bootstrap URL %s: %v\n", url, err)
 			continue
 		}
 		bootnodes = append(bootnodes, node)
@@ -610,7 +611,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 func MakeEtherbase(ks *keystore.KeyStore, ctx *cli.Context) common.Address {
 	accounts := ks.Accounts()
 	if !ctx.GlobalIsSet(EtherbaseFlag.Name) && len(accounts) == 0 {
-		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
+		logger.Errorf("WARNING: No etherbase set and no accounts found as default")
 		return common.Address{}
 	}
 	etherbase := ctx.GlobalString(EtherbaseFlag.Name)
@@ -776,13 +777,13 @@ func RegisterEthService(ctx *cli.Context, stack *node.Node, extra []byte) {
 
 	if ethConf.LightMode {
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, ethConf, nil)
+			return les.New(ctx, ethConf)
 		}); err != nil {
 			Fatalf("Failed to register the Ethereum light node service: %v", err)
 		}
 	} else {
 		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			fullNode, err := eth.New(ctx, ethConf, nil, nil)
+			fullNode, err := eth.New(ctx, ethConf, nil)
 			if fullNode != nil && ethConf.LightServ > 0 {
 				ls, _ := les.NewLesServer(fullNode, ethConf)
 				fullNode.AddLesServer(ls)
@@ -913,7 +914,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if ctx.GlobalBool(TestNetFlag.Name) {
 		_, err := core.WriteTestNetGenesisBlock(chainDb)
 		if err != nil {
-			glog.Fatalln(err)
+			logger.Error(err)
 		}
 	}
 

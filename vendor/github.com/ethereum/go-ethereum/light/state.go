@@ -21,8 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"golang.org/x/net/context"
 )
 
@@ -271,9 +269,7 @@ func (self *LightState) GetOrNewStateObject(ctx context.Context, addr common.Add
 
 // newStateObject creates a state object whether it exists in the state or not
 func (self *LightState) newStateObject(addr common.Address) *StateObject {
-	if glog.V(logger.Core) {
-		glog.Infof("(+) %x\n", addr)
-	}
+	 logger.Errorf("(+) %x\n", addr)
 
 	stateObject := NewStateObject(addr, self.odr)
 	self.stateObjects[addr.Str()] = stateObject

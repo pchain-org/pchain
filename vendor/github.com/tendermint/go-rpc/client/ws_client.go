@@ -38,7 +38,7 @@ func NewWSClient(remoteAddr, endpoint string) *WSClient {
 		Endpoint: endpoint,
 		Conn:     nil,
 	}
-	wsClient.BaseService = *cmn.NewBaseService(log, "WSClient", wsClient)
+	wsClient.BaseService = *cmn.NewBaseService(logger, "WSClient", wsClient)
 	return wsClient
 }
 
@@ -101,14 +101,14 @@ func (wsc *WSClient) receiveEventsRoutine() {
 	for {
 		_, data, err := wsc.ReadMessage()
 		if err != nil {
-			log.Info("WSClient failed to read message", "error", err, "data", string(data))
+			logger.Info("WSClient failed to read message", " error:", err, " data:", string(data))
 			wsc.Stop()
 			break
 		} else {
 			var response types.RPCResponse
 			err := json.Unmarshal(data, &response)
 			if err != nil {
-				log.Info("WSClient failed to parse message", "error", err, "data", string(data))
+				logger.Info("WSClient failed to parse message", " error:", err, " data:", string(data))
 				wsc.ErrorsCh <- err
 				continue
 			}

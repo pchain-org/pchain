@@ -21,10 +21,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 )
-
+var logger = plogger.GetLogger("ethereum")
 /*
 NetStore is a cloud storage access abstaction layer for swarm
 it contains the shared logic of network served chunk store/retrieval requests
@@ -98,14 +98,14 @@ func (self *NetStore) Put(entry *Chunk) {
 
 	// handle deliveries
 	if entry.Req != nil {
-		glog.V(logger.Detail).Infof("NetStore.Put: localStore.Put %v hit existing request...delivering", entry.Key.Log())
+		logger.Debugf("NetStore.Put: localStore.Put %v hit existing request...delivering", entry.Key.Log())
 		// closing C signals to other routines (local requests)
 		// that the chunk is has been retrieved
 		close(entry.Req.C)
 		// deliver the chunk to requesters upstream
 		go self.cloud.Deliver(entry)
 	} else {
-		glog.V(logger.Detail).Infof("NetStore.Put: localStore.Put %v stored locally", entry.Key.Log())
+		logger.Debugf("NetStore.Put: localStore.Put %v stored locally", entry.Key.Log())
 		// handle propagating store requests
 		// go self.cloud.Store(entry)
 		go self.cloud.Store(entry)
@@ -118,15 +118,15 @@ func (self *NetStore) Get(key Key) (*Chunk, error) {
 	chunk, err := self.localStore.Get(key)
 	if err == nil {
 		if chunk.Req == nil {
-			glog.V(logger.Detail).Infof("NetStore.Get: %v found locally", key)
+			logger.Debugf("NetStore.Get: %v found locally", key)
 		} else {
-			glog.V(logger.Detail).Infof("NetStore.Get: %v hit on an existing request", key)
+			logger.Debugf("NetStore.Get: %v hit on an existing request", key)
 			// no need to launch again
 		}
 		return chunk, err
 	}
 	// no data and no request status
-	glog.V(logger.Detail).Infof("NetStore.Get: %v not found locally. open new request", key)
+	logger.Debugf("NetStore.Get: %v not found locally. open new request", key)
 	chunk = NewChunk(key, newRequestStatus(key))
 	self.localStore.memStore.Put(chunk)
 	go self.cloud.Retrieve(chunk)

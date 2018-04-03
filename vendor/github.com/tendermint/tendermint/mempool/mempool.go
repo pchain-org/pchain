@@ -95,12 +95,12 @@ func (mem *Mempool) initWAL() {
 	if walDir != "" {
 		err := EnsureDir(walDir, 0700)
 		if err != nil {
-			log.Error("Error ensuring Mempool wal dir", "error", err)
+			logger.Error("Error ensuring Mempool wal dir", " error:", err)
 			PanicSanity(err)
 		}
 		af, err := auto.OpenAutoFile(walDir + "/wal")
 		if err != nil {
-			log.Error("Error opening Mempool wal file", "error", err)
+			logger.Error("Error opening Mempool wal file", " error:", err)
 			PanicSanity(err)
 		}
 		mem.wal = af
@@ -233,7 +233,7 @@ func (mem *Mempool) resCbNormal(req *abci.Request, res *abci.Response) {
 			mem.txs.PushBack(memTx)
 		} else {
 			// ignore bad transaction
-			log.Info("Bad Transaction", "res", r)
+			logger.Info("Bad Transaction", " res:", r)
 
 			// remove from cache (it might be good later)
 			mem.cache.Remove(req.GetCheckTx().Tx)
@@ -271,7 +271,7 @@ func (mem *Mempool) resCbRecheck(req *abci.Request, res *abci.Response) {
 		if mem.recheckCursor == nil {
 			// Done!
 			atomic.StoreInt32(&mem.rechecking, 0)
-			log.Info("Done rechecking txs")
+			logger.Info("Done rechecking txs")
 		}
 	default:
 		// ignore other messages
@@ -331,7 +331,7 @@ func (mem *Mempool) Update(height int, txs types.Txs) {
 	//	so we really still do need to recheck, but this is for debugging
 	if mem.config.GetBool("mempool_recheck") &&
 		(mem.config.GetBool("mempool_recheck_empty") || len(txs) > 0) {
-		log.Info("Recheck txs", "numtxs", len(goodTxs))
+		logger.Info("Recheck txs", " numtxs:", len(goodTxs))
 		mem.recheckTxs(goodTxs)
 		// At this point, mem.txs are being rechecked.
 		// mem.recheckCursor re-scans mem.txs and possibly removes some txs.

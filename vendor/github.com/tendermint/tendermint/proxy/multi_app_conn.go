@@ -52,7 +52,7 @@ func NewMultiAppConn(config cfg.Config, clientCreator ClientCreator, handshaker 
 		handshaker:    handshaker,
 		clientCreator: clientCreator,
 	}
-	multiAppConn.BaseService = *cmn.NewBaseService(log, "multiAppConn", multiAppConn)
+	multiAppConn.BaseService = *cmn.NewBaseService(logger, "multiAppConn", multiAppConn)
 	return multiAppConn
 }
 

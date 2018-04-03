@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -46,9 +45,9 @@ func main() {
 		nodeKey *ecdsa.PrivateKey
 		err     error
 	)
-	flag.Var(glog.GetVerbosity(), "verbosity", "log verbosity (0-9)")
-	flag.Var(glog.GetVModule(), "vmodule", "log verbosity pattern")
-	glog.SetToStderr(true)
+	// flag.Var(glog.GetVerbosity(), "verbosity", "log verbosity (0-9)")
+	// flag.Var(glog.GetVModule(), "vmodule", "log verbosity pattern")
+	// glog.SetToStderr(true)
 	flag.Parse()
 
 	natm, err := nat.Parse(*natdesc)

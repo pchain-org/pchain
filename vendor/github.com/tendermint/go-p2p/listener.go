@@ -67,7 +67,7 @@ func NewDefaultListener(protocol string, lAddr string, skipUPNP bool) Listener {
 	}
 	// Actual listener local IP & port
 	listenerIP, listenerPort := splitHostPort(listener.Addr().String())
-	log.Info("Local listener", "ip", listenerIP, "port", listenerPort)
+	logger.Info("Local listener", " ip:", listenerIP, " port:", listenerPort)
 
 	// Determine internal address...
 	var intAddr *NetAddress
@@ -98,7 +98,7 @@ func NewDefaultListener(protocol string, lAddr string, skipUPNP bool) Listener {
 		extAddr:     extAddr,
 		connections: make(chan net.Conn, numBufferedConnections),
 	}
-	dl.BaseService = *NewBaseService(log, "DefaultListener", dl)
+	dl.BaseService = *NewBaseService(logger, "DefaultListener", dl)
 	dl.Start() // Started upon construction
 	return dl
 }
@@ -167,16 +167,16 @@ func (l *DefaultListener) String() string {
 
 // UPNP external address discovery & port mapping
 func getUPNPExternalAddress(externalPort, internalPort int) *NetAddress {
-	log.Info("Getting UPNP external address")
+	logger.Info("Getting UPNP external address")
 	nat, err := upnp.Discover()
 	if err != nil {
-		log.Info("Could not perform UPNP discover", "error", err)
+		logger.Info("Could not perform UPNP discover", " error:", err)
 		return nil
 	}
 
 	ext, err := nat.GetExternalAddress()
 	if err != nil {
-		log.Info("Could not get UPNP external address", "error", err)
+		logger.Info("Could not get UPNP external address", " error:", err)
 		return nil
 	}
 
@@ -187,11 +187,11 @@ func getUPNPExternalAddress(externalPort, internalPort int) *NetAddress {
 
 	externalPort, err = nat.AddPortMapping("tcp", externalPort, internalPort, "tendermint", 0)
 	if err != nil {
-		log.Info("Could not add UPNP port mapping", "error", err)
+		logger.Info("Could not add UPNP port mapping", " error:", err)
 		return nil
 	}
 
-	log.Info("Got UPNP external address", "address", ext)
+	logger.Info("Got UPNP external address:", ext)
 	return NewNetAddressIPPort(ext, uint16(externalPort))
 }
 

@@ -1,7 +1,6 @@
 package abcicli
 
 import (
-	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -51,7 +50,7 @@ RETRY_LOOP:
 			if cli.mustConnect {
 				return err
 			}
-			log.Warn(fmt.Sprintf("abci.grpcClient failed to connect to %v.  Retrying...\n", cli.addr))
+			logger.Warn("abci.grpcClient failed to connect to ", cli.addr, " Retrying...")
 			time.Sleep(time.Second * 3)
 			continue RETRY_LOOP
 		}
@@ -93,7 +92,7 @@ func (cli *grpcClient) StopForError(err error) {
 	}
 	cli.mtx.Unlock()
 
-	log.Warn(fmt.Sprintf("Stopping abci.grpcClient for error: %v", err.Error()))
+	logger.Warn("Stopping abci.grpcClient for error:", err.Error())
 	cli.Stop()
 }
 

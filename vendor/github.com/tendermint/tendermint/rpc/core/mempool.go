@@ -78,7 +78,7 @@ func BroadcastTxCommit(tx types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
 		checkTxResCh <- res
 	})
 	if err != nil {
-		log.Error("err", "err", err)
+		logger.Error("err:", err)
 		return nil, fmt.Errorf("Error broadcasting transaction: %v", err)
 	}
 	checkTxRes := <-checkTxResCh
@@ -104,7 +104,7 @@ func BroadcastTxCommit(tx types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
 			Data: deliverTxRes.Data,
 			Log:  deliverTxRes.Log,
 		}
-		log.Notice("DeliverTx passed ", "tx", []byte(tx), "response", deliverTxR)
+		logger.Info("DeliverTx passed ", " tx:", []byte(tx), " response:", deliverTxR)
 		return &ctypes.ResultBroadcastTxCommit{
 			CheckTx:   checkTxR,
 			DeliverTx: deliverTxR,
@@ -112,7 +112,7 @@ func BroadcastTxCommit(tx types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
 			Height:    deliverTxRes.Height,
 		}, nil
 	case <-timer.C:
-		log.Error("failed to include tx")
+		logger.Error("failed to include tx")
 		return &ctypes.ResultBroadcastTxCommit{
 			CheckTx:   checkTxR,
 			DeliverTx: nil,

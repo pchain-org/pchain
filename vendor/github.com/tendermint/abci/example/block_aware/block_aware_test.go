@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -26,7 +25,7 @@ func TestChainAware(t *testing.T) {
 	// Connect to the socket
 	client, err := abcicli.NewSocketClient("unix://test.sock", false)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("Error starting socket client: %v", err.Error()))
+		logger.Fatal("Error starting socket client: ", err.Error())
 	}
 	client.Start()
 	defer client.Stop()

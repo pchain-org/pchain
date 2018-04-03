@@ -27,7 +27,7 @@ func makeHTTPDialer(remoteAddr string) (string, func(string, string) (net.Conn, 
 	parts := strings.SplitN(remoteAddr, "://", 2)
 	var protocol, address string
 	if len(parts) != 2 {
-		log.Warn("WARNING (go-rpc): Please use fully formed listening addresses, including the tcp:// or unix:// prefix")
+		logger.Warn("WARNING (go-rpc): Please use fully formed listening addresses, including the tcp:// or unix:// prefix")
 		protocol = types.SocketType(remoteAddr)
 		address = remoteAddr
 	} else {
@@ -85,9 +85,9 @@ func (c *JSONRPCClient) Call(method string, params map[string]interface{}, resul
 	if err != nil {
 		return nil, err
 	}
-	// log.Info(string(requestBytes))
+	// logger.Info(string(requestBytes))
 	requestBuf := bytes.NewBuffer(requestBytes)
-	// log.Info(Fmt("RPC request to %v (%v): %v", c.remote, method, string(requestBytes)))
+	// logger.Info(Fmt("RPC request to %v (%v): %v", c.remote, method, string(requestBytes)))
 	httpResponse, err := c.client.Post(c.address, "text/json", requestBuf)
 	if err != nil {
 		return nil, err
@@ -97,7 +97,7 @@ func (c *JSONRPCClient) Call(method string, params map[string]interface{}, resul
 	if err != nil {
 		return nil, err
 	}
-	// 	log.Info(Fmt("RPC response: %v", string(responseBytes)))
+	// 	logger.Info(Fmt("RPC response: %v", string(responseBytes)))
 	return unmarshalResponseBytes(responseBytes, result)
 }
 
@@ -122,7 +122,7 @@ func (c *URIClient) Call(method string, params map[string]interface{}, result in
 	if err != nil {
 		return nil, err
 	}
-	// log.Info(Fmt("URI request to %v (%v): %v", c.address, method, values))
+	// logger.Info(Fmt("URI request to %v (%v): %v", c.address, method, values))
 	resp, err := c.client.PostForm(c.address+"/"+method, values)
 	if err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func unmarshalResponseBytes(responseBytes []byte, result interface{}) (interface
 	// read response
 	// if rpc/core/types is imported, the result will unmarshal
 	// into the correct type
-	// log.Notice("response", "response", string(responseBytes))
+	// logger.Info("response", "response", string(responseBytes))
 	var err error
 	response := &types.RPCResponse{}
 	err = json.Unmarshal(responseBytes, response)

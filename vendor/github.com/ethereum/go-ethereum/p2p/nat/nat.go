@@ -25,11 +25,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"github.com/jackpal/go-nat-pmp"
 )
-
+var logger = plogger.GetLogger("ethereum")
 // An implementation of nat.Interface can map local ports to ports
 // accessible from the Internet.
 type Interface interface {
@@ -102,13 +102,13 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 	refresh := time.NewTimer(mapUpdateInterval)
 	defer func() {
 		refresh.Stop()
-		glog.V(logger.Debug).Infof("deleting port mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+		logger.Debugf("deleting port mapping: %s %d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 		m.DeleteMapping(protocol, extport, intport)
 	}()
 	if err := m.AddMapping(protocol, extport, intport, name, mapTimeout); err != nil {
-		glog.V(logger.Debug).Infof("network port %s:%d could not be mapped: %v\n", protocol, intport, err)
+		logger.Debugf("network port %s:%d could not be mapped: %v\n", protocol, intport, err)
 	} else {
-		glog.V(logger.Info).Infof("mapped network port %s:%d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+		logger.Infof("mapped network port %s:%d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 	}
 	for {
 		select {
@@ -117,9 +117,9 @@ func Map(m Interface, c chan struct{}, protocol string, extport, intport int, na
 				return
 			}
 		case <-refresh.C:
-			glog.V(logger.Detail).Infof("refresh port mapping %s:%d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
+			logger.Debugf("refresh port mapping %s:%d -> %d (%s) using %s\n", protocol, extport, intport, name, m)
 			if err := m.AddMapping(protocol, extport, intport, name, mapTimeout); err != nil {
-				glog.V(logger.Debug).Infof("network port %s:%d could not be mapped: %v\n", protocol, intport, err)
+				logger.Debugf("network port %s:%d could not be mapped: %v\n", protocol, intport, err)
 			}
 			refresh.Reset(mapUpdateInterval)
 		}

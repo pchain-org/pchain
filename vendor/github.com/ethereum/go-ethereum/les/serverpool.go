@@ -28,8 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
@@ -162,7 +161,7 @@ func (pool *serverPool) connect(p *peer, ip net.IP, port uint16) *poolEntry {
 	if entry == nil {
 		entry = pool.findOrNewNode(p.ID(), ip, port)
 	}
-	glog.V(logger.Debug).Infof("connecting to %v, state: %v", p.id, entry.state)
+	logger.Debugf("connecting to %v, state: %v", p.id, entry.state)
 	if entry.state == psConnected || entry.state == psRegistered {
 		return nil
 	}
@@ -184,7 +183,7 @@ func (pool *serverPool) connect(p *peer, ip net.IP, port uint16) *poolEntry {
 
 // registered should be called after a successful handshake
 func (pool *serverPool) registered(entry *poolEntry) {
-	glog.V(logger.Debug).Infof("registered %v", entry.id.String())
+	logger.Debugf("registered %v", entry.id.String())
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 
@@ -202,7 +201,7 @@ func (pool *serverPool) registered(entry *poolEntry) {
 // can be updated optionally (not updated if no registration happened, in this case
 // only connection statistics are updated, just like in case of timeout)
 func (pool *serverPool) disconnect(entry *poolEntry) {
-	glog.V(logger.Debug).Infof("disconnected %v", entry.id.String())
+	logger.Debugf("disconnected %v", entry.id.String())
 	pool.lock.Lock()
 	defer pool.lock.Unlock()
 
@@ -418,7 +417,7 @@ func (pool *serverPool) findOrNewNode(id discover.NodeID, ip net.IP, port uint16
 	now := mclock.Now()
 	entry := pool.entries[id]
 	if entry == nil {
-		glog.V(logger.Debug).Infof("discovered %v", id.String())
+		logger.Debugf("discovered %v", id.String())
 		entry = &poolEntry{
 			id:         id,
 			addr:       make(map[string]*poolEntryAddress),
@@ -459,11 +458,11 @@ func (pool *serverPool) loadNodes() {
 	var list []*poolEntry
 	err = rlp.DecodeBytes(enc, &list)
 	if err != nil {
-		glog.V(logger.Debug).Infof("node list decode error: %v", err)
+		logger.Debugf("node list decode error: %v", err)
 		return
 	}
 	for _, e := range list {
-		glog.V(logger.Debug).Infof("loaded server stats %016x  fails: %v  connStats: %v / %v  delayStats: %v / %v  responseStats: %v / %v  timeoutStats: %v / %v", e.id[0:8], e.lastConnected.fails, e.connectStats.avg, e.connectStats.weight, time.Duration(e.delayStats.avg), e.delayStats.weight, time.Duration(e.responseStats.avg), e.responseStats.weight, e.timeoutStats.avg, e.timeoutStats.weight)
+		logger.Debugf("loaded server stats %016x  fails: %v  connStats: %v / %v  delayStats: %v / %v  responseStats: %v / %v  timeoutStats: %v / %v", e.id[0:8], e.lastConnected.fails, e.connectStats.avg, e.connectStats.weight, time.Duration(e.delayStats.avg), e.delayStats.weight, time.Duration(e.responseStats.avg), e.responseStats.weight, e.timeoutStats.avg, e.timeoutStats.weight)
 		pool.entries[e.id] = e
 		pool.knownQueue.setLatest(e)
 		pool.knownSelect.update((*knownEntry)(e))
@@ -568,7 +567,7 @@ func (pool *serverPool) dial(entry *poolEntry, knownSelected bool) {
 		pool.newSelected++
 	}
 	addr := entry.addrSelect.choose().(*poolEntryAddress)
-	glog.V(logger.Debug).Infof("dialing %v out of %v, known: %v", entry.id.String()+"@"+addr.strKey(), len(entry.addr), knownSelected)
+	logger.Debugf("dialing %v out of %v, known: %v", entry.id.String()+"@"+addr.strKey(), len(entry.addr), knownSelected)
 	entry.dialed = addr
 	go func() {
 		pool.server.AddPeer(discover.NewNode(entry.id, addr.ip, addr.port, addr.port))
@@ -589,7 +588,7 @@ func (pool *serverPool) checkDialTimeout(entry *poolEntry) {
 	if entry.state != psDialed {
 		return
 	}
-	glog.V(logger.Debug).Infof("timeout %v", entry.id.String()+"@"+entry.dialed.strKey())
+	logger.Debugf("timeout %v", entry.id.String()+"@"+entry.dialed.strKey())
 	entry.state = psNotConnected
 	if entry.knownSelected {
 		pool.knownSelected--

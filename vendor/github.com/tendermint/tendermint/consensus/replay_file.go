@@ -115,7 +115,7 @@ func (pb *playback) replayReset(count int, newStepCh chan interface{}) error {
 	pb.fp = fp
 	pb.scanner = bufio.NewScanner(fp)
 	count = pb.count - count
-	log.Notice(Fmt("Reseting from %d to %d", pb.count, count))
+	logger.Info("Reseting from ", pb.count, " to ", count)
 	pb.count = 0
 	pb.cs = newCS
 	for i := 0; pb.scanner.Scan() && i < count; i++ {
@@ -129,7 +129,7 @@ func (pb *playback) replayReset(count int, newStepCh chan interface{}) error {
 
 func (cs *ConsensusState) startForReplay() {
 
-	log.Warn("Replay commands are disabled until someone updates them and writes tests")
+	logger.Warn("Replay commands are disabled until someone updates them and writes tests")
 	/* TODO:!
 	// since we replay tocks we just ignore ticks
 		go func() {

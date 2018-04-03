@@ -1,7 +1,7 @@
 package abcicli
 
 import (
-	"github.com/tendermint/go-logger"
+	"github.com/pchain/common/plogger"
 )
 
-var log = logger.New("module", "abcicli")
+var logger = plogger.GetLogger("abcicli")

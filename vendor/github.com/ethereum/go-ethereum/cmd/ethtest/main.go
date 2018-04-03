@@ -25,12 +25,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
+	"github.com/pchain/common/plogger"
+	"github.com/pchain/common/plogger"
 	"gopkg.in/urfave/cli.v1"
 )
 
+var logger = plogger.GetLogger("ethereum")
 var (
 	continueOnError = false
 	testExtension   = ".json"
@@ -70,7 +72,7 @@ var (
 )
 
 func runTestWithReader(test string, r io.Reader) error {
-	glog.Infoln("runTest", test)
+	logger.Infof("runTest", test)
 	var err error
 	switch strings.ToLower(test) {
 	case "bk", "block", "blocktest", "blockchaintest", "blocktests", "blockchaintests":
@@ -92,7 +94,7 @@ func runTestWithReader(test string, r io.Reader) error {
 }
 
 func getFiles(path string) ([]string, error) {
-	glog.Infoln("getFiles", path)
+	logger.Infof("getFiles", path)
 	var files []string
 	f, err := os.Open(path)
 	if err != nil {
@@ -113,7 +115,7 @@ func getFiles(path string) ([]string, error) {
 			// only go 1 depth and leave directory entires blank
 			if !v.IsDir() && v.Name()[len(v.Name())-len(testExtension):len(v.Name())] == testExtension {
 				files[i] = filepath.Join(path, v.Name())
-				glog.Infoln("Found file", files[i])
+				logger.Infof("Found file", files[i])
 			}
 		}
 	case mode.IsRegular():
@@ -134,7 +136,7 @@ func runSuite(test, file string) {
 	}
 
 	for _, curTest := range tests {
-		glog.Infoln("runSuite", curTest, file)
+		logger.Infof("runSuite", curTest, file)
 		var err error
 		var files []string
 		if test == defaultTest {
@@ -149,11 +151,11 @@ func runSuite(test, file string) {
 			files, err = getFiles(file)
 		}
 		if err != nil {
-			glog.Fatalln(err)
+			logger.Error((err)
 		}
 
 		if len(files) == 0 {
-			glog.Warningln("No files matched path")
+			logger.Warnf("No files matched path")
 		}
 		for _, curFile := range files {
 			// Skip blank entries
@@ -163,16 +165,16 @@ func runSuite(test, file string) {
 
 			r, err := os.Open(curFile)
 			if err != nil {
-				glog.Fatalln(err)
+				logger.Error((err)
 			}
 			defer r.Close()
 
 			err = runTestWithReader(curTest, r)
 			if err != nil {
 				if continueOnError {
-					glog.Errorln(err)
+					logger.Error(err)
 				} else {
-					glog.Fatalln(err)
+					logger.Error((err)
 				}
 			}
 		}
@@ -190,14 +192,14 @@ func setupApp(c *cli.Context) error {
 		runSuite(flagTest, flagFile)
 	} else {
 		if err := runTestWithReader(flagTest, os.Stdin); err != nil {
-			glog.Fatalln(err)
+			logger.Error((err)
 		}
 	}
 	return nil
 }
 
 func main() {
-	glog.SetToStderr(true)
+	// glog.SetToStderr(true)
 
 	app := cli.NewApp()
 	app.Name = "ethtest"
@@ -216,7 +218,7 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		glog.Fatalln(err)
+		logger.Error((err)
 	}
 
 }

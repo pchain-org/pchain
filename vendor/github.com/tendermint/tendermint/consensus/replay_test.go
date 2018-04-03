@@ -156,7 +156,7 @@ func toPV(pv PrivValidator) *types.PrivValidator {
 
 func setupReplayTest(thisCase *testCase, nLines int, crashAfter bool) (*ConsensusState, chan interface{}, string, string) {
 	fmt.Println("-------------------------------------")
-	log.Notice(cmn.Fmt("Starting replay test %v (of %d lines of WAL). Crash after = %v", thisCase.name, nLines, crashAfter))
+	logger.Info("Starting replay test ", thisCase.name, " (of ", nLines, " lines of WAL). Crash after = ", crashAfter)
 
 	lineStep := nLines
 	if crashAfter {
@@ -175,7 +175,7 @@ func setupReplayTest(thisCase *testCase, nLines int, crashAfter bool) (*Consensu
 	toPV(cs.privValidator).LastHeight = 1 // first block
 	toPV(cs.privValidator).LastStep = thisCase.stepMap[lineStep]
 
-	log.Warn("setupReplayTest", "LastStep", toPV(cs.privValidator).LastStep)
+	logger.Warn("setupReplayTest", " LastStep:", toPV(cs.privValidator).LastStep)
 
 	newBlockCh := subscribeToEvent(cs.evsw, "tester", types.EventStringNewBlock(), 1)
 
@@ -452,7 +452,7 @@ func makeBlockchainFromWAL(wal *WAL) ([]*types.Block, []*types.Commit, error) {
 	}
 	defer gr.Close()
 
-	log.Notice("Build a blockchain by reading from the WAL")
+	logger.Info("Build a blockchain by reading from the WAL")
 
 	var blockParts *types.PartSet
 	var blocks []*types.Block

@@ -21,13 +21,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	set "gopkg.in/fatih/set.v0"
 )
-
+var logger = plogger.GetLogger("ethereum")
 // peer represents a whisper protocol peer connection.
 type Peer struct {
 	host    *Whisper
@@ -56,13 +56,13 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 // into the network.
 func (p *Peer) start() {
 	go p.update()
-	glog.V(logger.Debug).Infof("%v: whisper started", p.peer)
+	logger.Debugf("%v: whisper started", p.peer)
 }
 
 // stop terminates the peer updater, stopping message forwarding to it.
 func (p *Peer) stop() {
 	close(p.quit)
-	glog.V(logger.Debug).Infof("%v: whisper stopped", p.peer)
+	logger.Debugf("%v: whisper stopped", p.peer)
 }
 
 // handshake sends the protocol initiation status message to the remote peer and
@@ -111,7 +111,7 @@ func (p *Peer) update() {
 
 		case <-transmit.C:
 			if err := p.broadcast(); err != nil {
-				glog.V(logger.Info).Infof("%v: broadcast failed: %v", p.peer, err)
+				logger.Infof("%v: broadcast failed: %v", p.peer, err)
 				return
 			}
 
@@ -172,7 +172,7 @@ func (p *Peer) broadcast() error {
 	if err := p2p.Send(p.ws, messagesCode, transmit); err != nil {
 		return err
 	}
-	glog.V(logger.Detail).Infoln(p.peer, "broadcasted", len(transmit), "message(s)")
+	logger.Debugf(p.peer, "broadcasted", len(transmit), "message(s)")
 	return nil
 }
 

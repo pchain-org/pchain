@@ -1,7 +1,7 @@
 package proxy
 
 import (
-	"github.com/tendermint/go-logger"
+	"github.com/pchain/common/plogger"
 )
 
-var log = logger.New("module", "proxy")
+var logger = plogger.GetLogger("proxy")

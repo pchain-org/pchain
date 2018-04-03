@@ -25,9 +25,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 const (
@@ -55,12 +52,12 @@ func checkClockDrift() {
 		howtofix := fmt.Sprintf("Please enable network time synchronisation in system settings")
 		separator := strings.Repeat("-", len(warning))
 
-		glog.V(logger.Warn).Info(separator)
-		glog.V(logger.Warn).Info(warning)
-		glog.V(logger.Warn).Info(howtofix)
-		glog.V(logger.Warn).Info(separator)
+		logger.Warnf(separator)
+		logger.Warnf(warning)
+		logger.Warnf(howtofix)
+		logger.Warnf(separator)
 	} else {
-		glog.V(logger.Debug).Infof("Sanity NTP check reported %v drift, all ok", drift)
+		logger.Debugf("Sanity NTP check reported %v drift, all ok", drift)
 	}
 }
 

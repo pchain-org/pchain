@@ -18,8 +18,6 @@ package trie
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 var secureKeyPrefix = []byte("secure-key-")
@@ -70,8 +68,8 @@ func NewSecure(root common.Hash, db Database, cachelimit uint16) (*SecureTrie, e
 // The value bytes must not be modified by the caller.
 func (t *SecureTrie) Get(key []byte) []byte {
 	res, err := t.TryGet(key)
-	if err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err != nil {
+		logger.Error("Unhandled trie error: ", err)
 	}
 	return res
 }
@@ -90,8 +88,8 @@ func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 func (t *SecureTrie) Update(key, value []byte) {
-	if err := t.TryUpdate(key, value); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err := t.TryUpdate(key, value); err != nil {
+		logger.Error("Unhandled trie error: ", err)
 	}
 }
 
@@ -115,8 +113,8 @@ func (t *SecureTrie) TryUpdate(key, value []byte) error {
 
 // Delete removes any existing value for key from the trie.
 func (t *SecureTrie) Delete(key []byte) {
-	if err := t.TryDelete(key); err != nil && glog.V(logger.Error) {
-		glog.Errorf("Unhandled trie error: %v", err)
+	if err := t.TryDelete(key); err != nil {
+		logger.Error("Unhandled trie error: ", err)
 	}
 }
 

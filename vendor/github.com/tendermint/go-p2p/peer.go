@@ -114,7 +114,7 @@ func newPeerFromConnAndConfig(rawConn net.Conn, outbound bool, reactorsByCh map[
 
 	p.mconn = createMConnection(conn, p, reactorsByCh, chDescs, onPeerError, config.MConfig)
 
-	p.BaseService = *cmn.NewBaseService(log, "Peer", p)
+	p.BaseService = *cmn.NewBaseService(logger, "Peer", p)
 
 	return p, nil
 }
@@ -155,7 +155,7 @@ func (p *Peer) HandshakeTimeout(ourNodeInfo *NodeInfo, timeout time.Duration) er
 		func() {
 			var n int
 			wire.ReadBinary(peerNodeInfo, p.conn, maxNodeInfoSize, &n, &err2)
-			log.Notice("Peer handshake", "peerNodeInfo", peerNodeInfo)
+			logger.Info("Peer handshake", " peerNodeInfo:", peerNodeInfo)
 		})
 	if err1 != nil {
 		return errors.Wrap(err1, "Error during handshake/write")
@@ -278,10 +278,10 @@ func (p *Peer) Get(key string) interface{} {
 }
 
 func dial(addr *NetAddress, config *PeerConfig) (net.Conn, error) {
-	log.Info("Dialing address", "address", addr)
+	logger.Info("Dialing address:", addr)
 	conn, err := addr.DialTimeout(config.DialTimeout)
 	if err != nil {
-		log.Info("Failed dialing address", "address", addr, "error", err)
+		logger.Info("Failed dialing address:", addr, " error:", err)
 		return nil, err
 	}
 	return conn, nil

@@ -34,8 +34,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -278,10 +277,10 @@ func (tab *Table) lookup(targetID NodeID, refreshIfEmpty bool) []*Node {
 						// Bump the failure counter to detect and evacuate non-bonded entries
 						fails := tab.db.findFails(n.ID) + 1
 						tab.db.updateFindFails(n.ID, fails)
-						glog.V(logger.Detail).Infof("Bumping failures for %x: %d", n.ID[:8], fails)
+						logger.Debugf("Bumping failures for %x: %d", n.ID[:8], fails)
 
 						if fails >= maxFindnodeFailures {
-							glog.V(logger.Detail).Infof("Evacuating node %x: %d findnode failures", n.ID[:8], fails)
+							logger.Debugf("Evacuating node %x: %d findnode failures", n.ID[:8], fails)
 							tab.delete(n)
 						}
 					}
@@ -384,13 +383,13 @@ func (tab *Table) doRefresh(done chan struct{}) {
 	// (hopefully) still alive.
 	seeds := tab.db.querySeeds(seedCount, seedMaxAge)
 	seeds = tab.bondall(append(seeds, tab.nursery...))
-	if glog.V(logger.Debug) {
+	if logger.Level >= logrus.DebugLevel {
 		if len(seeds) == 0 {
-			glog.Infof("no seed nodes found")
+			logger.Debugf("no seed nodes found")
 		}
 		for _, n := range seeds {
 			age := time.Since(tab.db.lastPong(n.ID))
-			glog.Infof("seed node (age %v): %v", age, n)
+			logger.Debugf("seed node (age %v): %v", age, n)
 		}
 	}
 	tab.mutex.Lock()
@@ -470,7 +469,7 @@ func (tab *Table) bond(pinged bool, id NodeID, addr *net.UDPAddr, tcpPort uint16
 	var result error
 	age := time.Since(tab.db.lastPong(id))
 	if node == nil || fails > 0 || age > nodeDBNodeExpiration {
-		glog.V(logger.Detail).Infof("Bonding %x: known=%t, fails=%d age=%v", id[:8], node != nil, fails, age)
+		logger.Debugf("Bonding %x: known=%t, fails=%d age=%v", id[:8], node != nil, fails, age)
 
 		tab.bondmu.Lock()
 		w := tab.bonding[id]

@@ -9,7 +9,6 @@ import (
 
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
-	"github.com/tendermint/go-logger"
 )
 
 func init() {
@@ -109,7 +108,7 @@ func ResetConfig(localPath string) cfg.Config {
 
 	mapConfig.SetDefault("tx_index", "kv")
 
-	logger.SetLogLevel(mapConfig.GetString("log_level"))
+	//logger.SetLogLevel(mapConfig.GetString("log_level"))
 
 	return mapConfig
 }

@@ -30,8 +30,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 // Minimum amount of time between cache reloads. This limit applies if the platform does
@@ -210,8 +208,8 @@ func (ac *accountCache) close() {
 // Callers must hold ac.mu.
 func (ac *accountCache) reload() {
 	accounts, err := ac.scan()
-	if err != nil && glog.V(logger.Debug) {
-		glog.Errorf("can't load keys: %v", err)
+	if err != nil {
+		logger.Debugf("can't load keys: ", err)
 	}
 	ac.all = accounts
 	sort.Sort(ac.all)
@@ -225,7 +223,7 @@ func (ac *accountCache) reload() {
 	case ac.notify <- struct{}{}:
 	default:
 	}
-	glog.V(logger.Debug).Infof("reloaded keys, cache has %d accounts", len(ac.all))
+	logger.Debugf("reloaded keys, cache has %d accounts", len(ac.all))
 }
 
 func (ac *accountCache) scan() ([]accounts.Account, error) {
@@ -244,12 +242,12 @@ func (ac *accountCache) scan() ([]accounts.Account, error) {
 	for _, fi := range files {
 		path := filepath.Join(ac.keydir, fi.Name())
 		if skipKeyFile(fi) {
-			glog.V(logger.Detail).Infof("ignoring file %s", path)
+			logger.Debugf("ignoring file %s", path)
 			continue
 		}
 		fd, err := os.Open(path)
 		if err != nil {
-			glog.V(logger.Detail).Infoln(err)
+			logger.Debug(err)
 			continue
 		}
 		buf.Reset(fd)
@@ -259,9 +257,9 @@ func (ac *accountCache) scan() ([]accounts.Account, error) {
 		addr := common.HexToAddress(keyJSON.Address)
 		switch {
 		case err != nil:
-			glog.V(logger.Debug).Infof("can't decode key %s: %v", path, err)
+			logger.Debugf("can't decode key %s: %v", path, err)
 		case (addr == common.Address{}):
-			glog.V(logger.Debug).Infof("can't decode key %s: missing or zero address", path)
+			logger.Debugf("can't decode key %s: missing or zero address", path)
 		default:
 			addrs = append(addrs, accounts.Account{Address: addr, URL: accounts.URL{Scheme: KeyStoreScheme, Path: path}})
 		}

@@ -58,7 +58,7 @@ func NewBlockPool(start int, requestsCh chan<- BlockRequest, timeoutsCh chan<- s
 		requestsCh: requestsCh,
 		timeoutsCh: timeoutsCh,
 	}
-	bp.BaseService = *NewBaseService(log, "BlockPool", bp)
+	bp.BaseService = *NewBaseService(logger, "BlockPool", bp)
 	return bp
 }
 
@@ -106,7 +106,7 @@ func (pool *BlockPool) removeTimedoutPeers() {
 			// XXX remove curRate != 0
 			if curRate != 0 && curRate < minRecvRate {
 				pool.sendTimeout(peer.id)
-				log.Warn("SendTimeout", "peer", peer.id, "reason", "curRate too low")
+				logger.Warn("SendTimeout", " peer:", peer.id, " reason ", "curRate too low")
 				peer.didTimeout = true
 			}
 		}
@@ -132,7 +132,7 @@ func (pool *BlockPool) IsCaughtUp() bool {
 
 	// Need at least 1 peer to be considered caught up.
 	if len(pool.peers) == 0 {
-		log.Debug("Blockpool has no peers")
+		logger.Debug("Blockpool has no peers")
 		return false
 	}
 
@@ -142,7 +142,7 @@ func (pool *BlockPool) IsCaughtUp() bool {
 	}
 
 	isCaughtUp := (height > 0 || time.Now().Sub(pool.startTime) > 5*time.Second) && (maxPeerHeight == 0 || height >= maxPeerHeight)
-	log.Notice(Fmt("IsCaughtUp: %v", isCaughtUp), "height", height, "maxPeerHeight", maxPeerHeight)
+	logger.Info("IsCaughtUp: ", isCaughtUp, " height: ", height, " maxPeerHeight: ", maxPeerHeight)
 	return isCaughtUp
 }
 
@@ -202,10 +202,10 @@ func (pool *BlockPool) AddBlock(peerID string, block *types.Block, blockSize int
 	pool.mtx.Lock()
 	defer pool.mtx.Unlock()
 
-	log.Info("(pool *BlockPool) AddBlock 0")
+	logger.Info("(pool *BlockPool) AddBlock 0")
 	requester := pool.requesters[block.Height]
 	if requester == nil {
-		log.Info("(pool *BlockPool) AddBlock 1")
+		logger.Info("(pool *BlockPool) AddBlock 1")
 		return
 	}
 
@@ -213,10 +213,10 @@ func (pool *BlockPool) AddBlock(peerID string, block *types.Block, blockSize int
 		pool.numPending--
 		peer := pool.peers[peerID]
 		peer.decrPending(blockSize)
-		log.Info("(pool *BlockPool) AddBlock 2")
+		logger.Info("(pool *BlockPool) AddBlock 2")
 	} else {
 		// Bad peer?
-		log.Info("(pool *BlockPool) AddBlock 3")
+		logger.Info("(pool *BlockPool) AddBlock 3")
 	}
 }
 
@@ -381,7 +381,7 @@ func (peer *bpPeer) onTimeout() {
 	defer peer.pool.mtx.Unlock()
 
 	peer.pool.sendTimeout(peer.id)
-	log.Warn("SendTimeout", "peer", peer.id, "reason", "onTimeout")
+	logger.Warn("SendTimeout", " peer:", peer.id, " reason", " onTimeout")
 	peer.didTimeout = true
 }
 
@@ -471,7 +471,7 @@ OUTER_LOOP:
 			}
 			peer = bpr.pool.pickIncrAvailablePeer(bpr.height)
 			if peer == nil {
-				//log.Info("No peers available", "height", height)
+				//logger.Info("No peers available", "height", height)
 				time.Sleep(requestIntervalMS * time.Millisecond)
 				continue PICK_PEER_LOOP
 			}

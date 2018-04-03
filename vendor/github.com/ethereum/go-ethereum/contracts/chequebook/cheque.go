@@ -40,12 +40,12 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/chequebook/contract"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 	"golang.org/x/net/context"
 )
-
+var logger = plogger.GetLogger("ethereum")
 // TODO(zelig): watch peer solvency and notify of bouncing cheques
 // TODO(zelig): enable paying with cheque by signing off
 
@@ -140,7 +140,7 @@ func NewChequebook(path string, contractAddr common.Address, prvKey *ecdsa.Priva
 
 	if (contractAddr != common.Address{}) {
 		self.setBalanceFromBlockChain()
-		glog.V(logger.Detail).Infof("new chequebook initialised from %s (owner: %v, balance: %s)", contractAddr.Hex(), self.owner.Hex(), self.balance.String())
+		logger.Debugf("new chequebook initialised from %s (owner: %v, balance: %s)", contractAddr.Hex(), self.owner.Hex(), self.balance.String())
 	}
 	return
 }
@@ -148,7 +148,7 @@ func NewChequebook(path string, contractAddr common.Address, prvKey *ecdsa.Priva
 func (self *Chequebook) setBalanceFromBlockChain() {
 	balance, err := self.backend.BalanceAt(context.TODO(), self.contractAddr, nil)
 	if err != nil {
-		glog.V(logger.Error).Infof("can't get balance: %v", err)
+		logger.Errorf("can't get balance: %v", err)
 	} else {
 		self.balance.Set(balance)
 	}
@@ -172,7 +172,7 @@ func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend, chec
 		self.setBalanceFromBlockChain()
 	}
 
-	glog.V(logger.Detail).Infof("loaded chequebook (%s, owner: %v, balance: %v) initialised from %v", self.contractAddr.Hex(), self.owner.Hex(), self.balance, path)
+	logger.Debugf("loaded chequebook (%s, owner: %v, balance: %v) initialised from %v", self.contractAddr.Hex(), self.owner.Hex(), self.balance, path)
 
 	return
 }
@@ -227,7 +227,7 @@ func (self *Chequebook) Save() (err error) {
 	if err != nil {
 		return err
 	}
-	glog.V(logger.Detail).Infof("saving chequebook (%s) to %v", self.contractAddr.Hex(), self.path)
+	logger.Debugf("saving chequebook (%s) to %v", self.contractAddr.Hex(), self.path)
 
 	return ioutil.WriteFile(self.path, data, os.ModePerm)
 }
@@ -340,12 +340,12 @@ func (self *Chequebook) deposit(amount *big.Int) (string, error) {
 	chbookRaw := &contract.ChequebookRaw{Contract: self.contract}
 	tx, err := chbookRaw.Transfer(depositTransactor)
 	if err != nil {
-		glog.V(logger.Warn).Infof("error depositing %d wei to chequebook (%s, balance: %v, target: %v): %v", amount, self.contractAddr.Hex(), self.balance, self.buffer, err)
+		logger.Warnf("error depositing %d wei to chequebook (%s, balance: %v, target: %v): %v", amount, self.contractAddr.Hex(), self.balance, self.buffer, err)
 		return "", err
 	}
 	// assume that transaction is actually successful, we add the amount to balance right away
 	self.balance.Add(self.balance, amount)
-	glog.V(logger.Detail).Infof("deposited %d wei to chequebook (%s, balance: %v, target: %v)", amount, self.contractAddr.Hex(), self.balance, self.buffer)
+	logger.Debugf("deposited %d wei to chequebook (%s, balance: %v, target: %v)", amount, self.contractAddr.Hex(), self.balance, self.buffer)
 	return tx.Hash().Hex(), nil
 }
 
@@ -469,7 +469,7 @@ func NewInbox(prvKey *ecdsa.PrivateKey, contractAddr, beneficiary common.Address
 		session:     session,
 		cashed:      new(big.Int).Set(common.Big0),
 	}
-	glog.V(logger.Detail).Infof("initialised inbox (%s -> %s) expected signer: %x", self.contract.Hex(), self.beneficiary.Hex(), crypto.FromECDSAPub(signer))
+	logger.Debugf("initialised inbox (%s -> %s) expected signer: %x", self.contract.Hex(), self.beneficiary.Hex(), crypto.FromECDSAPub(signer))
 	return
 }
 
@@ -491,7 +491,7 @@ func (self *Inbox) Stop() {
 func (self *Inbox) Cash() (txhash string, err error) {
 	if self.cheque != nil {
 		txhash, err = self.cheque.Cash(self.session)
-		glog.V(logger.Detail).Infof("cashing cheque (total: %v) on chequebook (%s) sending to %v", self.cheque.Amount, self.contract.Hex(), self.beneficiary.Hex())
+		logger.Debugf("cashing cheque (total: %v) on chequebook (%s) sending to %v", self.cheque.Amount, self.contract.Hex(), self.beneficiary.Hex())
 		self.cashed = self.cheque.Amount
 	}
 	return
@@ -575,7 +575,7 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 				self.Cash()
 			}
 		}
-		glog.V(logger.Detail).Infof("received cheque of %v wei in inbox (%s, uncashed: %v)", amount, self.contract.Hex(), uncashed)
+		logger.Debugf("received cheque of %v wei in inbox (%s, uncashed: %v)", amount, self.contract.Hex(), uncashed)
 	}
 
 	return amount, err
@@ -583,7 +583,7 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 
 // Verify verifies cheque for signer, contract, beneficiary, amount, valid signature.
 func (self *Cheque) Verify(signerKey *ecdsa.PublicKey, contract, beneficiary common.Address, sum *big.Int) (*big.Int, error) {
-	glog.V(logger.Detail).Infof("verify cheque: %v - sum: %v", self, sum)
+	logger.Debugf("verify cheque: %v - sum: %v", self, sum)
 	if sum == nil {
 		return nil, fmt.Errorf("invalid amount")
 	}

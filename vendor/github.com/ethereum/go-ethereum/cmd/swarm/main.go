@@ -35,8 +35,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -44,7 +44,7 @@ import (
 	bzzapi "github.com/ethereum/go-ethereum/swarm/api"
 	"gopkg.in/urfave/cli.v1"
 )
-
+var logger = plogger.GetLogger("ethereum")
 const (
 	clientIdentifier = "swarm"
 	versionString    = "0.2"
@@ -278,7 +278,7 @@ func bzzd(ctx *cli.Context) error {
 		signal.Notify(sigc, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 		<-sigc
-		glog.V(logger.Info).Infoln("Got sigterm, shutting down...")
+		logger.Info("Got sigterm, shutting down...")
 		stack.Stop()
 	}()
 	networkId := ctx.GlobalUint64(SwarmNetworkIdFlag.Name)
@@ -343,7 +343,7 @@ func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	}
 	// Try to load the arg as a hex key file.
 	if key, err := crypto.LoadECDSA(keyid); err == nil {
-		glog.V(logger.Info).Infof("swarm account key loaded: %#x", crypto.PubkeyToAddress(key.PublicKey))
+		logger.Infof("swarm account key loaded: %#x", crypto.PubkeyToAddress(key.PublicKey))
 		return key
 	}
 	// Otherwise try getting it from the keystore.
@@ -400,7 +400,7 @@ func injectBootnodes(srv *p2p.Server, nodes []string) {
 	for _, url := range nodes {
 		n, err := discover.ParseNode(url)
 		if err != nil {
-			glog.Errorf("invalid bootnode %q", err)
+			logger.Errorf("invalid bootnode %q", err)
 			continue
 		}
 		srv.AddPeer(n)

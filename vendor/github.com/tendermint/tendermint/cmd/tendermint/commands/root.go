@@ -1,15 +1,15 @@
 package commands
 
 import (
+	"github.com/pchain/common/plogger"
 	"github.com/spf13/cobra"
 
-	"github.com/tendermint/go-logger"
 	tmcfg "github.com/tendermint/tendermint/config/tendermint"
 )
 
 var (
 	config = tmcfg.GetConfig("")
-	log    = logger.New("module", "main")
+	log    = plogger.GetLogger("main")
 )
 
 //global flag
@@ -21,7 +21,7 @@ var RootCmd = &cobra.Command{
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// set the log level in the config and logger
 		config.Set("log_level", logLevel)
-		logger.SetLogLevel(logLevel)
+		//logger.SetLogLevel(logLevel)
 	},
 }
 

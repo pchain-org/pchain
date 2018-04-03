@@ -22,10 +22,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/pchain/common/plogger"
 	"golang.org/x/net/context"
 )
+
+var logger = plogger.GetLogger("ethereum")
 
 // WaitMined waits for tx to be mined on the blockchain.
 // It stops waiting when the context is canceled.
@@ -39,9 +40,9 @@ func WaitMined(ctx context.Context, b DeployBackend, tx *types.Transaction) (*ty
 			return receipt, nil
 		}
 		if err != nil {
-			glog.V(logger.Detail).Infof("tx %x error: %v", loghash, err)
+			logger.Debugf("tx %x error: %v", loghash, err)
 		} else {
-			glog.V(logger.Detail).Infof("tx %x not yet mined...", loghash)
+			logger.Debugf("tx %x not yet mined...", loghash)
 		}
 		// Wait for the next round.
 		select {

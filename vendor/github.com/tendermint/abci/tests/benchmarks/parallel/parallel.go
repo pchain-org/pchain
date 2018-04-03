@@ -13,7 +13,7 @@ func main() {
 
 	conn, err := cmn.Connect("unix://test.sock")
 	if err != nil {
-		log.Fatal(err.Error())
+		logger.Fatal(err.Error())
 	}
 
 	// Read a bunch of responses
@@ -23,7 +23,7 @@ func main() {
 			var res = &types.Response{}
 			err := types.ReadMessage(conn, res)
 			if err != nil {
-				log.Fatal(err.Error())
+				logger.Fatal(err.Error())
 			}
 			counter++
 			if counter%1000 == 0 {
@@ -40,11 +40,11 @@ func main() {
 
 		err := types.WriteMessage(req, bufWriter)
 		if err != nil {
-			log.Fatal(err.Error())
+			logger.Fatal(err.Error())
 		}
 		err = bufWriter.Flush()
 		if err != nil {
-			log.Fatal(err.Error())
+			logger.Fatal(err.Error())
 		}
 
 		counter++

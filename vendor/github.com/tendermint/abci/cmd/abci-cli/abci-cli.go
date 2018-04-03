@@ -129,7 +129,7 @@ func main() {
 	app.Before = before
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Fatal(err.Error())
+		logger.Fatal(err.Error())
 	}
 
 }
@@ -139,7 +139,7 @@ func before(c *cli.Context) error {
 		var err error
 		client, err = abcicli.NewClient(c.GlobalString("address"), c.GlobalString("abci"), false)
 		if err != nil {
-			log.Fatal(err.Error())
+			logger.Fatal(err.Error())
 		}
 	}
 	return nil

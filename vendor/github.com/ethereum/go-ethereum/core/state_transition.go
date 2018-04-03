@@ -22,8 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -89,7 +88,7 @@ func IntrinsicGas(data []byte, contractCreation, homestead bool) *big.Int {
 	} else {
 		igas.Set(params.TxGas)
 	}
-	glog.Infof("IntrinsicGas() 0, igas is %v, len(data) is %v\n", igas, len(data))
+	logger.Infof("IntrinsicGas() 0, igas is %v, len(data) is %v\n", igas, len(data))
 	if len(data) > 0 {
 		var nz int64
 		for _, byt := range data {
@@ -100,16 +99,16 @@ func IntrinsicGas(data []byte, contractCreation, homestead bool) *big.Int {
 		m := big.NewInt(nz)
 		m.Mul(m, params.TxDataNonZeroGas)
 		igas.Add(igas, m)
-		glog.Infof("IntrinsicGas() 1, nz is %v, params.TxDataNonZeroGas is %v, igas is %v\n",
+		logger.Infof("IntrinsicGas() 1, nz is %v, params.TxDataNonZeroGas is %v, igas is %v\n",
 			nz, params.TxDataNonZeroGas, igas)
 		m.SetInt64(int64(len(data)) - nz)
 		m.Mul(m, params.TxDataZeroGas)
 		igas.Add(igas, m)
-		glog.Infof("IntrinsicGas() 2, len(data) - nz is %v, params.TxDataZeroGas is %v, igas is %v\n",
-			int64(len(data)) - nz, params.TxDataZeroGas, igas)
+		logger.Infof("IntrinsicGas() 2, len(data) - nz is %v, params.TxDataZeroGas is %v, igas is %v\n",
+			int64(len(data))-nz, params.TxDataZeroGas, igas)
 	}
 
-	glog.Infof("IntrinsicGas() 3, igas is %v\n", igas)
+	logger.Infof("IntrinsicGas() 3, igas is %v\n", igas)
 	return igas
 }
 
@@ -139,7 +138,7 @@ func ApplyMessage(env *vm.EVM, msg Message, gp *GasPool) ([]byte, *big.Int, erro
 	st := NewStateTransition(env, msg, gp)
 
 	ret, _, gasUsed, err := st.TransitionDb()
-	glog.Infof("ApplyMessage() 0, gasUsed is %v\n", gasUsed)
+	logger.Infof("ApplyMessage() 0, gasUsed is %v\n", gasUsed)
 	return ret, gasUsed, err
 }
 
@@ -154,7 +153,7 @@ func ApplyMessageEx(env *vm.EVM, msg Message, gp *GasPool) ([]byte, *big.Int, *b
 	st := NewStateTransition(env, msg, gp)
 
 	ret, _, gasUsed, moneyUsed, err := st.TransitionDbEx()
-	glog.Infof("ApplyMessageEx(), gasUsed is %v, moneyUsed is %v\n", gasUsed, moneyUsed)
+	logger.Infof("ApplyMessageEx(), gasUsed is %v, moneyUsed is %v\n", gasUsed, moneyUsed)
 	return ret, gasUsed, moneyUsed, err
 }
 
@@ -183,12 +182,12 @@ func (self *StateTransition) to() vm.Account {
 
 func (self *StateTransition) useGas(amount *big.Int) error {
 
-	glog.Infof("useGas() 0, self.gas is %v, amount is %v\n", self.gas, amount)
+	logger.Infof("useGas() 0, self.gas is %v, amount is %v\n", self.gas, amount)
 	if self.gas.Cmp(amount) < 0 {
 		return vm.ErrOutOfGas
 	}
 	self.gas.Sub(self.gas, amount)
-	glog.Infof("useGas() 1, self.gas is %v\n", self.gas)
+	logger.Infof("useGas() 1, self.gas is %v\n", self.gas)
 	return nil
 }
 
@@ -205,10 +204,10 @@ func (self *StateTransition) buyGas() error {
 		return fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", sender.Address().Bytes()[:4], mgval, sender.Balance())
 	}
 	fmt.Printf("(self *StateTransition) buyGas(); sender is: %x, req: %v, has %v, gp is %v\n",
-			sender.Address().Bytes(), mgval, sender.Balance(), self.gp)
+		sender.Address().Bytes(), mgval, sender.Balance(), self.gp)
 	//debug.PrintStack()
 	if err := self.gp.SubGas(mgas); err != nil {
-	 	return err
+		return err
 	}
 	self.addGas(mgas)
 	self.initialGas.Set(mgas)
@@ -241,7 +240,7 @@ func (self *StateTransition) PreCheck() (err error) {
 // TransitionDb will move the state by applying the message against the given environment.
 func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *big.Int, err error) {
 
-	glog.Infof("TransitionDb(), before PreCheck\n")
+	logger.Infof("TransitionDb(), before PreCheck\n")
 
 	if err = self.PreCheck(); err != nil {
 		return
@@ -255,11 +254,11 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 	homestead := self.env.ChainConfig().IsHomestead(self.env.BlockNumber)
 	contractCreation := MessageCreatesContract(msg)
 	// Pay intrinsic gas
-	glog.Infof("TransitionDb() 0, requiredGas is %v\n", requiredGas)
+	logger.Infof("TransitionDb() 0, requiredGas is %v\n", requiredGas)
 	if err = self.useGas(IntrinsicGas(self.data, contractCreation, homestead)); err != nil {
 		return nil, nil, nil, InvalidTxError(err)
 	}
-	glog.Infof("TransitionDb() 1, self.gasUsed() is %v\n", self.gasUsed())
+	logger.Infof("TransitionDb() 1, self.gasUsed() is %v\n", self.gasUsed())
 	var (
 		vmenv = self.env
 		// vm errors do not effect consensus and are therefor
@@ -270,14 +269,14 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 
 	if contractCreation {
 		ret, _, vmerr = vmenv.Create(sender, self.data, self.gas, self.value)
-		glog.Infof("TransitionDb() 2, self.gasUsed() is %v\n", self.gasUsed())
+		logger.Infof("TransitionDb() 2, self.gasUsed() is %v\n", self.gasUsed())
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), self.state.GetNonce(sender.Address())+1)
-		ret, vmerr = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value, self.msg.Type())
+		ret, vmerr = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value)
 	}
 	if vmerr != nil {
-		glog.V(logger.Core).Infoln("vm returned with error:", err)
+		 logger.Error("vm returned with error:", err)
 		// The only possible consensus-error would be if there wasn't
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.
@@ -285,21 +284,21 @@ func (self *StateTransition) TransitionDb() (ret []byte, requiredGas, usedGas *b
 			return nil, nil, nil, InvalidTxError(vmerr)
 		}
 	}
-	glog.Infof("TransitionDb() 3, self.gasUsed() is %v\n", self.gasUsed())
+	logger.Infof("TransitionDb() 3, self.gasUsed() is %v\n", self.gasUsed())
 	requiredGas = new(big.Int).Set(self.gasUsed())
-	glog.Infof("TransitionDb() 4, requiredGas is %v, self.gasUsed() is %v\n", requiredGas, self.gasUsed())
+	logger.Infof("TransitionDb() 4, requiredGas is %v, self.gasUsed() is %v\n", requiredGas, self.gasUsed())
 
 	self.refundGas()
 	self.state.AddBalance(self.env.Coinbase, new(big.Int).Mul(self.gasUsed(), self.gasPrice))
 
-	glog.Infof("TransitionDb() 5, requiredGas is %v, self.gasUsed() is %v\n", requiredGas, self.gasUsed())
+	logger.Infof("TransitionDb() 5, requiredGas is %v, self.gasUsed() is %v\n", requiredGas, self.gasUsed())
 	return ret, requiredGas, self.gasUsed(), err
 }
 
 // TransitionDbEx will move the state by applying the message against the given environment.
 func (self *StateTransition) TransitionDbEx() (ret []byte, requiredGas, usedGas *big.Int, usedMoney *big.Int, err error) {
 
-	glog.Infof("TransitionDbEx(), before PreCheck\n")
+	logger.Infof("TransitionDbEx(), before PreCheck\n")
 
 	if err = self.PreCheck(); err != nil {
 		return
@@ -313,11 +312,11 @@ func (self *StateTransition) TransitionDbEx() (ret []byte, requiredGas, usedGas 
 	homestead := self.env.ChainConfig().IsHomestead(self.env.BlockNumber)
 	contractCreation := MessageCreatesContract(msg)
 	// Pay intrinsic gas
-	glog.Infof("TransitionDbEx() 0, requiredGas is %v\n", requiredGas)
+	logger.Infof("TransitionDbEx() 0, requiredGas is %v\n", requiredGas)
 	if err = self.useGas(IntrinsicGas(self.data, contractCreation, homestead)); err != nil {
 		return nil, nil, nil, nil, InvalidTxError(err)
 	}
-	glog.Infof("TransitionDbEx() 1, self.gasUsed() is %v\n", self.gasUsed())
+	logger.Infof("TransitionDbEx() 1, self.gasUsed() is %v\n", self.gasUsed())
 	var (
 		vmenv = self.env
 		// vm errors do not effect consensus and are therefor
@@ -328,14 +327,14 @@ func (self *StateTransition) TransitionDbEx() (ret []byte, requiredGas, usedGas 
 
 	if contractCreation {
 		ret, _, vmerr = vmenv.Create(sender, self.data, self.gas, self.value)
-		glog.Infof("TransitionDbEx() 2, self.gasUsed() is %v\n", self.gasUsed())
+		logger.Infof("TransitionDbEx() 2, self.gasUsed() is %v\n", self.gasUsed())
 	} else {
 		// Increment the nonce for the next transaction
 		self.state.SetNonce(sender.Address(), self.state.GetNonce(sender.Address())+1)
-		ret, vmerr = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value, self.msg.Type())
+		ret, vmerr = vmenv.Call(sender, self.to().Address(), self.data, self.gas, self.value)
 	}
 	if vmerr != nil {
-		glog.V(logger.Core).Infoln("vm returned with error:", err)
+		 logger.Error("vm returned with error:", err)
 		// The only possible consensus-error would be if there wasn't
 		// sufficient balance to make the transfer happen. The first
 		// balance transfer may never fail.
@@ -343,14 +342,14 @@ func (self *StateTransition) TransitionDbEx() (ret []byte, requiredGas, usedGas 
 			return nil, nil, nil, nil, InvalidTxError(vmerr)
 		}
 	}
-	glog.Infof("TransitionDbEx() 3, self.gasUsed() is %v\n", self.gasUsed())
+	logger.Infof("TransitionDbEx() 3, self.gasUsed() is %v\n", self.gasUsed())
 	requiredGas = new(big.Int).Set(self.gasUsed())
-	glog.Infof("TransitionDbEx() 4, requiredGas is %v, self.gasUsed() is %v\n", requiredGas, self.gasUsed())
+	logger.Infof("TransitionDbEx() 4, requiredGas is %v, self.gasUsed() is %v\n", requiredGas, self.gasUsed())
 
 	self.refundGas()
 	//self.state.AddBalance(self.env.Coinbase, new(big.Int).Mul(self.gasUsed(), self.gasPrice))
 	usedMoney = new(big.Int).Mul(self.gasUsed(), self.gasPrice)
-	glog.Infof("TransitionDbEx() 5, requiredGas is %v, self.gasUsed() is %v, usedMoney is %v\n", requiredGas, self.gasUsed(), usedMoney)
+	logger.Infof("TransitionDbEx() 5, requiredGas is %v, self.gasUsed() is %v, usedMoney is %v\n", requiredGas, self.gasUsed(), usedMoney)
 	return ret, requiredGas, self.gasUsed(), usedMoney, err
 }
 

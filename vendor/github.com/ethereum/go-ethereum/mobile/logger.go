@@ -17,9 +17,9 @@
 package geth
 
 import (
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/pchain/common/plogger"
 )
-
+var logger = plogger.GetLogger("ethereum")
 // SetVerbosity sets the global verbosity level (between 0 and 6 - see logger/verbosity.go).
 func SetVerbosity(level int) {
 	glog.SetV(level)

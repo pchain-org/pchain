@@ -1,7 +1,5 @@
 package rpcserver
 
-import (
-	"github.com/tendermint/log15"
-)
+import "github.com/pchain/common/plogger"
 
-var log = log15.New("module", "rpcserver")
+var logger = plogger.GetLogger("rpcserver")

@@ -33,7 +33,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
@@ -112,7 +111,7 @@ func (h *HandlerT) StartCPUProfile(file string) error {
 	}
 	h.cpuW = f
 	h.cpuFile = file
-	glog.V(logger.Info).Infoln("CPU profiling started, writing to", h.cpuFile)
+	logger.Info("CPU profiling started, writing to", h.cpuFile)
 	return nil
 }
 
@@ -124,7 +123,7 @@ func (h *HandlerT) StopCPUProfile() error {
 	if h.cpuW == nil {
 		return errors.New("CPU profiling not in progress")
 	}
-	glog.V(logger.Info).Infoln("done writing CPU profile to", h.cpuFile)
+	logger.Info("done writing CPU profile to", h.cpuFile)
 	h.cpuW.Close()
 	h.cpuW = nil
 	h.cpuFile = ""
@@ -180,7 +179,7 @@ func (*HandlerT) Stacks() string {
 
 func writeProfile(name, file string) error {
 	p := pprof.Lookup(name)
-	glog.V(logger.Info).Infof("writing %d %s profile records to %s", p.Count(), name, file)
+	logger.Infof("writing %d %s profile records to %s", p.Count(), name, file)
 	f, err := os.Create(expandHome(file))
 	if err != nil {
 		return err

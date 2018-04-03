@@ -24,10 +24,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 )
-
+var logger = plogger.GetLogger("ethereum")
 type brokenLimitedReader struct {
 	lr    io.Reader
 	errAt int
@@ -92,14 +92,14 @@ func testStore(m ChunkStore, l int64, branches int64, t *testing.T) {
 			go func(chunk *Chunk) {
 				storedChunk, err := m.Get(chunk.Key)
 				if err == notFound {
-					glog.V(logger.Detail).Infof("chunk '%v' not found", chunk.Key.Log())
+					logger.Debugf("chunk '%v' not found", chunk.Key.Log())
 				} else if err != nil {
-					glog.V(logger.Detail).Infof("error retrieving chunk %v: %v", chunk.Key.Log(), err)
+					logger.Debugf("error retrieving chunk %v: %v", chunk.Key.Log(), err)
 				} else {
 					chunk.SData = storedChunk.SData
 					chunk.Size = storedChunk.Size
 				}
-				glog.V(logger.Detail).Infof("chunk '%v' not found", chunk.Key.Log())
+				logger.Debugf("chunk '%v' not found", chunk.Key.Log())
 				close(chunk.C)
 			}(ch)
 		}

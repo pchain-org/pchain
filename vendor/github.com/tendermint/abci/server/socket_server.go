@@ -94,15 +94,15 @@ func (s *SocketServer) acceptConnectionsRoutine() {
 		// semaphore <- struct{}{}
 
 		// Accept a connection
-		log.Notice("Waiting for new connection...")
+		logger.Info("Waiting for new connection...")
 		conn, err := s.listener.Accept()
 		if err != nil {
 			if !s.IsRunning() {
 				return // Ignore error from listener closing.
 			}
-			log.Crit("Failed to accept connection: " + err.Error())
+			logger.Fatal("Failed to accept connection: ", err.Error())
 		} else {
-			log.Notice("Accepted a new connection")
+			logger.Info("Accepted a new connection")
 		}
 
 		connID := s.addConn(conn)
@@ -119,18 +119,18 @@ func (s *SocketServer) acceptConnectionsRoutine() {
 			// Wait until signal to close connection
 			errClose := <-closeConn
 			if err == io.EOF {
-				log.Warn("Connection was closed by client")
+				logger.Warn("Connection was closed by client")
 			} else if errClose != nil {
-				log.Warn("Connection error", "error", errClose)
+				logger.Warn("Connection error", " error:", errClose)
 			} else {
 				// never happens
-				log.Warn("Connection was closed.")
+				logger.Warn("Connection was closed.")
 			}
 
 			// Close the connection
 			err := s.rmConn(connID, conn)
 			if err != nil {
-				log.Warn("Error in closing connection", "error", err)
+				logger.Warn("Error in closing connection", " error:", err)
 			}
 
 			// <-semaphore

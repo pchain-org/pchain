@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/pow"
 	"gopkg.in/fatih/set.v0"
@@ -169,7 +168,7 @@ func (v *BlockValidator) VerifyUncles(block, parent *types.Block) error {
 			for h := range ancestors {
 				branch += fmt.Sprintf("  O - %x\n  |\n", h)
 			}
-			glog.Infoln(branch)
+			logger.Info(branch)
 			return UncleError("uncle[%d](%x) is ancestor", i, hash[:4])
 		}
 

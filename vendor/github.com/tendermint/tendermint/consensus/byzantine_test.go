@@ -118,7 +118,7 @@ func TestByzantine(t *testing.T) {
 	case <-eventChans[ind2]:
 	}
 
-	log.Notice("A block has been committed. Healing partition")
+	logger.Info("A block has been committed. Healing partition")
 
 	// connect the partitions
 	p2p.Connect2Switches(switches, ind0, ind1)
@@ -177,7 +177,7 @@ func byzantineDecideProposalFunc(height, round int, cs *ConsensusState, sw *p2p.
 
 	// broadcast conflicting proposals/block parts to peers
 	peers := sw.Peers().List()
-	log.Notice("Byzantine: broadcasting conflicting proposals", "peers", len(peers))
+	logger.Info("Byzantine: broadcasting conflicting proposals", " peers:", len(peers))
 	for i, peer := range peers {
 		if i < len(peers)/2 {
 			go sendProposalAndParts(height, round, cs, peer, proposal1, block1Hash, blockParts1)

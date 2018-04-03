@@ -1,14 +1,14 @@
 package mempool
 
 import (
-	"github.com/tendermint/go-logger"
+	"github.com/pchain/common/plogger"
 )
 
-var log = logger.New("module", "mempool")
+var logger = plogger.GetLogger("mempool")
 
 /*
 func init() {
-	log.SetHandler(
+	logger.SetHandler(
 		logger.LvlFilterHandler(
 			logger.LvlDebug,
 			logger.BypassHandler(),

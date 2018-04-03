@@ -22,8 +22,6 @@ import (
 	"runtime"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"golang.org/x/net/context"
 	"gopkg.in/fatih/set.v0"
 )
@@ -147,19 +145,19 @@ func hasOption(option CodecOption, options []CodecOption) bool {
 // an EOF). It executes requests in parallel when singleShot is false.
 func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecOption) error {
 
-	//glog.V(logger.Info).Infof("(s *Server) serveRequest start\n")
+	//logger.Infof("(s *Server) serveRequest start\n")
 	defer func() {
 		if err := recover(); err != nil {
 			const size = 64 << 10
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
-			glog.Errorln(string(buf))
+			logger.Error(string(buf))
 		}
 
 		s.codecsMu.Lock()
 		s.codecs.Remove(codec)
 		s.codecsMu.Unlock()
-		//glog.V(logger.Info).Infof("(s *Server) serveRequest end 2")
+		//logger.Infof("(s *Server) serveRequest end 2")
 		return
 	}()
 
@@ -184,7 +182,7 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 	for atomic.LoadInt32(&s.run) == 1 {
 		reqs, batch, err := s.readRequest(codec)
 		if err != nil {
-			glog.V(logger.Debug).Infof("read error %v\n", err)
+			logger.Debugf("read error %v\n", err)
 			codec.Write(codec.CreateErrorResponse(nil, err))
 			return nil
 		}
@@ -217,7 +215,7 @@ func (s *Server) serveRequest(codec ServerCodec, singleShot bool, options CodecO
 			go s.exec(ctx, codec, reqs[0])
 		}
 	}
-	//glog.V(logger.Info).Infof("(s *Server) serveRequest end 0")
+	//logger.Infof("(s *Server) serveRequest end 0")
 	return nil
 }
 
@@ -240,7 +238,7 @@ func (s *Server) ServeSingleRequest(codec ServerCodec, options CodecOption) {
 // close all codecs which will cancel pending requests/subscriptions.
 func (s *Server) Stop() {
 	if atomic.CompareAndSwapInt32(&s.run, 1, 0) {
-		glog.V(logger.Debug).Infoln("RPC Server shutdown initiatied")
+		logger.Debugf("RPC Server shutdown initiatied")
 		s.codecsMu.Lock()
 		defer s.codecsMu.Unlock()
 		s.codecs.Each(func(c interface{}) bool {
@@ -345,7 +343,7 @@ func (s *Server) exec(ctx context.Context, codec ServerCodec, req *serverRequest
 	}
 
 	if err := codec.Write(response); err != nil {
-		glog.V(logger.Error).Infof("%v\n", err)
+		logger.Errorf("%v\n", err)
 		codec.Close()
 	}
 
@@ -372,7 +370,7 @@ func (s *Server) execBatch(ctx context.Context, codec ServerCodec, requests []*s
 	}
 
 	if err := codec.Write(responses); err != nil {
-		glog.V(logger.Error).Infof("%v\n", err)
+		logger.Errorf("%v\n", err)
 		codec.Close()
 	}
 
@@ -452,10 +450,10 @@ func (s *Server) readRequest(codec ServerCodec) ([]*serverRequest, bool, Error) 
 		requests[i] = &serverRequest{id: r.id, err: &methodNotFoundError{r.service, r.method}}
 	}
 	/*
-	for _, req := range requests {
-		fmt.Printf("(s *Server) readRequest(), received request: %s, %v, %v\n",
-			req.svcname, req.callb, req.args)
-	}
+		for _, req := range requests {
+			fmt.Printf("(s *Server) readRequest(), received request: %s, %v, %v\n",
+				req.svcname, req.callb, req.args)
+		}
 	*/
 	return requests, batch, nil
 }

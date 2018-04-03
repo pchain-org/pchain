@@ -40,8 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -188,7 +187,7 @@ func New(ctx *node.ServiceContext, config *Config, pending miner.Pending, client
 		return nil, err
 	}
 
-	glog.V(logger.Info).Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)
+	logger.Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
 		bcVersion := core.GetBlockChainVersion(chainDb)
@@ -206,7 +205,7 @@ func New(ctx *node.ServiceContext, config *Config, pending miner.Pending, client
 		if err != nil {
 			return nil, err
 		}
-		glog.V(logger.Info).Infoln("WARNING: Wrote default ethereum genesis block")
+		logger.Info("WARNING: Wrote default ethereum genesis block")
 	}
 
 	if config.ChainConfig == nil {
@@ -216,7 +215,7 @@ func New(ctx *node.ServiceContext, config *Config, pending miner.Pending, client
 
 	eth.chainConfig = config.ChainConfig
 
-	glog.V(logger.Info).Infoln("Chain config:", eth.chainConfig)
+	logger.Info("Chain config:", eth.chainConfig)
 
 	eth.blockchain, err = core.NewBlockChain(chainDb, eth.chainConfig, eth.pow, eth.EventMux(), vm.Config{EnablePreimageRecording: config.EnablePreimageRecording})
 	if err != nil {
@@ -285,7 +284,7 @@ func SetupGenesisBlock(chainDb *ethdb.Database, config *Config) error {
 		if err != nil {
 			return err
 		}
-		glog.V(logger.Info).Infof("Successfully wrote custom genesis block: %x", block.Hash())
+		logger.Infof("Successfully wrote custom genesis block: %x", block.Hash())
 	}
 	// Load up a test setup if directly injected
 	if config.TestGenesisState != nil {
@@ -304,13 +303,13 @@ func SetupGenesisBlock(chainDb *ethdb.Database, config *Config) error {
 func CreatePoW(config *Config) (pow.PoW, error) {
 	switch {
 	case config.PowFake:
-		glog.V(logger.Info).Infof("ethash used in fake mode")
+		logger.Infof("ethash used in fake mode")
 		return pow.PoW(core.FakePow{}), nil
 	case config.PowTest:
-		glog.V(logger.Info).Infof("ethash used in test mode")
+		logger.Infof("ethash used in test mode")
 		return ethash.NewForTesting()
 	case config.PowShared:
-		glog.V(logger.Info).Infof("ethash used in shared mode")
+		logger.Infof("ethash used in shared mode")
 		return ethash.NewShared(), nil
 	default:
 		return ethash.New(), nil
@@ -394,7 +393,7 @@ func (s *Ethereum) StartMining(threads int) error {
 	eb, err := s.Etherbase()
 	if err != nil {
 		err = fmt.Errorf("Cannot start mining without etherbase address: %v", err)
-		glog.V(logger.Error).Infoln(err)
+		logger.Error(err)
 		return err
 	}
 	go s.miner.Start(eb, threads)
@@ -484,14 +483,14 @@ func (self *Ethereum) StartAutoDAG() {
 		return // already started
 	}
 	go func() {
-		glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG ON (ethash dir: %s)", ethash.DefaultDir)
+		logger.Infof("Automatic pregeneration of ethash DAG ON (ethash dir: %s)", ethash.DefaultDir)
 		var nextEpoch uint64
 		timer := time.After(0)
 		self.autodagquit = make(chan bool)
 		for {
 			select {
 			case <-timer:
-				glog.V(logger.Info).Infof("checking DAG (ethash dir: %s)", ethash.DefaultDir)
+				logger.Infof("checking DAG (ethash dir: %s)", ethash.DefaultDir)
 				currentBlock := self.BlockChain().CurrentBlock().NumberU64()
 				thisEpoch := currentBlock / epochLength
 				if nextEpoch <= thisEpoch {
@@ -500,19 +499,19 @@ func (self *Ethereum) StartAutoDAG() {
 							previousDag, previousDagFull := dagFiles(thisEpoch - 1)
 							os.Remove(filepath.Join(ethash.DefaultDir, previousDag))
 							os.Remove(filepath.Join(ethash.DefaultDir, previousDagFull))
-							glog.V(logger.Info).Infof("removed DAG for epoch %d (%s)", thisEpoch-1, previousDag)
+							logger.Infof("removed DAG for epoch %d (%s)", thisEpoch-1, previousDag)
 						}
 						nextEpoch = thisEpoch + 1
 						dag, _ := dagFiles(nextEpoch)
 						if _, err := os.Stat(dag); os.IsNotExist(err) {
-							glog.V(logger.Info).Infof("Pregenerating DAG for epoch %d (%s)", nextEpoch, dag)
+							logger.Infof("Pregenerating DAG for epoch %d (%s)", nextEpoch, dag)
 							err := ethash.MakeDAG(nextEpoch*epochLength, "") // "" -> ethash.DefaultDir
 							if err != nil {
-								glog.V(logger.Error).Infof("Error generating DAG for epoch %d (%s)", nextEpoch, dag)
+								logger.Errorf("Error generating DAG for epoch %d (%s)", nextEpoch, dag)
 								return
 							}
 						} else {
-							glog.V(logger.Error).Infof("DAG for epoch %d (%s)", nextEpoch, dag)
+							logger.Errorf("DAG for epoch %d (%s)", nextEpoch, dag)
 						}
 					}
 				}
@@ -530,7 +529,7 @@ func (self *Ethereum) StopAutoDAG() {
 		close(self.autodagquit)
 		self.autodagquit = nil
 	}
-	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
+	logger.Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
 }
 
 // dagFiles(epoch) returns the two alternative DAG filenames (not a path)

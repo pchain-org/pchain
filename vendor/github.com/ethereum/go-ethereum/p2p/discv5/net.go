@@ -28,11 +28,10 @@ import (
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -437,10 +436,10 @@ loop:
 			if err := net.handle(n, pkt.ev, &pkt); err != nil {
 				status = err.Error()
 			}
-			if glog.V(logger.Detail) {
-				glog.Infof("<<< (%d) %v from %x@%v: %v -> %v (%v)",
-					net.tab.count, pkt.ev, pkt.remoteID[:8], pkt.remoteAddr, prestate, n.state, status)
-			}
+
+			logger.Debugf("<<< (%d) %v from %x@%v: %v -> %v (%v)",
+				net.tab.count, pkt.ev, pkt.remoteID[:8], pkt.remoteAddr, prestate, n.state, status)
+
 			// TODO: persist state if n.state goes >= known, delete if it goes <= known
 
 		// State transition timeouts.
@@ -456,10 +455,9 @@ loop:
 			if err := net.handle(timeout.node, timeout.ev, nil); err != nil {
 				status = err.Error()
 			}
-			if glog.V(logger.Detail) {
-				glog.Infof("--- (%d) %v for %x@%v: %v -> %v (%v)",
-					net.tab.count, timeout.ev, timeout.node.ID[:8], timeout.node.addr(), prestate, timeout.node.state, status)
-			}
+
+			logger.Debugf("--- (%d) %v for %x@%v: %v -> %v (%v)",
+				net.tab.count, timeout.ev, timeout.node.ID[:8], timeout.node.addr(), prestate, timeout.node.state, status)
 
 		// Querying.
 		case q := <-net.queryReq:
@@ -655,7 +653,7 @@ loop:
 	}
 	debugLog("loop stopped")
 
-	glog.V(logger.Debug).Infof("shutting down")
+	logger.Debugf("shutting down")
 	if net.conn != nil {
 		net.conn.Close()
 	}
@@ -685,19 +683,19 @@ func (net *Network) refresh(done chan<- struct{}) {
 		seeds = net.nursery
 	}
 	if len(seeds) == 0 {
-		glog.V(logger.Detail).Info("no seed nodes found")
+		logger.Debugf("no seed nodes found")
 		close(done)
 		return
 	}
 	for _, n := range seeds {
-		if glog.V(logger.Debug) {
+		if logger.Level >= logrus.DebugLevel {
 			var age string
 			if net.db != nil {
 				age = time.Since(net.db.lastPong(n.ID)).String()
 			} else {
 				age = "unknown"
 			}
-			glog.Infof("seed node (age %s): %v", age, n)
+			logger.Debugf("seed node (age %s): %v", age, n)
 		}
 		n = net.internNodeFromDB(n)
 		if n.state == unknown {
@@ -1254,7 +1252,7 @@ func (net *Network) handleNeighboursPacket(n *Node, pkt *ingressPacket) error {
 	for i, rn := range req.Nodes {
 		nn, err := net.internNodeFromNeighbours(pkt.remoteAddr, rn)
 		if err != nil {
-			glog.V(logger.Debug).Infof("invalid neighbour (%v) from %x@%v: %v", rn.IP, n.ID[:8], pkt.remoteAddr, err)
+			logger.Debugf("invalid neighbour (%v) from %x@%v: %v", rn.IP, n.ID[:8], pkt.remoteAddr, err)
 			continue
 		}
 		nodes[i] = nn

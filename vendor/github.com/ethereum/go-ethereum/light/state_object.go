@@ -23,8 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/net/context"
 )
@@ -111,9 +109,7 @@ func (self *StateObject) MarkForDeletion() {
 	self.remove = true
 	self.dirty = true
 
-	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
-	}
+	logger.Errorf("%x: #%d %v X\n", self.Address(), self.nonce, self.balance)
 }
 
 // getAddr gets the storage value at the given address from the trie
@@ -160,18 +156,14 @@ func (self *StateObject) SetState(k, value common.Hash) {
 func (c *StateObject) AddBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Add(c.balance, amount))
 
-	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.balance, amount)
-	}
+	logger.Errorf("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.balance, amount)
 }
 
 // SubBalance subtracts the given amount from the account balance
 func (c *StateObject) SubBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Sub(c.balance, amount))
 
-	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.balance, amount)
-	}
+	logger.Errorf("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.balance, amount)
 }
 
 // SetBalance sets the account balance to the given amount
@@ -184,18 +176,16 @@ func (c *StateObject) SetBalance(amount *big.Int) {
 func (c *StateObject) AddLockedBalance(amount *big.Int) {
 	c.SetLockedBalance(new(big.Int).Add(c.lockedbalance, amount))
 
-	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.lockedbalance, amount)
-	}
+	logger.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.nonce, c.lockedbalance, amount)
+
 }
 
 // SubLockedBalance subtracts the given amount from the locked account balance
 func (c *StateObject) SubLockedBalance(amount *big.Int) {
 	c.SetLockedBalance(new(big.Int).Sub(c.lockedbalance, amount))
 
-	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.lockedbalance, amount)
-	}
+	logger.Infof("%x: #%d %v (- %v)\n", c.Address(), c.nonce, c.lockedbalance, amount)
+
 }
 
 // SetLockedBalance sets the account balance to the given amount

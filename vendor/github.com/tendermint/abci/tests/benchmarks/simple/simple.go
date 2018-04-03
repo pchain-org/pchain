@@ -15,7 +15,7 @@ func main() {
 
 	conn, err := cmn.Connect("unix://test.sock")
 	if err != nil {
-		log.Fatal(err.Error())
+		logger.Fatal(err.Error())
 	}
 
 	// Make a bunch of requests
@@ -24,7 +24,7 @@ func main() {
 		req := types.ToRequestEcho("foobar")
 		_, err := makeRequest(conn, req)
 		if err != nil {
-			log.Fatal(err.Error())
+			logger.Fatal(err.Error())
 		}
 		counter++
 		if counter%1000 == 0 {

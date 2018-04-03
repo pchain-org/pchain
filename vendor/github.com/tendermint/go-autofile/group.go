@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pchain/common/plogger"
 	. "github.com/tendermint/go-common"
 )
 
@@ -51,6 +51,8 @@ const groupCheckDuration = 5000 * time.Millisecond
 const defaultHeadSizeLimit = 10 * 1024 * 1024        // 10MB
 const defaultTotalSizeLimit = 1 * 1024 * 1024 * 1024 // 1GB
 const maxFilesToRemove = 4                           // needs to be greater than 1
+
+var logger = plogger.GetLogger("group")
 
 type Group struct {
 	BaseService
@@ -202,18 +204,18 @@ func (g *Group) checkTotalSizeLimit() {
 		}
 		if index == gInfo.MaxIndex {
 			// Special degenerate case, just do nothing.
-			log.Println("WARNING: Group's head " + g.Head.Path + "may grow without bound")
+			logger.Debug("WARNING: Group's head ", g.Head.Path, " may grow without bound")
 			return
 		}
 		pathToRemove := filePathForIndex(g.Head.Path, index, gInfo.MaxIndex)
 		fileInfo, err := os.Stat(pathToRemove)
 		if err != nil {
-			log.Println("WARNING: Failed to fetch info for file @" + pathToRemove)
+			logger.Println("WARNING: Failed to fetch info for file @" + pathToRemove)
 			continue
 		}
 		err = os.Remove(pathToRemove)
 		if err != nil {
-			log.Println(err)
+			logger.Println(err)
 			return
 		}
 		totalSize -= fileInfo.Size()

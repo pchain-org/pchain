@@ -267,7 +267,7 @@ func soapRequest(url, function, message, domain string) (r *http.Response, err e
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Pragma", "no-cache")
 
-	// log.Stderr("soapRequest ", req)
+	// logger.Stderr("soapRequest ", req)
 
 	r, err = http.DefaultClient.Do(req)
 	if err != nil {
@@ -278,7 +278,7 @@ func soapRequest(url, function, message, domain string) (r *http.Response, err e
 	}*/
 
 	if r.StatusCode >= 400 {
-		// log.Stderr(function, r.StatusCode)
+		// logger.Stderr(function, r.StatusCode)
 		err = errors.New("Error " + strconv.Itoa(r.StatusCode) + " for " + function)
 		r = nil
 		return
@@ -348,7 +348,7 @@ func (n *upnpNAT) AddPortMapping(protocol string, externalPort, internalPort int
 	}
 
 	// TODO: check response to see if the port was forwarded
-	// log.Println(message, response)
+	// logger.Println(message, response)
 	// JAE:
 	// body, err := ioutil.ReadAll(response.Body)
 	// fmt.Println(string(body), err)
@@ -374,7 +374,7 @@ func (n *upnpNAT) DeletePortMapping(protocol string, externalPort, internalPort 
 	}
 
 	// TODO: check response to see if the port was deleted
-	// log.Println(message, response)
+	// logger.Println(message, response)
 	_ = response
 	return
 }

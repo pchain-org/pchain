@@ -21,8 +21,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -74,14 +73,14 @@ func (c *ecrecover) Run(in []byte) []byte {
 
 	// tighter sig s values in homestead only apply to tx sigs
 	if common.Bytes2Big(in[32:63]).BitLen() > 0 || !crypto.ValidateSignatureValues(v, r, s, false) {
-		glog.V(logger.Detail).Infof("ECRECOVER error: v, r or s value invalid")
+		logger.Debugf("ECRECOVER error: v, r or s value invalid")
 		return nil
 	}
 	// v needs to be at the end for libsecp256k1
 	pubKey, err := crypto.Ecrecover(in[:32], append(in[64:128], v))
 	// make sure the public key is a valid one
 	if err != nil {
-		glog.V(logger.Detail).Infoln("ECRECOVER error: ", err)
+		logger.Debugf("ECRECOVER error: ", err)
 		return nil
 	}
 

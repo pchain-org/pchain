@@ -24,8 +24,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -100,11 +98,11 @@ func (s *StateObject) empty() bool {
 // Account is the Ethereum consensus representation of accounts.
 // These objects are stored in the main account trie.
 type Account struct {
-	Nonce		uint64
-	Balance		*big.Int
-	LockedBalance   *big.Int
-	Root     	common.Hash // merkle root of the storage trie
-	CodeHash	[]byte
+	Nonce         uint64
+	Balance       *big.Int
+	LockedBalance *big.Int
+	Root          common.Hash // merkle root of the storage trie
+	CodeHash      []byte
 }
 
 // newObject creates a state object.
@@ -139,9 +137,7 @@ func (self *StateObject) markSuicided() {
 		self.onDirty(self.Address())
 		self.onDirty = nil
 	}
-	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v X\n", self.Address(), self.Nonce(), self.Balance())
-	}
+	logger.Errorf("%x: #%d %v X\n", self.Address(), self.Nonce(), self.Balance())
 }
 
 func (c *StateObject) touch() {
@@ -257,9 +253,7 @@ func (c *StateObject) AddBalance(amount *big.Int) {
 	}
 	c.SetBalance(new(big.Int).Add(c.Balance(), amount))
 
-	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.Balance(), amount)
-	}
+	logger.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.Balance(), amount)
 }
 
 // SubBalance removes amount from c's balance.
@@ -270,9 +264,7 @@ func (c *StateObject) SubBalance(amount *big.Int) {
 	}
 	c.SetBalance(new(big.Int).Sub(c.Balance(), amount))
 
-	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.Nonce(), c.Balance(), amount)
-	}
+	logger.Errorf("%x: #%d %v (- %v)\n", c.Address(), c.Nonce(), c.Balance(), amount)
 }
 
 func (self *StateObject) SetBalance(amount *big.Int) {
@@ -302,17 +294,16 @@ func (c *StateObject) AddLockedBalance(amount *big.Int) {
 
 		return
 	}
-	
+
 	fmt.Printf("StateObject_AddLockedBalance : value to lock %d\n", amount)
-	fmt.Printf("StateObject_AddLockedBalance : value before lock: addr %x balance %d\n",c.Address(), c.LockedBalance())
+	fmt.Printf("StateObject_AddLockedBalance : value before lock: addr %x balance %d\n", c.Address(), c.LockedBalance())
 
 	c.SetLockedBalance(new(big.Int).Add(c.LockedBalance(), amount))
 
-	fmt.Printf("StateObject_AddLockedBalance : value after lock: addr %x balance %d\n",c.Address(), c.LockedBalance())
+	fmt.Printf("StateObject_AddLockedBalance : value after lock: addr %x balance %d\n", c.Address(), c.LockedBalance())
 
-	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.LockedBalance(), amount)
-	}
+	logger.Errorf("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.LockedBalance(), amount)
+
 }
 
 func (self *StateObject) SetLockedBalance(amount *big.Int) {
@@ -338,9 +329,8 @@ func (c *StateObject) SubLockedBalance(amount *big.Int) {
 	}
 	c.SetLockedBalance(new(big.Int).Sub(c.LockedBalance(), amount))
 
-	if glog.V(logger.Core) {
-		glog.Infof("%x: #%d %v (- %v)\n", c.Address(), c.Nonce(), c.LockedBalance(), amount)
-	}
+	logger.Errorf("%x: #%d %v (- %v)\n", c.Address(), c.Nonce(), c.LockedBalance(), amount)
+
 }
 
 // Return the gas back to the origin. Used by the Virtual machine or Closures

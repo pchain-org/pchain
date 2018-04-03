@@ -25,11 +25,11 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
-
+var logger = plogger.GetLogger("ethereum")
 var (
 	hashMatcher      = regexp.MustCompile("^[0-9A-Fa-f]{64}")
 	slashes          = regexp.MustCompile("/+")
@@ -72,9 +72,9 @@ type ErrResolve error
 
 // DNS Resolver
 func (self *Api) Resolve(hostPort string, nameresolver bool) (storage.Key, error) {
-	glog.V(logger.Detail).Infof("Resolving : %v", hostPort)
+	logger.Debugf("Resolving : %v", hostPort)
 	if hashMatcher.MatchString(hostPort) || self.dns == nil {
-		glog.V(logger.Detail).Infof("host is a contentHash: '%v'", hostPort)
+		logger.Debugf("host is a contentHash: '%v'", hostPort)
 		return storage.Key(common.Hex2Bytes(hostPort)), nil
 	}
 	if !nameresolver {
@@ -83,9 +83,9 @@ func (self *Api) Resolve(hostPort string, nameresolver bool) (storage.Key, error
 	contentHash, err := self.dns.Resolve(hostPort)
 	if err != nil {
 		err = ErrResolve(err)
-		glog.V(logger.Warn).Infof("DNS error : %v", err)
+		logger.Warnf("DNS error : %v", err)
 	}
-	glog.V(logger.Detail).Infof("host lookup: %v -> %v", err)
+	logger.Debugf("host lookup: %v -> %v", err)
 	return contentHash[:], err
 }
 func Parse(uri string) (hostPort, path string) {
@@ -110,7 +110,7 @@ func Parse(uri string) (hostPort, path string) {
 			path = parts[i]
 		}
 	}
-	glog.V(logger.Debug).Infof("host: '%s', path '%s' requested.", hostPort, path)
+	logger.Debugf("host: '%s', path '%s' requested.", hostPort, path)
 	return
 }
 
@@ -118,7 +118,7 @@ func (self *Api) parseAndResolve(uri string, nameresolver bool) (key storage.Key
 	hostPort, path = Parse(uri)
 	//resolving host and port
 	contentHash, err := self.Resolve(hostPort, nameresolver)
-	glog.V(logger.Debug).Infof("Resolved '%s' to contentHash: '%s', path: '%s'", uri, contentHash, path)
+	logger.Debugf("Resolved '%s' to contentHash: '%s', path: '%s'", uri, contentHash, path)
 	return contentHash[:], hostPort, path, err
 }
 
@@ -152,11 +152,11 @@ func (self *Api) Get(uri string, nameresolver bool) (reader storage.LazySectionR
 	quitC := make(chan bool)
 	trie, err := loadManifest(self.dpa, key, quitC)
 	if err != nil {
-		glog.V(logger.Warn).Infof("loadManifestTrie error: %v", err)
+		logger.Warnf("loadManifestTrie error: %v", err)
 		return
 	}
 
-	glog.V(logger.Detail).Infof("getEntry(%s)", path)
+	logger.Debugf("getEntry(%s)", path)
 
 	entry, _ := trie.getEntry(path)
 
@@ -164,12 +164,12 @@ func (self *Api) Get(uri string, nameresolver bool) (reader storage.LazySectionR
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		mimeType = entry.ContentType
-		glog.V(logger.Detail).Infof("content lookup key: '%v' (%v)", key, mimeType)
+		logger.Debugf("content lookup key: '%v' (%v)", key, mimeType)
 		reader = self.dpa.Retrieve(key)
 	} else {
 		status = http.StatusNotFound
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
-		glog.V(logger.Warn).Infof("%v", err)
+		logger.Warnf("%v", err)
 	}
 	return
 }

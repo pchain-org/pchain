@@ -22,7 +22,6 @@ import (
 	_ "net/http/pprof"
 	"runtime"
 
-	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -87,8 +86,8 @@ var Flags = []cli.Flag{
 // It should be called as early as possible in the program.
 func Setup(ctx *cli.Context) error {
 	// logging
-	glog.CopyStandardLogTo("INFO")
-	glog.SetToStderr(true)
+	// glog.CopyStandardLogTo("INFO")
+	// glog.SetToStderr(true)
 
 	// profiling, tracing
 	runtime.MemProfileRate = ctx.GlobalInt(memprofilerateFlag.Name)
@@ -108,8 +107,8 @@ func Setup(ctx *cli.Context) error {
 	if ctx.GlobalBool(pprofFlag.Name) {
 		address := fmt.Sprintf("%s:%d", ctx.GlobalString(pprofAddrFlag.Name), ctx.GlobalInt(pprofPortFlag.Name))
 		go func() {
-			glog.V(logger.Info).Infof("starting pprof server at http://%s/debug/pprof", address)
-			glog.Errorln(http.ListenAndServe(address, nil))
+			logger.Infof("starting pprof server at http://%s/debug/pprof", address)
+			logger.Error(http.ListenAndServe(address, nil))
 		}()
 	}
 	return nil

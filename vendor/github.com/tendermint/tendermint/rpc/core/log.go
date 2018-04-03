@@ -1,7 +1,7 @@
 package core
 
 import (
-	"github.com/tendermint/log15"
+	"github.com/pchain/common/plogger"
 )
 
-var log = log15.New("module", "rpc")
+var logger = plogger.GetLogger("rpc")

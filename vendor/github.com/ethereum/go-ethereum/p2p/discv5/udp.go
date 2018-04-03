@@ -26,8 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -348,9 +347,9 @@ func (t *udp) sendPacket(toid NodeID, toaddr *net.UDPAddr, ptype byte, req inter
 		//fmt.Println(err)
 		return hash, err
 	}
-	glog.V(logger.Detail).Infof(">>> %v to %x@%v\n", nodeEvent(ptype), toid[:8], toaddr)
+	logger.Debugf(">>> %v to %x@%v\n", nodeEvent(ptype), toid[:8], toaddr)
 	if _, err = t.conn.WriteToUDP(packet, toaddr); err != nil {
-		glog.V(logger.Detail).Infoln("UDP send failed:", err)
+		logger.Debugf("UDP send failed:", err)
 	}
 	//fmt.Println(err)
 	return hash, err
@@ -364,13 +363,13 @@ func encodePacket(priv *ecdsa.PrivateKey, ptype byte, req interface{}) (p, hash 
 	b.Write(headSpace)
 	b.WriteByte(ptype)
 	if err := rlp.Encode(b, req); err != nil {
-		glog.V(logger.Error).Infoln("error encoding packet:", err)
+		logger.Error("error encoding packet:", err)
 		return nil, nil, err
 	}
 	packet := b.Bytes()
 	sig, err := crypto.Sign(crypto.Keccak256(packet[headSize:]), priv)
 	if err != nil {
-		glog.V(logger.Error).Infoln("could not sign packet:", err)
+		logger.Error("could not sign packet:", err)
 		return nil, nil, err
 	}
 	copy(packet[macSize:], sig)
@@ -393,11 +392,11 @@ func (t *udp) readLoop() {
 		nbytes, from, err := t.conn.ReadFromUDP(buf)
 		if netutil.IsTemporaryError(err) {
 			// Ignore temporary read errors.
-			glog.V(logger.Debug).Infof("Temporary read error: %v", err)
+			logger.Debugf("Temporary read error: %v", err)
 			continue
 		} else if err != nil {
 			// Shut down the loop for permament errors.
-			glog.V(logger.Debug).Infof("Read error: %v", err)
+			logger.Debugf("Read error: %v", err)
 			return
 		}
 		t.handlePacket(from, buf[:nbytes])
@@ -407,7 +406,7 @@ func (t *udp) readLoop() {
 func (t *udp) handlePacket(from *net.UDPAddr, buf []byte) error {
 	pkt := ingressPacket{remoteAddr: from}
 	if err := decodePacket(buf, &pkt); err != nil {
-		glog.V(logger.Debug).Infof("Bad packet from %v: %v\n", from, err)
+		logger.Debugf("Bad packet from %v: %v\n", from, err)
 		//fmt.Println("bad packet", err)
 		return err
 	}

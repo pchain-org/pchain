@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
-	//"github.com/ethereum/go-ethereum/logger/glog"
+	//"github.com/pchain/common/plogger"
 )
 
 type (
@@ -276,13 +276,13 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 // Create creates a new contract using code as deployment code.
 func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (ret []byte, contractAddr common.Address, err error) {
 
-	//glog.Infof("(evm *EVM) Create() 0, gas is %v\n", gas)
+	//logger.Infof("(evm *EVM) Create() 0, gas is %v\n", gas)
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		caller.ReturnGas(gas)
 
 		return nil, common.Address{}, nil
 	}
-	//glog.Infof("(evm *EVM) Create() 1, gas is %v\n", gas)
+	//logger.Infof("(evm *EVM) Create() 1, gas is %v\n", gas)
 	// Depth check execution. Fail if we're trying to execute above the
 	// limit.
 	if evm.depth > int(params.CallCreateDepth.Int64()) {
@@ -290,13 +290,13 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (re
 
 		return nil, common.Address{}, ErrDepth
 	}
-	//glog.Infof("(evm *EVM) Create() 2, gas is %v\n", gas)
+	//logger.Infof("(evm *EVM) Create() 2, gas is %v\n", gas)
 	if !evm.CanTransfer(evm.StateDB, caller.Address(), value) {
 		caller.ReturnGas(gas)
 
 		return nil, common.Address{}, ErrInsufficientBalance
 	}
-	//glog.Infof("(evm *EVM) Create() 3, gas is %v\n", gas)
+	//logger.Infof("(evm *EVM) Create() 3, gas is %v\n", gas)
 	// Create a new account on the state
 	nonce := evm.StateDB.GetNonce(caller.Address())
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
@@ -312,14 +312,14 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (re
 	// initialise a new contract and set the code that is to be used by the
 	// E The contract is a scoped evmironment for this execution context
 	// only.
-	//glog.Infof("(evm *EVM) Create() 4, gas is %v\n", gas)
+	//logger.Infof("(evm *EVM) Create() 4, gas is %v\n", gas)
 	contract := NewContract(caller, to, value, gas)
-	//glog.Infof("(evm *EVM) Create() 5, gas is %v\n", gas)
+	//logger.Infof("(evm *EVM) Create() 5, gas is %v\n", gas)
 	contract.SetCallCode(&contractAddr, crypto.Keccak256Hash(code), code)
 	defer contract.Finalise()
 
 	ret, err = evm.interpreter.Run(contract, nil)
-	//glog.Infof("(evm *EVM) Create() 6, len(ret) is %v, err is %v, ret is %v\n", len(ret), err, ret)
+	//logger.Infof("(evm *EVM) Create() 6, len(ret) is %v, err is %v, ret is %v\n", len(ret), err, ret)
 
 	// check whether the max code size has been exceeded
 	maxCodeSizeExceeded := len(ret) > params.MaxCodeSize
@@ -329,18 +329,18 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (re
 	// by the error checking condition below.
 	if err == nil && !maxCodeSizeExceeded {
 		dataGas := big.NewInt(int64(len(ret)))
-		//glog.Infof("(evm *EVM) Create() 7, dataGas is %v, params.CreateDataGas is %v\n", dataGas, params.CreateDataGas)
+		//logger.Infof("(evm *EVM) Create() 7, dataGas is %v, params.CreateDataGas is %v\n", dataGas, params.CreateDataGas)
 		dataGas.Mul(dataGas, params.CreateDataGas)
-		//glog.Infof("(evm *EVM) Create() 8, dataGas is %v\n", dataGas)
+		//logger.Infof("(evm *EVM) Create() 8, dataGas is %v\n", dataGas)
 
 		if contract.UseGas(dataGas) {
-			//glog.Infof("(evm *EVM) Create() 9%v\n")
+			//logger.Infof("(evm *EVM) Create() 9%v\n")
 			evm.StateDB.SetCode(contractAddr, ret)
 		} else {
-			//glog.Infof("(evm *EVM) Create() 10%v\n")
+			//logger.Infof("(evm *EVM) Create() 10%v\n")
 			err = ErrCodeStoreOutOfGas
 		}
-		//glog.Infof("(evm *EVM) Create() 11, contract.UsedGas is %v\n", contract.UsedGas)
+		//logger.Infof("(evm *EVM) Create() 11, contract.UsedGas is %v\n", contract.UsedGas)
 	}
 
 	// When an error was returned by the EVM or when setting the creation code
@@ -350,10 +350,10 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (re
 		(err != nil && (evm.ChainConfig().IsHomestead(evm.BlockNumber) || err != ErrCodeStoreOutOfGas)) {
 		contract.UseGas(contract.Gas)
 		evm.StateDB.RevertToSnapshot(snapshot)
-		//glog.Infof("(evm *EVM) Create() 12, contract.UsedGas is %v\n", contract.UsedGas)
+		//logger.Infof("(evm *EVM) Create() 12, contract.UsedGas is %v\n", contract.UsedGas)
 		// Nothing should be returned when an error is thrown.
 
-		if(maxCodeSizeExceeded && err == nil) {
+		if maxCodeSizeExceeded && err == nil {
 			err = ErrCodeStoreOutOfGas
 		}
 
@@ -365,7 +365,7 @@ func (evm *EVM) Create(caller ContractRef, code []byte, gas, value *big.Int) (re
 	if err != nil {
 		ret = nil
 	}
-	//glog.Infof("(evm *EVM) Create() 13, contract.UsedGas is %v\n", contract.UsedGas)
+	//logger.Infof("(evm *EVM) Create() 13, contract.UsedGas is %v\n", contract.UsedGas)
 	return ret, contractAddr, err
 }
 

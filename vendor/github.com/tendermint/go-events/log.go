@@ -1,7 +1,7 @@
 package events
 
 import (
-	"github.com/tendermint/go-logger"
+	"github.com/pchain/common/plogger"
 )
 
-var log = logger.New("module", "events")
+var logger = plogger.GetLogger("events")

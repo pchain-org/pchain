@@ -49,7 +49,7 @@ func NewWAL(walFile string, light bool) (*WAL, error) {
 		group: group,
 		light: light,
 	}
-	wal.BaseService = *NewBaseService(log, "WAL", wal)
+	wal.BaseService = *NewBaseService(logger, "WAL", wal)
 	_, err = wal.Start()
 	return wal, err
 }

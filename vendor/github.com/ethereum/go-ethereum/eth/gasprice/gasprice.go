@@ -25,10 +25,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 )
-
+var logger = plogger.GetLogger("ethereum")
 const (
 	gpoProcessPastBlocks = 100
 
@@ -176,7 +176,7 @@ func (self *GasPriceOracle) processBlock(block *types.Block) {
 	self.lastBase = newBase
 	self.lastBaseMutex.Unlock()
 
-	glog.V(logger.Detail).Infof("Processed block #%v, base price is %v\n", i, newBase.Int64())
+	logger.Debugf("Processed block #%v, base price is %v\n", i, newBase.Int64())
 }
 
 // returns the lowers possible price with which a tx was or could have been included

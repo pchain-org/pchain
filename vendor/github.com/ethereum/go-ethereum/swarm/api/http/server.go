@@ -29,13 +29,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/pchain/common/plogger"
 	"github.com/rs/cors"
 )
-
+var logger = plogger.GetLogger("ethereum")
 const (
 	rawType = "application/octet-stream"
 )
@@ -86,7 +85,7 @@ func StartHttpServer(api *api.Api, server *Server) {
 	hdlr := c.Handler(serveMux)
 
 	go http.ListenAndServe(server.Addr, hdlr)
-	glog.V(logger.Info).Infof("Swarm HTTP proxy started on localhost:%s", server.Addr)
+	logger.Infof("Swarm HTTP proxy started on localhost:%s", server.Addr)
 }
 
 func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
@@ -100,13 +99,13 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 	//			return
 	//		}
 	//	}
-	glog.V(logger.Debug).Infof("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
+	logger.Debugf("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
 	uri := requestURL.Path
 	var raw, nameresolver bool
 	var proto string
 
 	// HTTP-based URL protocol handler
-	glog.V(logger.Debug).Infof("BZZ request URI: '%s'", uri)
+	logger.Debugf("BZZ request URI: '%s'", uri)
 
 	path := bzzPrefix.ReplaceAllStringFunc(uri, func(p string) string {
 		proto = p
@@ -115,21 +114,16 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 
 	// protocol identification (ugly)
 	if proto == "" {
-		if glog.V(logger.Error) {
-			glog.Errorf(
-				"[BZZ] Swarm: Protocol error in request `%s`.",
-				uri,
-			)
-			http.Error(w, "Invalid request URL: need access protocol (bzz:/, bzzr:/, bzzi:/) as first element in path.", http.StatusBadRequest)
-			return
-		}
+		logger.Error("[BZZ] Swarm: Protocol error in request ", uri)
+		http.Error(w, "Invalid request URL: need access protocol (bzz:/, bzzr:/, bzzi:/) as first element in path.", http.StatusBadRequest)
+		return
 	}
 	if len(proto) > 4 {
 		raw = proto[1:5] == "bzzr"
 		nameresolver = proto[1:5] != "bzzi"
 	}
 
-	glog.V(logger.Debug).Infof(
+	logger.Debugf(
 		"[BZZ] Swarm: %s request over protocol %s '%s' received.",
 		r.Method, proto, path,
 	)
@@ -142,7 +136,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 		}
 		key, err := a.Store(io.LimitReader(r.Body, r.ContentLength), r.ContentLength, nil)
 		if err == nil {
-			glog.V(logger.Debug).Infof("Content for %v stored", key.Log())
+			logger.Debugf("Content for %v stored", key.Log())
 		} else {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -164,10 +158,10 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 				path = api.RegularSlashes(path)
 				mime := r.Header.Get("Content-Type")
 				// TODO proper root hash separation
-				glog.V(logger.Debug).Infof("Modify '%s' to store %v as '%s'.", path, key.Log(), mime)
+				logger.Debugf("Modify '%s' to store %v as '%s'.", path, key.Log(), mime)
 				newKey, err := a.Modify(path, common.Bytes2Hex(key), mime, nameresolver)
 				if err == nil {
-					glog.V(logger.Debug).Infof("Swarm replaced manifest by '%s'", newKey)
+					logger.Debugf("Swarm replaced manifest by '%s'", newKey)
 					w.Header().Set("Content-Type", "text/plain")
 					http.ServeContent(w, r, "", time.Now(), bytes.NewReader([]byte(newKey)))
 				} else {
@@ -182,10 +176,10 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			return
 		} else {
 			path = api.RegularSlashes(path)
-			glog.V(logger.Debug).Infof("Delete '%s'.", path)
+			logger.Debugf("Delete '%s'.", path)
 			newKey, err := a.Modify(path, "", "", nameresolver)
 			if err == nil {
-				glog.V(logger.Debug).Infof("Swarm replaced manifest by '%s'", newKey)
+				logger.Debugf("Swarm replaced manifest by '%s'", newKey)
 				w.Header().Set("Content-Type", "text/plain")
 				http.ServeContent(w, r, "", time.Now(), bytes.NewReader([]byte(newKey)))
 			} else {
@@ -206,7 +200,7 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			if parsedurl == path {
 				key, err := a.Resolve(parsedurl, nameresolver)
 				if err != nil {
-					glog.V(logger.Error).Infof("%v", err)
+					logger.Errorf("%v", err)
 					http.Error(w, err.Error(), http.StatusBadRequest)
 					return
 				}
@@ -226,12 +220,12 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			quitC := make(chan bool)
 			size, err := reader.Size(quitC)
 			if err != nil {
-				glog.V(logger.Debug).Infof("Could not determine size: %v", err.Error())
+				logger.Debugf("Could not determine size: %v", err.Error())
 				//An error on call to Size means we don't have the root chunk
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
-			glog.V(logger.Debug).Infof("Reading %d bytes.", size)
+			logger.Debugf("Reading %d bytes.", size)
 
 			// setting mime type
 			qv := requestURL.Query()
@@ -242,11 +236,11 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 
 			w.Header().Set("Content-Type", mimeType)
 			http.ServeContent(w, r, uri, forever(), reader)
-			glog.V(logger.Debug).Infof("Serve raw content '%s' (%d bytes) as '%s'", uri, size, mimeType)
+			logger.Debugf("Serve raw content '%s' (%d bytes) as '%s'", uri, size, mimeType)
 
 			// retrieve path via manifest
 		} else {
-			glog.V(logger.Debug).Infof("Structured GET request '%s' received.", uri)
+			logger.Debugf("Structured GET request '%s' received.", uri)
 			// add trailing slash, if missing
 			if rootDocumentUri.MatchString(uri) {
 				http.Redirect(w, r, path+"/", http.StatusFound)
@@ -255,10 +249,10 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			reader, mimeType, status, err := a.Get(path, nameresolver)
 			if err != nil {
 				if _, ok := err.(api.ErrResolve); ok {
-					glog.V(logger.Debug).Infof("%v", err)
+					logger.Debugf("%v", err)
 					status = http.StatusBadRequest
 				} else {
-					glog.V(logger.Debug).Infof("error retrieving '%s': %v", uri, err)
+					logger.Debugf("error retrieving '%s': %v", uri, err)
 					status = http.StatusNotFound
 				}
 				http.Error(w, err.Error(), status)
@@ -274,12 +268,12 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			quitC := make(chan bool)
 			size, err := reader.Size(quitC)
 			if err != nil {
-				glog.V(logger.Debug).Infof("Could not determine size: %v", err.Error())
+				logger.Debugf("Could not determine size: %v", err.Error())
 				//An error on call to Size means we don't have the root chunk
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
-			glog.V(logger.Debug).Infof("Served '%s' (%d bytes) as '%s' (status code: %v)", uri, size, mimeType, status)
+			logger.Debugf("Served '%s' (%d bytes) as '%s' (status code: %v)", uri, size, mimeType, status)
 
 			http.ServeContent(w, r, path, forever(), reader)
 
@@ -293,12 +287,12 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 	self.lock.Lock()
 	// assert self.pos <= off
 	if self.pos > off {
-		glog.V(logger.Error).Infof("non-sequential read attempted from sequentialReader; %d > %d",
+		logger.Errorf("non-sequential read attempted from sequentialReader; %d > %d",
 			self.pos, off)
 		panic("Non-sequential read attempt")
 	}
 	if self.pos != off {
-		glog.V(logger.Debug).Infof("deferred read in POST at position %d, offset %d.",
+		logger.Debugf("deferred read in POST at position %d, offset %d.",
 			self.pos, off)
 		wait := make(chan bool)
 		self.ahead[off] = wait
@@ -315,10 +309,10 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 	for localPos < len(target) {
 		n, err = self.reader.Read(target[localPos:])
 		localPos += n
-		glog.V(logger.Debug).Infof("Read %d bytes into buffer size %d from POST, error %v.",
+		logger.Debugf("Read %d bytes into buffer size %d from POST, error %v.",
 			n, len(target), err)
 		if err != nil {
-			glog.V(logger.Debug).Infof("POST stream's reading terminated with %v.", err)
+			logger.Debugf("POST stream's reading terminated with %v.", err)
 			for i := range self.ahead {
 				self.ahead[i] <- true
 				delete(self.ahead, i)
@@ -330,7 +324,7 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 	}
 	wait := self.ahead[self.pos]
 	if wait != nil {
-		glog.V(logger.Debug).Infof("deferred read in POST at position %d triggered.",
+		logger.Debugf("deferred read in POST at position %d triggered.",
 			self.pos)
 		delete(self.ahead, self.pos)
 		close(wait)

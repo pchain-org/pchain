@@ -38,8 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
@@ -154,8 +152,8 @@ func echo() {
 }
 
 func initialize() {
-	glog.SetV(logger.Warn)
-	glog.SetToStderr(true)
+	// glog.SetV(logger.Warn)
+	// glog.SetToStderr(true)
 
 	done = make(chan struct{})
 	var peers []*discover.Node

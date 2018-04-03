@@ -12,13 +12,14 @@ import (
 	"strings"
 	"time"
 
+	"runtime/debug"
+
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	cmn "github.com/tendermint/go-common"
 	events "github.com/tendermint/go-events"
 	types "github.com/tendermint/go-rpc/types"
 	wire "github.com/tendermint/go-wire"
-	"runtime/debug"
 )
 
 // Adds a route for each function in the funcMap, as well as general jsonrpc and websocket handlers for all functions.
@@ -120,7 +121,9 @@ func makeJSONRPCHandler(funcMap map[string]*RPCFunc) http.HandlerFunc {
 		if rpcFunc == nil {
 			WriteRPCResponseHTTP(w, types.NewRPCResponse(request.ID, nil, "RPC method unknown 1: "+request.Method))
 			fmt.Println("now iterate all rpc functions")
-			for k, v := range funcMap {fmt.Println("%s=%d;", k, v)}
+			for k, v := range funcMap {
+				fmt.Println("%s=%d;", k, v)
+			}
 			debug.PrintStack()
 			return
 		}
@@ -134,7 +137,7 @@ func makeJSONRPCHandler(funcMap map[string]*RPCFunc) http.HandlerFunc {
 			return
 		}
 		returns := rpcFunc.f.Call(args)
-		log.Info("HTTPJSONRPC", "method", request.Method, "args", args, "returns", returns)
+		logger.Info("HTTPJSONRPC", " method:", request.Method, " args:", args, " returns:", returns)
 		result, err := unreflectResult(returns)
 		if err != nil {
 			WriteRPCResponseHTTP(w, types.NewRPCResponse(request.ID, result, err.Error()))
@@ -230,14 +233,14 @@ func makeHTTPHandler(rpcFunc *RPCFunc) func(http.ResponseWriter, *http.Request) 
 	}
 	// All other endpoints
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Debug("HTTP HANDLER", "req", r)
+		logger.Debug("HTTP HANDLER", " req:", r)
 		args, err := httpParamsToArgs(rpcFunc, r)
 		if err != nil {
 			WriteRPCResponseHTTP(w, types.NewRPCResponse("", nil, fmt.Sprintf("Error converting http params to args: %v", err.Error())))
 			return
 		}
 		returns := rpcFunc.f.Call(args)
-		log.Info("HTTPRestRPC", "method", r.URL.Path, "args", args, "returns", returns)
+		logger.Info("HTTPRestRPC", " method:", r.URL.Path, " args:", args, " returns:", returns)
 		result, err := unreflectResult(returns)
 		if err != nil {
 			WriteRPCResponseHTTP(w, types.NewRPCResponse("", nil, err.Error()))
@@ -258,7 +261,7 @@ func httpParamsToArgs(rpcFunc *RPCFunc, r *http.Request) ([]reflect.Value, error
 		values[i] = reflect.Zero(argType) // set default for that type
 
 		arg := GetParam(r, name)
-		// log.Notice("param to arg", "argType", argType, "name", name, "arg", arg)
+		// logger.Info("param to arg", "argType", argType, "name", name, "arg", arg)
 
 		if "" == arg {
 			continue
@@ -368,7 +371,7 @@ func NewWSConnection(baseConn *websocket.Conn, funcMap map[string]*RPCFunc, evsw
 		funcMap:    funcMap,
 		evsw:       evsw,
 	}
-	wsc.BaseService = *cmn.NewBaseService(log, "wsConnection", wsc)
+	wsc.BaseService = *cmn.NewBaseService(logger, "wsConnection", wsc)
 	return wsc
 }
 
@@ -418,7 +421,7 @@ func (wsc *wsConnection) OnStop() {
 func (wsc *wsConnection) readTimeoutRoutine() {
 	select {
 	case <-wsc.readTimeout.C:
-		log.Notice("Stopping connection due to read timeout")
+		logger.Info("Stopping connection due to read timeout")
 		wsc.Stop()
 	case <-wsc.Quit:
 		return
@@ -477,7 +480,7 @@ func (wsc *wsConnection) readRoutine() {
 			// We use `readTimeout` to handle read timeouts.
 			_, in, err := wsc.baseConn.ReadMessage()
 			if err != nil {
-				log.Notice("Failed to read from connection", "remote", wsc.remoteAddr, "err", err.Error())
+				logger.Info("Failed to read from connection", " remote:", wsc.remoteAddr, "err", err.Error())
 				// an error reading the connection,
 				// kill the connection
 				wsc.Stop()
@@ -510,7 +513,7 @@ func (wsc *wsConnection) readRoutine() {
 				continue
 			}
 			returns := rpcFunc.f.Call(args)
-			log.Info("WSJSONRPC", "method", request.Method, "args", args, "returns", returns)
+			logger.Info("WSJSONRPC", " method:", request.Method, " args:", args, " returns:", returns)
 			result, err := unreflectResult(returns)
 			if err != nil {
 				wsc.WriteRPCResponse(types.NewRPCResponse(request.ID, nil, err.Error()))
@@ -534,18 +537,18 @@ func (wsc *wsConnection) writeRoutine() {
 		case <-wsc.pingTicker.C:
 			err := wsc.baseConn.WriteMessage(websocket.PingMessage, []byte{})
 			if err != nil {
-				log.Error("Failed to write ping message on websocket", "error", err)
+				logger.Error("Failed to write ping message on websocket", "error", err)
 				wsc.Stop()
 				return
 			}
 		case msg := <-wsc.writeChan:
 			jsonBytes, err := json.Marshal(msg)
 			if err != nil {
-				log.Error("Failed to marshal RPCResponse to JSON", "error", err)
+				logger.Error("Failed to marshal RPCResponse to JSON", "error", err)
 			} else {
 				wsc.baseConn.SetWriteDeadline(time.Now().Add(time.Second * wsWriteTimeoutSeconds))
 				if err = wsc.baseConn.WriteMessage(websocket.TextMessage, jsonBytes); err != nil {
-					log.Warn("Failed to write response on websocket", "error", err)
+					logger.Warn("Failed to write response on websocket", "error", err)
 					wsc.Stop()
 					return
 				}
@@ -585,13 +588,13 @@ func (wm *WebsocketManager) WebsocketHandler(w http.ResponseWriter, r *http.Requ
 	wsConn, err := wm.Upgrade(w, r, nil)
 	if err != nil {
 		// TODO - return http error
-		log.Error("Failed to upgrade to websocket connection", "error", err)
+		logger.Error("Failed to upgrade to websocket connection", "error", err)
 		return
 	}
 
 	// register connection
 	con := NewWSConnection(wsConn, wm.funcMap, wm.evsw)
-	log.Notice("New websocket connection", "remote", con.remoteAddr)
+	logger.Info("New websocket connection", " remote:", con.remoteAddr)
 	con.Start() // Blocking
 }
 

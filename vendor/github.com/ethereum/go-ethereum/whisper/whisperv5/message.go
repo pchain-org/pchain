@@ -30,11 +30,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"golang.org/x/crypto/pbkdf2"
 )
-
+var logger = plogger.GetLogger("ethereum")
 // Options specifies the exact way a message should be wrapped into an Envelope.
 type MessageParams struct {
 	TTL      uint32
@@ -143,7 +143,7 @@ func (msg *SentMessage) appendPadding(params *MessageParams) {
 func (msg *SentMessage) sign(key *ecdsa.PrivateKey) error {
 	if isMessageSigned(msg.Raw[0]) {
 		// this should not happen, but no reason to panic
-		glog.V(logger.Error).Infof("Trying to sign a message which was already signed")
+		logger.Errorf("Trying to sign a message which was already signed")
 		return nil
 	}
 
@@ -237,7 +237,7 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 		}
 	}
 	if len(msg.Raw) > MaxMessageLength {
-		glog.V(logger.Error).Infof("Message size must not exceed %d bytes", MaxMessageLength)
+		logger.Errorf("Message size must not exceed %d bytes", MaxMessageLength)
 		return nil, errors.New("Oversized message")
 	}
 	var salt, nonce []byte
@@ -280,7 +280,7 @@ func (msg *ReceivedMessage) decryptSymmetric(key []byte, salt []byte, nonce []by
 	}
 	if len(nonce) != aesgcm.NonceSize() {
 		info := fmt.Sprintf("Wrong AES nonce size - want: %d, got: %d", len(nonce), aesgcm.NonceSize())
-		glog.V(logger.Error).Infof(info)
+		logger.Error(info)
 		return errors.New(info)
 	}
 	decrypted, err := aesgcm.Open(nil, nonce, msg.Raw, nil)
@@ -351,7 +351,7 @@ func (msg *ReceivedMessage) SigToPubKey() *ecdsa.PublicKey {
 
 	pub, err := crypto.SigToPub(msg.hash(), msg.Signature)
 	if err != nil {
-		glog.V(logger.Error).Infof("Could not get public key from signature: %v", err)
+		logger.Errorf("Could not get public key from signature: %v", err)
 		return nil
 	}
 	return pub

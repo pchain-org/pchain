@@ -24,9 +24,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/sirupsen/logrus"
 )
 
 // Config are the configuration options for the Interpreter
@@ -117,11 +116,11 @@ func (evm *Interpreter) Run(contract *Contract, input []byte) (ret []byte, err e
 		}
 	}()
 
-	if glog.V(logger.Debug) {
-		glog.Infof("evm running: %x\n", codehash[:4])
+	if logger.Level >= logrus.DebugLevel {
+		logger.Debugf("evm running: %x\n", codehash[:4])
 		tstart := time.Now()
 		defer func() {
-			glog.Infof("evm done: %x. time: %v\n", codehash[:4], time.Since(tstart))
+			logger.Debugf("evm done: %x. time: %v\n", codehash[:4], time.Since(tstart))
 		}()
 	}
 

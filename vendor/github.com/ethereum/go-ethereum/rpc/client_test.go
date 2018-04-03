@@ -30,11 +30,11 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	
+	"github.com/pchain/common/plogger"
 	"golang.org/x/net/context"
 )
-
+var logger = plogger.GetLogger("ethereum")
 func TestClientRequest(t *testing.T) {
 	server := newTestServer("service", new(Service))
 	defer server.Stop()
@@ -150,7 +150,7 @@ func testClientCancel(transport string, t *testing.T) {
 	// glog.SetV(6)
 	// glog.SetToStderr(true)
 	// defer glog.SetToStderr(false)
-	// glog.Infoln("testing ", transport)
+	// logger.Infof("testing ", transport)
 
 	// The actual test starts here.
 	var (
@@ -181,7 +181,7 @@ func testClientCancel(transport string, t *testing.T) {
 			// The key thing here is that no call will ever complete successfully.
 			err := client.CallContext(ctx, nil, "service_sleep", 2*maxContextCancelTimeout)
 			if err != nil {
-				glog.V(logger.Debug).Infoln("got expected error:", err)
+				logger.Debugf("got expected error:", err)
 			} else {
 				t.Errorf("no error for call with %v wait time", timeout)
 			}
@@ -532,7 +532,7 @@ func (l *flakeyListener) Accept() (net.Conn, error) {
 	if err == nil {
 		timeout := time.Duration(rand.Int63n(int64(l.maxKillTimeout)))
 		time.AfterFunc(timeout, func() {
-			glog.V(logger.Debug).Infof("killing conn %v after %v", c.LocalAddr(), timeout)
+			logger.Debugf("killing conn %v after %v", c.LocalAddr(), timeout)
 			c.Close()
 		})
 	}
