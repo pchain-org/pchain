@@ -34,14 +34,14 @@ import (
 	_ "net/http/pprof"
 	"fmt"
 	"github.com/tendermint/ethermint/app"
-	"github.com/tendermint/go-logger"
 	//"github.com/tendermint/ethermint/utils"
 	ep "github.com/tendermint/tendermint/epoch"
 	st "github.com/tendermint/tendermint/state"
-	"os"
+
+	"github.com/pchain/common/plogger"
 )
 
-var log = logger.New("module", "node")
+var logger = plogger.GetLogger("node")
 
 type Node struct {
 	cmn.BaseService
@@ -212,7 +212,7 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	if profileHost != "" {
 
 		go func() {
-			log.Warn("Profile server", "error", http.ListenAndServe(profileHost, nil))
+			logger.Warn("Profile server", " error:", http.ListenAndServe(profileHost, nil))
 		}()
 	}
 
@@ -234,7 +234,7 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 		proxyApp:         proxyApp,
 		txIndexer:        txIndexer,
 	}
-	node.BaseService = *cmn.NewBaseService(log, "Node", node)
+	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
 	return node
 }
 
@@ -279,14 +279,14 @@ func (n *Node) OnStart() error {
 func (n *Node) OnStop() {
 	n.BaseService.OnStop()
 
-	log.Notice("Stopping Node")
+	logger.Info("Stopping Node")
 	// TODO: gracefully disconnect from peers.
 	n.sw.Stop()
 
 	for _, l := range n.rpcListeners {
-		log.Info("Closing rpc listener", "listener", l)
+		logger.Info("Closing rpc listener ", l)
 		if err := l.Close(); err != nil {
-			log.Error("Error closing listener", "listener", l, "error", err)
+			logger.Error("Error closing listener ", l, " error:", err)
 		}
 	}
 }
@@ -505,7 +505,7 @@ func RunNode(config cfg.Config, app *app.EthermintApplication) {
 	// Wait until the genesis doc becomes available
 	genDocFile := config.GetString("genesis_file")
 	if !cmn.FileExists(genDocFile) {
-		log.Notice(cmn.Fmt("Waiting for genesis file %v...", genDocFile))
+		logger.Info(cmn.Fmt("Waiting for genesis file %v...", genDocFile))
 		for {
 			time.Sleep(time.Second)
 			if !cmn.FileExists(genDocFile) {
@@ -537,7 +537,7 @@ func RunNode(config cfg.Config, app *app.EthermintApplication) {
 		cmn.Exit(cmn.Fmt("Failed to start node: %v", err))
 	}
 
-	log.Notice("Started node", "nodeInfo", n.sw.NodeInfo())
+	logger.Info("Started node ", n.sw.NodeInfo())
 	/*
 	// If seedNode is provided by config, dial out.
 	if config.GetString("seeds") != "" {
