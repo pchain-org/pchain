@@ -48,7 +48,7 @@ func NewVAL(valFile string) (*VAL, error) {
 	val := &VAL{
 		group: group,
 	}
-	val.BaseService = *NewBaseService(log, "VAL", val)
+	val.BaseService = *NewBaseService(logger, "VAL", val)
 	_, err = val.Start()
 	return val, err
 }

@@ -119,7 +119,7 @@ func (a *ABCIResponses) ResCb(req *abci.Request, res *abci.Response) {
 
 			a.ValidTxs++
 		} else {
-			log.Debug("Invalid tx", "code", txResult.Code, "log", txResult.Log)
+			logger.Debug("Invalid tx", "code", txResult.Code, "log", txResult.Log)
 			a.InvalidTxs++
 			txError = txResult.Code.String()
 		}

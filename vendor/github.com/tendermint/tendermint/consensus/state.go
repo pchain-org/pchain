@@ -287,7 +287,7 @@ func NewConsensusState(config cfg.Config, state *sm.State, proxyAppConn proxy.Ap
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
 	cs.reconstructLastCommit(state)
-	cs.BaseService = *NewBaseService(log, "ConsensusState", cs)
+	cs.BaseService = *NewBaseService(logger, "ConsensusState", cs)
 	return cs
 }
 
@@ -1018,7 +1018,7 @@ func (cs *ConsensusState) defaultDoPrevote(height int, round int) {
 		err = cs.RoundState.Epoch.ValidateNextEpoch(proposedNextEpoch, height)
 		if err != nil {
 			// ProposalBlock is invalid, prevote nil.
-			log.Warn("enterPrevote: Proposal reward scheme is invalid", "error", err)
+			logger.Warn("enterPrevote: Proposal reward scheme is invalid", "error", err)
 			cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
 			return
 		}

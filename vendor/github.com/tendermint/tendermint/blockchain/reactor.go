@@ -13,7 +13,7 @@ import (
 	"github.com/tendermint/tendermint/proxy"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
-	//"fmt"
+	"fmt"
 )
 
 const (

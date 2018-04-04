@@ -37,7 +37,7 @@ import (
 	//"github.com/tendermint/ethermint/utils"
 	ep "github.com/tendermint/tendermint/epoch"
 	st "github.com/tendermint/tendermint/state"
-
+	"os"
 	"github.com/pchain/common/plogger"
 )
 
