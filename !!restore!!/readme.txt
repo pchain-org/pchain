@@ -72,7 +72,6 @@ here are the deployment steps:
 		# This is a TOML config file.
 		# For more information, see https://github.com/toml-lang/toml
 
-		proxy_app = "tcp://127.0.0.1:46658"
 		moniker = "anonymous"
 		node_laddr = "tcp://0.0.0.0:46656"
 		seeds = "10.104.107.82:46656"

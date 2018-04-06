@@ -11,7 +11,7 @@ func NewServer(protoAddr, transport string, app types.Application) (cmn.Service,
 	var s cmn.Service
 	var err error
 	switch transport {
-	case "socket":
+	case "socket", "unix":
 		s, err = NewSocketServer(protoAddr, app)
 	case "grpc":
 		s, err = NewGRPCServer(protoAddr, types.NewGRPCApplication(app))

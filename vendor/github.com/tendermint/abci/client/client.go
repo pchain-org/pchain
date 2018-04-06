@@ -45,7 +45,7 @@ type Client interface {
 
 func NewClient(addr, transport string, mustConnect bool) (client Client, err error) {
 	switch transport {
-	case "socket":
+	case "socket", "unix":
 		client, err = NewSocketClient(addr, mustConnect)
 	case "grpc":
 		client, err = NewGRPCClient(addr, mustConnect)

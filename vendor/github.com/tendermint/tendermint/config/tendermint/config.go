@@ -7,6 +7,9 @@ import (
 
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
+	"time"
+	"github.com/pborman/uuid"
+	"strconv"
 )
 
 func getTMRoot(rootDir string) string {
@@ -59,8 +62,10 @@ func GetConfig(rootDir string) cfg.Config {
 	mapConfig.SetDefault("genesis_file", rootDir+"/genesis.json")
 	mapConfig.SetDefault("eth_genesis_file", rootDir+"/eth_genesis.json")
 	mapConfig.SetDefault("keystore", rootDir+"/keystore")
-	mapConfig.SetDefault("proxy_app", "tcp://127.0.0.1:46658")
-	mapConfig.SetDefault("abci", "socket")
+	//mapConfig.SetDefault("proxy_app", "tcp://127.0.0.1:46658")
+	//mapConfig.SetDefault("abci", "socket")
+	mapConfig.Set("proxy_app", calcAppAddr())
+	mapConfig.Set("abci", defaultAbci())
 	mapConfig.SetDefault("moniker", "anonymous")
 	mapConfig.SetDefault("node_laddr", "tcp://0.0.0.0:46656")
 	mapConfig.SetDefault("seeds", "")
@@ -114,8 +119,6 @@ func GetConfig(rootDir string) cfg.Config {
 
 var defaultConfigTmpl = `# This is a TOML config file.
 # For more information, see https://github.com/toml-lang/toml
-
-proxy_app = "tcp://127.0.0.1:46658"
 moniker = "__MONIKER__"
 node_laddr = "tcp://0.0.0.0:46656"
 seeds = ""
@@ -128,4 +131,12 @@ rpc_laddr = "tcp://0.0.0.0:46657"
 func defaultConfig(moniker string) (defaultConfig string) {
 	defaultConfig = strings.Replace(defaultConfigTmpl, "__MONIKER__", moniker, -1)
 	return
+}
+
+func defaultAbci() string {
+	return "unix"
+}
+
+func calcAppAddr() string {
+	return defaultAbci() + "://" + strconv.Itoa(time.Now().Nanosecond()) + "-" + uuid.NewRandom().String()
 }

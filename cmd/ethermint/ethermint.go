@@ -56,8 +56,10 @@ func ethermintCmd(ctx *cli.Context) error {
 		return nil
 	}
 
-	addr := ctx.GlobalString("addr")
-	abci := ctx.GlobalString("abci")
+	//addr := ctx.GlobalString("addr")
+	//abci := ctx.GlobalString("abci")
+	addr := config.GetString("proxy_app")
+	abci := config.GetString("abci")
 
 	//set verbosity level for go-ethereum
 	glog.SetToStderr(true)
