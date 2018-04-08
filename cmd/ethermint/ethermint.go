@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/sirupsen/logrus"
 
 	"github.com/tendermint/ethermint/app"
 	"github.com/tendermint/ethermint/ethereum"
@@ -18,25 +19,33 @@ import (
 
 	"github.com/tendermint/abci/server"
 	//tendermintNode "github.com/tendermint/tendermint/node"
-	"github.com/tendermint/ethermint/tendermint"
-	tmTypes "github.com/tendermint/tendermint/types"
-	cmn "github.com/tendermint/go-common"
 	"io/ioutil"
+
 	"github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/tendermint/ethermint/tendermint"
+	cmn "github.com/tendermint/go-common"
+	tmTypes "github.com/tendermint/tendermint/types"
 	//"github.com/ethereum/go-ethereum/cmd/geth"
 	//"github.com/ethereum/go-ethereum/logger"
+	"github.com/pchain/common/plogger"
 )
 
 func ethermintCmd(ctx *cli.Context) error {
 
 	/*
-	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
-	glog.V(logger.Info).Infoln("try to enable glog/logger")
-	fmt.Println("pow recover: ethermintCmd(), before Geth")
-	gethmain.Geth(ctx)
-	fmt.Println("pow recover: ethermintCmd(), after Geth")
-	return nil
+		glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
+		glog.V(logger.Info).Infoln("try to enable glog/logger")
+		fmt.Println("pow recover: ethermintCmd(), before Geth")
+		gethmain.Geth(ctx)
+		fmt.Println("pow recover: ethermintCmd(), after Geth")
+		return nil
 	*/
+	verbosity := ctx.GlobalInt(VerbosityFlag.Name)
+	if verbosity != 0 {
+		plogger.SetVerbosity(logrus.Level(verbosity))
+	}
+
+	fmt.Println("setVerbosity level %d", verbosity)
 
 	//always start ethereum
 	stack := ethereum.MakeSystemNode(clientIdentifier, version.Version, ctx.GlobalString(RpcLaddrFlag.Name), ctx)
@@ -46,12 +55,12 @@ func ethermintCmd(ctx *cli.Context) error {
 	utils.StartNode(stack)
 
 	consensus, err := getConsensus()
-	if(err != nil) {
+	if err != nil {
 		cmn.Exit(cmn.Fmt("Couldn't get consensus with: %v", err))
 	}
 	fmt.Printf("consensus is: %s\n", consensus)
 
-	if (consensus != tmTypes.CONSENSUS_POS) {
+	if consensus != tmTypes.CONSENSUS_POS {
 		fmt.Println("consensus is not pos, so not start the pos prototol")
 		return nil
 	}
@@ -119,14 +128,14 @@ func getConsensus() (string, error) {
 
 func testEthereumApi() {
 	coinbase, err := ethereum.Coinbase()
-	if(err != nil) {
+	if err != nil {
 		fmt.Printf("ethereum.Coinbase err with: %v\n", err)
 		return
 	}
 	fmt.Printf("testEthereumApi: coinbase is: %x\n", coinbase)
 
 	balance, err := ethereum.GetBalance(coinbase)
-	if(err != nil) {
+	if err != nil {
 		fmt.Printf("ethereum.GetBalance err with: %v\n", err)
 	}
 	fmt.Printf("testEthereumApi: balance is: %x\n", balance)

@@ -11,6 +11,7 @@ import (
 )
 
 var logger *logrus.Logger
+var verbosity = logrus.InfoLevel
 
 func GetLogger(module string) *logrus.Logger {
 	if logger != nil {
@@ -33,7 +34,7 @@ func GetLogger(module string) *logrus.Logger {
 
 	logger = logrus.New()
 	logger.Formatter = &logrus.TextFormatter{}
-	logger.Level = logrus.InfoLevel
+	logger.Level = verbosity
 
 	filelineHook := NewHook()
 	filelineHook.Field = "file" // Customize source field name
@@ -52,6 +53,13 @@ func GetLogger(module string) *logrus.Logger {
 	))
 
 	return logger
+}
+
+func SetVerbosity(level logrus.Level) {
+	verbosity = level
+	if logger != nil {
+		logger.SetLevel(level)
+	}
 }
 
 func init() {
