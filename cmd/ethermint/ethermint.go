@@ -7,7 +7,6 @@ import (
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/sirupsen/logrus"
 
 	"github.com/tendermint/ethermint/app"
@@ -30,6 +29,8 @@ import (
 	"github.com/pchain/common/plogger"
 )
 
+var log = plogger.GetLogger("cmd")
+
 func ethermintCmd(ctx *cli.Context) error {
 
 	/*
@@ -45,7 +46,7 @@ func ethermintCmd(ctx *cli.Context) error {
 		plogger.SetVerbosity(logrus.Level(verbosity))
 	}
 
-	fmt.Println("setVerbosity level %d", verbosity)
+	log.Info("setVerbosity level ", verbosity)
 
 	//always start ethereum
 	stack := ethereum.MakeSystemNode(clientIdentifier, version.Version, ctx.GlobalString(RpcLaddrFlag.Name), ctx)
@@ -69,8 +70,8 @@ func ethermintCmd(ctx *cli.Context) error {
 	abci := ctx.GlobalString("abci")
 
 	//set verbosity level for go-ethereum
-	glog.SetToStderr(true)
-	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
+	// glog.SetToStderr(true)
+	// glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	var backend *ethereum.Backend
 	if err := stack.Service(&backend); err != nil {
