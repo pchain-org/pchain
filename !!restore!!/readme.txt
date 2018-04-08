@@ -78,7 +78,6 @@ here are the deployment steps:
 		fast_sync = true
 		db_backend = "leveldb"
 		log_level = "notice"
-		rpc_laddr = "tcp://0.0.0.0:46657"
 
    4.3) copy A's /home/ubuntu/.ethermint/genesis.json to B's /home/ubuntu/.ethermint/, make their genesis.json keep the same,
         therefor the validators are the same between A and B.

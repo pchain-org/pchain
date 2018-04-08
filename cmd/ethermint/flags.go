@@ -60,21 +60,23 @@ var (
 		Usage: "Skip UPNP configuration",
 	}
 
-	RpcLaddrFlag = cli.StringFlag{
-		Name:  "rpc_laddr",
-		Value: "tcp://0.0.0.0:46657",
-		Usage: "RPC listen address. Port required",
-	}
+	/*
+		RpcLaddrFlag = cli.StringFlag{
+			Name:  "rpc_laddr",
+			Value: "unix://@pchainrpcunixsock",
+			Usage: "RPC listen address. Port required",
+		}
 
-	AddrFlag = cli.StringFlag{
-		Name:  "addr",
-		Value: "unix://@pchainappunixsock", //"tcp://0.0.0.0:46658",
-		Usage: "TMSP app listen address",
-	}
+		AddrFlag = cli.StringFlag{
+			Name:  "addr",
+			Value: "unix://@pchainappunixsock", //"tcp://0.0.0.0:46658",
+			Usage: "TMSP app listen address",
+		}
 
-	AbciFlag = cli.StringFlag{
-		Name:  "abci",
-		Value: "unix", //"socket"
-		Usage: "socket | grpc | unix",
-	}
+		AbciFlag = cli.StringFlag{
+			Name:  "abci",
+			Value: "unix", //"socket"
+			Usage: "socket | grpc | unix",
+		}
+	*/
 )

@@ -25,7 +25,6 @@ func getTendermintConfig(ctx *cli.Context) cfg.Config {
 	checkAndSet(config, ctx, "seeds")
 	checkAndSet(config, ctx, "fast_sync")
 	checkAndSet(config, ctx, "skip_upnp")
-	checkAndSet(config, ctx, "rpc_laddr")
 
 	tmlog.SetLogLevel(config.GetString("log_level"))
 

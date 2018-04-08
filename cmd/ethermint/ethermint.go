@@ -39,7 +39,7 @@ func ethermintCmd(ctx *cli.Context) error {
 	*/
 
 	//always start ethereum
-	stack := ethereum.MakeSystemNode(clientIdentifier, version.Version, ctx.GlobalString(RpcLaddrFlag.Name), ctx)
+	stack := ethereum.MakeSystemNode(clientIdentifier, version.Version, config.GetString("rpc_laddr"), ctx)
 
 	//emmark
 	fmt.Println("ethermintCmd->utils.StartNode(stack)")

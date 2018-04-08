@@ -147,9 +147,9 @@ func newCliApp(version, usage string) *cli.App {
 		SeedsFlag,
 		FastSyncFlag,
 		SkipUpnpFlag,
-		RpcLaddrFlag,
-		AddrFlag,
-		AbciFlag,
+		//RpcLaddrFlag,
+		//AddrFlag,
+		//AbciFlag,
 	}
 	return app
 }
