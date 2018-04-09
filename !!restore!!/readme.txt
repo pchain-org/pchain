@@ -42,20 +42,20 @@ here are the deployment steps:
 	ls ./bin
 
 	#make it simple to run 'ethermint'
-	sudo cp ./bin/ethermint /usr/local/bin/
+	sudo cp ./bin/pchain /usr/local/bin/
 
 	#create 5(you can change it) accounts with specified balance, will generate eth_genesis.json
-	ethermint --datadir /home/ubuntu/.ethermint init_eth_genesis "{10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}"
+	pchain --datadir /home/ubuntu/.pchain init_eth_genesis "{10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}"
 
 	#generate the pchain genesis.json with epoch/reward scheme parameters
-	ethermint -datadir /home/ubuntu/.ethermint init /home/ubuntu/.ethermint/eth_genesis.json
+	pchain -datadir /home/ubuntu/.pchain init /home/ubuntu/.pchain/eth_genesis.json
 
 	#start ehtermint node, run_debug.sh with more log output
 	./run.sh
 
     3.2) login to another console and run this cmd to check the log
 
-	tail -f /mnt/vdb/ethermint-master/ethereum.log
+	tail -f /tmp/pchain.%Y%m%d-%H.log
 
 4, follow steps 1-3 with the same source code in another machine, build a fresh node('B') but don't start it (!!!!not run the ./run.sh!!!!).
 

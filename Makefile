@@ -7,9 +7,9 @@ TMROOT = $${TMROOT:-$$HOME/.tendermint}
 all: get_deps install test
 
 build:
-	rm -rf ./ethermint
+	rm -rf ./pchain
 	go build --ldflags '-extldflags "-static"' \
-		--ldflags "-X github.com/tendermint/ethermint/version.GitCommit=`git rev-parse HEAD`"  -o $(GOPATH)/bin/ethermint ./cmd/ethermint/
+		--ldflags "-X github.com/tendermint/ethermint/version.GitCommit=`git rev-parse HEAD`"  -o $(GOPATH)/bin/pchain ./cmd/ethermint/
 
 install: get_deps
 	@go install ./cmd/ethermint
@@ -37,11 +37,11 @@ get_vendor_deps: tools
 	@glide install --strip-vendor
 
 build-docker:
-	rm -f ./ethermint
+	rm -f ./pchain
 	docker run -it --rm -v "$(PWD):/go/src/github.com/tendermint/ethermint" -w "/go/src/github.com/tendermint/ethermint" golang:latest go build ./cmd/ethermint
 	docker build -t "tendermint/ethermint" -f docker/Dockerfile .
 
 clean:
-	rm -f ./ethermint
+	rm -f ./pchain
   
 .PHONY: all install test test_race get_deps get_vendor_deps tools build-docker clean
