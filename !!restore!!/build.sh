@@ -5,7 +5,7 @@ set -e
 PWD=`pwd`
 echo $PWD
 workspace=$PWD
-ethermintdir="$workspace/src/github.com/tendermint/ethermint"
+ethermintdir="$workspace/src/github.com/pchain/ethermint"
 
 GOPATH="$workspace"
 export GOPATH
