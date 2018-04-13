@@ -110,6 +110,7 @@ func newTransaction(nonce uint64, to *common.Address, amount, gasLimit, gasPrice
 		AccountNonce: nonce,
 		Recipient:    to,
 		Payload:      data,
+		ExtendTxData: new(ExtendTxData),
 		Amount:       new(big.Int),
 //		Type:         new(big.Int),
 		GasLimit:     new(big.Int),

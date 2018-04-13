@@ -150,7 +150,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool,
 
 	etd := tx.ExtendTxData()
 
-	if  etd == nil {
+	if  etd == nil || etd.FuncName == "" {
 		msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
 		if err != nil {
 			return nil, nil, err

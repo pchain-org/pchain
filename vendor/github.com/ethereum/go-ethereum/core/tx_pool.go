@@ -296,7 +296,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	}
 
 	etd := tx.ExtendTxData()
-	if etd == nil {
+	if etd == nil || etd.FuncName == ""{
 		// Check the transaction doesn't exceed the current
 		// block limit gas.
 		if pool.gasLimit().Cmp(tx.Gas()) < 0 {
