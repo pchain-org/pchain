@@ -152,9 +152,12 @@ func (valSet *ValidatorSet) GetProposer() (proposer *Validator) {
 func (valSet *ValidatorSet) findProposer() *Validator {
 	var proposer *Validator
 	for _, val := range valSet.Validators {
-		if proposer == nil || !bytes.Equal(val.Address, proposer.Address) {
-			proposer = proposer.CompareAccum(val)
-		}
+fmt.Printf("Always use the first one as validator $#v\n", val)
+		proposer = val
+		break
+//		if proposer == nil || !bytes.Equal(val.Address, proposer.Address) {
+//			proposer = proposer.CompareAccum(val)
+//		}
 	}
 	return proposer
 }

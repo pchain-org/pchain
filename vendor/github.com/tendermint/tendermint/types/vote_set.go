@@ -143,6 +143,8 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	valAddr := vote.ValidatorAddress
 	blockKey := vote.BlockID.Key()
 
+fmt.Printf("VoteSet::addVote : before add vote, voteset is ##v\n", voteSet)
+
 	// Ensure that validator index was set
 	if valIndex < 0 || len(valAddr) == 0 {
 		panic("Validator index or address was not set in vote.")
@@ -183,6 +185,9 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 
 	// Add vote and get conflicting vote if any
 	added, conflicting := voteSet.addVerifiedVote(vote, blockKey, val.VotingPower)
+
+fmt.Printf("VoteSet::addVote : after add vote, voteset is ##v\n", voteSet)
+
 	if conflicting != nil {
 		return added, &ErrVoteConflictingVotes{
 			VoteA: conflicting,
@@ -262,6 +267,7 @@ func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower
 	// Add vote to votesByBlock
 	votesByBlock.addVerifiedVote(vote, votingPower)
 
+fmt.Printf("VoteSet::addVerifiedVote: origSum %d quorum %d votesByBlock.sum %d voteSet.maj23 %+v\n", origSum, quorum, votesByBlock.sum, voteSet.maj23)
 	// If we just crossed the quorum threshold and have 2/3 majority...
 	if origSum < quorum && quorum <= votesByBlock.sum {
 		// Only consider the first quorum reached

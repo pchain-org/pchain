@@ -167,6 +167,11 @@ func (privVal *PrivValidator) GetAddress() []byte {
 	return privVal.Address
 }
 
+// GetPubKey returns the public key of the validator.
+func (privVal *PrivValidator) GetPubKey() crypto.PubKey {
+	return privVal.PubKey
+}
+
 func (privVal *PrivValidator) SignVote(chainID string, vote *Vote) error {
 	privVal.mtx.Lock()
 	defer privVal.mtx.Unlock()
