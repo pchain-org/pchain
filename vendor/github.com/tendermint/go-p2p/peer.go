@@ -12,6 +12,24 @@ import (
 	wire "github.com/tendermint/go-wire"
 )
 
+// Peer is an interface representing a peer connected on a reactor.
+/*
+type Peer interface {
+	cmn.Service
+
+	Key() string
+	IsOutbound() bool
+	IsPersistent() bool
+	Status() ConnectionStatus
+
+	Send(byte, interface{}) bool
+	TrySend(byte, interface{}) bool
+
+	Set(string, interface{})
+	Get(string) interface{}
+}
+*/
+
 // Peer could be marked as persistent, in which case you can use
 // Redial function to reconnect. Note that inbound peers can't be
 // made persistent. They should be made persistent on the other end.
@@ -275,6 +293,28 @@ func (p *Peer) Equals(other *Peer) bool {
 // Get the data for a given key.
 func (p *Peer) Get(key string) interface{} {
 	return p.Data.Get(key)
+}
+
+// Key returns the peer's id key.
+func (p *Peer) PeerKey() string {
+//	return p.nodeInfo.ListenAddr // XXX: should probably be PubKey.KeyString()
+	return p.ListenAddr // XXX: should probably be PubKey.KeyString()
+}
+
+// NodeInfo returns a copy of the peer's NodeInfo.
+/*
+func (p *peer) NodeInfo() *NodeInfo {
+	if p.nodeInfo == nil {
+		return nil
+	}
+	n := *p.nodeInfo // copy
+	return &n
+}
+*/
+
+// Status returns the peer's ConnectionStatus.
+func (p *Peer) Status() ConnectionStatus {
+	return p.mconn.Status()
 }
 
 func dial(addr *NetAddress, config *PeerConfig) (net.Conn, error) {

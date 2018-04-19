@@ -38,7 +38,6 @@ import (
 	ep "github.com/tendermint/tendermint/epoch"
 	st "github.com/tendermint/tendermint/state"
 	"os"
-	"github.com/pchain/common/plogger"
 )
 
 var logger = plogger.GetLogger("node")
@@ -160,6 +159,22 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
+/*
+	nodeInfo := n.makeNodeInfo()
+fmt.Printf("node: nodeInfo %x\n", nodeInfo)
+fmt.Printf("node: nodeInfo %#v\n", nodeInfo)
+
+fmt.Printf("node: ConsensusState %x\n", consensusState)
+
+	consensusState.SetNodeInfo(nodeInfo)
+
+	if consensusState.nodeInfo != nil {
+		fmt.Println("consensusState.nodeInfo is %+v\n", consensusState.nodeInfo)
+	} else {
+		fmt.Println("local nodeInfo is %+v\n", nodeInfo)
+		panic("consensusState.nodeInfo is Nil")
+	}
+*/
 	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
 
 	// Make p2p network switch
@@ -247,8 +262,22 @@ func (n *Node) OnStart() error {
 	l := p2p.NewDefaultListener(protocol, address, n.config.GetBool("skip_upnp"))
 	n.sw.AddListener(l)
 
+	fmt.Printf("(n *Node) OnStart() - after creawte listener\n")
+
+	// Set node info
+	// n.consensusReactor.conS.SetNodeInfo(n.makeNodeInfo())
+
+	nodeInfo := n.makeNodeInfo()
+	fmt.Printf("onstart(): nodeInfo %#v\n", nodeInfo)
+
+	//n.consensusReactor.conS.SetNodeInfo(nodeInfo)
+	n.consensusState.SetNodeInfo(nodeInfo)
+
+	fmt.Printf("(n *Node) OnStart() - before start switch\n")
+
 	// Start the switch
-	n.sw.SetNodeInfo(n.makeNodeInfo())
+	//n.sw.SetNodeInfo(n.makeNodeInfo())
+	n.sw.SetNodeInfo(nodeInfo)
 	n.sw.SetNodePrivKey(n.privKey)
 	_, err := n.sw.Start()
 	if err != nil {

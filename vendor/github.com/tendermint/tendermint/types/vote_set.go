@@ -107,6 +107,10 @@ func (voteSet *VoteSet) Type() byte {
 	}
 }
 
+func (voteSet *VoteSet) Votes() []*Vote {
+	return voteSet.votes
+}
+
 func (voteSet *VoteSet) Size() int {
 	if voteSet == nil {
 		return 0
@@ -138,6 +142,8 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	valIndex := vote.ValidatorIndex
 	valAddr := vote.ValidatorAddress
 	blockKey := vote.BlockID.Key()
+
+fmt.Printf("VoteSet::addVote : before add vote, voteset is ##v\n", voteSet)
 
 	// Ensure that validator index was set
 	if valIndex < 0 || len(valAddr) == 0 {
@@ -179,6 +185,9 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 
 	// Add vote and get conflicting vote if any
 	added, conflicting := voteSet.addVerifiedVote(vote, blockKey, val.VotingPower)
+
+fmt.Printf("VoteSet::addVote : after add vote, voteset is ##v\n", voteSet)
+
 	if conflicting != nil {
 		return added, &ErrVoteConflictingVotes{
 			VoteA: conflicting,
@@ -258,6 +267,7 @@ func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower
 	// Add vote to votesByBlock
 	votesByBlock.addVerifiedVote(vote, votingPower)
 
+fmt.Printf("VoteSet::addVerifiedVote: origSum %d quorum %d votesByBlock.sum %d voteSet.maj23 %+v\n", origSum, quorum, votesByBlock.sum, voteSet.maj23)
 	// If we just crossed the quorum threshold and have 2/3 majority...
 	if origSum < quorum && quorum <= votesByBlock.sum {
 		// Only consider the first quorum reached
@@ -448,6 +458,11 @@ func (voteSet *VoteSet) StringShort() string {
 	return fmt.Sprintf(`VoteSet{H:%v R:%v T:%v +2/3:%v %v %v}`,
 		voteSet.height, voteSet.round, voteSet.type_, voteSet.maj23, voteSet.votesBitArray, voteSet.peerMaj23s)
 }
+
+// Split vote set into parts
+//func (voteSet *VoteSet) MakePartSet(partSize int) *PartSet {
+//        return NewPartSetFromData(wire.BinaryBytes(VoteSet), partSize)
+//}
 
 //--------------------------------------------------------------------------------
 // Commit
