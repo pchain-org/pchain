@@ -52,8 +52,12 @@ func getLogger(module string) {
 	}
 
 	logger = logrus.New()
-	logger.Formatter = &logrus.TextFormatter{}
 	logger.Level = verbosity
+	if runtime.GOOS == "windows"{
+	    logger.Formatter = &logrus.TextFormatter{DisableColors:true}
+	} else {
+		logger.Formatter = &logrus.TextFormatter{}
+	}
 
 	filelineHook := NewHook()
 	filelineHook.Field = "file" // Customize source field name
