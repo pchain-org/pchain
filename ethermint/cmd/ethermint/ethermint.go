@@ -1,4 +1,4 @@
-package main
+package etmmain
 
 import (
 	"fmt"
@@ -27,8 +27,11 @@ import (
 	//"github.com/ethereum/go-ethereum/logger"
 )
 
-func ethermintCmd(ctx *cli.Context) error {
+var EthermintCmd = ethermintCmd
 
+func ethermintCmd(ctx *cli.Context, quit chan int) error {
+
+	config = getTendermintConfig(ctx)
 	/*
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 	glog.V(logger.Info).Infoln("try to enable glog/logger")
@@ -39,6 +42,7 @@ func ethermintCmd(ctx *cli.Context) error {
 	*/
 
 	//always start ethereum
+	fmt.Println("ethereum.MakeSystemNode")
 	stack := ethereum.MakeSystemNode(clientIdentifier, version.Version, ctx.GlobalString(RpcLaddrFlag.Name), ctx)
 
 	//emmark
@@ -95,6 +99,8 @@ func ethermintCmd(ctx *cli.Context) error {
 
 	fmt.Println("tm node")
 	tendermint.RunNode(config, ethApp)
+
+	quit <- 1
 	return nil
 }
 

@@ -1,4 +1,4 @@
-package etmmain
+package main
 
 import (
 	"os"

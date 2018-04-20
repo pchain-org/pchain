@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"gopkg.in/urfave/cli.v1"
 	cfg "github.com/tendermint/go-config"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 )
 
 const (
@@ -55,6 +56,66 @@ func newCliApp(version, usage string) *cli.App {
 	app.Version = version
 	app.Usage = usage
 	app.Flags = []cli.Flag{
+		utils.IdentityFlag,
+		utils.UnlockedAccountFlag,
+		utils.PasswordFileFlag,
+		utils.BootnodesFlag,
+		utils.KeyStoreDirFlag,
+		// utils.BlockchainVersionFlag,
+		utils.CacheFlag,
+		utils.LightKDFFlag,
+		utils.JSpathFlag,
+		utils.ListenPortFlag,
+		utils.MaxPeersFlag,
+		utils.MaxPendingPeersFlag,
+		utils.EtherbaseFlag,
+		utils.TargetGasLimitFlag,
+		utils.GasPriceFlag,
+		utils.NATFlag,
+		// utils.NatspecEnabledFlag,
+		utils.NodeKeyFileFlag,
+		utils.NodeKeyHexFlag,
+		utils.RPCEnabledFlag,
+		utils.RPCListenAddrFlag,
+		utils.RPCPortFlag,
+		utils.RPCApiFlag,
+		utils.WSEnabledFlag,
+		utils.WSListenAddrFlag,
+		utils.WSPortFlag,
+		utils.WSApiFlag,
+		utils.WSAllowedOriginsFlag,
+		utils.IPCDisabledFlag,
+		utils.IPCApiFlag,
+		utils.IPCPathFlag,
+		utils.ExecFlag,
+		utils.PreloadJSFlag,
+		utils.TestNetFlag,
+		utils.VMForceJitFlag,
+		utils.VMJitCacheFlag,
+		utils.VMEnableJitFlag,
+		utils.NetworkIdFlag,
+		utils.RPCCORSDomainFlag,
+		utils.MetricsEnabledFlag,
+		utils.SolcPathFlag,
+		utils.GpoMinGasPriceFlag,
+		utils.GpoMaxGasPriceFlag,
+		utils.GpoFullBlockRatioFlag,
+		utils.GpobaseStepDownFlag,
+		utils.GpobaseStepUpFlag,
+		utils.GpobaseCorrectionFactorFlag,
+		VerbosityFlag, // not exposed by go-ethereum
+		DataDirFlag,   // so we control defaults
+
+		//ethermint flags
+		MonikerFlag,
+		NodeLaddrFlag,
+		LogLevelFlag,
+		SeedsFlag,
+		FastSyncFlag,
+		SkipUpnpFlag,
+		RpcLaddrFlag,
+		AddrFlag,
+		AbciFlag,
 	}
 	return app
 }
