@@ -37,9 +37,27 @@ func main() {
 			Description: "Print the version",
 		},
 
+		{
+			Action:		initEthGenesis,
+			Name:		"init_eth_genesis",
+			Usage:		"init_eth_genesis balance:\"10,10,10\"",
+			Description: "Initialize the balance of accounts",
+		},
+
+		{
+			Action:      initCmd,
+			Name:        "init",
+			Usage:       "init genesis.json",
+			Description: "Initialize the files",
+		},
+
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 
+	cliApp.Before = func(ctx *cli.Context) error {
+		config = getTendermintConfig(ctx)
+		return nil
+	}
 
 	if err := cliApp.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -120,7 +138,7 @@ func newCliApp(version, usage string) *cli.App {
 	return app
 }
 
-func versionCmd(ctx *cli.Context) error {
+func versionCmd() error {
 	fmt.Println(version.Version)
 	return nil
 }
