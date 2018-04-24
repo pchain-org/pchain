@@ -36,7 +36,7 @@ func getLogger(module string) {
 	}
 
 	fmt.Printf("log directory %s\r\n", dir)
-	path := dir + "pchainabcd.%Y%m%d-%H.log"
+	path := dir + "pchain.%Y%m%d-%H.log"
 
 	writer, err := rotatelogs.New(
 		path,
