@@ -69,10 +69,10 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 	mapConfig.SetDefault("genesis_file", rootDir+"/genesis.json")
 	mapConfig.SetDefault("eth_genesis_file", rootDir+"/eth_genesis.json")
 	mapConfig.SetDefault("keystore", rootDir+"/keystore")
-	mapConfig.SetDefault("proxy_app", "tcp://127.0.0.1:46658")
-	mapConfig.SetDefault("abci", "socket")
-	//mapConfig.Set("proxy_app", calcAppAddr())
-	//mapConfig.Set("abci", defaultAbci())
+	//mapConfig.SetDefault("proxy_app", "tcp://127.0.0.1:46658")
+	//mapConfig.SetDefault("abci", "socket")
+	mapConfig.Set("proxy_app", calcAppAddr())
+	mapConfig.Set("abci", defaultAbci())
 	mapConfig.SetDefault("moniker", "anonymous")
 	mapConfig.SetDefault("node_laddr", "tcp://0.0.0.0:46656")
 	mapConfig.SetDefault("seeds", "")
@@ -126,7 +126,7 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 
 var defaultConfigTmpl = `# This is a TOML config file.
 # For more information, see https://github.com/toml-lang/toml
-proxy_app = "tcp://127.0.0.1:46658"
+#proxy_app = "tcp://127.0.0.1:46658"
 moniker = "__MONIKER__"
 node_laddr = "tcp://0.0.0.0:46656"
 seeds = ""
