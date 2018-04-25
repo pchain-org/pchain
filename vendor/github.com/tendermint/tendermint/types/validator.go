@@ -19,6 +19,8 @@ type Validator struct {
 	PubKey      crypto.PubKey `json:"pub_key"`
 	VotingPower int64         `json:"voting_power"`
 	Accum       int64         `json:"accum"`
+	NodeKey     string	  `json:"nodekey"`
+	NodePeer    *p2p.Peer	  `json:"nodepeer"`
 }
 
 func NewValidator(pubKey crypto.PubKey, votingPower int64) *Validator {

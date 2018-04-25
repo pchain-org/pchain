@@ -98,13 +98,25 @@ const (
 	RoundStepNewHeight     = RoundStepType(0x01) // Wait til CommitTime + timeoutCommit
 	RoundStepNewRound      = RoundStepType(0x02) // Setup new round and go to RoundStepPropose
 	RoundStepPropose       = RoundStepType(0x03) // Did propose, gossip proposal
-	RoundStepPrevote       = RoundStepType(0x04) // Did prevote, gossip prevotes
-	RoundStepPrevoteWait   = RoundStepType(0x05) // Did receive any +2/3 prevotes, start timeout
-	RoundStepPrecommit     = RoundStepType(0x06) // Did precommit, gossip precommits
-	RoundStepPrecommitWait = RoundStepType(0x07) // Did receive any +2/3 precommits, start timeout
-	RoundStepCommit        = RoundStepType(0x08) // Entered commit state machine
-	RoundStepTest          = RoundStepType(0x09) // for test author@liaoyd
+	RoundStepPrepareCosi   = RoundStepType(0x04) // Did Cosi preparetion, gossip commit/challenge
+	RoundStepPrevote       = RoundStepType(0x05) // Did prevote, gossip prevotes
+	RoundStepPrevoteWait   = RoundStepType(0x06) // Did receive any +2/3 prevotes, start timeout
+	RoundStepPrecommit     = RoundStepType(0x07) // Did precommit, gossip precommits
+	RoundStepPrecommitWait = RoundStepType(0x08) // Did receive any +2/3 precommits, start timeout
+	RoundStepCommit        = RoundStepType(0x09) // Entered commit state machine
+	RoundStepTest          = RoundStepType(0x0a) // for test author@liaoyd
 	// NOTE: RoundStepNewHeight acts as RoundStepCommitWait.
+)
+
+type CosiStepType uint8 // These must be numeric, ordered.
+
+const (
+	Cosi_BuildTree		= RoundStepType(0x01) // Finish building communication tree
+	Cosi_ReceivedCommit	= RoundStepType(0x02) // Received commitment from children, not for leaf
+	Cosi_SendCommit		= RoundStepType(0x03) // Sent commitment to parent, not for root
+	Cosi_ReceiveChallenge	= RoundStepType(0x04) // Received challenge code
+	Cosi_SendChallenge	= RoundStepType(0x05) // Sent challenge code to children
+	Cosi_SendSignature	= RoundStepType(0x06) // Sent signatures to parent
 )
 
 func (rs RoundStepType) String() string {
@@ -115,6 +127,8 @@ func (rs RoundStepType) String() string {
 		return "RoundStepNewRound"
 	case RoundStepPropose:
 		return "RoundStepPropose"
+	case RoundStepPrepareCosi:
+		return "RoundStepPrepareCosi"
 	case RoundStepPrevote:
 		return "RoundStepPrevote"
 	case RoundStepPrevoteWait:
@@ -133,6 +147,16 @@ func (rs RoundStepType) String() string {
 }
 
 //-----------------------------------------------------------------------------
+
+// All all information needed by Cosi here, information needed
+// o challenge code
+// o bitmap for commitments/signature received
+// o any more???
+type CosiState struct {
+	Height             int // Height we are working on
+	Round              int
+	Step		   CosiStepType 
+}
 
 // Immutable when returned from ConsensusState.GetRoundState()
 // TODO: Actually, only the top pointer is copied,
@@ -162,6 +186,7 @@ type RoundState struct {
 	PrecommitAggr      *types.VotesAggr
 	PrecommitMaj23     *types.Maj23VoteSet
 	PrecommitMaj23Parts *types.PartSet
+	Cosi		   CosiState
 }
 
 func (rs *RoundState) RoundStateEvent() types.EventDataRoundState {
@@ -775,6 +800,24 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 		// TODO: If rs.Height == vote.Height && rs.Round < vote.Round,
 		// the peer is sending us CatchupCommit precommits.
 		// We could make note of this and help filter in broadcastHasVoteMessage().
+	case *CosiCommitmentMessage:
+		// This must be a non-leaf node receiving commitment from it's child,
+		// need to aggregate all the commitments and send to its parent
+		err = cs.handleCosiCommitment(msg.Commitment)
+	case *CosiChallengeMessage:
+		// This must be a non-root node receiving challenge from it's parent,
+		// need to send the challenge code to its children.
+		//
+		// *** Challenge code may be send by root using gossip broadcast
+		err = cs.handleCosiCommitment(msg.Challenge)
+	case *CosiSignatureMessage:
+		// This must be a non-leaf node receiving signature from it's child,
+		// need to aggregate all the commitments and send to its parent
+		err = cs.handleCosiSignature(msg.Signature)
+	case *CosiSignAggrMessage:
+		// This must be a non-leaf node receiving signature from it's child,
+		// need to aggregate all the commitments and send to its parent
+		err = cs.handleCosiSignAggr(msg.SignAggr)
 	default:
 		logger.Warn("Unknown msg type ", reflect.TypeOf(msg))
 	}
@@ -893,7 +936,11 @@ func (cs *ConsensusState) enterPropose(height int, round int) {
 		// else, we'll enterPrevote when the rest of the proposal is received (in AddProposalBlockPart),
 		// or else after timeoutPropose
 		if cs.isProposalComplete() {
-			cs.enterPrevote(height, cs.Round)
+			if os.Getenv("CONSENSUS_COSI") != nil {
+				cs.enterPrepareCosi(height, cs.Round)
+			} else {
+				cs.enterPrevote(height, cs.Round)
+			}
 		}
 	}()
 
@@ -1040,6 +1087,67 @@ func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts 
 	return types.MakeBlock(cs.Height, cs.state.ChainID, txs, commit,
 		cs.state.LastBlockID, val.Hash(), cs.state.AppHash,
 		epochBytes, cs.config.GetInt("block_part_size"))
+}
+
+// Enter: proposal block and POL is ready.
+func (cs *ConsensusState) enterPrepareCosi(height int, round int) {
+	if cs.Height != height || round < cs.Round || (cs.Round == round && RoundStepPrevote <= cs.Step) {
+		logger.Debug(Fmt("enterPrepareCosi(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
+		return
+	}
+
+	defer func() {
+		// Done enterPrevote:
+		cs.updateRoundStep(round, RoundStepPrepareCosi)
+		cs.newStep()
+	}()
+
+	// fire event for how we got here
+	if cs.isProposalComplete() {
+		types.FireEventCompleteProposal(cs.evsw, cs.RoundStateEvent())
+	} else {
+		// we received +2/3 prevotes for a future round
+		// TODO: catchup event?
+	}
+
+	logger.Info(Fmt("enterPrepareCosi(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
+
+	// Valdiate proposal block
+        err := cs.state.ValidateBlock(cs.ProposalBlock)
+        if err != nil {
+                // ProposalBlock is invalid, prevote nil. 
+                logger.Warn("enterPrepareCosi: ProposalBlock is invalid", " error:", err) 
+                // cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+                return
+        }    
+
+        // Valdiate proposal block
+        proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.ExData.BlockExData)
+        if proposedNextEpoch != nil {
+                err = cs.RoundState.Epoch.ValidateNextEpoch(proposedNextEpoch, height)
+                if err != nil {
+                        // ProposalBlock is invalid, prevote nil. 
+                        logger.Warn("enterPrepareCosi: Proposal reward scheme is invalid", "error", err) 
+                        // cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+                        return
+                }    
+        }    
+
+	// Build tree with proposer as the root
+	cs.cosiBuildTree(height, round)
+
+	// Need to update internal Cosi step
+	cs.cosiUpdateStep()
+
+	// Save information of current validator, ie, parent/child nodes/...
+	cs.cosiSaveCurNodeInfo()
+
+	// Save information of current validator, ie, parent/child nodes/...
+	if cs.Cosi.IsCurValLeaf() {
+		cs.cosiGenCommitment()
+
+		// Need to trigger upper ConsensusReactor to send commitment to parent, how?
+	}
 }
 
 // Enter: `timeoutPropose` after entering Propose.
@@ -1501,7 +1609,11 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 		fmt.Printf("block.LastCommit is %v\n", cs.ProposalBlock.LastCommit)
 		if cs.Step == RoundStepPropose && cs.isProposalComplete() {
 			// Move onto the next step
-			cs.enterPrevote(height, cs.Round)
+			if os.Getenv("CONSENSUS_COSI") != nil {
+				cs.enterPrepareCosi(height, cs.Round)
+			} else {
+				cs.enterPrevote(height, cs.Round)
+			}
 		} else if cs.Step == RoundStepCommit {
 			// If we're waiting on the proposal block...
 			cs.tryFinalizeCommit(height)
@@ -1939,6 +2051,36 @@ func (cs *ConsensusState) sendMaj23Vote(votetype byte) {
 
 	//logger.Debug(Fmt("Build and send Maj 2/3+ for (height %d round %d type %d)\n", cs.Height, cs.Round, votetype))
 
+}
+
+// Maintain a bitmap of commitments received from all it children,
+// if all received, aggregate them and,
+// o stop if it's root node,
+// o send to its parent otherwise
+func (cs *ConsensusState) handleCosiCommitment() (err error) {
+	// some code to add
+	return nil
+}
+
+// Maintain a bitmap of signatures received from all it children,
+// if all received, aggregate them and,
+// o stop if it's root node,
+// o send to its parent otherwise
+func (cs *ConsensusState) handleCosiSignature() (err error) {
+	// some code to add
+	return nil
+}
+
+// Save the challenge code into cs.Cosi for furture use
+func (cs *ConsensusState) handleChallenge() (err error) {
+	// some code to add
+	return nil
+}
+
+// Verify whether +2/3 voting power received, if yes, go to next state 
+func (cs *ConsensusState) handleSignAggr() (err error) {
+        // some code to add
+        return nil
 }
 
 //---------------------------------------------------------

@@ -1411,8 +1411,13 @@ const (
 	msgTypeHasVote      = byte(0x15)
 	msgTypeVoteSetMaj23 = byte(0x16)
 	msgTypeVoteSetBits  = byte(0x17)
-	msgTypeMaj23VotesAggr= byte(0x18)
-	msgTypeVotesAggrPart= byte(0x1a)
+	msgTypeMaj23VotesAggr	= byte(0x18)
+	msgTypeVotesAggrPart	= byte(0x19)
+	msgTypeCosiCommitment	= byte(0x1a)
+	msgTypeCosiChallenge	= byte(0x1b)
+	msgTypeCosiSignature	= byte(0x1c)
+	msgTypeCosiSignAggr	= byte(0x1d)
+
 	//new liaoyd
 	msgTypeTest = byte(0x03)
 )
@@ -1432,6 +1437,10 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{&VoteSetBitsMessage{}, msgTypeVoteSetBits},
 	wire.ConcreteType{&Maj23VotesAggrMessage{}, msgTypeMaj23VotesAggr},
 	wire.ConcreteType{&VotesAggrPartMessage{}, msgTypeVotesAggrPart},
+	wire.ConcreteType{&CosiCommitmentMessage{}, msgTypeCosiCommitment},
+	wire.ConcreteType{&CosiChallengeMessage{}, msgTypeCosiChallenge},
+	wire.ConcreteType{&CosiSignatureMessage{}, msgTypeCosiSignature},
+	wire.ConcreteType{&CosiSignAggrMessage{}, msgTypeCosiSignAggr},
 	//new liaoyd
 	wire.ConcreteType{&TestMessage{}, msgTypeTest},
 )
@@ -1542,6 +1551,34 @@ func (m *VotesAggrPartMessage) String() string {
 	return fmt.Sprintf("[VotesAggrPart H:%v R:%v T:%v P:%v]", m.Height, m.Round, m.Type, m.Part)
 }
 
+//-------------------------------------
+type CosiCommitmentMessage struct {
+	Height		int
+	Round		int
+	Type		byte
+	Commitment	int
+}
+
+type CosiChallengeMessage struct {
+	Height		int
+	Round		int
+	Type		byte
+	Challenge	int
+}
+
+type CosiSignatureMessage struct {
+	Height		int
+	Round		int
+	Type		byte
+	Signature	int
+}
+
+type CosiSignaAggrMessage struct {
+	Height		int
+	Round		int
+	Type		byte
+	SignAggr	int
+}
 //-------------------------------------
 
 type VoteMessage struct {
