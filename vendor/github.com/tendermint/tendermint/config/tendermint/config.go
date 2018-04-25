@@ -2,7 +2,7 @@ package tendermint
 
 import (
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 
 	. "github.com/tendermint/go-common"
@@ -11,6 +11,13 @@ import (
 	"github.com/pborman/uuid"
 	"strconv"
 )
+
+const (
+	defaultDataDir         = "data"
+	defaultConfigFileName  = "config.toml"
+	defaultGenesisJSONName = "genesis.json"
+)
+
 
 func getTMRoot(rootDir string) string {
 	if rootDir == "" {
@@ -26,12 +33,12 @@ func getTMRoot(rootDir string) string {
 	return rootDir
 }
 
-func initTMRoot(rootDir string) {
+func initTMRoot(rootDir, chainId string) {
 	rootDir = getTMRoot(rootDir)
 	EnsureDir(rootDir, 0700)
-	EnsureDir(rootDir+"/data", 0700)
+	EnsureDir(filepath.Join(rootDir, chainId, defaultDataDir), 0700)
 
-	configFilePath := path.Join(rootDir, "config.toml")
+	configFilePath := filepath.Join(rootDir, defaultConfigFileName)
 
 	// Write default config file if missing.
 	if !FileExists(configFilePath) {
@@ -41,11 +48,11 @@ func initTMRoot(rootDir string) {
 	}
 }
 
-func GetConfig(rootDir string) cfg.Config {
+func GetConfig(rootDir, chainId string) cfg.Config {
 	rootDir = getTMRoot(rootDir)
-	initTMRoot(rootDir)
+	initTMRoot(rootDir, chainId)
 
-	configFilePath := path.Join(rootDir, "config.toml")
+	configFilePath := filepath.Join(rootDir, defaultConfigFileName)
 	mapConfig, err := cfg.ReadMapConfigFromFile(configFilePath)
 	if err != nil {
 		Exit(Fmt("Could not read config: %v", err))
@@ -62,10 +69,10 @@ func GetConfig(rootDir string) cfg.Config {
 	mapConfig.SetDefault("genesis_file", rootDir+"/genesis.json")
 	mapConfig.SetDefault("eth_genesis_file", rootDir+"/eth_genesis.json")
 	mapConfig.SetDefault("keystore", rootDir+"/keystore")
-	//mapConfig.SetDefault("proxy_app", "tcp://127.0.0.1:46658")
-	//mapConfig.SetDefault("abci", "socket")
-	mapConfig.Set("proxy_app", calcAppAddr())
-	mapConfig.Set("abci", defaultAbci())
+	mapConfig.SetDefault("proxy_app", "tcp://127.0.0.1:46658")
+	mapConfig.SetDefault("abci", "socket")
+	//mapConfig.Set("proxy_app", calcAppAddr())
+	//mapConfig.Set("abci", defaultAbci())
 	mapConfig.SetDefault("moniker", "anonymous")
 	mapConfig.SetDefault("node_laddr", "tcp://0.0.0.0:46656")
 	mapConfig.SetDefault("seeds", "")
@@ -78,18 +85,18 @@ func GetConfig(rootDir string) cfg.Config {
 	mapConfig.SetDefault("priv_validator_file", rootDir+"/priv_validator.json")
 	mapConfig.SetDefault("priv_validator_file_root", rootDir+"/priv_validator")
 	mapConfig.SetDefault("db_backend", "leveldb")
-	mapConfig.SetDefault("db_dir", rootDir+"/data")
+	mapConfig.SetDefault("db_dir", filepath.Join(rootDir, chainId, defaultDataDir))
 	mapConfig.SetDefault("log_level", "info")
 	mapConfig.SetDefault("rpc_laddr", "tcp://0.0.0.0:46657")
 	mapConfig.SetDefault("grpc_laddr", "")
 	mapConfig.SetDefault("prof_laddr", "")
 	mapConfig.SetDefault("revision_file", rootDir+"/revision")
-	mapConfig.SetDefault("cs_wal_file", rootDir+"/data/cs.wal/wal")
+	mapConfig.SetDefault("cs_wal_file", filepath.Join(rootDir, chainId, defaultDataDir, "cs.wal", "wal"))
 	mapConfig.SetDefault("cs_wal_light", false)
 	mapConfig.SetDefault("filter_peers", false)
 
 	//liaoyd
-	mapConfig.SetDefault("cs_val_file", rootDir+"/data/cs.val/val")
+	mapConfig.SetDefault("cs_val_file", filepath.Join(rootDir, chainId, defaultDataDir, "cs.val", "val"))
 
 	mapConfig.SetDefault("block_size", 10000)      // max number of txs
 	mapConfig.SetDefault("block_part_size", 65536) // part size 64K
@@ -110,7 +117,7 @@ func GetConfig(rootDir string) cfg.Config {
 	mapConfig.SetDefault("mempool_recheck", true)
 	mapConfig.SetDefault("mempool_recheck_empty", true)
 	mapConfig.SetDefault("mempool_broadcast", true)
-	mapConfig.SetDefault("mempool_wal_dir", rootDir+"/data/mempool.wal")
+	mapConfig.SetDefault("mempool_wal_dir", filepath.Join(rootDir, chainId, defaultDataDir, "mempool.wal"))
 
 	mapConfig.SetDefault("tx_index", "kv")
 
@@ -119,6 +126,7 @@ func GetConfig(rootDir string) cfg.Config {
 
 var defaultConfigTmpl = `# This is a TOML config file.
 # For more information, see https://github.com/toml-lang/toml
+proxy_app = "tcp://127.0.0.1:46658"
 moniker = "__MONIKER__"
 node_laddr = "tcp://0.0.0.0:46656"
 seeds = ""

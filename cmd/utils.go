@@ -14,10 +14,10 @@ import (
 	tmlog "github.com/tendermint/go-logger"
 	tmcfg "github.com/tendermint/tendermint/config/tendermint"
 )
-
-func getTendermintConfig(ctx *cli.Context) cfg.Config {
+//Deprecated
+func getTendermintConfig(chainId string, ctx *cli.Context) cfg.Config {
 	datadir := ctx.GlobalString(DataDirFlag.Name)
-	config := tmcfg.GetConfig(datadir)
+	config := tmcfg.GetConfig(datadir, chainId)
 
 	checkAndSet(config, ctx, "moniker")
 	checkAndSet(config, ctx, "node_laddr")

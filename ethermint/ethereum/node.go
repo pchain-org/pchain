@@ -10,17 +10,18 @@ import (
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/tendermint/go-rpc/client"
+	"path/filepath"
 )
 
 var clientIdentifier = "geth" // Client identifier to advertise over the network
 
 // MakeSystemNode sets up a local node and configures the services to launch
-func MakeSystemNode(name, version, rpcuri string, ctx *cli.Context) *node.Node {
+func MakeSystemNode(chainId, version, rpcuri string, ctx *cli.Context) *node.Node {
 	params.TargetGasLimit = common.String2Big(ctx.GlobalString(utils.TargetGasLimitFlag.Name))
 
 	// Configure the node's service container
 	stackConf := &node.Config{
-		DataDir:     utils.MakeDataDir(ctx),
+		DataDir:     filepath.Join(utils.MakeDataDir(ctx), chainId),
 		PrivateKey:  utils.MakeNodeKey(ctx),
 		Name:        clientIdentifier,
 		IPCPath:     utils.MakeIPCPath(ctx),

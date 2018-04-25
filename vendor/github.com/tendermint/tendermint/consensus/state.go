@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"path"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
@@ -411,7 +411,7 @@ func (cs *ConsensusState) Wait() {
 
 // Open file to log all consensus messages and timeouts for deterministic accountability
 func (cs *ConsensusState) OpenWAL(walFile string) (err error) {
-	err = EnsureDir(path.Dir(walFile), 0700)
+	err = EnsureDir(filepath.Dir(walFile), 0700)
 	if err != nil {
 		log.Error("Error ensuring ConsensusState wal dir", "error", err.Error())
 		return err

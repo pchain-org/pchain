@@ -29,9 +29,9 @@ import (
 
 var EthermintCmd = ethermintCmd
 
-func ethermintCmd(ctx *cli.Context, quit chan int) error {
+func ethermintCmd(chainId string, ctx *cli.Context, quit chan int) error {
 
-	config = getTendermintConfig(ctx)
+	config = GetTendermintConfig(chainId, ctx)
 	/*
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 	glog.V(logger.Info).Infoln("try to enable glog/logger")
@@ -43,7 +43,7 @@ func ethermintCmd(ctx *cli.Context, quit chan int) error {
 
 	//always start ethereum
 	fmt.Println("ethereum.MakeSystemNode")
-	stack := ethereum.MakeSystemNode(clientIdentifier, version.Version, ctx.GlobalString(RpcLaddrFlag.Name), ctx)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx.GlobalString(RpcLaddrFlag.Name), ctx)
 
 	//emmark
 	fmt.Println("ethermintCmd->utils.StartNode(stack)")

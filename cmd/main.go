@@ -9,12 +9,13 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"gopkg.in/urfave/cli.v1"
 	cfg "github.com/tendermint/go-config"
+	etm "github.com/pchain/ethermint/cmd/ethermint"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 )
 
 const (
 	// Client identifier to advertise over the network
-	clientIdentifier = "Pchain"
+	mainChain = "pchain"
 )
 
 var (
@@ -55,7 +56,7 @@ func main() {
 	cliApp.HideVersion = true // we have a command to print the version
 
 	cliApp.Before = func(ctx *cli.Context) error {
-		config = getTendermintConfig(ctx)
+		config = etm.GetTendermintConfig(mainChain, ctx)
 		return nil
 	}
 

@@ -27,7 +27,7 @@ var (
 	// tendermint config
 	config cfg.Config
 )
-
+//Deprecated
 func main() {
 
 	glog.V(logger.Info).Infof("Starting ethermint")
@@ -67,7 +67,7 @@ func main() {
 	cliApp.HideVersion = true // we have a command to print the version
 
 	cliApp.Before = func(ctx *cli.Context) error {
-		config = getTendermintConfig(ctx)
+		config = GetTendermintConfig("", ctx)
 		return nil
 	}
 	cliApp.After = func(ctx *cli.Context) error {

@@ -43,13 +43,13 @@ func pchainCmd(ctx *cli.Context) error {
 func startMainChain(ctx *cli.Context, quit chan int) error {
 
 	fmt.Printf("start main chain\n")
-	go etm.EthermintCmd(ctx, quit)
+	go etm.EthermintCmd(mainChain, ctx, quit)
 	return nil
 }
 
 func startSideChain(ctx *cli.Context, chainId string, quit chan int) error {
 
 	fmt.Printf("start side chain with %v\n", chainId)
-	go etm.EthermintCmd(ctx, quit)
+	go etm.EthermintCmd(chainId, ctx, quit)
 	return nil
 }

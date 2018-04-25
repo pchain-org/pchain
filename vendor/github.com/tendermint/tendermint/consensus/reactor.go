@@ -56,7 +56,7 @@ func (conR *ConsensusReactor) OnStart() error {
 	conR.registerEventCallbacks()
 
 	//liaoyd
-	go conR.GetDiffValidator()
+	//go conR.GetDiffValidator()
 
 	if !conR.fastSync {
 		// conR.catchupValidator(val, ok)

@@ -142,7 +142,7 @@ func initEthGenesis(ctx *cli.Context) error {
 
 func init_eth_blockchain(ethGenesisPath string, ctx *cli.Context) {
 
-	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MakeDataDir(ctx), "chaindata"), 0, 0)
+	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MakeDataDir(ctx), mainChain, "geth/chaindata"), 0, 0)
 	if err != nil {
 		utils.Fatalf("could not open database: %v", err)
 	}
@@ -182,19 +182,20 @@ func init_em_files(genesisPath string) error  {
 		return err
 	}
 	privValidator := types.LoadOrGenPrivValidator(privValPath)
-	if err := createGenesisDoc(&coreGenesis, privValidator); err != nil {
+	if err := createGenesisDoc(mainChain, &coreGenesis, privValidator); err != nil {
 		utils.Fatalf("failed to write genesis file: %v", err)
 		return err
 	}
 	return nil
 }
 
-func createGenesisDoc(coreGenesis *core.Genesis, privValidator *types.PrivValidator) error {
+func createGenesisDoc(chainId string, coreGenesis *core.Genesis, privValidator *types.PrivValidator) error {
 	genFile := config.GetString("genesis_file")
 	if _, err := os.Stat(genFile); os.IsNotExist(err) {
 		genDoc := types.GenesisDoc{
-			ChainID:   cmn.Fmt("pchain-%v", cmn.RandStr(6)),
+			ChainID:   chainId, //cmn.Fmt("pchain-%v", cmn.RandStr(6)),
 			Consensus: types.CONSENSUS_POS,
+			GenesisTime: time.Now(),
 			RewardScheme: types.RewardSchemeDoc{
 				TotalReward:        "210000000000000000000000000",
 				PreAllocated:       "178500000000000000000000000",

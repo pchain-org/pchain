@@ -114,7 +114,7 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	epoch = ep.LoadOneEpoch(epochDB, state.LastEpochNumber)
 	state.Epoch = epoch
 
-	_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
+	//_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
 	fmt.Println("state.Validators:", state.Epoch.Validators)
 
 	// Transaction indexing
