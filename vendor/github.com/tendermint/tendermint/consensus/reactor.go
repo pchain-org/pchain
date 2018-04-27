@@ -252,6 +252,9 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 		case *VotesAggrPartMessage:
 			ps.SetHasMaj23VotesPart(msg.Height, msg.Round, msg.Type, msg.Part.Index)
 			conR.conS.peerMsgQueue <- msgInfo{msg, src.Key}
+		case *Maj23SignAggrMessage:
+			ps.SetHasMaj23SignAggr(msg.SignAggr)
+			conR.conS.peerMsgQueue <- msgInfo{msg, src.Key}
 		default:
 			logger.Warn("Unknown message type ", reflect.TypeOf(msg))
 		}
@@ -657,6 +660,34 @@ OUTER_LOOP:
 			continue OUTER_LOOP
 		}
 
+		// Send prevote 2/3+ BLS signature aggregation
+		if rs.PrevoteMaj23SignAggr != nil && !prs.PrevoteMaj23SignAggr {
+			logger.Debug(Fmt("gossipDataRoutine: Validator (addr %v proposr %v) send prevoteAggr (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round))
+
+			// share the Prevote signature aggregation with peer.
+			{
+				msg := &Maj23SignAggrMessage{Maj23SignAggr: rs.PrevoteMaj23SignAggr}
+				if peer.Send(DataChannel, struct{ ConsensusMessage }{msg}) {
+					ps.SetHasMaj23SignAggr(rs.PrevoteMaj23SignAggr)
+				}
+			}
+			continue OUTER_LOOP
+		}
+
+		// Send precommit 2/3+ BLS signature aggregation
+		if rs.PrecommitMaj23SignAggr != nil && !prs.PrecommitMaj23SignAggr {
+			logger.Debug(Fmt("gossipDataRoutine: Validator (addr %v proposr %v) send prevoteAggr (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round))
+
+			// share the Prevote signature aggregation with peer.
+			{
+				msg := &Maj23SignAggrMessage{Maj23SignAggr: rs.PrecommitMaj23SignAggr}
+				if peer.Send(DataChannel, struct{ ConsensusMessage }{msg}) {
+					ps.SetHasMaj23SignAggr(rs.PrecommitMaj23SignAggr)
+				}
+			}
+			continue OUTER_LOOP
+		}
+
 		//logger.Debug(Fmt("gossipDataRoutine: peer has nothing to do"))
 
 		// Nothing to do. Sleep.
@@ -930,6 +961,10 @@ type PeerRoundState struct {
 	PrecommitAggr		 bool
 	PrecommitMaj23PartsHeader  types.PartSetHeader //
 	PrecommitMaj23Parts        *BitArray           //
+
+	// Fields used for BLS signature aggregation
+	PrevoteMaj23SignAggr	bool
+	PrecommitMaj23SignAggr	bool
 }
 
 func (prs PeerRoundState) String() string {
@@ -1105,6 +1140,36 @@ fmt.Printf("enter SetHasMaj23PrecommitPart: part %d\n", index)
 	}
 
 	ps.PrecommitMaj23Parts.SetIndex(index, true)
+}
+
+// Received msg saying proposer has 2/3+ votes including the signature aggregation
+func (ps *PeerState) SetHasMaj23SignAggr(signAggr *types.SignAggr) {
+	ps.mtx.Lock()
+	defer ps.mtx.Unlock()
+
+	if ps.Height != signAggr.Height || ps.Round != signAggr.Round {
+		return
+	}
+
+	if signAggr.Type == types.VoteTypePrevote {
+		if ps.PrevoteMaj23SignAggr {
+			return
+		}
+
+		ps.PrevoteMaj23SignAggr = true
+//		ps.PrevoteMaj23PartsHeader = signAggr.VotePartsHeader
+	} else if votesAggr.TypeMaj23Sign == types.VoteTypePrecommit {
+		if ps.PrecommitMaj23SignAggr {
+			return
+		}
+
+		ps.PrecommitAggr = true
+//		ps.PrecommitMaj23PartsHeader = votesAggr.VotePartsHeader
+
+//		fmt.Printf("SetHasMaj23SignAggr: peer (%s) set up ps.PrecommitMaj23SignAggr %#v\n", ps.Peer.PeerKey(), ps.PrecommitMaj23SignAggr)
+	} else {
+		panic(Fmt("Invalid signAggr type %d", signAggr.Type))
+	}
 }
 
 // PickVoteToSend sends vote to peer.
@@ -1412,7 +1477,8 @@ const (
 	msgTypeVoteSetMaj23 = byte(0x16)
 	msgTypeVoteSetBits  = byte(0x17)
 	msgTypeMaj23VotesAggr= byte(0x18)
-	msgTypeVotesAggrPart= byte(0x1a)
+	msgTypeVotesAggrPart = byte(0x19)
+	msgTypeMaj23SignAggr = byte(0x1a)
 	//new liaoyd
 	msgTypeTest = byte(0x03)
 )
@@ -1432,6 +1498,7 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{&VoteSetBitsMessage{}, msgTypeVoteSetBits},
 	wire.ConcreteType{&Maj23VotesAggrMessage{}, msgTypeMaj23VotesAggr},
 	wire.ConcreteType{&VotesAggrPartMessage{}, msgTypeVotesAggrPart},
+	wire.ConcreteType{&Maj23SignAggrMessage{}, msgTypeMaj23SignAggr},
 	//new liaoyd
 	wire.ConcreteType{&TestMessage{}, msgTypeTest},
 )
@@ -1550,6 +1617,16 @@ type VoteMessage struct {
 
 func (m *VoteMessage) String() string {
 	return fmt.Sprintf("[Vote %v]", m.Vote)
+}
+
+//-------------------------------------
+
+type Maj23SignAggrMessage struct {
+	Maj23SignAggr	*types.SignAggr
+}
+
+func (m *Maj23SignAggrMessage) String() string {
+	return fmt.Sprintf("[Maj23VotesAggr %v]", m.Maj23SignAggr)
 }
 
 //-------------------------------------

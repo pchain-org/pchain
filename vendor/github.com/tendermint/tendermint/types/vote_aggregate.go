@@ -12,6 +12,7 @@ import (
 	//"github.com/tendermint/go-data"
 )
 
+//------------------------ vote aggregation -------------------
 const MaxVoteSetSize = 22020096 // 21MB TODO make it configurable
 
 type VotesAggr struct {
@@ -119,3 +120,53 @@ func (va *Maj23VoteSet) String() string {
 }
 
 
+//------------------------ signature aggregation -------------------
+const MaxSignAggrSize = 22020096 // 21MB TODO make it configurable
+
+type SignAggr struct {
+	Height           int              `json:"height"`
+	Round            int              `json:"round"`
+	Type             byte             `json:"type"`
+	NumValidators	 int              `json:"numValidators"`
+	BlockID          BlockID          `json:"block_id"` // zero if vote is nil.
+        BitArray         *BitArray         // valIndex -> hasVote?
+	
+	// BLS signature aggregation to be added here
+	 Signature	BLSSignature
+}
+
+func MakeSignAggr(height int, round int, mtype byte, numValidators int, blockID BlockID, sign BLSSignature) *SignAggr {
+        return &SignAggr{
+		Height	: height,
+		Round	: round,
+		Type	: mtype,
+		NumValidators: numValidators,
+		BlockID	: blockID
+                BitArray: NewBitArray(numValidators),
+		Signature : sign
+        }
+}
+
+func (sa *SignAggr) SignAggr() BLSSignature {
+	return sa.Signature
+}
+
+func (va *SignAggr) String() string {
+	return va.StringIndented("")
+}
+
+func (va *SignAggr) StringIndented(indent string) string {
+	if va == nil {
+		return "nil-SignAggr"
+	}
+	return fmt.Sprintf(`SignAggr{
+%s  %v
+%s  %v
+%s  %v
+%s  %v
+}`,
+		indent, va.Height,
+		indent, va.Round,
+		indent, va.Type,
+		indent, va.NumValidators)
+}

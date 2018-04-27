@@ -162,6 +162,10 @@ type RoundState struct {
 	PrecommitAggr      *types.VotesAggr
 	PrecommitMaj23     *types.Maj23VoteSet
 	PrecommitMaj23Parts *types.PartSet
+
+	// Following fields are used for BLS signature aggregation
+	PrevoteMaj23SignAggr	*types.SignAggr
+	PrecommitMaj23SignAggr	*types.SignAggr
 }
 
 func (rs *RoundState) RoundStateEvent() types.EventDataRoundState {
@@ -646,6 +650,8 @@ func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	cs.PrecommitAggr = nil
 	cs.PrecommitMaj23 = nil
 	cs.PrecommitMaj23Parts = nil
+	cs.PrevoteMaj23SignAggr = nil
+	cs.PrecommitMaj23SignAggr = nil
 	cs.LockedRound = 0
 	cs.LockedBlock = nil
 	cs.LockedBlockParts = nil
@@ -761,6 +767,10 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 		if err != nil && msg.Round != cs.Round {
 			err = nil
 		}
+        case *Maj23SignAggrMessage:
+		// Msg saying a set of 2/3+ signatures had been received
+		logger.Debug(Fmt("handleMsg: Received Maj23SignAggrMessage %#v\n", (msg.Maj23SignAggr)))
+		err = cs.setMaj23SignAggr(msg.Maj23SignAggr)
 	case *VoteMessage:
 		// attempt to add the vote and dupeout the validator if its a duplicate signature
 		// if the vote gives us a 2/3-any or 2/3-one, we transition
@@ -867,6 +877,8 @@ func (cs *ConsensusState) enterNewRound(height int, round int) {
 		cs.PrecommitAggr = nil
 		cs.PrecommitMaj23 = nil
 		cs.PrecommitMaj23Parts = nil
+		cs.PrevoteMaj23SignAggr = nil
+		cs.PrecommitMaj23SignAggr = nil
 	}
 	cs.Votes.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
 
@@ -1695,6 +1707,74 @@ func (cs *ConsensusState) addPrecommitsAggrPart(height int, part *types.Part, ve
 	return added, nil
 }
 
+// -----------------------------------------------------------------------------
+func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
+	// Does not apply
+	if signAggr.Height != cs.Height || signAggr.Round != cs.Round {
+		return nil
+	}
+
+	fmt.Printf("Received SignAggr %#v\n", signAggr)
+
+	if signAggr.Type == types.VoteTypePrevote {
+		if cs.PrevoteMaj23SignAggr != nil {
+			return nil
+		}
+		
+		cs.PrevoteMaj23SignAggr = signAggr
+
+		fmt.Printf("setMaj23SignAggr:prevote aggr %#v\n", cs.PrevoteMaj23SignAggr)
+	} else if signAggr.Type == types.VoteTypePrecommit {
+		if cs.PrecommitMaj23Aggr != nil {
+			return nil
+		}
+		
+		cs.PrecommitMaj23Aggr = votesAggr
+
+		fmt.Printf("setMaj23SignAggr:precommit aggr %#v\n", cs.PrecommitMaj23Aggr)
+	} else {
+		logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
+		return nil
+	}
+
+	// Verify whether the signature aggregation indicates +2/3 voting power 
+	return cs.verifyMaj23SignAggr(signAggr)
+}
+
+func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) error) {
+
+	// Assume BLSVerifySignAggr() will do following things
+	// 1. Aggregate pub keys based on signAggr->BitArray
+	// 2. Verify signature aggrefation is correct
+	// 3. Verify +2/3 voting power exceeded
+ 
+	// maj23, err = BLSVerifySignAggr(signAggr)
+
+	if err != nil {
+		return err
+	}
+
+	if maj23 {
+		if signAggr.Type == types.VoteTypePrecommit {
+			logger.Debug(Fmt("verifyMaj23SignAggr: Received 2/3+ prevotes, enter precommit\n"))
+
+			cs.enterPrecommit(cs.Height, cs.Round)
+
+		} else if signAggr.Type == types.VoteTypePrecommit {
+			logger.Debug(Fmt("verifyMaj23SignAggr: Received 2/3+ precommits, enter commit\n"))
+
+			// TODO : Shall go to this state?
+			// cs.tryFinalizeCommit(height)
+			cs.enterCommit(cs.Height, cs.Round)
+
+		} else
+			panic("Invalid signAggr type %d\n", signAggr.Type)
+		}
+	}
+
+	return nil
+}
+
 // Attempt to add the vote. if its a duplicate signature, dupeout the validator
 func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerKey string) error {
 	_, err := cs.addVote(vote, peerKey)
@@ -1762,19 +1842,26 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 
 	// A prevote/precommit for this height?
 	if vote.Height == cs.Height {
-//		height := cs.Height
 		added, err = cs.Votes.AddVote(vote, peerKey)
 		if added {
 			if vote.Type == types.VoteTypePrevote {
 				// If 2/3+ votes received, send them to other validators
 				if cs.Votes.Prevotes(cs.Round).HasTwoThirdsMajority() {
 					logger.Debug(Fmt("addVote: Got 2/3+ prevotes %+v\n", cs.Votes.Prevotes(cs.Round)))
-					cs.sendMaj23Vote(vote.Type)
+					// Send votes aggregation
+					//cs.sendMaj23Vote(vote.Type)
+
+					// Send signature aggregation
+					cs.sendMaj23SignAggr(vote.Type)
 				}
 			} else if vote.Type == types.VoteTypePrecommit {
 				if cs.Votes.Precommits(cs.Round).HasTwoThirdsMajority() {
 					logger.Debug(Fmt("addVote: Got 2/3+ precommits %+v\n", cs.Votes.Prevotes(cs.Round)))
-					cs.sendMaj23Vote(vote.Type)
+					// Send votes aggregation
+					//cs.sendMaj23Vote(vote.Type)
+
+					// Send signature aggregation
+					cs.sendMaj23SignAggr(vote.Type)
 				}
 			}
 
@@ -1939,6 +2026,37 @@ func (cs *ConsensusState) sendMaj23Vote(votetype byte) {
 
 	//logger.Debug(Fmt("Build and send Maj 2/3+ for (height %d round %d type %d)\n", cs.Height, cs.Round, votetype))
 
+}
+
+// Build the 2/3+ signature aggregation based on vote set and send it to other validators
+func (cs *ConsensusState) sendMaj23Sign(voteType byte) {
+	var votes []*types.Vote 
+
+	if votetype == types.VoteTypePrevote {
+		votes = cs.Votes.Prevotes(cs.Round).Votes()
+	} else if votetype == types.VoteTypePrecommit {
+		votes = cs.Votes.Precommits(cs.Round).Votes()
+	}
+
+	numValidators := cs.Validators.Size()
+	signBitArray := NewBitArray(numValidators)
+
+	for index, vote := range votes {
+		signBitArray.SetIndex(index, true)
+
+		// add the signature in this vote to the aggregation
+		// signature = BLSBuildSignAggr(vote.Signature)	
+	}
+
+	// step 1: build BLS signature aggregation based on signatures in votes 
+	// bitarray, signAggr := BuildSignAggr(votes)
+
+	signAggr := types.MakeMaj23SignAggr(cs.Height, cs.Round, voteType, numValidator, vote.BlockID, signature)
+
+	logger.Debug(Fmt("Generate Maj23SignAggr %#v\n", SignAggr))
+
+	// send sign aggregate msg on internal msg queue
+	cs.sendInternalMessage(msgInfo{&Maj23SignAggrMessage{signAggr}, ""})
 }
 
 //---------------------------------------------------------
