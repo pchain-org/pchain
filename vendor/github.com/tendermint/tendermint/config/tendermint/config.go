@@ -87,7 +87,7 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 	mapConfig.SetDefault("db_backend", "leveldb")
 	mapConfig.SetDefault("db_dir", filepath.Join(rootDir, chainId, defaultDataDir))
 	mapConfig.SetDefault("log_level", "info")
-	mapConfig.SetDefault("rpc_laddr", "tcp://0.0.0.0:46657")
+	mapConfig.SetDefault("rpc_laddr", calcRpcAddr())
 	mapConfig.SetDefault("grpc_laddr", "")
 	mapConfig.SetDefault("prof_laddr", "")
 	mapConfig.SetDefault("revision_file", rootDir+"/revision")
@@ -133,7 +133,7 @@ seeds = ""
 fast_sync = true
 db_backend = "leveldb"
 log_level = "notice"
-rpc_laddr = "tcp://0.0.0.0:46657"
+#rpc_laddr = "tcp://0.0.0.0:46657"
 `
 
 func defaultConfig(moniker string) (defaultConfig string) {
@@ -146,5 +146,9 @@ func defaultAbci() string {
 }
 
 func calcAppAddr() string {
+	return defaultAbci() + "://" + strconv.Itoa(time.Now().Nanosecond()) + "-" + uuid.NewRandom().String()
+}
+
+func calcRpcAddr() string {
 	return defaultAbci() + "://" + strconv.Itoa(time.Now().Nanosecond()) + "-" + uuid.NewRandom().String()
 }
