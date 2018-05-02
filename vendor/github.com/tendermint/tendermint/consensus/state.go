@@ -87,6 +87,8 @@ var (
 	ErrInvalidProposalPOLRound  = errors.New("Error invalid proposal POL round")
 	ErrAddingVote               = errors.New("Error adding vote")
 	ErrVoteHeightMismatch       = errors.New("Error vote height mismatch")
+	ErrInvalidSignatureAggr	    = errors.New("Invalid signature aggregation")
+	ErrDuplicateSignatureAggr   = errors.New("Invalid signature aggregation")
 )
 
 //-----------------------------------------------------------------------------
@@ -153,6 +155,7 @@ type RoundState struct {
 	LockedBlock        *types.Block
 	LockedBlockParts   *types.PartSet
 	Votes              *HeightVoteSet
+	VoteSignAggr       *HeightVoteSignAggr
 	CommitRound        int            //
 	LastCommit         *types.VoteSet // Last precommits at Height-1
 	LastValidators     *types.ValidatorSet
@@ -584,9 +587,9 @@ func (cs *ConsensusState) reconstructLastCommit(state *sm.State) {
 			PanicCrisis(Fmt("Failed to reconstruct LastCommit: %v", err))
 		}
 	}
-	if !lastPrecommits.HasTwoThirdsMajority() {
-		PanicSanity("Failed to reconstruct LastCommit: Does not have +2/3 maj")
-	}
+//	if !lastPrecommits.HasTwoThirdsMajority() {
+//		PanicSanity("Failed to reconstruct LastCommit: Does not have +2/3 maj")
+//	}
 	cs.LastCommit = lastPrecommits
 }
 
@@ -617,11 +620,13 @@ func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	//liaoyd
 	// fmt.Println("validators:", validators)
 	lastPrecommits := (*types.VoteSet)(nil)
-	if cs.CommitRound > -1 && cs.Votes != nil {
-		if !cs.Votes.Precommits(cs.CommitRound).HasTwoThirdsMajority() {
+	if cs.CommitRound > -1 && cs.VoteSignAggr != nil {
+		if !cs.VoteSignAggr.Precommits(cs.CommitRound).HasTwoThirdsMajority() {
 			PanicSanity("updateToState(state) called but last Precommit round didn't have +2/3")
 		}
-		lastPrecommits = cs.Votes.Precommits(cs.CommitRound)
+
+		// lastPrecommits cannot be saved anymore, may be replaced with signature aggregation
+		// lastPrecommits = cs.Votes.Precommits(cs.CommitRound)
 	}
 
 	// Next desired block height
@@ -656,6 +661,7 @@ func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	cs.LockedBlock = nil
 	cs.LockedBlockParts = nil
 	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators)
+	cs.VoteSignAggr = NewHeightVoteSignAggr(cs.config.GetString("chain_id"), height, validators)
 	cs.CommitRound = -1
 	cs.LastCommit = lastPrecommits
 	cs.Epoch = epoch
@@ -880,7 +886,8 @@ func (cs *ConsensusState) enterNewRound(height int, round int) {
 		cs.PrevoteMaj23SignAggr = nil
 		cs.PrecommitMaj23SignAggr = nil
 	}
-	cs.Votes.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
+	// cs.Votes.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
+	cs.VoteSignAggr.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
 
 	types.FireEventNewRound(cs.evsw, cs.RoundStateEvent())
 
@@ -962,7 +969,7 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 	}
 
 	// Make proposal
-	polRound, polBlockID := cs.Votes.POLInfo()
+	polRound, polBlockID := cs.VoteSignAggr.POLInfo()
 	proposal := types.NewProposal(height, round, blockParts.Header(), polRound, polBlockID, proposerPeerKey)
 	err := cs.privValidator.SignProposal(cs.state.ChainID, proposal)
 	if err == nil {
@@ -1005,7 +1012,7 @@ func (cs *ConsensusState) isProposalComplete() bool {
 		return true
 	} else {
 		// if this is false the proposer is lying or we haven't received the POL yet
-		return cs.Votes.Prevotes(cs.Proposal.POLRound).HasTwoThirdsMajority()
+		return cs.VoteSignAggr.Prevotes(cs.Proposal.POLRound).HasTwoThirdsMajority()
 	}
 }
 
@@ -1020,7 +1027,10 @@ func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts 
 		commit = &types.Commit{}
 	} else if cs.LastCommit.HasTwoThirdsMajority() {
 		// Make the commit from LastCommit
-		commit = cs.LastCommit.MakeCommit()
+		//commit = cs.LastCommit.MakeCommit()
+
+		//Don't save commits now, may be replaced with signature aggregation laster
+		commit = &types.Commit{}
 	} else {
 		// This shouldn't happen.
 		logger.Error("enterPropose: Cannot propose anything: No commit for the previous block.")
@@ -1137,7 +1147,7 @@ func (cs *ConsensusState) enterPrevoteWait(height int, round int) {
 		logger.Debug(Fmt("enterPrevoteWait(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
 		return
 	}
-	if !cs.Votes.Prevotes(round).HasTwoThirdsAny() {
+	if !cs.VoteSignAggr.Prevotes(round).HasTwoThirdsAny() {
 		PanicSanity(Fmt("enterPrevoteWait(%v/%v), but Prevotes does not have any +2/3 votes", height, round))
 	}
 	logger.Info(Fmt("enterPrevoteWait(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
@@ -1172,7 +1182,7 @@ func (cs *ConsensusState) enterPrecommit(height int, round int) {
 		cs.newStep()
 	}()
 
-	blockID, ok := cs.Votes.Prevotes(round).TwoThirdsMajority()
+	blockID, ok := cs.VoteSignAggr.Prevotes(round).TwoThirdsMajority()
 
 	// If we don't have a polka, we must precommit nil
 	if !ok {
@@ -1189,7 +1199,7 @@ func (cs *ConsensusState) enterPrecommit(height int, round int) {
 	types.FireEventPolka(cs.evsw, cs.RoundStateEvent())
 
 	// the latest POLRound should be this round
-	polRound, _ := cs.Votes.POLInfo()
+	polRound, _ := cs.VoteSignAggr.POLInfo()
 	if polRound < round {
 		PanicSanity(Fmt("This POLRound should be %v but got %", round, polRound))
 	}
@@ -1257,7 +1267,7 @@ func (cs *ConsensusState) enterPrecommitWait(height int, round int) {
 		logger.Debug(Fmt("enterPrecommitWait(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
 		return
 	}
-	if !cs.Votes.Precommits(round).HasTwoThirdsAny() {
+	if !cs.VoteSignAggr.Precommits(round).HasTwoThirdsAny() {
 		PanicSanity(Fmt("enterPrecommitWait(%v/%v), but Precommits does not have any +2/3 votes", height, round))
 	}
 	logger.Info(Fmt("enterPrecommitWait(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
@@ -1293,7 +1303,7 @@ func (cs *ConsensusState) enterCommit(height int, commitRound int) {
 		cs.tryFinalizeCommit(height)
 	}()
 
-	blockID, ok := cs.Votes.Precommits(commitRound).TwoThirdsMajority()
+	blockID, ok := cs.VoteSignAggr.Precommits(commitRound).TwoThirdsMajority()
 	if !ok {
 		PanicSanity("RunActionCommit() expects +2/3 precommits")
 	}
@@ -1325,7 +1335,7 @@ func (cs *ConsensusState) tryFinalizeCommit(height int) {
 		PanicSanity(Fmt("tryFinalizeCommit() cs.Height: %v vs height: %v", cs.Height, height))
 	}
 
-	blockID, ok := cs.Votes.Precommits(cs.CommitRound).TwoThirdsMajority()
+	blockID, ok := cs.VoteSignAggr.Precommits(cs.CommitRound).TwoThirdsMajority()
 	if !ok || len(blockID.Hash) == 0 {
 		logger.Warn("Attempt to finalize failed. There was no +2/3 majority, or +2/3 was for <nil>.", " height:", height)
 		return
@@ -1349,8 +1359,8 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 
 logger.Info("finalizeCommit: beginning", "cur height", cs.Height, "cur round", cs.Round)
 
-	// fmt.Println("precommits:", cs.Votes.Precommits(cs.CommitRound))
-	blockID, ok := cs.Votes.Precommits(cs.CommitRound).TwoThirdsMajority()
+	// fmt.Println("precommits:", cs.VoteSignAggr.Precommits(cs.CommitRound))
+	blockID, ok := cs.VoteSignAggr.Precommits(cs.CommitRound).TwoThirdsMajority()
 	block, blockParts := cs.ProposalBlock, cs.ProposalBlockParts
 
 	if !ok {
@@ -1380,8 +1390,12 @@ time.Sleep(newHeightChangeSleepDuration)
 	if cs.blockStore.Height() < block.Height {
 		// NOTE: the seenCommit is local justification to commit this block,
 		// but may differ from the LastCommit included in the next block
-		precommits := cs.Votes.Precommits(cs.CommitRound)
-		seenCommit := precommits.MakeCommit()
+		precommits := cs.VoteSignAggr.Precommits(cs.CommitRound)
+
+		// Make emptry precommits now, may be replaced with signature aggregation
+		//seenCommit := precommits.MakeCommit()
+		seenCommit := &Commit{}
+
 		cs.blockStore.SaveBlock(block, blockParts, seenCommit)
 	} else {
 		// Happens during replay if we already saved the block but didn't commit
@@ -1610,7 +1624,7 @@ func (cs *ConsensusState) addPrevotesAggrPart(height int, part *types.Part, veri
 		cs.PrevoteMaj23 = wire.ReadBinary(&types.Maj23VoteSet{}, cs.PrevoteMaj23Parts.GetReader(), types.MaxVoteSetSize, &n, &err).(*types.Maj23VoteSet)
 
 		logger.Debug(Fmt("addPrevotesAggrPart:Received complete prevote set aggr %#v\n", cs.PrevoteMaj23))
-		logger.Debug(Fmt("addPrevotesAggrPart:Current prevote set %+v\n", cs.Votes.Prevotes(cs.Round)))
+		logger.Debug(Fmt("addPrevotesAggrPart:Current prevote set %+v\n", cs.Vote.Prevotes(cs.Round)))
 
 		for _, vote := range cs.PrevoteMaj23.Votes {
 			if (vote.Height != cs.Height || vote.Round != cs.Round) {
@@ -1716,32 +1730,41 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 
 	fmt.Printf("Received SignAggr %#v\n", signAggr)
 
-	if signAggr.Type == types.VoteTypePrevote {
-		if cs.PrevoteMaj23SignAggr != nil {
-			return nil
-		}
-		
-		cs.PrevoteMaj23SignAggr = signAggr
-
-		fmt.Printf("setMaj23SignAggr:prevote aggr %#v\n", cs.PrevoteMaj23SignAggr)
-	} else if signAggr.Type == types.VoteTypePrecommit {
-		if cs.PrecommitMaj23Aggr != nil {
-			return nil
-		}
-		
-		cs.PrecommitMaj23Aggr = votesAggr
-
-		fmt.Printf("setMaj23SignAggr:precommit aggr %#v\n", cs.PrecommitMaj23Aggr)
-	} else {
-		logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
-		return nil
+	validSign := cs.verifyMaj23SignAggr(signAggr)
+	
+	if validSign == false {
+		panic("Invalid signature aggregation\n")
+		return ErrInvalidSignatureAggr
 	}
 
-	// Verify whether the signature aggregation indicates +2/3 voting power 
-	return cs.verifyMaj23SignAggr(signAggr)
+	if signAggr.Type == types.VoteTypePrevote {
+		// How if the signagure aggregation is for another block
+		if cs.PrevoteMaj23SignAggr != nil {
+			return ErrDuplicateSignatureAggr
+		}
+		
+		cs.VoteSignAggr.AddSignAggr(signAggr)
+		cs.PrevoteMaj23SignAggr = signAggr
+
+		logger.Debug("setMaj23SignAggr:prevote aggr %#v\n", cs.PrevoteMaj23SignAggr)
+	} else if signAggr.Type == types.VoteTypePrecommit {
+		if cs.PrecommitMaj23Aggr != nil {
+			return ErrDuplicateSignatureAggr
+		}
+		
+		cs.VoteSignAggr.AddSignAggr(signAggr)
+		cs.PrecommitMaj23Aggr = signAggr
+
+		logger.Debug("setMaj23SignAggr:precommit aggr %#v\n", cs.PrecommitMaj23Aggr)
+	} else {
+		logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
+		return ErrInvalidSignatureAggr
+	}
+
+	return nil
 }
 
-func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) error) {
+func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) bool {
 
 	// Assume BLSVerifySignAggr() will do following things
 	// 1. Aggregate pub keys based on signAggr->BitArray
@@ -1751,10 +1774,10 @@ func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) error) {
 	// maj23, err = BLSVerifySignAggr(signAggr)
 
 	if err != nil {
-		return err
+		return false 
 	}
 
-	if maj23 {
+	if maj23 == true {
 		if signAggr.Type == types.VoteTypePrecommit {
 			logger.Debug(Fmt("verifyMaj23SignAggr: Received 2/3+ prevotes, enter precommit\n"))
 
@@ -2029,7 +2052,7 @@ func (cs *ConsensusState) sendMaj23Vote(votetype byte) {
 }
 
 // Build the 2/3+ signature aggregation based on vote set and send it to other validators
-func (cs *ConsensusState) sendMaj23Sign(voteType byte) {
+func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	var votes []*types.Vote 
 
 	if votetype == types.VoteTypePrevote {
