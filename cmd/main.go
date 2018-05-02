@@ -11,6 +11,7 @@ import (
 	cfg "github.com/tendermint/go-config"
 	etm "github.com/pchain/ethermint/cmd/ethermint"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/pchain/chain"
 )
 
 const (
@@ -122,19 +123,19 @@ func newCliApp(version, usage string) *cli.App {
 		utils.GpobaseStepDownFlag,
 		utils.GpobaseStepUpFlag,
 		utils.GpobaseCorrectionFactorFlag,
-		VerbosityFlag, // not exposed by go-ethereum
-		DataDirFlag,   // so we control defaults
+		chain.VerbosityFlag, // not exposed by go-ethereum
+		chain.DataDirFlag,   // so we control defaults
 
 		//ethermint flags
-		MonikerFlag,
-		NodeLaddrFlag,
-		LogLevelFlag,
-		SeedsFlag,
-		FastSyncFlag,
-		SkipUpnpFlag,
-		RpcLaddrFlag,
-		AddrFlag,
-		AbciFlag,
+		chain.MonikerFlag,
+		chain.NodeLaddrFlag,
+		chain.LogLevelFlag,
+		chain.SeedsFlag,
+		chain.FastSyncFlag,
+		chain.SkipUpnpFlag,
+		chain.RpcLaddrFlag,
+		chain.AddrFlag,
+		chain.AbciFlag,
 	}
 	return app
 }

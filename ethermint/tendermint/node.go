@@ -45,13 +45,14 @@ var log = logger.New("module", "node")
 
 type Node struct {
 	cmn.BaseService
-
 						     // config
 	config        cfg.Config           // user config
 	genesisDoc    *types.GenesisDoc    // initial validator set
 	privValidator *types.PrivValidator // local node's validator key
 
-						     // network
+	stateDB       dbm.DB
+	epochDB       dbm.DB
+
 	privKey  crypto.PrivKeyEd25519 // local node's p2p key
 	sw       *p2p.Switch           // p2p connections
 	addrBook *p2p.AddrBook         // known peers
@@ -68,15 +69,15 @@ type Node struct {
 	txIndexer        txindex.TxIndexer
 }
 
-func NewNodeDefault(config cfg.Config, app *app.EthermintApplication) *Node {
+func NewNodeDefault(config cfg.Config) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
 	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
-	return NewNode(config, privValidator, proxy.DefaultClientCreator(config), app)
+	return NewNode(config, privValidator, proxy.DefaultClientCreator(config))
 }
 
 func NewNode(config cfg.Config, privValidator *types.PrivValidator,
-	clientCreator proxy.ClientCreator, app *app.EthermintApplication) *Node {
+	clientCreator proxy.ClientCreator) *Node {
 
 	// Get BlockStore
 	blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
@@ -88,15 +89,6 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
 	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
 	state, epoch := InitStateAndEpoch(config, stateDB, epochDB)
-
-	/*
-	genDoc := utils.GetGenDocFromFile(config)
-	validators := make([]*types.GenesisValidator, len(genDoc.CurrentEpoch.Validators))
-	for i, val := range genDoc.CurrentEpoch.Validators {
-		validators[i] = &val
-	}
-	app.SetValidators(validators)
-	*/
 
 	// add the chainid and number of validators to the global config
 	config.Set("chain_id", state.ChainID)
@@ -221,6 +213,8 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 		genesisDoc:    state.GenesisDoc,
 		privValidator: privValidator,
 
+		stateDB:       stateDB,
+		epochDB:       epochDB,
 		privKey:  privKey,
 		sw:       sw,
 		addrBook: addrBook,
@@ -237,6 +231,207 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	node.BaseService = *cmn.NewBaseService(log, "Node", node)
 	return node
 }
+
+func NewNodeNotStart(config cfg.Config) *Node {
+	// Get PrivValidator
+	privValidatorFile := config.GetString("priv_validator_file")
+	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
+	clientCreator := proxy.DefaultClientCreator(config)
+
+	// Get BlockStore
+	blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
+	blockStore := bc.NewBlockStore(blockStoreDB)
+
+	ep.VADB = dbm.NewDB("validatoraction", config.GetString("db_backend"), config.GetString("db_dir"))
+
+	// Get State And Epoch
+	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
+	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
+	state, _ := InitStateAndEpoch(config, stateDB, epochDB)
+
+	// add the chainid and number of validators to the global config
+	config.Set("chain_id", state.ChainID)
+	config.Set("num_vals", state.Epoch.Validators.Size())
+
+	// Create the proxyApp, which manages connections (consensus, mempool, query)
+	// and sync tendermint and the app by replaying any necessary blocks
+	proxyApp := proxy.NewAppConns(config, clientCreator, consensus.NewHandshaker(config, state, blockStore))
+
+	// Generate node PrivKey
+	privKey := crypto.GenPrivKeyEd25519()
+
+	// Make event switch
+	eventSwitch := types.NewEventSwitch()
+
+	node := &Node{
+		config:        config,
+		genesisDoc:    state.GenesisDoc,
+		privValidator: privValidator,
+
+		stateDB:       stateDB,
+		epochDB:       epochDB,
+
+		privKey:  privKey,
+		evsw:             eventSwitch,
+		blockStore:       blockStore,
+		proxyApp:         proxyApp,
+	}
+	node.BaseService = *cmn.NewBaseService(log, "Node", node)
+	return node
+}
+
+
+func (n *Node) OnStart1() error {
+
+	if _, err := n.proxyApp.Start(); err != nil {
+		cmn.Exit(cmn.Fmt("Error starting proxy app connections: %v", err))
+	}
+
+	// reload the state (it may have been updated by the handshake)
+	state := sm.LoadState(n.stateDB)
+	epoch := ep.LoadOneEpoch(n.epochDB, state.LastEpochNumber)
+	state.Epoch = epoch
+
+	//_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
+	fmt.Println("state.Validators:", state.Epoch.Validators)
+
+	// Transaction indexing
+	var txIndexer txindex.TxIndexer
+	switch n.config.GetString("tx_index") {
+	case "kv":
+		store := dbm.NewDB("tx_index", n.config.GetString("db_backend"), n.config.GetString("db_dir"))
+		txIndexer = kv.NewTxIndex(store)
+	default:
+		txIndexer = &null.TxIndex{}
+	}
+	state.TxIndexer = txIndexer
+
+	_, err := n.evsw.Start()
+	if err != nil {
+		cmn.Exit(cmn.Fmt("Failed to start switch: %v", err))
+	}
+
+	// Decide whether to fast-sync or not
+	// We don't fast-sync when the only validator is us.
+	fastSync := n.config.GetBool("fast_sync")
+	if state.Epoch.Validators.Size() == 1 {
+		addr, _ := state.Epoch.Validators.GetByIndex(0)
+		if bytes.Equal(n.privValidator.Address, addr) {
+			fastSync = false
+		}
+	}
+
+	// Make BlockchainReactor
+	bcReactor := bc.NewBlockchainReactor(n.config, state.Copy(), n.proxyApp.Consensus(), n.blockStore, fastSync)
+
+	// Make MempoolReactor
+	mempool := mempl.NewMempool(n.config, n.proxyApp.Mempool())
+	mempoolReactor := mempl.NewMempoolReactor(n.config, mempool)
+
+	// Make ConsensusReactor
+	consensusState := consensus.NewConsensusState(n.config, state.Copy(), n.proxyApp.Consensus(), n.blockStore, mempool, epoch)
+	if n.privValidator != nil {
+		consensusState.SetPrivValidator(n.privValidator)
+	}
+	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
+
+	// Make p2p network switch
+	sw := p2p.NewSwitch(n.config.GetConfig("p2p"))
+	sw.AddReactor("MEMPOOL", mempoolReactor)
+	sw.AddReactor("BLOCKCHAIN", bcReactor)
+	sw.AddReactor("CONSENSUS", consensusReactor)
+
+	// Optionally, start the pex reactor
+	var addrBook *p2p.AddrBook
+	if n.config.GetBool("pex_reactor") {
+		addrBook = p2p.NewAddrBook(n.config.GetString("addrbook_file"), n.config.GetBool("addrbook_strict"))
+		pexReactor := p2p.NewPEXReactor(addrBook)
+		sw.AddReactor("PEX", pexReactor)
+	}
+
+	// Filter peers by addr or pubkey with an ABCI query.
+	// If the query return code is OK, add peer.
+	// XXX: Query format subject to change
+	if n.config.GetBool("filter_peers") {
+		// NOTE: addr is ip:port
+		sw.SetAddrFilter(func(addr net.Addr) error {
+			resQuery, err := n.proxyApp.Query().QuerySync(abci.RequestQuery{Path: cmn.Fmt("/p2p/filter/addr/%s", addr.String())})
+			if err != nil {
+				return err
+			}
+			if resQuery.Code.IsOK() {
+				return nil
+			}
+			return errors.New(resQuery.Code.String())
+		})
+		sw.SetPubKeyFilter(func(pubkey crypto.PubKeyEd25519) error {
+			resQuery, err := n.proxyApp.Query().QuerySync(abci.RequestQuery{Path: cmn.Fmt("/p2p/filter/pubkey/%X", pubkey.Bytes())})
+			if err != nil {
+				return err
+			}
+			if resQuery.Code.IsOK() {
+				return nil
+			}
+			return errors.New(resQuery.Code.String())
+		})
+	}
+
+	// add the event switch to all services
+	// they should all satisfy events.Eventable
+	SetEventSwitch(n.evsw, bcReactor, mempoolReactor, consensusReactor)
+
+	// run the profile server
+	profileHost := n.config.GetString("prof_laddr")
+	if profileHost != "" {
+
+		go func() {
+			log.Warn("Profile server", "error", http.ListenAndServe(profileHost, nil))
+		}()
+	}
+
+	// Create & add listener
+	protocol, address := ProtocolAndAddress(n.config.GetString("node_laddr"))
+	l := p2p.NewDefaultListener(protocol, address, n.config.GetBool("skip_upnp"))
+	sw.AddListener(l)
+	n.sw = sw
+
+	// Start the switch
+	sw.SetNodeInfo(n.makeNodeInfo())
+	sw.SetNodePrivKey(n.privKey)
+	_, err = sw.Start()
+	if err != nil {
+		return err
+	}
+
+
+	n.addrBook = addrBook
+	n.bcReactor = bcReactor
+	n.mempoolReactor = mempoolReactor
+	n.consensusState = consensusState
+	n.consensusReactor = consensusReactor
+	n.txIndexer = txIndexer
+
+	// If seeds exist, add them to the address book and dial out
+	if n.config.GetString("seeds") != "" {
+		// dial out
+		seeds := strings.Split(n.config.GetString("seeds"), ",")
+		if err := n.DialSeeds(seeds); err != nil {
+			return err
+		}
+	}
+
+	// Run the RPC server
+	if n.config.GetString("rpc_laddr") != "" {
+		listeners, err := n.StartRPC()
+		if err != nil {
+			return err
+		}
+		n.rpcListeners = listeners
+	}
+
+	return nil
+}
+
 
 func (n *Node) OnStart() error {
 
@@ -527,7 +722,7 @@ func RunNode(config cfg.Config, app *app.EthermintApplication) {
 	}
 
 	// Create & start node
-	n := NewNodeDefault(config, app)
+	n := NewNodeDefault(config)
 
 	//protocol, address := ProtocolAndAddress(config.GetString("node_laddr"))
 	//l := p2p.NewDefaultListener(protocol, address, config.GetBool("skip_upnp"))

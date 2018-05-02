@@ -164,6 +164,10 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	srv.ServeSingleRequest(codec, OptionMethodInvocation)
 }
 
+func NewCorsHandler(srv *Server, corsString string) http.Handler {
+	return newCorsHandler(srv, corsString)
+}
+
 func newCorsHandler(srv *Server, corsString string) http.Handler {
 	var allowedOrigins []string
 	for _, domain := range strings.Split(corsString, ",") {

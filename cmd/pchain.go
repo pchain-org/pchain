@@ -3,7 +3,8 @@ package main
 import (
 	"fmt"
 	"gopkg.in/urfave/cli.v1"
-	etm "github.com/pchain/ethermint/cmd/ethermint"
+	"github.com/pchain/rpc"
+	"github.com/pchain/chain"
 )
 
 func pchainCmd(ctx *cli.Context) error {
@@ -17,12 +18,22 @@ func pchainCmd(ctx *cli.Context) error {
 
 	fmt.Printf("pchain supports large scale block-chain applicaitons with multi-chain\n")
 
+	var chains []*chain.Chain = make([]*chain.Chain, 0)
+	mainChain := chain.LoadMainChain(ctx, mainChain)
+	childChain := chain.LoadChildChain(ctx, "abcd")
+	chains = append(chains, mainChain)
+	chains = append(chains, childChain)
+
+	chain.StartMainChain(ctx, mainChain, quit)
+	chain.StartChildChain(ctx, childChain, quit)
+
+	/*
 	err := startMainChain(ctx, quit)
 	if err != nil {
 		fmt.Printf("start main chain failed with %v\n", err)
 		return err
 	}
-
+	*/
 	/*
 	sideChains := []string{"a", "b"}
 	for i:=0; i<len(sideChains); i++ {
@@ -34,22 +45,12 @@ func pchainCmd(ctx *cli.Context) error {
 	}
 	*/
 
+	rpc.StartRPC(ctx, chains)
+
 	<- quit
 
+	rpc.StopRPC()
+
 	return nil
 }
 
-
-func startMainChain(ctx *cli.Context, quit chan int) error {
-
-	fmt.Printf("start main chain\n")
-	go etm.EthermintCmd(mainChain, ctx, quit)
-	return nil
-}
-
-func startSideChain(ctx *cli.Context, chainId string, quit chan int) error {
-
-	fmt.Printf("start side chain with %v\n", chainId)
-	go etm.EthermintCmd(chainId, ctx, quit)
-	return nil
-}

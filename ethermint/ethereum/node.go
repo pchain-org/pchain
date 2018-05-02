@@ -71,5 +71,8 @@ func MakeSystemNode(chainId, version, rpcuri string, ctx *cli.Context) *node.Nod
 	}); err != nil {
 		utils.Fatalf("Failed to register the TMSP application service: %v", err)
 	}
+
+	stack.GatherServices()
+
 	return stack
 }

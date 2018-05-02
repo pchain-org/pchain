@@ -20,3 +20,15 @@ func NewServer(protoAddr, transport string, app types.Application) (cmn.Service,
 	}
 	return s, err
 }
+
+func NewServerNotStart(protoAddr, transport string, app types.Application) (cmn.Service, error) {
+	var s cmn.Service
+	var err error
+	switch transport {
+	case "socket", "unix":
+		s, err = NewSocketServerNotStart(protoAddr, app)
+	default:
+		err = fmt.Errorf("Unknown server type %s", transport)
+	}
+	return s, err
+}
