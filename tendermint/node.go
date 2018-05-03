@@ -38,6 +38,7 @@ import (
 	ep "github.com/tendermint/tendermint/epoch"
 	st "github.com/tendermint/tendermint/state"
 	"os"
+	"github.com/pchain/common/plogger"
 )
 
 var logger = plogger.GetLogger("node")

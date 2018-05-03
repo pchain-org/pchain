@@ -7,6 +7,7 @@ import (
 	. "github.com/tendermint/go-common"
 	data "github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
+	"github.com/Nik-U/pbc"
 )
 
 // Signature is a part of Txs and consensus Votes.
@@ -24,7 +25,8 @@ func init() {
 	sigMapper = data.NewMapper(SignatureS{}).
 		RegisterImplementation(SignatureEd25519{}, NameEd25519, TypeEd25519).
 		RegisterImplementation(SignatureSecp256k1{}, NameSecp256k1, TypeSecp256k1).
-		RegisterImplementation(EtherumSignature{}, NameEtherum, TypeEtherum)
+		RegisterImplementation(EtherumSignature{}, NameEtherum, TypeEtherum).
+		RegisterImplementation(BLSSignature{}, NameBls, TypeBls)
 }
 
 // SignatureS add json serialization to Signature
@@ -159,3 +161,74 @@ func (sig *EtherumSignature) UnmarshalJSON(enc []byte) error {
 	copy((*sig)[:], ref)
 	return err
 }
+
+
+//-------------------------------------
+// Implements Signature
+type BLSSignature []byte
+
+func CreateBLSSignature() BLSSignature {
+	privKey := pairing.NewZr().Rand()
+	return privKey.Bytes()
+}
+
+func (sig BLSSignature) getElement() *pbc.Element {
+	return pairing.NewG2().SetBytes(sig)
+}
+
+func (sig BLSSignature) Set1() {
+	sig.getElement().Set1()
+}
+
+func BLSSignatureMul(l, r Signature) Signature {
+	lSign,lok := l.(BLSSignature);
+	rSign, rok := r.(BLSSignature);
+	if  lok&&rok {
+		el1 := lSign.getElement()
+		el2 := rSign.getElement()
+		rs := pairing.NewG2().Mul(el1, el2)
+		return BLSSignature(rs.Bytes())
+	} else {
+		return nil
+	}
+}
+
+func (sig BLSSignature) Mul(other Signature) bool {
+	if otherSign,ok := other.(BLSSignature); ok {
+		el1 := sig.getElement()
+		el2 := otherSign.getElement()
+		rs := pairing.NewG2().Mul(el1, el2)
+		copy(sig, rs.Bytes())
+		return true
+	} else {
+		return false
+	}
+}
+
+func (sig BLSSignature) Bytes() []byte {
+	return sig
+}
+
+func (sig BLSSignature) IsZero() bool { return len(sig) == 0 }
+
+func (sig BLSSignature) String() string { return fmt.Sprintf("/%X.../", Fingerprint(sig)) }
+
+func (sig BLSSignature) Equals(other Signature) bool {
+	if otherBLS, ok := other.(BLSSignature); ok {
+		return sig.getElement().Equals(otherBLS.getElement())
+	} else {
+		return false
+	}
+}
+
+func (p BLSSignature) MarshalJSON() ([]byte, error) {
+	return data.Encoder.Marshal(p)
+}
+
+func (p *BLSSignature) UnmarshalJSON(enc []byte) error {
+	var ref []byte
+	err := data.Encoder.Unmarshal(&ref, enc)
+	copy(*p, ref)
+	return err
+}
+

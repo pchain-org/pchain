@@ -395,7 +395,7 @@ func (cs *ConsensusState) OnStart() error {
 	if cs.nodeInfo == nil {
 		panic("cs.nodeInfo is nil\n")
 	}
-	
+
 	walFile := cs.config.GetString("cs_wal_file")
 	if err := cs.OpenWAL(walFile); err != nil {
 		logger.Error("Error loading ConsensusState wal", " error:", err.Error())
@@ -1563,7 +1563,7 @@ func (cs *ConsensusState) setMaj23VotesAggr(votesAggr *types.VotesAggr) error {
 		if cs.PrevoteAggr != nil {
 			return nil
 		}
-		
+
 		cs.PrevoteAggr = votesAggr
 		cs.PrevoteMaj23Parts = types.NewPartSetFromHeader(votesAggr.VotePartsHeader)
 		fmt.Printf("setMaj23VotesAggr:prevote aggr %#v\n", cs.PrevoteAggr)
@@ -1571,7 +1571,7 @@ func (cs *ConsensusState) setMaj23VotesAggr(votesAggr *types.VotesAggr) error {
 		if cs.PrecommitAggr != nil {
 			return nil
 		}
-		
+
 		cs.PrecommitAggr = votesAggr
 		cs.PrecommitMaj23Parts = types.NewPartSetFromHeader(votesAggr.VotePartsHeader)
 		fmt.Printf("setMaj23VotesAggr:precommit aggr %#v\n", cs.PrecommitAggr)
@@ -1632,7 +1632,7 @@ func (cs *ConsensusState) addPrevotesAggrPart(height int, part *types.Part, veri
 			}
 
 			logger.Debug(Fmt("addPrevotesAggrPart:Try add Vote (H %d R %d T %d VALIDX %d) current state (H %d %d)\n", vote.Height, vote.Round, vote.Type, vote.ValidatorIndex, cs.Height, cs.Round))
-			
+
 			logger.Debug(Fmt("addPrevotesAggrPart:Vote to add %s\n", vote.String()))
 
 			added, err = cs.Votes.AddVoteNoPeer(vote)
@@ -1691,7 +1691,7 @@ func (cs *ConsensusState) addPrecommitsAggrPart(height int, part *types.Part, ve
 			}
 
 			logger.Debug(Fmt("addPrecommitsAggrPart:Add Vote (H %d R %d T %d VALIDX %d) current state (H %d %d)\n", vote.Height, vote.Round, vote.Type, vote.ValidatorIndex, cs.Height, cs.Round))
-			
+
 			if cs.IsProposer() == false {
 				added, err = cs.Votes.AddVoteNoPeer(vote)
 
@@ -1731,7 +1731,7 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 	fmt.Printf("Received SignAggr %#v\n", signAggr)
 
 	validSign := cs.verifyMaj23SignAggr(signAggr)
-	
+
 	if validSign == false {
 		panic("Invalid signature aggregation\n")
 		return ErrInvalidSignatureAggr
@@ -1742,7 +1742,7 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 		if cs.PrevoteMaj23SignAggr != nil {
 			return ErrDuplicateSignatureAggr
 		}
-		
+
 		cs.VoteSignAggr.AddSignAggr(signAggr)
 		cs.PrevoteMaj23SignAggr = signAggr
 
@@ -1751,7 +1751,7 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 		if cs.PrecommitMaj23Aggr != nil {
 			return ErrDuplicateSignatureAggr
 		}
-		
+
 		cs.VoteSignAggr.AddSignAggr(signAggr)
 		cs.PrecommitMaj23Aggr = signAggr
 
@@ -1770,11 +1770,11 @@ func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) bool {
 	// 1. Aggregate pub keys based on signAggr->BitArray
 	// 2. Verify signature aggrefation is correct
 	// 3. Verify +2/3 voting power exceeded
- 
-	// maj23, err = BLSVerifySignAggr(signAggr)
+
+	maj23, err := cs.BLSVerifySignAggr(signAggr)
 
 	if err != nil {
-		return false 
+		return false
 	}
 
 	if maj23 == true {
@@ -1790,12 +1790,43 @@ func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) bool {
 			// cs.tryFinalizeCommit(height)
 			cs.enterCommit(cs.Height, cs.Round)
 
-		} else
+		} else {
 			panic("Invalid signAggr type %d\n", signAggr.Type)
 		}
 	}
 
-	return nil
+	return true
+}
+
+func (cs *ConsensusState) BLSVerifySignAggr(signAggr *types.SignAggr) (bool, error) {
+	aggrPubKey := crypto.CreateBLSPubKey()
+	aggrPubKey.Set1()
+	bitMap := signAggr.BitArray
+	validators := cs.Validators.Validators
+	var powerSum int64
+	quorum := cs.Validators.TotalVotingPower()*2/3 + 1
+	if len(validators) != bitMap.Size() {
+		return false,nil
+	}
+	for i := 0; i < bitMap.Size(); i++ {
+		if bitMap.GetIndex(i) {
+			if otherPubKey,ok := validators[i].PubKey.(crypto.BLSPubKey); ok {
+				aggrPubKey.Mul(otherPubKey)
+				powerSum += validators[i].VotingPower
+			}
+		}
+	}
+
+	if aggrPubKey.VerifyBytes(types.SignBytes(signAggr.ChainID, signAggr), signAggr.Signature) {
+		return false, errors.New("Invalid aggregate signature")
+	}
+	var maj23 bool
+	if powerSum < quorum {
+		maj23 = true
+	} else {
+		maj23 = false
+	}
+	return maj23,nil
 }
 
 // Attempt to add the vote. if its a duplicate signature, dupeout the validator
@@ -2004,7 +2035,7 @@ func (cs *ConsensusState) signAddVote(type_ byte, hash []byte, header types.Part
 
 // Build the 2/3+ vote set parts and send them to other validators
 func (cs *ConsensusState) sendMaj23Vote(votetype byte) {
-	var votes []*types.Vote 
+	var votes []*types.Vote
 
 	if votetype == types.VoteTypePrevote {
 		votes = cs.Votes.Prevotes(cs.Round).Votes()
@@ -2053,7 +2084,7 @@ func (cs *ConsensusState) sendMaj23Vote(votetype byte) {
 
 // Build the 2/3+ signature aggregation based on vote set and send it to other validators
 func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
-	var votes []*types.Vote 
+	var votes []*types.Vote
 
 	if votetype == types.VoteTypePrevote {
 		votes = cs.Votes.Prevotes(cs.Round).Votes()
@@ -2064,17 +2095,25 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	numValidators := cs.Validators.Size()
 	signBitArray := NewBitArray(numValidators)
 
+	signature := crypto.CreateBLSSignature()
+	signature.Set1()
 	for index, vote := range votes {
-		signBitArray.SetIndex(index, true)
+		if vote != nil {
+			signBitArray.SetIndex(index, true)
 
-		// add the signature in this vote to the aggregation
-		// signature = BLSBuildSignAggr(vote.Signature)	
+			// add the signature in this vote to the aggregation
+			//signature = BLSBuildSignAggr(vote.BlsSignature)
+			if signature.Mul(vote.Signature) == false {
+				logger.Fatal("Can not aggregate signature")
+				return
+			}
+		}
 	}
 
-	// step 1: build BLS signature aggregation based on signatures in votes 
+	// step 1: build BLS signature aggregation based on signatures in votes
 	// bitarray, signAggr := BuildSignAggr(votes)
 
-	signAggr := types.MakeMaj23SignAggr(cs.Height, cs.Round, voteType, numValidator, vote.BlockID, signature)
+	signAggr := types.MakeSignAggr(cs.Height, cs.Round, voteType, numValidators, vote.BlockID, cs.Votes.chainID, signature)
 
 	logger.Debug(Fmt("Generate Maj23SignAggr %#v\n", SignAggr))
 

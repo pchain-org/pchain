@@ -115,6 +115,7 @@ func initEthGenesis(ctx *cli.Context) error {
 			Nonce   string
 			Amount  string
 			PubKey  string
+			ConsensusPubKey string
 		}{
 		},
 	}
@@ -127,7 +128,8 @@ func initEthGenesis(ctx *cli.Context) error {
 				Nonce   string
 				Amount  string
 				PubKey  string
-			}{Balance: balanceAmounts[i].balance, Amount:balanceAmounts[i].amount, PubKey: common.ToHex(otherEd[:])}
+				ConsensusPubKey string
+			}{Balance: balanceAmounts[i].balance, Amount:balanceAmounts[i].amount, PubKey: common.ToHex(otherEd[:]), ConsensusPubKey:common.ToHex(validator.ConsensusPubKey.Bytes())}
 		}
 
 	}
@@ -137,6 +139,18 @@ func initEthGenesis(ctx *cli.Context) error {
 		utils.Fatalf("marshal coreGenesis failed")
 		return  err
 	}
+
+	var object interface{}
+	err = json.Unmarshal(contents, &object)
+	if err != nil {
+		utils.Fatalf("write eth_genesis_file failed")
+	}
+	contents, err = json.MarshalIndent(object, "", "\t")
+
+	if err != nil {
+		utils.Fatalf("write eth_genesis_file failed")
+	}
+
 	ethGenesisPath := config.GetString("eth_genesis_file")
 	if err = ioutil.WriteFile(ethGenesisPath, contents, 0654); err != nil {
 		utils.Fatalf("write eth_genesis_file failed")

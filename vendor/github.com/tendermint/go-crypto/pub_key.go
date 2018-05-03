@@ -12,6 +12,7 @@ import (
 	"github.com/tendermint/go-wire"
 	"golang.org/x/crypto/ripemd160"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/Nik-U/pbc"
 )
 
 // PubKey is part of Account and Validator.
@@ -30,7 +31,8 @@ func init() {
 	pubKeyMapper = data.NewMapper(PubKeyS{}).
 		RegisterImplementation(PubKeyEd25519{}, NameEd25519, TypeEd25519).
 		RegisterImplementation(PubKeySecp256k1{}, NameSecp256k1, TypeSecp256k1).
-		RegisterImplementation(EtherumPubKey{}, NameEtherum, TypeEtherum)
+		RegisterImplementation(EtherumPubKey{}, NameEtherum, TypeEtherum).
+		RegisterImplementation(BLSPubKey{}, NameBls, TypeBls)
 }
 
 // PubKeyS add json serialization to PubKey
@@ -258,5 +260,82 @@ func (p *EtherumPubKey) UnmarshalJSON(enc []byte) error {
 	var ref []byte
 	err := data.Encoder.Unmarshal(&ref, enc)
 	copy((*p)[:], ref)
+	return err
+}
+
+
+//-------------------------------------
+// Implements PubKey.
+type BLSPubKey []byte
+
+func (pubKey BLSPubKey) getElement() *pbc.Element {
+	return pairing.NewG2().SetBytes(pubKey)
+}
+
+func (pubKey BLSPubKey) Set1() {
+	pubKey.getElement().Set1()
+}
+
+
+func CreateBLSPubKey() BLSPubKey {
+	privKey := pairing.NewG2()
+	return privKey.Bytes()
+}
+
+func PubKeyMul(l, r BLSPubKey) BLSPubKey {
+	el1 := l.getElement()
+	el2 := r.getElement()
+	rs := pairing.NewG2().Mul(el1, el2)
+	return rs.Bytes()
+}
+
+func (pubKey BLSPubKey) Mul(other BLSPubKey) {
+	el1 := pubKey.getElement()
+	el2 := other.getElement()
+	rs := pairing.NewG2().Mul(el1, el2)
+	copy(pubKey, rs.Bytes())
+}
+
+func (pubKey BLSPubKey) Bytes() []byte {
+	return pubKey.getElement().Bytes()
+}
+
+func (pubKey BLSPubKey) Address() []byte {
+	return []byte("")
+}
+
+func (pubKey BLSPubKey) KeyString() string {
+
+	return Fmt("EthPubKey{%X}", pubKey[:])
+}
+
+func (pubKey BLSPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
+	if otherSign, ok := sig_.(BLSSignature); ok {
+		h := pairing.NewG1().SetFromStringHash(string(msg), sha256.New())
+		temp1 := pairing.NewGT().Pair(h, pubKey.getElement())
+		temp2 := pairing.NewGT().Pair(otherSign.getElement(), g)
+		return temp1.Equals(temp2)
+	} else {
+		return false;
+	}
+}
+
+func (pubKey BLSPubKey) Equals(other PubKey) bool {
+	if otherBLS, ok := other.(BLSPubKey); ok {
+		return pubKey.getElement().Equals(otherBLS.getElement())
+	} else {
+		return false
+	}
+}
+
+func (pubKey BLSPubKey) MarshalJSON() ([]byte, error) {
+
+	return data.Encoder.Marshal(pubKey)
+}
+
+func (p *BLSPubKey) UnmarshalJSON(enc []byte) error {
+	var ref []byte
+	err := data.Encoder.Unmarshal(&ref, enc)
+	copy(*p, ref)
 	return err
 }

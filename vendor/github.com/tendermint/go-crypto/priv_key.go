@@ -10,6 +10,8 @@ import (
 	data "github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/Nik-U/pbc"
+	"crypto/sha256"
 )
 
 // PrivKey is part of PrivAccount and state.PrivValidator.
@@ -25,9 +27,11 @@ const (
 	TypeEd25519   = byte(0x01)
 	TypeSecp256k1 = byte(0x02)
 	TypeEtherum   = byte(0x03)
+	TypeBls       = byte(0x04)
 	NameEd25519   = "ed25519"
 	NameSecp256k1 = "secp256k1"
 	NameEtherum    = "etherum"
+	NameBls        = "bls"
 )
 
 var privKeyMapper data.Mapper
@@ -37,7 +41,8 @@ func init() {
 	privKeyMapper = data.NewMapper(PrivKeyS{}).
 		RegisterImplementation(PrivKeyEd25519{}, NameEd25519, TypeEd25519).
 		RegisterImplementation(PrivKeySecp256k1{}, NameSecp256k1, TypeSecp256k1).
-	        RegisterImplementation(EtherumPrivKey{}, NameEtherum, TypeEtherum)
+		RegisterImplementation(EtherumPrivKey{}, NameEtherum, TypeEtherum).
+		RegisterImplementation(BLSPrivKey{}, NameBls, TypeBls)
 
 }
 
@@ -273,4 +278,58 @@ func GenPrivKeySecp256k1FromSecret(secret []byte) PrivKeySecp256k1 {
 	privKeyBytes := [32]byte{}
 	copy(privKeyBytes[:], priv.Serialize())
 	return PrivKeySecp256k1(privKeyBytes)
+}
+
+
+//-------------------------------------
+// Implements PrivKey
+
+var params = pbc.GenerateA(160, 512)
+var pairing = params.NewPairing()
+var g = pairing.NewG2().Rand()
+
+type BLSPrivKey []byte
+
+func CreateBLSPrivKey() BLSPrivKey {
+	privKey := pairing.NewZr().Rand()
+	return privKey.Bytes()
+}
+
+func (privKey BLSPrivKey) Bytes() []byte {
+	return privKey
+}
+
+
+func (privKey BLSPrivKey) getElement() *pbc.Element {
+	return pairing.NewZr().SetBytes(privKey)
+}
+
+func (privKey BLSPrivKey) PubKey() PubKey {
+	pubKey := pairing.NewG2().PowZn(g, privKey.getElement())
+	return BLSPubKey(pubKey.Bytes())
+}
+
+func (privKey BLSPrivKey) Sign(msg []byte) Signature {
+	h := pairing.NewG1().SetFromStringHash(string(msg), sha256.New())
+	signature := pairing.NewG2().PowZn(h, privKey.getElement())
+	return BLSSignature(signature.Bytes())
+}
+
+func (privKey BLSPrivKey) Equals(other PrivKey) bool {
+	if otherKey,ok := other.(BLSPrivKey); ok {
+		return privKey.getElement().Equals(otherKey.getElement())
+	} else {
+		return false
+	}
+}
+
+func (privKey BLSPrivKey) MarshalJSON() ([]byte, error) {
+	return data.Encoder.Marshal(privKey)
+}
+
+func (privKey *BLSPrivKey) UnmarshalJSON(enc []byte) error {
+	var ref []byte
+	err := data.Encoder.Unmarshal(&ref, enc)
+	copy(*privKey, ref)
+	return err
 }

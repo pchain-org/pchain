@@ -48,6 +48,8 @@ type PrivValidator struct {
 
 	// PrivKey should be empty if a Signer other than the default is being used.
 	PrivKey crypto.PrivKey `json:"priv_key"`
+	ConsensusPubKey  crypto.PubKey `json:"consensus_pub_key"`
+	ConsensusPrivKey crypto.PrivKey `json:"consensus_priv_key"`
 	Signer  `json:"-"`
 
 	// For persistence.
@@ -96,17 +98,23 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 	}
 	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
 	privKey := crypto.EtherumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
+	blsPrivKey := crypto.CreateBLSPrivKey()
+	msg := "hello world"
+	sign := blsPrivKey.Sign([]byte(msg))
+	fmt.Println("verify:", blsPrivKey.PubKey().VerifyBytes([]byte(msg), sign))
 	return &PrivValidator{
 		Address:       pubKey.Address(),
 		PubKey:        pubKey,
 		PrivKey:       privKey,
+		ConsensusPrivKey:    blsPrivKey,
+		ConsensusPubKey:     blsPrivKey.PubKey(),
 		LastHeight:    0,
 		LastRound:     0,
 		LastStep:      stepNone,
 		LastSignature: nil,
 		LastSignBytes: nil,
 		filePath:      "",
-		Signer:        NewDefaultSigner(privKey),
+		Signer:        NewDefaultSigner(blsPrivKey),
 	}, newKey
 
 }
@@ -284,6 +292,7 @@ func (privVal *PrivValidator) signBytesHRS(height, round int, step int8, signByt
 	return signature, nil
 
 }
+
 
 func (privVal *PrivValidator) String() string {
 	return fmt.Sprintf("PrivValidator{%X LH:%v, LR:%v, LS:%v}", privVal.Address, privVal.LastHeight, privVal.LastRound, privVal.LastStep)

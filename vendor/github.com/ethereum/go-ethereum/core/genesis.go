@@ -53,6 +53,7 @@ type Genesis struct {
 		Nonce   string
 		Amount  string
 		PubKey  string
+		ConsensusPubKey string
 	}
 }
 
