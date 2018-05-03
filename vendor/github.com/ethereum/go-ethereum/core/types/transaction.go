@@ -145,7 +145,7 @@ func OriToTransaction(oriTx *OriTransaction) *Transaction {
 		},
 		hash : oriTx.hash,
 		size : oriTx.size,
-		from : oriTx.size,
+		from : oriTx.from,
 	}
 
 	return tx
