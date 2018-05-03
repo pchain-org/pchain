@@ -7,12 +7,8 @@ import (
 	//"io"
 
 	. "github.com/tendermint/go-common"
-	"github.com/tendermint/go-wire"
 	//"github.com/tendermint/go-data"
-	"io"
-	"github.com/tendermint/go-crypto"
 )
-
 
 //------------------------ signature aggregation -------------------
 const MaxSignAggrSize = 22020096 // 21MB TODO make it configurable
@@ -27,7 +23,7 @@ type SignAggr struct {
         BitArray         *BitArray         // valIndex -> hasVote?
 
 	// BLS signature aggregation to be added here
-	SignAggr    crypto.BLSSignature
+	SignAggr	crypto.BLSSignature
 
 	sum		int64             // Sum of voting power for seen votes, discounting conflicts
 	maj23		*BlockID	  // First 2/3 majority seen
@@ -75,11 +71,9 @@ func (sa *SignAggr) IsCommit() bool {
 	if sa == nil {
 		return false
 	}
-	if sa.type_ != VoteTypePrecommit {
+	if sa.Type != VoteTypePrecommit {
 		return false
 	}
-	sa.mtx.Lock()
-	defer sa.mtx.Unlock()
 	return sa.maj23 != nil
 }
 
@@ -88,8 +82,6 @@ func (sa *SignAggr) HasTwoThirdsAny() bool {
 	if sa == nil {
 		return false
 	}
-	sa.mtx.Lock()
-	defer sa.mtx.Unlock()
 	return sa.sum > voteSet.valSet.TotalVotingPower()*2/3
 }
 

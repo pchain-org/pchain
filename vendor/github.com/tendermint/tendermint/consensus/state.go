@@ -1147,7 +1147,9 @@ func (cs *ConsensusState) enterPrevoteWait(height int, round int) {
 		logger.Debug(Fmt("enterPrevoteWait(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
 		return
 	}
-	if !cs.VoteSignAggr.Prevotes(round).HasTwoThirdsAny() {
+	
+	// Temp use here, need to change it to use cs.VoteSignAggr finally
+	if !cs.Votes.Prevotes(round).HasTwoThirdsAny() {
 		PanicSanity(Fmt("enterPrevoteWait(%v/%v), but Prevotes does not have any +2/3 votes", height, round))
 	}
 	logger.Info(Fmt("enterPrevoteWait(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
@@ -1267,7 +1269,9 @@ func (cs *ConsensusState) enterPrecommitWait(height int, round int) {
 		logger.Debug(Fmt("enterPrecommitWait(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
 		return
 	}
-	if !cs.VoteSignAggr.Precommits(round).HasTwoThirdsAny() {
+
+	// Temp use here, need to change it to use cs.VoteSignAggr finally
+	if !cs.Votes.Precommits(round).HasTwoThirdsAny() {
 		PanicSanity(Fmt("enterPrecommitWait(%v/%v), but Precommits does not have any +2/3 votes", height, round))
 	}
 	logger.Info(Fmt("enterPrecommitWait(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
@@ -1390,11 +1394,11 @@ time.Sleep(newHeightChangeSleepDuration)
 	if cs.blockStore.Height() < block.Height {
 		// NOTE: the seenCommit is local justification to commit this block,
 		// but may differ from the LastCommit included in the next block
-		precommits := cs.VoteSignAggr.Precommits(cs.CommitRound)
+		//precommits := cs.VoteSignAggr.Precommits(cs.CommitRound)
 
 		// Make emptry precommits now, may be replaced with signature aggregation
 		//seenCommit := precommits.MakeCommit()
-		seenCommit := &Commit{}
+		seenCommit := &types.Commit{}
 
 		cs.blockStore.SaveBlock(block, blockParts, seenCommit)
 	} else {
@@ -1624,7 +1628,7 @@ func (cs *ConsensusState) addPrevotesAggrPart(height int, part *types.Part, veri
 		cs.PrevoteMaj23 = wire.ReadBinary(&types.Maj23VoteSet{}, cs.PrevoteMaj23Parts.GetReader(), types.MaxVoteSetSize, &n, &err).(*types.Maj23VoteSet)
 
 		logger.Debug(Fmt("addPrevotesAggrPart:Received complete prevote set aggr %#v\n", cs.PrevoteMaj23))
-		logger.Debug(Fmt("addPrevotesAggrPart:Current prevote set %+v\n", cs.Vote.Prevotes(cs.Round)))
+		logger.Debug(Fmt("addPrevotesAggrPart:Current prevote set %+v\n", cs.Votes.Prevotes(cs.Round)))
 
 		for _, vote := range cs.PrevoteMaj23.Votes {
 			if (vote.Height != cs.Height || vote.Round != cs.Round) {
@@ -1748,14 +1752,14 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 
 		logger.Debug("setMaj23SignAggr:prevote aggr %#v\n", cs.PrevoteMaj23SignAggr)
 	} else if signAggr.Type == types.VoteTypePrecommit {
-		if cs.PrecommitMaj23Aggr != nil {
+		if cs.PrecommitMaj23SignAggr != nil {
 			return ErrDuplicateSignatureAggr
 		}
 
 		cs.VoteSignAggr.AddSignAggr(signAggr)
-		cs.PrecommitMaj23Aggr = signAggr
+		cs.PrecommitMaj23SignAggr = signAggr
 
-		logger.Debug("setMaj23SignAggr:precommit aggr %#v\n", cs.PrecommitMaj23Aggr)
+		logger.Debug("setMaj23SignAggr:precommit aggr %#v\n", cs.PrecommitMaj23SignAggr)
 	} else {
 		logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
 		return ErrInvalidSignatureAggr
@@ -1791,7 +1795,7 @@ func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) bool {
 			cs.enterCommit(cs.Height, cs.Round)
 
 		} else {
-			panic("Invalid signAggr type %d\n", signAggr.Type)
+			panic("Invalid signAggr type")
 		}
 	}
 
@@ -2084,11 +2088,12 @@ func (cs *ConsensusState) sendMaj23Vote(votetype byte) {
 
 // Build the 2/3+ signature aggregation based on vote set and send it to other validators
 func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
-	var votes []*types.Vote
+	var votes []*types.Vote 
+	var blockID types.BlockID
 
-	if votetype == types.VoteTypePrevote {
+	if voteType == types.VoteTypePrevote {
 		votes = cs.Votes.Prevotes(cs.Round).Votes()
-	} else if votetype == types.VoteTypePrecommit {
+	} else if voteType == types.VoteTypePrecommit {
 		votes = cs.Votes.Precommits(cs.Round).Votes()
 	}
 
@@ -2100,6 +2105,7 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	for index, vote := range votes {
 		if vote != nil {
 			signBitArray.SetIndex(index, true)
+			blockID = vote.BlockID
 
 			// add the signature in this vote to the aggregation
 			//signature = BLSBuildSignAggr(vote.BlsSignature)
@@ -2113,9 +2119,9 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	// step 1: build BLS signature aggregation based on signatures in votes
 	// bitarray, signAggr := BuildSignAggr(votes)
 
-	signAggr := types.MakeSignAggr(cs.Height, cs.Round, voteType, numValidators, vote.BlockID, cs.Votes.chainID, signature)
+	signAggr := types.MakeSignAggr(cs.Height, cs.Round, voteType, numValidators, blockID, cs.Votes.chainID, signature)
 
-	logger.Debug(Fmt("Generate Maj23SignAggr %#v\n", SignAggr))
+	logger.Debug(Fmt("Generate Maj23SignAggr %#v\n", signAggr))
 
 	// send sign aggregate msg on internal msg queue
 	cs.sendInternalMessage(msgInfo{&Maj23SignAggrMessage{signAggr}, ""})

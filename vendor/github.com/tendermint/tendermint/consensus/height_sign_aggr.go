@@ -3,7 +3,6 @@ package consensus
 import (
 	"strings"
 	"sync"
-	"fmt"
 
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/tendermint/types"
@@ -73,7 +72,7 @@ func (hvs *HeightVoteSignAggr) Round() int {
 	return hvs.round
 }
 
-// Create more RoundVoteSets up to round.
+// Create more RoundVoteSignAggr up to round.
 func (hvs *HeightVoteSignAggr) SetRound(round int) {
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
@@ -81,7 +80,7 @@ func (hvs *HeightVoteSignAggr) SetRound(round int) {
 		PanicSanity("SetRound() must increment hvs.round")
 	}
 	for r := hvs.round + 1; r <= round; r++ {
-		if _, ok := hvs.roundVoteSignAggr[r]; ok {
+		if _, ok := hvs.roundVoteSignAggrs[r]; ok {
 			continue // Already exists because peerCatchupRounds.
 		}
 		hvs.addRound(r)
@@ -110,35 +109,55 @@ func (hvs *HeightVoteSignAggr) AddSignAggr(signAggr *types.SignAggr) (added bool
 	}
 	existing := hvs.getSignAggr(signAggr.Round, signAggr.Type)
 
-	if existing, _ != nil {
+	if existing != nil {
 		logger.Warn("Found existing signature aggregation for (height %v round %v type %v)", signAggr.Height, signAggr.Round, signAggr.Type)
-		return
+		return false, nil
 
 	}
 
-	if signAggr.Type == types.VoteTypePrevot {
-		hvs.roundVoteSignAggrs[signAggr.Round].Prevotes = signAggr
+	rvs, ok := hvs.roundVoteSignAggrs[signAggr.Round]
+
+	if !ok {
+		return false, nil
 	}
-	else if signAggr.Type == types.VoteTypePrecommit {
-		hvs.roundVoteSignAggrs[signAggr.Round].Precommits = signAggr
+
+	if signAggr.Type == types.VoteTypePrevote {
+		rvs.Prevotes = signAggr
+	} else if signAggr.Type == types.VoteTypePrecommit {
+		rvs.Precommits = signAggr
 	} else {
 		logger.Warn("Invalid signature aggregation for (height %v round %v type %v)", signAggr.Height, signAggr.Round, signAggr.Type)
-		return
+		return false, nil
 	}
 
 	return true, nil
 }
 
-func (hvs *HeightVoteSet) Prevotes(round int) *types.SignAggr {
+func (hvs *HeightVoteSignAggr) Prevotes(round int) *types.SignAggr {
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
 	return hvs.getSignAggr(round, types.VoteTypePrevote)
 }
 
-func (hvs *HeightVoteSet) Precommits(round int) *types.SignAggr {
+func (hvs *HeightVoteSignAggr) Precommits(round int) *types.SignAggr {
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
 	return hvs.getSignAggr(round, types.VoteTypePrecommit)
+}
+
+// Last round and blockID that has +2/3 prevotes for a particular block or nil.
+// Returns -1 if no such round exists.
+func (hvs *HeightVoteSignAggr) POLInfo() (polRound int, polBlockID types.BlockID) {
+	hvs.mtx.Lock()
+	defer hvs.mtx.Unlock()
+	for r := hvs.round; r >= 0; r-- {
+		rvs := hvs.getSignAggr(r, types.VoteTypePrevote)
+		polBlockID, ok := rvs.TwoThirdsMajority()
+		if ok {
+			return r, polBlockID
+		}
+	}
+	return -1, types.BlockID{}
 }
 
 func (hvs *HeightVoteSignAggr) getSignAggr(round int, type_ byte) *types.SignAggr {
@@ -184,23 +203,23 @@ func (hvs *HeightVoteSignAggr) String() string {
 func (hvs *HeightVoteSignAggr) StringIndented(indent string) string {
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
-	vsStrings := make([]string, 0, (len(hvs.roundVoteSets)+1)*2)
+	vsStrings := make([]string, 0, (len(hvs.roundVoteSignAggrs)+1)*2)
 	// rounds 0 ~ hvs.round inclusive
 	for round := 0; round <= hvs.round; round++ {
-		voteSetString := hvs.roundVoteSignAggrs[round].Prevotes.StringShort()
+		voteSetString := hvs.roundVoteSignAggrs[round].Prevotes.String()
 		vsStrings = append(vsStrings, voteSetString)
-		voteSetString = hvs.roundVoteSignAggrs[round].Precommits.StringShort()
+		voteSetString = hvs.roundVoteSignAggrs[round].Precommits.String()
 		vsStrings = append(vsStrings, voteSetString)
 	}
 
 	// all other peer catchup rounds
-	for round, roundVoteSet := range hvs.roundVoteSignAggrs {
+	for round, roundVoteSignAggr := range hvs.roundVoteSignAggrs {
 		if round <= hvs.round {
 			continue
 		}
-		voteSetString := roundVoteSignAggrs.Prevotes.StringShort()
+		voteSetString := roundVoteSignAggr.Prevotes.String()
 		vsStrings = append(vsStrings, voteSetString)
-		voteSetString = roundVoteSignAggrs.Precommits.StringShort()
+		voteSetString = roundVoteSignAggr.Precommits.String()
 		vsStrings = append(vsStrings, voteSetString)
 	}
 

@@ -253,7 +253,7 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 			ps.SetHasMaj23VotesPart(msg.Height, msg.Round, msg.Type, msg.Part.Index)
 			conR.conS.peerMsgQueue <- msgInfo{msg, src.Key}
 		case *Maj23SignAggrMessage:
-			ps.SetHasMaj23SignAggr(msg.SignAggr)
+			ps.SetHasMaj23SignAggr(msg.Maj23SignAggr)
 			conR.conS.peerMsgQueue <- msgInfo{msg, src.Key}
 		default:
 			logger.Warn("Unknown message type ", reflect.TypeOf(msg))
@@ -1158,7 +1158,7 @@ func (ps *PeerState) SetHasMaj23SignAggr(signAggr *types.SignAggr) {
 
 		ps.PrevoteMaj23SignAggr = true
 //		ps.PrevoteMaj23PartsHeader = signAggr.VotePartsHeader
-	} else if votesAggr.TypeMaj23Sign == types.VoteTypePrecommit {
+	} else if signAggr.Type == types.VoteTypePrecommit {
 		if ps.PrecommitMaj23SignAggr {
 			return
 		}
@@ -1626,7 +1626,7 @@ type Maj23SignAggrMessage struct {
 }
 
 func (m *Maj23SignAggrMessage) String() string {
-	return fmt.Sprintf("[Maj23VotesAggr %v]", m.Maj23SignAggr)
+	return fmt.Sprintf("[SignAggr %v]", m.Maj23SignAggr)
 }
 
 //-------------------------------------
