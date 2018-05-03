@@ -1147,7 +1147,7 @@ func (cs *ConsensusState) enterPrevoteWait(height int, round int) {
 		logger.Debug(Fmt("enterPrevoteWait(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
 		return
 	}
-	
+
 	// Temp use here, need to change it to use cs.VoteSignAggr finally
 	if !cs.Votes.Prevotes(round).HasTwoThirdsAny() {
 		PanicSanity(Fmt("enterPrevoteWait(%v/%v), but Prevotes does not have any +2/3 votes", height, round))
@@ -1821,7 +1821,7 @@ func (cs *ConsensusState) BLSVerifySignAggr(signAggr *types.SignAggr) (bool, err
 		}
 	}
 
-	if aggrPubKey.VerifyBytes(types.SignBytes(signAggr.ChainID, signAggr), signAggr.Signature) {
+	if aggrPubKey.VerifyBytes(types.SignBytes(signAggr.ChainID, signAggr), (signAggr.SignAggr())) {
 		return false, errors.New("Invalid aggregate signature")
 	}
 	var maj23 bool
@@ -2088,7 +2088,7 @@ func (cs *ConsensusState) sendMaj23Vote(votetype byte) {
 
 // Build the 2/3+ signature aggregation based on vote set and send it to other validators
 func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
-	var votes []*types.Vote 
+	var votes []*types.Vote
 	var blockID types.BlockID
 
 	if voteType == types.VoteTypePrevote {

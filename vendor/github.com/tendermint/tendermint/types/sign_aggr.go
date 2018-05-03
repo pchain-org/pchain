@@ -7,7 +7,10 @@ import (
 	//"io"
 
 	. "github.com/tendermint/go-common"
+	"github.com/tendermint/go-crypto"
 	//"github.com/tendermint/go-data"
+	"io"
+	"github.com/tendermint/go-wire"
 )
 
 //------------------------ signature aggregation -------------------
@@ -23,7 +26,7 @@ type SignAggr struct {
         BitArray         *BitArray         // valIndex -> hasVote?
 
 	// BLS signature aggregation to be added here
-	SignAggr	crypto.BLSSignature
+	SignatureAggr	crypto.BLSSignature
 
 	sum		int64             // Sum of voting power for seen votes, discounting conflicts
 	maj23		*BlockID	  // First 2/3 majority seen
@@ -50,14 +53,14 @@ func MakeSignAggr(height int, round int, mtype byte, numValidators int, blockID 
 		BlockID	: blockID,
 		ChainID: chainID,
                 BitArray: NewBitArray(numValidators),
-		SignAggr : signAggr,
+		SignatureAggr : signAggr,
 		sum	: 0,
 		maj23	: nil,
         }
 }
 
 func (sa *SignAggr) SignAggr() crypto.BLSSignature {
-	return sa.SignAggr
+	return sa.SignatureAggr
 }
 
 func (sa *SignAggr) HasTwoThirdsMajority() bool {
