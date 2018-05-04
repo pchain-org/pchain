@@ -138,7 +138,7 @@ func OriToTransaction(oriTx *OriTransaction) *Transaction {
 			Amount: oriTx.data.Amount,
 			Type: 0,
 			Payload: oriTx.data.Payload[:],
-			ExtendTxData: nil,
+			ExtendTxData: &ExtendTxData{},
 			V: oriTx.data.V,
 			R: oriTx.data.R,
 			S: oriTx.data.S,
