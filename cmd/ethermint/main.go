@@ -29,7 +29,6 @@ var (
 )
 
 func main() {
-
 	glog.V(logger.Info).Infof("Starting ethermint")
 
 	cliApp := newCliApp(version.Version, "the ethermint command line interface")

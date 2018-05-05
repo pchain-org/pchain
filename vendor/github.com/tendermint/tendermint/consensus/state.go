@@ -1812,10 +1812,15 @@ func (cs *ConsensusState) BLSVerifySignAggr(signAggr *types.SignAggr) (bool, err
 	if len(validators) != bitMap.Size() {
 		return false,nil
 	}
+	first := true
 	for i := 0; i < bitMap.Size(); i++ {
 		if bitMap.GetIndex(i) {
 			if otherPubKey,ok := validators[i].PubKey.(crypto.BLSPubKey); ok {
-				aggrPubKey.Mul(otherPubKey)
+				if first {
+					aggrPubKey.MulWithSet1(otherPubKey)
+				} else {
+					aggrPubKey.Mul(otherPubKey)
+				}
 				powerSum += validators[i].VotingPower
 			}
 		}
@@ -2102,6 +2107,7 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 
 	signature := crypto.CreateBLSSignature()
 	signature.Set1()
+	first := true
 	for index, vote := range votes {
 		if vote != nil {
 			signBitArray.SetIndex(index, true)
@@ -2109,7 +2115,13 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 
 			// add the signature in this vote to the aggregation
 			//signature = BLSBuildSignAggr(vote.BlsSignature)
-			if signature.Mul(vote.Signature) == false {
+			if first {
+				if signature.MulWithSet1(vote.Signature) == false {
+					logger.Fatal("Can not aggregate signature")
+					return
+				}
+				first = false
+			} else if signature.Mul(vote.Signature) == false {
 				logger.Fatal("Can not aggregate signature")
 				return
 			}

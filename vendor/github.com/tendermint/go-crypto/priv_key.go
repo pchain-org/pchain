@@ -288,6 +288,10 @@ var params = pbc.GenerateA(160, 512)
 var pairing = params.NewPairing()
 var g = pairing.NewG2().Rand()
 
+func Pairing() *pbc.Pairing {
+	return pairing
+}
+
 type BLSPrivKey []byte
 
 func CreateBLSPrivKey() BLSPrivKey {
@@ -301,6 +305,10 @@ func (privKey BLSPrivKey) Bytes() []byte {
 
 
 func (privKey BLSPrivKey) getElement() *pbc.Element {
+	return pairing.NewZr().SetBytes(privKey)
+}
+
+func (privKey BLSPrivKey) GetElement() *pbc.Element {
 	return pairing.NewZr().SetBytes(privKey)
 }
 

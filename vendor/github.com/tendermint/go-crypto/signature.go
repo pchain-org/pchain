@@ -168,16 +168,20 @@ func (sig *EtherumSignature) UnmarshalJSON(enc []byte) error {
 type BLSSignature []byte
 
 func CreateBLSSignature() BLSSignature {
-	privKey := pairing.NewZr().Rand()
-	return privKey.Bytes()
+	pubKey := pairing.NewG2().Rand()
+	return pubKey.Bytes()
 }
 
 func (sig BLSSignature) getElement() *pbc.Element {
 	return pairing.NewG2().SetBytes(sig)
 }
 
+func (sig BLSSignature) GetElement() *pbc.Element {
+	return pairing.NewG2().SetBytes(sig)
+}
+
 func (sig BLSSignature) Set1() {
-	sig.getElement().Set1()
+	copy(sig, pairing.NewG1().Set1().Bytes())
 }
 
 func BLSSignatureMul(l, r Signature) Signature {
@@ -196,8 +200,29 @@ func BLSSignatureMul(l, r Signature) Signature {
 func (sig BLSSignature) Mul(other Signature) bool {
 	if otherSign,ok := other.(BLSSignature); ok {
 		el1 := sig.getElement()
+		fmt.Println(el1.Bytes()[:3])
 		el2 := otherSign.getElement()
-		rs := pairing.NewG2().Mul(el1, el2)
+		fmt.Println(el2.Bytes()[:3])
+		rs := el1.Mul(el1, el2)
+		fmt.Println("el1",el1.Bytes()[:3])
+		fmt.Println("rs", rs.Bytes()[:3])
+		copy(sig, rs.Bytes())
+		return true
+	} else {
+		return false
+	}
+}
+
+func (sig BLSSignature) MulWithSet1(other Signature) bool {
+	if otherSign,ok := other.(BLSSignature); ok {
+		el1 := sig.getElement()
+		el1.Set1()
+		fmt.Println(el1.Bytes()[:3])
+		el2 := otherSign.getElement()
+		fmt.Println(el2.Bytes()[:3])
+		rs := el1.Mul(el1, el2)
+		fmt.Println("el1",el1.Bytes()[:3])
+		fmt.Println("rs", rs.Bytes()[:3])
 		copy(sig, rs.Bytes())
 		return true
 	} else {

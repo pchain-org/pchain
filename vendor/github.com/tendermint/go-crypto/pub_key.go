@@ -272,14 +272,18 @@ func (pubKey BLSPubKey) getElement() *pbc.Element {
 	return pairing.NewG2().SetBytes(pubKey)
 }
 
+func (pubKey BLSPubKey) GetElement() *pbc.Element {
+	return pairing.NewG2().SetBytes(pubKey)
+}
+
 func (pubKey BLSPubKey) Set1() {
-	pubKey.getElement().Set1()
+	copy(pubKey, pairing.NewG1().Set1().Bytes())
 }
 
 
 func CreateBLSPubKey() BLSPubKey {
-	privKey := pairing.NewG2()
-	return privKey.Bytes()
+	pubKey := pairing.NewG2().Rand()
+	return pubKey.Bytes()
 }
 
 func PubKeyMul(l, r BLSPubKey) BLSPubKey {
@@ -289,11 +293,29 @@ func PubKeyMul(l, r BLSPubKey) BLSPubKey {
 	return rs.Bytes()
 }
 
-func (pubKey BLSPubKey) Mul(other BLSPubKey) {
-	el1 := pubKey.getElement()
-	el2 := other.getElement()
-	rs := pairing.NewG2().Mul(el1, el2)
-	copy(pubKey, rs.Bytes())
+func (pubKey BLSPubKey) Mul(other PubKey) bool {
+	if otherPub, ok := other.(BLSPubKey); ok {
+		el1 := pubKey.getElement()
+		el2 := otherPub.getElement()
+		rs := pairing.NewG2().Mul(el1, el2)
+		copy(pubKey, rs.Bytes())
+		return true
+	} else {
+		return false
+	}
+}
+
+func (pubKey BLSPubKey) MulWithSet1(other PubKey) bool {
+	if otherPub, ok := other.(BLSPubKey); ok {
+		el1 := pubKey.getElement()
+		el1.Set1()
+		el2 := otherPub.getElement()
+		rs := pairing.NewG2().Mul(el1, el2)
+		copy(pubKey, rs.Bytes())
+		return true
+	} else {
+		return false
+	}
 }
 
 func (pubKey BLSPubKey) Bytes() []byte {

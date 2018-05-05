@@ -78,18 +78,32 @@ func alice(sharedParams string, sharedG []byte, messageChannel chan *messageData
 
 	// Generate keypair (x, g^x)
 	privKey := pairing.NewZr().Rand()
+	privKey1 := pairing.NewZr().Rand()
+
 	pubKey := pairing.NewG2().PowZn(g, privKey)
+	pubKey1 := pairing.NewG2().PowZn(g, privKey1)
+
+	//	aggPriv := pairing.NewZr().Add(privKey, privKey1)
+
+	aggPub := pairing.NewG2().Mul(pubKey, pubKey1)
+
+
+	fmt.Println()
+	fmt.Println("pubKey1:", pubKey.String())
+	fmt.Println("pubKey2:", pubKey1.String())
+	fmt.Println("aggregate pubKey:", aggPub.String())
 
 	// Send public key to Bob
-	keyChannel <- pubKey.Bytes()
+	keyChannel <- aggPub.Bytes()
 
 	// Some time later, sign a message, hashed to h, as h^x
 	message := "some text to sign"
 	h := pairing.NewG1().SetFromStringHash(message, sha256.New())
-	signature := pairing.NewG2().PowZn(h, privKey)
+	signature1 := pairing.NewG2().PowZn(h, privKey)
+	signature2 := pairing.NewG2().PowZn(h, privKey1)
 
 	// Send the message and signature to Bob
-	messageChannel <- &messageData{message: message, signature: signature.Bytes()}
+	messageChannel <- &messageData{message: message, signature: pairing.NewG2().Mul(signature1, signature2).Bytes()}
 
 	finished <- true
 }
@@ -118,4 +132,5 @@ func bob(sharedParams string, sharedG []byte, messageChannel chan *messageData, 
 	}
 
 	finished <- true
+	fmt.Println("verify over")
 }
