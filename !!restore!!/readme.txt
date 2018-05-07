@@ -2,33 +2,15 @@
 *                                                     README                                             *
 **********************************************************************************************************
 
-here are the modifications based on the original version:
-----------------------------------------------------------
-1, fix the tx gap between ethermintapp and ethereum because of gaslimit check 
-2, fix multi-tx with the same nonce in ethereum
-3, migrate attach command for ethermint from ethereum
-4, support validator adding, with some practice principles
-5, supply fake interfaces with eth-netstats monitor webpage, to make it run
-
-
-here are issues/future tasks:
------------------------------
-1, deploy the multi-node network with scripts
-2, fix the bug found in performance test
-3, fix the bug found in product test
-4, modify the eth-netstats monitor webpage to adapt this ethermint platform
-
-
 here are the deployment steps:
 ------------------------------
-1, get a ethermint-master-xx.tar.gz source package, such as 'ethermint-master-full.20170525.tar.gz', 
-   or get an un-compressed copy, copy the source to a location, ie
+1, get a copy of pchain code, copy the source to a location, ie
 
-	cp ethermint-master /mnt/vdb/ethermint-master
+	cp pchain /mnt/vdb/pchain
 
 2, step into the directory by 
 
-	cd /mnt/vdb/ethermint-master
+	cd /mnt/vdb/pchain
 
 3, follow the instructs to make it run in single node,
 
@@ -37,35 +19,35 @@ here are the deployment steps:
 	#build the exe file, download necessary software such as golang package
 	./build.sh
 
-	#make sure the generated 'ethermint' is the newest; there are some other exe files in the same directory,
+	#make sure the generated 'pchain' is the newest; there are some other exe files in the same directory,
 	# we will use the directly
 	ls ./bin
 
-	#make it simple to run 'ethermint'
-	sudo cp ./bin/ethermint /usr/local/bin/
+	#make it simple to run 'pchain'
+	sudo cp ./bin/pchain /usr/local/bin/
 
 	#create 5(you can change it) accounts with specified balance, will generate eth_genesis.json
-	ethermint --datadir /home/ubuntu/.ethermint init_eth_genesis "{10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}"
+	pchain --datadir /home/ubuntu/.pchain init_eth_genesis "{10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}"
 
 	#generate the pchain genesis.json with epoch/reward scheme parameters
-	ethermint -datadir /home/ubuntu/.ethermint init /home/ubuntu/.ethermint/eth_genesis.json
+	pchain --datadir /home/ubuntu/.pchain init /home/ubuntu/.pchain/pchain/eth_genesis.json
 
 	#start ehtermint node, run_debug.sh with more log output
 	./run.sh
 
     3.2) login to another console and run this cmd to check the log
 
-	tail -f /mnt/vdb/ethermint-master/ethereum.log
+	tail -f /mnt/vdb/pchain/pchain.log
 
 4, follow steps 1-3 with the same source code in another machine, build a fresh node('B') but don't start it (!!!!not run the ./run.sh!!!!).
 
    Here are the steps to make the new node ('B') join existing node ('A'):
 
-   4.1) stop ethermint on A
+   4.1) stop pchain on A
    4.2) add the peer entry,
 
-		add B's ip:port(say 10.104.107.82:46656) to A's /home/ubuntu/.ethermint/config.toml,
-		add A's ip:port(say 10.104.105.106:46656) to B's /home/ubuntu/.ethermint/config.toml.
+		add B's ip:port(say 10.104.107.82:46656) to A's /home/ubuntu/.pchain/config.toml,
+		add A's ip:port(say 10.104.105.106:46656) to B's /home/ubuntu/.pchain/config.toml.
 
 	 then, A's config.toml should look like:
 
@@ -79,9 +61,9 @@ here are the deployment steps:
 		db_backend = "leveldb"
 		log_level = "notice"
 
-   4.3) copy A's /home/ubuntu/.ethermint/genesis.json to B's /home/ubuntu/.ethermint/, make their genesis.json keep the same,
+   4.3) copy A's /home/ubuntu/.pchain/genesis.json to B's /home/ubuntu/.pchain/, make their genesis.json keep the same,
         therefor the validators are the same between A and B.
-   4.4) run ethermint on A and B (order is not relevant). After connected, B should start synchronize blocks from A,
+   4.4) run pchain on A and B (order is not relevant). After connected, B should start synchronize blocks from A,
         and they will have the same blockchain behaviors when synchronzation is done
 
 5, here is the step to make a node to be a validator, joining to existing validator(s). 
@@ -89,8 +71,8 @@ here are the deployment steps:
    we assume there already are/is existing validators. with default single-node deployment, the node itself will be a validator.
 
    5.1) follow 1-4 with the same souce code, add a new node ('C') to the existing network but don't start it (!!!!not run the ./run.sh!!!!).
-   5.2) pick one validator (node 'A'), add C's pub-key (the long hex-string of "pub_key" part in /home/ubuntu/.ethermint/priv_validator.json) 
-        to A's "validators" part in A's /home/ubuntu/.ethermint/genesis.json. then A's "validators" part in genesis.json should look like:
+   5.2) pick one validator (node 'A'), add C's pub-key (the long hex-string of "pub_key" part in /home/ubuntu/.pchain/priv_validator.json) 
+        to A's "validators" part in A's /home/ubuntu/.pchain/genesis.json. then A's "validators" part in genesis.json should look like:
         
         "validators": [
                 ...

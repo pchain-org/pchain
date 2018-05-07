@@ -21,8 +21,13 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	validatorsStrategy "github.com/pchain/ethermint/strategies/validators"
 	"time"
+
 )
 
+const (
+	// Client identifier to advertise over the network
+	MainChain = "pchain"
+)
 
 type Chain struct{
 	Id string
@@ -76,8 +81,56 @@ func LoadMainChain(ctx *cli.Context, chainId string) *Chain {
 
 func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
 
-	chain := new(Chain)
-	chain.Id = chainId
+	fmt.Printf("now load child: %s\n", chainId)
+
+	chainDir := ChainDir(ctx, chainId)
+	empty, err :=cmn.IsDirEmpty(chainDir)
+	if empty || err != nil{
+		fmt.Printf("directory %s not exist or with error %v\n", chainDir, err)
+		return nil
+	}
+	chain := &Chain {Id:chainId}
+	config := etm.GetTendermintConfig(chainId, ctx)
+	chain.Config = config
+
+	//always start ethereum
+	fmt.Println("chainId: %s, ethereum.MakeSystemNode", chainId)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, config.GetString(RpcLaddrFlag.Name), ctx)
+	chain.EthNode = stack
+
+	rpcHandler, err := stack.GetRPCHandler()
+	if err != nil {
+		fmt.Println("rpc_handler got failed, return")
+		return nil
+	}
+
+	chain.RpcHandler = rpcHandler
+
+	consensus, err := getConsensus(config)
+	if(err != nil) {
+		fmt.Printf("Couldn't get consensus with: %v\n", err)
+		stack.Stop()
+		return nil
+	}
+	fmt.Printf("consensus is: %s\n", consensus)
+
+	if (consensus != tdmTypes.CONSENSUS_POS) {
+		fmt.Println("consensus is not pos, so not start the pos prototol")
+		return nil
+	}
+
+	//set verbosity level for go-ethereum
+	glog.SetToStderr(true)
+	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
+
+	fmt.Println("tm node")
+	tdmNode := MakeTendermintNode(config)
+	if tdmNode == nil {
+		fmt.Println("make tendermint node failed")
+		return nil
+	}
+	chain.TdmNode = tdmNode
+
 	return chain
 }
 
@@ -146,10 +199,59 @@ func StartMainChain(ctx *cli.Context, chain *Chain, quit chan int) error {
 
 func StartChildChain(ctx *cli.Context, chain *Chain, quit chan int) error {
 
-	fmt.Printf("start side chain: %v\n", chain.Id)
-	//go etm.EthermintCmd(chain, ctx, quit)
-	go func() {
-		//quit <- 1
+	fmt.Printf("start child chain: %s\n", chain.Id)
+	go func(){
+		fmt.Println("ethermintCmd->utils.StartNode(stack)")
+		utils.StartNode1(chain.EthNode)
+
+		config := chain.Config
+		addr := config.GetString("proxy_app")
+		abci := config.GetString("abci")
+
+		stack := chain.EthNode
+		var backend *ethereum.Backend
+		if err := stack.Service(&backend); err != nil {
+			utils.Fatalf("backend service not running: %v", err)
+		}
+		client, err := stack.Attach()
+		if err != nil {
+			utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+		}
+
+		ethereum.ReloadEthApi(stack, backend)
+
+		testEthereumApi()
+
+		//strategy := &emtTypes.Strategy{new(minerRewardStrategies.RewardConstant),nil}
+		strategy := &validatorsStrategy.ValidatorsStrategy{}
+		etmApp, err := etmApp.NewEthermintApplication(backend, client, strategy)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		chain.EtmApp = etmApp
+
+		abciServer, err := server.NewServer(addr, abci, etmApp)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		chain.AbciServer = abciServer
+
+		fmt.Println("tm node")
+		err = chain.TdmNode.OnStart2()
+		if err != nil {
+			cmn.Exit(cmn.Fmt("Failed to start node: %v", err))
+		}
+
+		//fmt.Printf("Started node", "nodeInfo", chain.TdmNode.sw.NodeInfo())
+
+		// Sleep forever and then...
+		cmn.TrapSignal(func() {
+			chain.TdmNode.Stop()
+		})
+
+		quit <- 1
 	}()
 
 	return nil
@@ -219,4 +321,18 @@ func MakeTendermintNode(config cfg.Config) *tdm.Node{
 	}
 
 	return tdm.NewNodeNotStart(config)
+}
+
+func CreateChildChain(ctx *cli.Context, chainId string, balStr string) error{
+	//validators: json format, like {[{pubkey: pk1, balance:b1, amount: am1},{pubkey: pk2, balance: b2, amount: am2}]}
+
+	config := etm.GetTendermintConfig(chainId, ctx)
+	err := init_eth_genesis(config, balStr)
+	if err != nil {
+		return err
+	}
+
+	init_cmd(ctx, config, chainId, config.GetString("eth_genesis_file"))
+
+	return nil
 }

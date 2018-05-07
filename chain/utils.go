@@ -14,6 +14,13 @@ import (
 	tmlog "github.com/tendermint/go-logger"
 	tmcfg "github.com/tendermint/tendermint/config/tendermint"
 )
+
+
+var (
+	// tendermint config
+	Config cfg.Config
+)
+
 //Deprecated
 func getTendermintConfig(chainId string, ctx *cli.Context) cfg.Config {
 	datadir := ctx.GlobalString(DataDirFlag.Name)
@@ -62,13 +69,18 @@ func DefaultDataDir() string {
 	home := HomeDir()
 	if home != "" {
 		if runtime.GOOS == "darwin" {
-			return filepath.Join(home, "Library", "Ethermint")
+			return filepath.Join(home, "Library", "Pchain")
 		} else if runtime.GOOS == "windows" {
-			return filepath.Join(home, "AppData", "Roaming", "Ethermint")
+			return filepath.Join(home, "AppData", "Roaming", "Pchain")
 		} else {
-			return filepath.Join(home, ".ethermint")
+			return filepath.Join(home, ".pchain")
 		}
 	}
 	// As we cannot guess a stable location, return empty and handle later
 	return ""
+}
+
+func ChainDir(ctx *cli.Context, chainId string) string {
+	datadir := ctx.GlobalString(DataDirFlag.Name)
+	return filepath.Join(datadir, chainId)
 }

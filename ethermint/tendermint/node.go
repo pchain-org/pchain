@@ -432,6 +432,157 @@ func (n *Node) OnStart1() error {
 	return nil
 }
 
+func (n *Node) OnStart2() error {
+
+	if _, err := n.proxyApp.Start(); err != nil {
+		cmn.Exit(cmn.Fmt("Error starting proxy app connections: %v", err))
+	}
+
+	// reload the state (it may have been updated by the handshake)
+	state := sm.LoadState(n.stateDB)
+	epoch := ep.LoadOneEpoch(n.epochDB, state.LastEpochNumber)
+	state.Epoch = epoch
+
+	//_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
+	fmt.Println("state.Validators:", state.Epoch.Validators)
+
+	// Transaction indexing
+	var txIndexer txindex.TxIndexer
+	switch n.config.GetString("tx_index") {
+	case "kv":
+		store := dbm.NewDB("tx_index", n.config.GetString("db_backend"), n.config.GetString("db_dir"))
+		txIndexer = kv.NewTxIndex(store)
+	default:
+		txIndexer = &null.TxIndex{}
+	}
+	state.TxIndexer = txIndexer
+
+	_, err := n.evsw.Start()
+	if err != nil {
+		cmn.Exit(cmn.Fmt("Failed to start switch: %v", err))
+	}
+
+	// Decide whether to fast-sync or not
+	// We don't fast-sync when the only validator is us.
+	fastSync := n.config.GetBool("fast_sync")
+	if state.Epoch.Validators.Size() == 1 {
+		addr, _ := state.Epoch.Validators.GetByIndex(0)
+		if bytes.Equal(n.privValidator.Address, addr) {
+			fastSync = false
+		}
+	}
+
+	// Make BlockchainReactor
+	bcReactor := bc.NewBlockchainReactor(n.config, state.Copy(), n.proxyApp.Consensus(), n.blockStore, fastSync)
+
+	// Make MempoolReactor
+	mempool := mempl.NewMempool(n.config, n.proxyApp.Mempool())
+	mempoolReactor := mempl.NewMempoolReactor(n.config, mempool)
+
+	// Make ConsensusReactor
+	consensusState := consensus.NewConsensusState(n.config, state.Copy(), n.proxyApp.Consensus(), n.blockStore, mempool, epoch)
+	if n.privValidator != nil {
+		consensusState.SetPrivValidator(n.privValidator)
+	}
+	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
+
+	// Make p2p network switch
+	sw := p2p.NewSwitch(n.config.GetConfig("p2p"))
+	sw.AddReactor("MEMPOOL", mempoolReactor)
+	sw.AddReactor("BLOCKCHAIN", bcReactor)
+	sw.AddReactor("CONSENSUS", consensusReactor)
+
+	// Optionally, start the pex reactor
+	var addrBook *p2p.AddrBook
+	if n.config.GetBool("pex_reactor") {
+		addrBook = p2p.NewAddrBook(n.config.GetString("addrbook_file"), n.config.GetBool("addrbook_strict"))
+		pexReactor := p2p.NewPEXReactor(addrBook)
+		sw.AddReactor("PEX", pexReactor)
+	}
+
+	// Filter peers by addr or pubkey with an ABCI query.
+	// If the query return code is OK, add peer.
+	// XXX: Query format subject to change
+	if n.config.GetBool("filter_peers") {
+		// NOTE: addr is ip:port
+		sw.SetAddrFilter(func(addr net.Addr) error {
+			resQuery, err := n.proxyApp.Query().QuerySync(abci.RequestQuery{Path: cmn.Fmt("/p2p/filter/addr/%s", addr.String())})
+			if err != nil {
+				return err
+			}
+			if resQuery.Code.IsOK() {
+				return nil
+			}
+			return errors.New(resQuery.Code.String())
+		})
+		sw.SetPubKeyFilter(func(pubkey crypto.PubKeyEd25519) error {
+			resQuery, err := n.proxyApp.Query().QuerySync(abci.RequestQuery{Path: cmn.Fmt("/p2p/filter/pubkey/%X", pubkey.Bytes())})
+			if err != nil {
+				return err
+			}
+			if resQuery.Code.IsOK() {
+				return nil
+			}
+			return errors.New(resQuery.Code.String())
+		})
+	}
+
+	// add the event switch to all services
+	// they should all satisfy events.Eventable
+	SetEventSwitch(n.evsw, bcReactor, mempoolReactor, consensusReactor)
+
+	// run the profile server
+	profileHost := n.config.GetString("prof_laddr")
+	if profileHost != "" {
+
+		go func() {
+			log.Warn("Profile server", "error", http.ListenAndServe(profileHost, nil))
+		}()
+	}
+
+	// Create & add listener
+	//protocol, address := ProtocolAndAddress(n.config.GetString("node_laddr"))
+	protocol, address := ProtocolAndAddress("tcp://0.0.0.0:46660")
+	l := p2p.NewDefaultListener(protocol, address, n.config.GetBool("skip_upnp"))
+	sw.AddListener(l)
+	n.sw = sw
+
+	// Start the switch
+	sw.SetNodeInfo(n.makeNodeInfo())
+	sw.SetNodePrivKey(n.privKey)
+	_, err = sw.Start()
+	if err != nil {
+		return err
+	}
+
+
+	n.addrBook = addrBook
+	n.bcReactor = bcReactor
+	n.mempoolReactor = mempoolReactor
+	n.consensusState = consensusState
+	n.consensusReactor = consensusReactor
+	n.txIndexer = txIndexer
+
+	// If seeds exist, add them to the address book and dial out
+	if n.config.GetString("seeds") != "" {
+		// dial out
+		seeds := strings.Split(n.config.GetString("seeds"), ",")
+		if err := n.DialSeeds(seeds); err != nil {
+			return err
+		}
+	}
+
+	// Run the RPC server
+	if n.config.GetString("rpc_laddr") != "" {
+		listeners, err := n.StartRPC()
+		if err != nil {
+			return err
+		}
+		n.rpcListeners = listeners
+	}
+
+	return nil
+}
 
 func (n *Node) OnStart() error {
 

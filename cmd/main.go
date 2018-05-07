@@ -8,21 +8,11 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"gopkg.in/urfave/cli.v1"
-	cfg "github.com/tendermint/go-config"
 	etm "github.com/pchain/ethermint/cmd/ethermint"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/pchain/chain"
 )
 
-const (
-	// Client identifier to advertise over the network
-	mainChain = "pchain"
-)
-
-var (
-	// tendermint config
-	config cfg.Config
-)
 
 func main() {
 
@@ -40,14 +30,14 @@ func main() {
 		},
 
 		{
-			Action:		initEthGenesis,
+			Action:		chain.InitEthGenesis,
 			Name:		"init_eth_genesis",
 			Usage:		"init_eth_genesis balance:\"10,10,10\"",
 			Description: "Initialize the balance of accounts",
 		},
 
 		{
-			Action:      initCmd,
+			Action:      chain.InitCmd,
 			Name:        "init",
 			Usage:       "init genesis.json",
 			Description: "Initialize the files",
@@ -57,7 +47,7 @@ func main() {
 	cliApp.HideVersion = true // we have a command to print the version
 
 	cliApp.Before = func(ctx *cli.Context) error {
-		config = etm.GetTendermintConfig(mainChain, ctx)
+		chain.Config = etm.GetTendermintConfig(chain.MainChain, ctx)
 		return nil
 	}
 

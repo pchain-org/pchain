@@ -1,4 +1,4 @@
-package main
+package chain
 
 import (
 	"os"
@@ -28,6 +28,8 @@ import (
 	"github.com/tendermint/go-crypto"
 	"time"
 	"regexp"
+	cfg "github.com/tendermint/go-config"
+	etm "github.com/pchain/ethermint/cmd/ethermint"
 )
 
 type BalaceAmount struct {
@@ -61,29 +63,27 @@ func parseBalaceAmount(s string) ([]*BalaceAmount,error){
 	return balanceAmounts,nil
 }
 
-func initCmd(ctx *cli.Context) error {
+func InitCmd(ctx *cli.Context) error {
 
 	// ethereum genesis.json
 	ethGenesisPath := ctx.Args().First()
 	if len(ethGenesisPath) == 0 {
 		utils.Fatalf("must supply path to genesis JSON file")
 	}
-	//coreGensis, privValidator, err := init_eth_genesis()
-	//if err != nil {
-	//	utils.Fatalf("init eth_genesis failed")
-	//	return err
-	//}
-	init_eth_blockchain(config.GetString("eth_genesis_file"), ctx)
 
-	init_em_files(ethGenesisPath)
-	/*
-	rsTmplPath := ctx.Args().Get(1)
-	init_reward_scheme_files(rsTmplPath)
-	*/
+	return init_cmd(ctx, etm.GetTendermintConfig(MainChain, ctx), MainChain, ethGenesisPath)
+}
+
+func init_cmd(ctx *cli.Context, config cfg.Config, chainId string, ethGenesisPath string) error {
+
+	init_eth_blockchain(chainId, ethGenesisPath, ctx)
+
+	init_em_files(config, chainId, ethGenesisPath)
+
 	return nil
 }
 
-func initEthGenesis(ctx *cli.Context) error {
+func InitEthGenesis(ctx *cli.Context) error {
 	fmt.Println("this is init_eth_genesis")
 	args := ctx.Args()
 	if len(args) != 1 {
@@ -91,13 +91,19 @@ func initEthGenesis(ctx *cli.Context) error {
 		return nil
 	}
 	bal_str := args[0]
-	balanceAmounts, err := parseBalaceAmount(bal_str)
+
+	return init_eth_genesis(etm.GetTendermintConfig(MainChain, ctx), bal_str)
+}
+
+func init_eth_genesis(config cfg.Config, balStr string) error {
+
+	balanceAmounts, err := parseBalaceAmount(balStr)
 	if err != nil {
 		utils.Fatalf("init eth_genesis_file failed")
 		return err
 	}
 
-	validators := createPriValidators(len(balanceAmounts))
+	validators := createPriValidators(config, len(balanceAmounts))
 
 	var coreGenesis = core.Genesis{
 		Nonce: "0xdeadbeefdeadbeef",
@@ -140,27 +146,36 @@ func initEthGenesis(ctx *cli.Context) error {
 	return nil
 }
 
-func init_eth_blockchain(ethGenesisPath string, ctx *cli.Context) {
+func init_eth_blockchain(chainId string, ethGenesisPath string, ctx *cli.Context) {
 
-	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MakeDataDir(ctx), mainChain, "geth/chaindata"), 0, 0)
+	dbPath := filepath.Join(utils.MakeDataDir(ctx), chainId, "geth/chaindata")
+	fmt.Printf("init_eth_blockchain 0 with dbPath: %s\n", dbPath)
+
+	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MakeDataDir(ctx), chainId, "geth/chaindata"), 0, 0)
 	if err != nil {
 		utils.Fatalf("could not open database: %v", err)
 	}
+	defer chainDb.Close()
 
+	fmt.Printf("init_eth_blockchain 1\n")
 	genesisFile, err := os.Open(ethGenesisPath)
 	if err != nil {
 		utils.Fatalf("failed to read genesis file: %v", err)
 	}
+	defer genesisFile.Close()
 
+	fmt.Printf("init_eth_blockchain 2\n")
 	block, err := core.WriteGenesisBlock(chainDb, genesisFile)
 	if err != nil {
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
 
+
+	fmt.Printf("init_eth_blockchain end\n")
 	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
 }
 
-func init_em_files(genesisPath string) error  {
+func init_em_files(config cfg.Config, chainId string, genesisPath string) error  {
 	gensisFile, err := os.Open(genesisPath)
 	defer gensisFile.Close()
 	if err != nil {
@@ -182,14 +197,14 @@ func init_em_files(genesisPath string) error  {
 		return err
 	}
 	privValidator := types.LoadOrGenPrivValidator(privValPath)
-	if err := createGenesisDoc(mainChain, &coreGenesis, privValidator); err != nil {
+	if err := createGenesisDoc(config, chainId, &coreGenesis, privValidator); err != nil {
 		utils.Fatalf("failed to write genesis file: %v", err)
 		return err
 	}
 	return nil
 }
 
-func createGenesisDoc(chainId string, coreGenesis *core.Genesis, privValidator *types.PrivValidator) error {
+func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genesis, privValidator *types.PrivValidator) error {
 	genFile := config.GetString("genesis_file")
 	if _, err := os.Stat(genFile); os.IsNotExist(err) {
 		genDoc := types.GenesisDoc{
@@ -234,7 +249,7 @@ func createGenesisDoc(chainId string, coreGenesis *core.Genesis, privValidator *
 }
 
 
-func createPriValidators(num int) []*types.PrivValidator {
+func createPriValidators(config cfg.Config, num int) []*types.PrivValidator {
 	validators := make([]*types.PrivValidator, num)
 	var newKey *keystore.Key
 	scryptN := keystore.StandardScryptN
