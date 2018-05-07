@@ -88,7 +88,7 @@ var (
 	ErrAddingVote               = errors.New("Error adding vote")
 	ErrVoteHeightMismatch       = errors.New("Error vote height mismatch")
 	ErrInvalidSignatureAggr	    = errors.New("Invalid signature aggregation")
-	ErrDuplicateSignatureAggr   = errors.New("Invalid signature aggregation")
+	ErrDuplicateSignatureAggr   = errors.New("Duplicate signature aggregation")
 )
 
 //-----------------------------------------------------------------------------
@@ -621,9 +621,9 @@ func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	// fmt.Println("validators:", validators)
 	lastPrecommits := (*types.VoteSet)(nil)
 	if cs.CommitRound > -1 && cs.VoteSignAggr != nil {
-		if !cs.VoteSignAggr.Precommits(cs.CommitRound).HasTwoThirdsMajority() {
-			PanicSanity("updateToState(state) called but last Precommit round didn't have +2/3")
-		}
+//		if !cs.VoteSignAggr.Precommits(cs.CommitRound).HasTwoThirdsMajority() {
+//			PanicSanity("updateToState(state) called but last Precommit round didn't have +2/3")
+//		}
 
 		// lastPrecommits cannot be saved anymore, may be replaced with signature aggregation
 		// lastPrecommits = cs.Votes.Precommits(cs.CommitRound)
@@ -1027,14 +1027,14 @@ func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts 
 		commit = &types.Commit{}
 	} else if cs.LastCommit.HasTwoThirdsMajority() {
 		// Make the commit from LastCommit
-		//commit = cs.LastCommit.MakeCommit()
-
-		//Don't save commits now, may be replaced with signature aggregation laster
-		commit = &types.Commit{}
+		commit = cs.LastCommit.MakeCommit()
 	} else {
 		// This shouldn't happen.
-		logger.Error("enterPropose: Cannot propose anything: No commit for the previous block.")
-		return
+//		logger.Error("enterPropose: Cannot propose anything: No commit for the previous block.")
+//		return
+
+		//Don't throw error now, the last commits may be replaced with signature aggregation later
+		commit = &types.Commit{}
 	}
 
 	// Mempool validated transactions
@@ -1727,17 +1727,17 @@ func (cs *ConsensusState) addPrecommitsAggrPart(height int, part *types.Part, ve
 
 // -----------------------------------------------------------------------------
 func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
+	logger.Info("Received SignAggr %#v\n", signAggr)
+
 	// Does not apply
 	if signAggr.Height != cs.Height || signAggr.Round != cs.Round {
 		return nil
 	}
 
-	fmt.Printf("Received SignAggr %#v\n", signAggr)
+	maj23, err := cs.verifyMaj23SignAggr(signAggr)
 
-	validSign := cs.verifyMaj23SignAggr(signAggr)
-
-	if validSign == false {
-		panic("Invalid signature aggregation\n")
+	if err != nil || maj23 == false {
+		logger.Info(Fmt("verifyMaj23SignAggr: Received 2/3+ prevotes, enter precommit\n"))
 		return ErrInvalidSignatureAggr
 	}
 
@@ -1765,10 +1765,31 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 		return ErrInvalidSignatureAggr
 	}
 
+	if signAggr.Type == types.VoteTypePrevote {
+		logger.Info(Fmt("setMaj23SignAggr: Received 2/3+ prevotes, enter precommit\n"))
+
+		logger.Debug(Fmt("setMaj23SignAggr: Received 2/3+ prevotes, enter precommit\n"))
+
+		cs.enterPrecommit(cs.Height, cs.Round)
+
+	} else if signAggr.Type == types.VoteTypePrecommit {
+		logger.Info(Fmt("setMaj23SignAggr: Received 2/3+ precommits, enter commit\n"))
+
+		logger.Debug(Fmt("setMaj23SignAggr: Received 2/3+ precommits, enter commit\n"))
+
+		// TODO : Shall go to this state?
+		// cs.tryFinalizeCommit(height)
+		cs.enterCommit(cs.Height, cs.Round)
+
+	} else {
+		panic("Invalid signAggr type")
+	}
+
 	return nil
 }
 
-func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) bool {
+func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) (bool, error) {
+	logger.Info("enter verifyMaj23SignAggr()\n")
 
 	// Assume BLSVerifySignAggr() will do following things
 	// 1. Aggregate pub keys based on signAggr->BitArray
@@ -1778,31 +1799,16 @@ func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) bool {
 	maj23, err := cs.BLSVerifySignAggr(signAggr)
 
 	if err != nil {
-		return false
+		logger.Debug("verifyMaj23SignAggr return with error \n")
+		return false, err
 	}
 
-	if maj23 == true {
-		if signAggr.Type == types.VoteTypePrecommit {
-			logger.Debug(Fmt("verifyMaj23SignAggr: Received 2/3+ prevotes, enter precommit\n"))
-
-			cs.enterPrecommit(cs.Height, cs.Round)
-
-		} else if signAggr.Type == types.VoteTypePrecommit {
-			logger.Debug(Fmt("verifyMaj23SignAggr: Received 2/3+ precommits, enter commit\n"))
-
-			// TODO : Shall go to this state?
-			// cs.tryFinalizeCommit(height)
-			cs.enterCommit(cs.Height, cs.Round)
-
-		} else {
-			panic("Invalid signAggr type")
-		}
-	}
-
-	return true
+	return maj23, err
 }
 
 func (cs *ConsensusState) BLSVerifySignAggr(signAggr *types.SignAggr) (bool, error) {
+	fmt.Printf("enter BLSVerifySignAggr()\n")
+
 	aggrPubKey := crypto.CreateBLSPubKey()
 	aggrPubKey.Set1()
 	bitMap := signAggr.BitArray
@@ -2093,13 +2099,21 @@ func (cs *ConsensusState) sendMaj23Vote(votetype byte) {
 
 // Build the 2/3+ signature aggregation based on vote set and send it to other validators
 func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
+	logger.Info("Enter sendMaj23SignAggr")
+
 	var votes []*types.Vote
-	var blockID types.BlockID
+	var blockID, maj23 types.BlockID
 
 	if voteType == types.VoteTypePrevote {
 		votes = cs.Votes.Prevotes(cs.Round).Votes()
+		maj23, ok = cs.Votes.Prevotes(cs.Round).TwoThirdsMajority()
 	} else if voteType == types.VoteTypePrecommit {
 		votes = cs.Votes.Precommits(cs.Round).Votes()
+		maj23, ok = cs.Votes.Prevotes(cs.Round).TwoThirdsMajority()
+	}
+
+	if ok == false {
+		logger.Fatal("Votset does not have +2/3 voting")
 	}
 
 	numValidators := cs.Validators.Size()
@@ -2132,6 +2146,17 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	// bitarray, signAggr := BuildSignAggr(votes)
 
 	signAggr := types.MakeSignAggr(cs.Height, cs.Round, voteType, numValidators, blockID, cs.Votes.chainID, signature)
+
+	// Set sign bitmap
+	signAggr.SetBitArray(signBitArray)
+
+	if maj23.IsZero() == true {
+		logger.Debug("The maj23 blockID is zero %#v\n", maj23)
+		panic("Invalid maj23")
+	}
+
+	// Set ma23 block ID
+	signAggr.SetMaj23(maj23)
 
 	logger.Debug(Fmt("Generate Maj23SignAggr %#v\n", signAggr))
 

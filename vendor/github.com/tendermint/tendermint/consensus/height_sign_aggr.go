@@ -34,7 +34,7 @@ type HeightVoteSignAggr struct {
 
 	mtx			sync.Mutex
 	round			int                       // max tracked round
-	roundVoteSignAggrs	map[int]RoundVoteSignAggr // keys: [0...round]
+	roundVoteSignAggrs	map[int]*RoundVoteSignAggr // keys: [0...round]
 
 	// peerCatchupRounds	map[string][]int          // keys: peer.Key; values: at most 2 rounds
 }
@@ -53,7 +53,7 @@ func (hvs *HeightVoteSignAggr) Reset(height int, valSet *types.ValidatorSet) {
 
 	hvs.height = height
 	hvs.valSet = valSet
-	hvs.roundVoteSignAggrs = make(map[int]RoundVoteSignAggr)
+	hvs.roundVoteSignAggrs = make(map[int]*RoundVoteSignAggr)
 //	hvs.peerCatchupRounds = make(map[string][]int)
 
 	hvs.addRound(0)
@@ -94,7 +94,7 @@ func (hvs *HeightVoteSignAggr) addRound(round int) {
 	}
 	logger.Debug("addRound(round)", " round:", round)
 
-	hvs.roundVoteSignAggrs[round] = RoundVoteSignAggr{
+	hvs.roundVoteSignAggrs[round] = &RoundVoteSignAggr{
 		Prevotes:   nil,
 		Precommits: nil,
 	}

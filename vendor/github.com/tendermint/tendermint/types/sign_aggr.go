@@ -29,7 +29,7 @@ type SignAggr struct {
 	SignatureAggr	crypto.BLSSignature
 
 	sum		int64             // Sum of voting power for seen votes, discounting conflicts
-	maj23		*BlockID	  // First 2/3 majority seen
+	maj23		BlockID		// First 2/3 majority seen
 }
 
 func (vote *SignAggr) WriteSignBytes(chainID string, w io.Writer, n *int, err *error) {
@@ -55,7 +55,6 @@ func MakeSignAggr(height int, round int, mtype byte, numValidators int, blockID 
                 BitArray: NewBitArray(numValidators),
 		SignatureAggr : signAggr,
 		sum	: 0,
-		maj23	: nil,
         }
 }
 
@@ -67,7 +66,15 @@ func (sa *SignAggr) HasTwoThirdsMajority() bool {
 	if sa == nil {
 		return false
 	}
-	return sa.maj23 != nil
+	return sa.maj23.IsZero()
+}
+
+func (sa *SignAggr) SetMaj23(blockID BlockID) {
+	sa.maj23 = blockID
+}
+
+func (sa *SignAggr) SetBitArray(newBitArray *BitArray) {
+	sa.BitArray.Update(newBitArray)
 }
 
 func (sa *SignAggr) IsCommit() bool {
@@ -77,7 +84,7 @@ func (sa *SignAggr) IsCommit() bool {
 	if sa.Type != VoteTypePrecommit {
 		return false
 	}
-	return sa.maj23 != nil
+	return sa.maj23.IsZero() != false
 }
 
 /*
@@ -99,10 +106,10 @@ func (sa *SignAggr) TwoThirdsMajority() (blockID BlockID, ok bool) {
 	if sa == nil {
 		return BlockID{}, false
 	}
-	if sa.maj23 != nil {
-		return *sa.maj23, true
-	} else {
+	if sa.maj23.IsZero() == true {
 		return BlockID{}, false
+	} else {
+		return sa.maj23, true
 	}
 }
 
