@@ -66,14 +66,14 @@ type CanonicalJSONValidatorMsg struct {
 
 func CanonicalBlockID(blockID BlockID) CanonicalJSONBlockID {
 	return CanonicalJSONBlockID{
-		Hash:        blockID.Hash,
+		Hash:        blockID.Hash.Bytes(),
 		PartsHeader: CanonicalPartSetHeader(blockID.PartsHeader),
 	}
 }
 
 func CanonicalPartSetHeader(psh PartSetHeader) CanonicalJSONPartSetHeader {
 	return CanonicalJSONPartSetHeader{
-		psh.Hash,
+		psh.Hash.Bytes(),
 		psh.Total,
 	}
 }

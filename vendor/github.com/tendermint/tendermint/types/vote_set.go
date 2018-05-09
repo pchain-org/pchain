@@ -158,7 +158,7 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	}
 
 	// Ensure that the signer has the right address
-	if !bytes.Equal(valAddr, lookupAddr) {
+	if !bytes.Equal(valAddr.Bytes(), lookupAddr) {
 		return false, ErrVoteInvalidValidatorAddress
 	}
 

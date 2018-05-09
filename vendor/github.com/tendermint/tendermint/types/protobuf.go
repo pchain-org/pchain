@@ -16,15 +16,15 @@ func (tm2pb) Header(header *Header) *types.Header {
 		Time:           uint64(header.Time.Unix()),
 		NumTxs:         uint64(header.NumTxs),
 		LastBlockId:    TM2PB.BlockID(header.LastBlockID),
-		LastCommitHash: header.LastCommitHash,
-		DataHash:       header.DataHash,
-		AppHash:        header.AppHash,
+		LastCommitHash: header.LastCommitHash.Bytes(),
+		DataHash:       header.DataHash.Bytes(),
+		AppHash:        header.AppHash.Bytes(),
 	}
 }
 
 func (tm2pb) BlockID(blockID BlockID) *types.BlockID {
 	return &types.BlockID{
-		Hash:  blockID.Hash,
+		Hash:  blockID.Hash.Bytes(),
 		Parts: TM2PB.PartSetHeader(blockID.PartsHeader),
 	}
 }
@@ -32,7 +32,7 @@ func (tm2pb) BlockID(blockID BlockID) *types.BlockID {
 func (tm2pb) PartSetHeader(partSetHeader PartSetHeader) *types.PartSetHeader {
 	return &types.PartSetHeader{
 		Total: uint64(partSetHeader.Total),
-		Hash:  partSetHeader.Hash,
+		Hash:  partSetHeader.Hash.Bytes(),
 	}
 }
 

@@ -47,7 +47,7 @@ func IsVoteTypeValid(type_ byte) bool {
 
 // Represents a prevote, precommit, or commit vote from validators for consensus.
 type Vote struct {
-	ValidatorAddress []byte           `json:"validator_address"`
+	ValidatorAddress Hash160           `json:"validator_address"`
 	ValidatorIndex   int              `json:"validator_index"`
 	Height           int              `json:"height"`
 	Round            int              `json:"round"`
@@ -83,7 +83,7 @@ func (vote *Vote) String() string {
 	}
 
 	return fmt.Sprintf("Vote{%v:%X %v/%02d/%v(%v) %X %v}",
-		vote.ValidatorIndex, Fingerprint(vote.ValidatorAddress),
+		vote.ValidatorIndex, Fingerprint(vote.ValidatorAddress.Bytes()),
 		vote.Height, vote.Round, vote.Type, typeString,
-		Fingerprint(vote.BlockID.Hash), vote.Signature)
+		Fingerprint(vote.BlockID.Hash.Bytes()), vote.Signature)
 }
