@@ -97,11 +97,11 @@ func makeSwitchPair(t testing.TB, initSwitch func(int, *Switch) *Switch) (*Switc
 
 func initSwitchFunc(i int, sw *Switch) *Switch {
 	// Make two reactors of two channels each
-	sw.AddReactor("foo", NewTestReactor([]*ChannelDescriptor{
+	sw.AddReactor("pchain","foo", NewTestReactor([]*ChannelDescriptor{
 		&ChannelDescriptor{ID: byte(0x00), Priority: 10},
 		&ChannelDescriptor{ID: byte(0x01), Priority: 10},
 	}, true))
-	sw.AddReactor("bar", NewTestReactor([]*ChannelDescriptor{
+	sw.AddReactor("pchain","bar", NewTestReactor([]*ChannelDescriptor{
 		&ChannelDescriptor{ID: byte(0x02), Priority: 10},
 		&ChannelDescriptor{ID: byte(0x03), Priority: 10},
 	}, true))
@@ -125,15 +125,15 @@ func TestSwitches(t *testing.T) {
 	ch1Msg := "channel foo"
 	ch2Msg := "channel bar"
 
-	s1.Broadcast(byte(0x00), ch0Msg)
-	s1.Broadcast(byte(0x01), ch1Msg)
-	s1.Broadcast(byte(0x02), ch2Msg)
+	s1.Broadcast("pchain", byte(0x00), ch0Msg)
+	s1.Broadcast("pchain", byte(0x01), ch1Msg)
+	s1.Broadcast("pchain", byte(0x02), ch2Msg)
 
 	// Wait for things to settle...
 	time.Sleep(5000 * time.Millisecond)
 
 	// Check message on ch0
-	ch0Msgs := s2.Reactor("foo").(*TestReactor).getMsgs(byte(0x00))
+	ch0Msgs := s2.Reactor("pchain","foo").(*TestReactor).getMsgs(byte(0x00))
 	if len(ch0Msgs) != 1 {
 		t.Errorf("Expected to have received 1 message in ch0")
 	}
@@ -142,7 +142,7 @@ func TestSwitches(t *testing.T) {
 	}
 
 	// Check message on ch1
-	ch1Msgs := s2.Reactor("foo").(*TestReactor).getMsgs(byte(0x01))
+	ch1Msgs := s2.Reactor("pchain","foo").(*TestReactor).getMsgs(byte(0x01))
 	if len(ch1Msgs) != 1 {
 		t.Errorf("Expected to have received 1 message in ch1")
 	}
@@ -151,7 +151,7 @@ func TestSwitches(t *testing.T) {
 	}
 
 	// Check message on ch2
-	ch2Msgs := s2.Reactor("bar").(*TestReactor).getMsgs(byte(0x02))
+	ch2Msgs := s2.Reactor("pchain","bar").(*TestReactor).getMsgs(byte(0x02))
 	if len(ch2Msgs) != 1 {
 		t.Errorf("Expected to have received 1 message in ch2")
 	}
@@ -289,11 +289,11 @@ func BenchmarkSwitches(b *testing.B) {
 
 	s1, s2 := makeSwitchPair(b, func(i int, sw *Switch) *Switch {
 		// Make bar reactors of bar channels each
-		sw.AddReactor("foo", NewTestReactor([]*ChannelDescriptor{
+		sw.AddReactor("pchain","foo", NewTestReactor([]*ChannelDescriptor{
 			&ChannelDescriptor{ID: byte(0x00), Priority: 10},
 			&ChannelDescriptor{ID: byte(0x01), Priority: 10},
 		}, false))
-		sw.AddReactor("bar", NewTestReactor([]*ChannelDescriptor{
+		sw.AddReactor("pchain","bar", NewTestReactor([]*ChannelDescriptor{
 			&ChannelDescriptor{ID: byte(0x02), Priority: 10},
 			&ChannelDescriptor{ID: byte(0x03), Priority: 10},
 		}, false))
@@ -311,7 +311,7 @@ func BenchmarkSwitches(b *testing.B) {
 	// Send random message from foo channel to another
 	for i := 0; i < b.N; i++ {
 		chID := byte(i % 4)
-		successChan := s1.Broadcast(chID, "test data")
+		successChan := s1.Broadcast("pchain", chID, "test data")
 		for s := range successChan {
 			if s {
 				numSuccess++

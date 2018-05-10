@@ -87,6 +87,7 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 	mapConfig.SetDefault("db_backend", "leveldb")
 	mapConfig.SetDefault("db_dir", filepath.Join(rootDir, chainId, defaultDataDir))
 	mapConfig.SetDefault("log_level", "info")
+	//mapConfig.SetDefault("rpc_laddr", "tcp://0.0.0.0:46657")
 	mapConfig.SetDefault("rpc_laddr", calcRpcAddr())
 	mapConfig.SetDefault("grpc_laddr", "")
 	mapConfig.SetDefault("prof_laddr", "")

@@ -8,6 +8,11 @@ import (
 	cmn "github.com/tendermint/go-common"
 )
 
+// Client defines an interface for an ABCI client.
+// All `Async` methods return a `ReqRes` object.
+// All `Sync` methods return the appropriate protobuf ResponseXxx struct and an error.
+// Note these are client errors, eg. ABCI socket connectivity issues.
+// Application-related errors are reflected in response via ABCI error codes and logs.
 type Client interface {
 	cmn.Service
 
@@ -22,6 +27,9 @@ type Client interface {
 	CheckTxAsync(tx []byte, cb func(*types.Response)) *ReqRes
 	QueryAsync(reqQuery types.RequestQuery) *ReqRes
 	CommitAsync(validators []*types.Validator) *ReqRes
+	InitChainAsync(validators []*types.Validator) *ReqRes
+	BeginBlockAsync(hash []byte, header *types.Header) *ReqRes
+	EndBlockAsync(height uint64) *ReqRes
 
 	FlushSync() error
 	EchoSync(msg string) (res types.Result)
@@ -31,11 +39,6 @@ type Client interface {
 	CheckTxSync(tx []byte) (res types.Result)
 	QuerySync(reqQuery types.RequestQuery) (resQuery types.ResponseQuery, err error)
 	CommitSync(validators []*types.Validator, rewardPerBlock string) (res types.Result)
-
-	InitChainAsync(validators []*types.Validator) *ReqRes
-	BeginBlockAsync(hash []byte, header *types.Header) *ReqRes
-	EndBlockAsync(height uint64) *ReqRes
-
 	InitChainSync(validators []*types.Validator) (err error)
 	BeginBlockSync(hash []byte, header *types.Header) (err error)
 	EndBlockSync(height uint64) (resEndBlock types.ResponseEndBlock, err error)

@@ -15,9 +15,8 @@ import (
 	crypto "github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	p2p "github.com/tendermint/go-p2p"
-	rpc "github.com/tendermint/go-rpc"
+
 	rpcserver "github.com/tendermint/go-rpc/server"
-	wire "github.com/tendermint/go-wire"
 	bc "github.com/tendermint/tendermint/blockchain"
 	"github.com/tendermint/tendermint/consensus"
 	mempl "github.com/tendermint/tendermint/mempool"
@@ -29,7 +28,6 @@ import (
 	"github.com/tendermint/tendermint/state/txindex/kv"
 	"github.com/tendermint/tendermint/state/txindex/null"
 	"github.com/tendermint/tendermint/types"
-	"github.com/tendermint/tendermint/version"
 
 	_ "net/http/pprof"
 	"fmt"
@@ -53,7 +51,6 @@ type Node struct {
 	stateDB       dbm.DB
 	epochDB       dbm.DB
 
-	privKey  crypto.PrivKeyEd25519 // local node's p2p key
 	sw       *p2p.Switch           // p2p connections
 	addrBook *p2p.AddrBook         // known peers
 
@@ -69,6 +66,7 @@ type Node struct {
 	txIndexer        txindex.TxIndexer
 }
 
+// Deprecated
 func NewNodeDefault(config cfg.Config) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
@@ -76,6 +74,7 @@ func NewNodeDefault(config cfg.Config) *Node {
 	return NewNode(config, privValidator, proxy.DefaultClientCreator(config))
 }
 
+// Deprecated
 func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	clientCreator proxy.ClientCreator) *Node {
 
@@ -121,7 +120,7 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	state.TxIndexer = txIndexer
 
 	// Generate node PrivKey
-	privKey := crypto.GenPrivKeyEd25519()
+	//privKey := crypto.GenPrivKeyEd25519()
 
 	// Make event switch
 	eventSwitch := types.NewEventSwitch()
@@ -145,7 +144,7 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 
 	// Make MempoolReactor
 	mempool := mempl.NewMempool(config, proxyApp.Mempool())
-	mempoolReactor := mempl.NewMempoolReactor(config, mempool)
+	mempoolReactor := mempl.NewMempoolReactor(config, mempool, state.ChainID)
 
 	// Make ConsensusReactor
 	consensusState := consensus.NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch)
@@ -156,16 +155,16 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 
 	// Make p2p network switch
 	sw := p2p.NewSwitch(config.GetConfig("p2p"))
-	sw.AddReactor("MEMPOOL", mempoolReactor)
-	sw.AddReactor("BLOCKCHAIN", bcReactor)
-	sw.AddReactor("CONSENSUS", consensusReactor)
+	sw.AddReactor(state.ChainID, "MEMPOOL", mempoolReactor)
+	sw.AddReactor(state.ChainID, "BLOCKCHAIN", bcReactor)
+	sw.AddReactor(state.ChainID, "CONSENSUS", consensusReactor)
 
 	// Optionally, start the pex reactor
 	var addrBook *p2p.AddrBook
 	if config.GetBool("pex_reactor") {
 		addrBook = p2p.NewAddrBook(config.GetString("addrbook_file"), config.GetBool("addrbook_strict"))
 		pexReactor := p2p.NewPEXReactor(addrBook)
-		sw.AddReactor("PEX", pexReactor)
+		sw.AddReactor(state.ChainID, "PEX", pexReactor)
 	}
 
 	// Filter peers by addr or pubkey with an ABCI query.
@@ -215,9 +214,9 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 
 		stateDB:       stateDB,
 		epochDB:       epochDB,
-		privKey:  privKey,
-		sw:       sw,
-		addrBook: addrBook,
+		//privKey:  privKey,
+		//sw:       sw,
+		//addrBook: addrBook,
 
 		evsw:             eventSwitch,
 		blockStore:       blockStore,
@@ -232,7 +231,7 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	return node
 }
 
-func NewNodeNotStart(config cfg.Config) *Node {
+func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
 	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
@@ -250,15 +249,13 @@ func NewNodeNotStart(config cfg.Config) *Node {
 	state, _ := InitStateAndEpoch(config, stateDB, epochDB)
 
 	// add the chainid and number of validators to the global config
+	// TODO There is No Global Config, to be removed
 	config.Set("chain_id", state.ChainID)
 	config.Set("num_vals", state.Epoch.Validators.Size())
 
 	// Create the proxyApp, which manages connections (consensus, mempool, query)
 	// and sync tendermint and the app by replaying any necessary blocks
 	proxyApp := proxy.NewAppConns(config, clientCreator, consensus.NewHandshaker(config, state, blockStore))
-
-	// Generate node PrivKey
-	privKey := crypto.GenPrivKeyEd25519()
 
 	// Make event switch
 	eventSwitch := types.NewEventSwitch()
@@ -271,7 +268,9 @@ func NewNodeNotStart(config cfg.Config) *Node {
 		stateDB:       stateDB,
 		epochDB:       epochDB,
 
-		privKey:  privKey,
+		sw:            sw,
+		addrBook:      addrBook,
+
 		evsw:             eventSwitch,
 		blockStore:       blockStore,
 		proxyApp:         proxyApp,
@@ -326,7 +325,7 @@ func (n *Node) OnStart1() error {
 
 	// Make MempoolReactor
 	mempool := mempl.NewMempool(n.config, n.proxyApp.Mempool())
-	mempoolReactor := mempl.NewMempoolReactor(n.config, mempool)
+	mempoolReactor := mempl.NewMempoolReactor(n.config, mempool, state.ChainID)
 
 	// Make ConsensusReactor
 	consensusState := consensus.NewConsensusState(n.config, state.Copy(), n.proxyApp.Consensus(), n.blockStore, mempool, epoch)
@@ -335,46 +334,10 @@ func (n *Node) OnStart1() error {
 	}
 	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
 
-	// Make p2p network switch
-	sw := p2p.NewSwitch(n.config.GetConfig("p2p"))
-	sw.AddReactor("MEMPOOL", mempoolReactor)
-	sw.AddReactor("BLOCKCHAIN", bcReactor)
-	sw.AddReactor("CONSENSUS", consensusReactor)
-
-	// Optionally, start the pex reactor
-	var addrBook *p2p.AddrBook
-	if n.config.GetBool("pex_reactor") {
-		addrBook = p2p.NewAddrBook(n.config.GetString("addrbook_file"), n.config.GetBool("addrbook_strict"))
-		pexReactor := p2p.NewPEXReactor(addrBook)
-		sw.AddReactor("PEX", pexReactor)
-	}
-
-	// Filter peers by addr or pubkey with an ABCI query.
-	// If the query return code is OK, add peer.
-	// XXX: Query format subject to change
-	if n.config.GetBool("filter_peers") {
-		// NOTE: addr is ip:port
-		sw.SetAddrFilter(func(addr net.Addr) error {
-			resQuery, err := n.proxyApp.Query().QuerySync(abci.RequestQuery{Path: cmn.Fmt("/p2p/filter/addr/%s", addr.String())})
-			if err != nil {
-				return err
-			}
-			if resQuery.Code.IsOK() {
-				return nil
-			}
-			return errors.New(resQuery.Code.String())
-		})
-		sw.SetPubKeyFilter(func(pubkey crypto.PubKeyEd25519) error {
-			resQuery, err := n.proxyApp.Query().QuerySync(abci.RequestQuery{Path: cmn.Fmt("/p2p/filter/pubkey/%X", pubkey.Bytes())})
-			if err != nil {
-				return err
-			}
-			if resQuery.Code.IsOK() {
-				return nil
-			}
-			return errors.New(resQuery.Code.String())
-		})
-	}
+	// Add Reactor to P2P Switch
+	n.sw.AddReactor(state.ChainID, "MEMPOOL", mempoolReactor)
+	n.sw.AddReactor(state.ChainID, "BLOCKCHAIN", bcReactor)
+	n.sw.AddReactor(state.ChainID, "CONSENSUS", consensusReactor)
 
 	// add the event switch to all services
 	// they should all satisfy events.Eventable
@@ -389,36 +352,14 @@ func (n *Node) OnStart1() error {
 		}()
 	}
 
-	// Create & add listener
-	protocol, address := ProtocolAndAddress(n.config.GetString("node_laddr"))
-	l := p2p.NewDefaultListener(protocol, address, n.config.GetBool("skip_upnp"))
-	sw.AddListener(l)
-	n.sw = sw
+	// Start the Reactors for this Chain
+	n.sw.StartChainReactor(state.ChainID)
 
-	// Start the switch
-	sw.SetNodeInfo(n.makeNodeInfo())
-	sw.SetNodePrivKey(n.privKey)
-	_, err = sw.Start()
-	if err != nil {
-		return err
-	}
-
-
-	n.addrBook = addrBook
 	n.bcReactor = bcReactor
 	n.mempoolReactor = mempoolReactor
 	n.consensusState = consensusState
 	n.consensusReactor = consensusReactor
 	n.txIndexer = txIndexer
-
-	// If seeds exist, add them to the address book and dial out
-	if n.config.GetString("seeds") != "" {
-		// dial out
-		seeds := strings.Split(n.config.GetString("seeds"), ",")
-		if err := n.DialSeeds(seeds); err != nil {
-			return err
-		}
-	}
 
 	// Run the RPC server
 	if n.config.GetString("rpc_laddr") != "" {
@@ -432,202 +373,47 @@ func (n *Node) OnStart1() error {
 	return nil
 }
 
-func (n *Node) OnStart2() error {
-
-	if _, err := n.proxyApp.Start(); err != nil {
-		cmn.Exit(cmn.Fmt("Error starting proxy app connections: %v", err))
-	}
-
-	// reload the state (it may have been updated by the handshake)
-	state := sm.LoadState(n.stateDB)
-	epoch := ep.LoadOneEpoch(n.epochDB, state.LastEpochNumber)
-	state.Epoch = epoch
-
-	//_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
-	fmt.Println("state.Validators:", state.Epoch.Validators)
-
-	// Transaction indexing
-	var txIndexer txindex.TxIndexer
-	switch n.config.GetString("tx_index") {
-	case "kv":
-		store := dbm.NewDB("tx_index", n.config.GetString("db_backend"), n.config.GetString("db_dir"))
-		txIndexer = kv.NewTxIndex(store)
-	default:
-		txIndexer = &null.TxIndex{}
-	}
-	state.TxIndexer = txIndexer
-
-	_, err := n.evsw.Start()
-	if err != nil {
-		cmn.Exit(cmn.Fmt("Failed to start switch: %v", err))
-	}
-
-	// Decide whether to fast-sync or not
-	// We don't fast-sync when the only validator is us.
-	fastSync := n.config.GetBool("fast_sync")
-	if state.Epoch.Validators.Size() == 1 {
-		addr, _ := state.Epoch.Validators.GetByIndex(0)
-		if bytes.Equal(n.privValidator.Address, addr) {
-			fastSync = false
-		}
-	}
-
-	// Make BlockchainReactor
-	bcReactor := bc.NewBlockchainReactor(n.config, state.Copy(), n.proxyApp.Consensus(), n.blockStore, fastSync)
-
-	// Make MempoolReactor
-	mempool := mempl.NewMempool(n.config, n.proxyApp.Mempool())
-	mempoolReactor := mempl.NewMempoolReactor(n.config, mempool)
-
-	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(n.config, state.Copy(), n.proxyApp.Consensus(), n.blockStore, mempool, epoch)
-	if n.privValidator != nil {
-		consensusState.SetPrivValidator(n.privValidator)
-	}
-	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
-
-	// Make p2p network switch
-	sw := p2p.NewSwitch(n.config.GetConfig("p2p"))
-	sw.AddReactor("MEMPOOL", mempoolReactor)
-	sw.AddReactor("BLOCKCHAIN", bcReactor)
-	sw.AddReactor("CONSENSUS", consensusReactor)
-
-	// Optionally, start the pex reactor
-	var addrBook *p2p.AddrBook
-	if n.config.GetBool("pex_reactor") {
-		addrBook = p2p.NewAddrBook(n.config.GetString("addrbook_file"), n.config.GetBool("addrbook_strict"))
-		pexReactor := p2p.NewPEXReactor(addrBook)
-		sw.AddReactor("PEX", pexReactor)
-	}
-
-	// Filter peers by addr or pubkey with an ABCI query.
-	// If the query return code is OK, add peer.
-	// XXX: Query format subject to change
-	if n.config.GetBool("filter_peers") {
-		// NOTE: addr is ip:port
-		sw.SetAddrFilter(func(addr net.Addr) error {
-			resQuery, err := n.proxyApp.Query().QuerySync(abci.RequestQuery{Path: cmn.Fmt("/p2p/filter/addr/%s", addr.String())})
-			if err != nil {
-				return err
-			}
-			if resQuery.Code.IsOK() {
-				return nil
-			}
-			return errors.New(resQuery.Code.String())
-		})
-		sw.SetPubKeyFilter(func(pubkey crypto.PubKeyEd25519) error {
-			resQuery, err := n.proxyApp.Query().QuerySync(abci.RequestQuery{Path: cmn.Fmt("/p2p/filter/pubkey/%X", pubkey.Bytes())})
-			if err != nil {
-				return err
-			}
-			if resQuery.Code.IsOK() {
-				return nil
-			}
-			return errors.New(resQuery.Code.String())
-		})
-	}
-
-	// add the event switch to all services
-	// they should all satisfy events.Eventable
-	SetEventSwitch(n.evsw, bcReactor, mempoolReactor, consensusReactor)
-
-	// run the profile server
-	profileHost := n.config.GetString("prof_laddr")
-	if profileHost != "" {
-
-		go func() {
-			log.Warn("Profile server", "error", http.ListenAndServe(profileHost, nil))
-		}()
-	}
-
-	// Create & add listener
-	//protocol, address := ProtocolAndAddress(n.config.GetString("node_laddr"))
-	protocol, address := ProtocolAndAddress("tcp://0.0.0.0:46660")
-	l := p2p.NewDefaultListener(protocol, address, n.config.GetBool("skip_upnp"))
-	sw.AddListener(l)
-	n.sw = sw
-
-	// Start the switch
-	sw.SetNodeInfo(n.makeNodeInfo())
-	sw.SetNodePrivKey(n.privKey)
-	_, err = sw.Start()
-	if err != nil {
-		return err
-	}
-
-
-	n.addrBook = addrBook
-	n.bcReactor = bcReactor
-	n.mempoolReactor = mempoolReactor
-	n.consensusState = consensusState
-	n.consensusReactor = consensusReactor
-	n.txIndexer = txIndexer
-
-	// If seeds exist, add them to the address book and dial out
-	if n.config.GetString("seeds") != "" {
-		// dial out
-		seeds := strings.Split(n.config.GetString("seeds"), ",")
-		if err := n.DialSeeds(seeds); err != nil {
-			return err
-		}
-	}
-
-	// Run the RPC server
-	if n.config.GetString("rpc_laddr") != "" {
-		listeners, err := n.StartRPC()
-		if err != nil {
-			return err
-		}
-		n.rpcListeners = listeners
-	}
-
-	return nil
-}
-
+// Deprecated
 func (n *Node) OnStart() error {
 
 	fmt.Printf("(n *Node) OnStart()")
 
 	// Create & add listener
-	protocol, address := ProtocolAndAddress(n.config.GetString("node_laddr"))
-	l := p2p.NewDefaultListener(protocol, address, n.config.GetBool("skip_upnp"))
-	n.sw.AddListener(l)
-
-	// Start the switch
-	n.sw.SetNodeInfo(n.makeNodeInfo())
-	n.sw.SetNodePrivKey(n.privKey)
-	_, err := n.sw.Start()
-	if err != nil {
-		return err
-	}
-
-	// If seeds exist, add them to the address book and dial out
-	if n.config.GetString("seeds") != "" {
-		// dial out
-		seeds := strings.Split(n.config.GetString("seeds"), ",")
-		if err := n.DialSeeds(seeds); err != nil {
-			return err
-		}
-	}
-
-	// Run the RPC server
-	if n.config.GetString("rpc_laddr") != "" {
-		listeners, err := n.StartRPC()
-		if err != nil {
-			return err
-		}
-		n.rpcListeners = listeners
-	}
+	//protocol, address := ProtocolAndAddress(n.config.GetString("node_laddr"))
+	//l := p2p.NewDefaultListener(protocol, address, n.config.GetBool("skip_upnp"))
+	//n.sw.AddListener(l)
+	//
+	//// Start the switch
+	//n.sw.SetNodeInfo(n.makeNodeInfo())
+	//n.sw.SetNodePrivKey(n.privKey)
+	//_, err := n.sw.Start()
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//// If seeds exist, add them to the address book and dial out
+	//if n.config.GetString("seeds") != "" {
+	//	// dial out
+	//	seeds := strings.Split(n.config.GetString("seeds"), ",")
+	//	if err := n.DialSeeds(seeds); err != nil {
+	//		return err
+	//	}
+	//}
+	//
+	//// Run the RPC server
+	//if n.config.GetString("rpc_laddr") != "" {
+	//	listeners, err := n.StartRPC()
+	//	if err != nil {
+	//		return err
+	//	}
+	//	n.rpcListeners = listeners
+	//}
 
 	return nil
 }
 
 func (n *Node) OnStop() {
 	n.BaseService.OnStop()
-
-	log.Notice("Stopping Node")
-	// TODO: gracefully disconnect from peers.
-	n.sw.Stop()
 
 	for _, l := range n.rpcListeners {
 		log.Info("Closing rpc listener", "listener", l)
@@ -705,10 +491,6 @@ func (n *Node) StartRPC() ([]net.Listener, error) {
 	return listeners, nil
 }
 
-func (n *Node) Switch() *p2p.Switch {
-	return n.sw
-}
-
 func (n *Node) BlockStore() *bc.BlockStore {
 	return n.blockStore
 }
@@ -741,49 +523,6 @@ func (n *Node) GenesisDoc() *types.GenesisDoc {
 func (n *Node) ProxyApp() proxy.AppConns {
 	return n.proxyApp
 }
-
-func (n *Node) makeNodeInfo() *p2p.NodeInfo {
-	txIndexerStatus := "on"
-	if _, ok := n.txIndexer.(*null.TxIndex); ok {
-		txIndexerStatus = "off"
-	}
-
-	nodeInfo := &p2p.NodeInfo{
-		PubKey:  n.privKey.PubKey().(crypto.PubKeyEd25519),
-		Moniker: n.config.GetString("moniker"),
-		Network: n.config.GetString("chain_id"),
-		Version: version.Version,
-		Other: []string{
-			cmn.Fmt("wire_version=%v", wire.Version),
-			cmn.Fmt("p2p_version=%v", p2p.Version),
-			cmn.Fmt("consensus_version=%v", consensus.Version),
-			cmn.Fmt("rpc_version=%v/%v", rpc.Version, rpccore.Version),
-			cmn.Fmt("tx_index=%v", txIndexerStatus),
-		},
-	}
-
-	// include git hash in the nodeInfo if available
-	if rev, err := cmn.ReadFile(n.config.GetString("revision_file")); err == nil {
-		nodeInfo.Other = append(nodeInfo.Other, cmn.Fmt("revision=%v", string(rev)))
-	}
-
-	if !n.sw.IsListening() {
-		return nodeInfo
-	}
-
-	p2pListener := n.sw.Listeners()[0]
-	p2pHost := p2pListener.ExternalAddress().IP.String()
-	p2pPort := p2pListener.ExternalAddress().Port
-	rpcListenAddr := n.config.GetString("rpc_laddr")
-
-	// We assume that the rpcListener has the same ExternalAddress.
-	// This is probably true because both P2P and RPC listeners use UPnP,
-	// except of course if the rpc is only bound to localhost
-	nodeInfo.ListenAddr = cmn.Fmt("%v:%v", p2pHost, p2pPort)
-	nodeInfo.Other = append(nodeInfo.Other, cmn.Fmt("rpc_addr=%v", rpcListenAddr))
-	return nodeInfo
-}
-
 
 func InitStateAndEpoch(config cfg.Config, stateDB dbm.DB, epochDB dbm.DB) (state *st.State, epoch *ep.Epoch) {
 
@@ -883,7 +622,7 @@ func RunNode(config cfg.Config, app *app.EthermintApplication) {
 		cmn.Exit(cmn.Fmt("Failed to start node: %v", err))
 	}
 
-	log.Notice("Started node", "nodeInfo", n.sw.NodeInfo())
+	//log.Notice("Started node", "nodeInfo", n.sw.NodeInfo())
 	/*
 	// If seedNode is provided by config, dial out.
 	if config.GetString("seeds") != "" {
@@ -905,13 +644,13 @@ func RunNode(config cfg.Config, app *app.EthermintApplication) {
 	})
 }
 
-func (n *Node) NodeInfo() *p2p.NodeInfo {
-	return n.sw.NodeInfo()
-}
-
-func (n *Node) DialSeeds(seeds []string) error {
-	return n.sw.DialSeeds(n.addrBook, seeds)
-}
+//func (n *Node) NodeInfo() *p2p.NodeInfo {
+//	return n.sw.NodeInfo()
+//}
+//
+//func (n *Node) DialSeeds(seeds []string) error {
+//	return n.sw.DialSeeds(n.addrBook, seeds)
+//}
 
 // Defaults to tcp
 func ProtocolAndAddress(listenAddr string) (string, string) {

@@ -156,12 +156,12 @@ func (r *PEXReactor) Receive(chID byte, src *Peer, msgBytes []byte) {
 
 // RequestPEX asks peer for more addresses.
 func (r *PEXReactor) RequestPEX(p *Peer) {
-	p.Send(PexChannel, struct{ PexMessage }{&pexRequestMessage{}})
+	p.Send("pchain", PexChannel, struct{ PexMessage }{&pexRequestMessage{}})
 }
 
 // SendAddrs sends addrs to the peer.
 func (r *PEXReactor) SendAddrs(p *Peer, addrs []*NetAddress) {
-	p.Send(PexChannel, struct{ PexMessage }{&pexAddrsMessage{Addrs: addrs}})
+	p.Send("pchain", PexChannel, struct{ PexMessage }{&pexAddrsMessage{Addrs: addrs}})
 }
 
 // SetEnsurePeersPeriod sets period to ensure peers connected.

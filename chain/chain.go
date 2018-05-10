@@ -22,6 +22,7 @@ import (
 	validatorsStrategy "github.com/pchain/ethermint/strategies/validators"
 	"time"
 
+	"github.com/pchain/p2p"
 )
 
 const (
@@ -39,7 +40,7 @@ type Chain struct{
 	RpcHandler http.Handler
 }
 
-func LoadMainChain(ctx *cli.Context, chainId string) *Chain {
+func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chain {
 
 	chain := &Chain {Id:chainId}
 	config := etm.GetTendermintConfig(chainId, ctx)
@@ -74,12 +75,12 @@ func LoadMainChain(ctx *cli.Context, chainId string) *Chain {
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	fmt.Println("tm node")
-	chain.TdmNode = MakeTendermintNode(config)
+	chain.TdmNode = MakeTendermintNode(config, pNode)
 
 	return chain
 }
 
-func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
+func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chain {
 
 	fmt.Printf("now load child: %s\n", chainId)
 
@@ -124,7 +125,7 @@ func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	fmt.Println("tm node")
-	tdmNode := MakeTendermintNode(config)
+	tdmNode := MakeTendermintNode(config, pNode)
 	if tdmNode == nil {
 		fmt.Println("make tendermint node failed")
 		return nil
@@ -134,8 +135,7 @@ func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
 	return chain
 }
 
-
-func StartMainChain(ctx *cli.Context, chain *Chain, quit chan int) error {
+func StartChain(chain *Chain, quit chan int) error {
 
 	fmt.Printf("start main chain: %s\n", chain.Id)
 	go func(){
@@ -197,67 +197,6 @@ func StartMainChain(ctx *cli.Context, chain *Chain, quit chan int) error {
 	return nil
 }
 
-func StartChildChain(ctx *cli.Context, chain *Chain, quit chan int) error {
-
-	fmt.Printf("start child chain: %s\n", chain.Id)
-	go func(){
-		fmt.Println("ethermintCmd->utils.StartNode(stack)")
-		utils.StartNode1(chain.EthNode)
-
-		config := chain.Config
-		addr := config.GetString("proxy_app")
-		abci := config.GetString("abci")
-
-		stack := chain.EthNode
-		var backend *ethereum.Backend
-		if err := stack.Service(&backend); err != nil {
-			utils.Fatalf("backend service not running: %v", err)
-		}
-		client, err := stack.Attach()
-		if err != nil {
-			utils.Fatalf("Failed to attach to the inproc geth: %v", err)
-		}
-
-		ethereum.ReloadEthApi(stack, backend)
-
-		testEthereumApi()
-
-		//strategy := &emtTypes.Strategy{new(minerRewardStrategies.RewardConstant),nil}
-		strategy := &validatorsStrategy.ValidatorsStrategy{}
-		etmApp, err := etmApp.NewEthermintApplication(backend, client, strategy)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		chain.EtmApp = etmApp
-
-		abciServer, err := server.NewServer(addr, abci, etmApp)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		chain.AbciServer = abciServer
-
-		fmt.Println("tm node")
-		err = chain.TdmNode.OnStart2()
-		if err != nil {
-			cmn.Exit(cmn.Fmt("Failed to start node: %v", err))
-		}
-
-		//fmt.Printf("Started node", "nodeInfo", chain.TdmNode.sw.NodeInfo())
-
-		// Sleep forever and then...
-		cmn.TrapSignal(func() {
-			chain.TdmNode.Stop()
-		})
-
-		quit <- 1
-	}()
-
-	return nil
-}
-
-
 func getConsensus(config cfg.Config) (string, error) {
 
 	genDocFile := config.GetString("genesis_file")
@@ -294,7 +233,7 @@ func testEthereumApi() {
 	fmt.Printf("testEthereumApi: balance is: %x\n", balance)
 }
 
-func MakeTendermintNode(config cfg.Config) *tdm.Node{
+func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P) *tdm.Node{
 
 	genDocFile := config.GetString("genesis_file")
 	if !cmn.FileExists(genDocFile) {
@@ -320,7 +259,7 @@ func MakeTendermintNode(config cfg.Config) *tdm.Node{
 		}
 	}
 
-	return tdm.NewNodeNotStart(config)
+	return tdm.NewNodeNotStart(config, pNode.Switch(), pNode.AddrBook())
 }
 
 func CreateChildChain(ctx *cli.Context, chainId string, balStr string) error{

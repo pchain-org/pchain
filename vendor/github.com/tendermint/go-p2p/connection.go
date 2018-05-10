@@ -12,7 +12,7 @@ import (
 
 	cmn "github.com/tendermint/go-common"
 	flow "github.com/tendermint/go-flowrate/flowrate"
-	wire "github.com/tendermint/go-wire"
+	"github.com/tendermint/go-wire"
 )
 
 const (
@@ -31,7 +31,7 @@ const (
 	defaultSendTimeout         = 10 * time.Second
 )
 
-type receiveCbFunc func(chID byte, msgBytes []byte)
+type receiveCbFunc func(chainID string, chID byte, msgBytes []byte)
 type errorCbFunc func(interface{})
 
 /*
@@ -69,8 +69,9 @@ type MConnection struct {
 	recvMonitor *flow.Monitor
 	send        chan struct{}
 	pong        chan struct{}
-	channels    []*Channel
-	channelsIdx map[byte]*Channel
+	channelsByChainId map[string]*ChainChannel
+	//channels    []*Channel
+	//channelsIdx map[byte]*Channel
 	onReceive   receiveCbFunc
 	onError     errorCbFunc
 	errored     uint32
@@ -100,17 +101,17 @@ func DefaultMConnConfig() *MConnConfig {
 }
 
 // NewMConnection wraps net.Conn and creates multiplex connection
-func NewMConnection(conn net.Conn, chDescs []*ChannelDescriptor, onReceive receiveCbFunc, onError errorCbFunc) *MConnection {
+func NewMConnection(conn net.Conn, reactorsByChainId map[string]*ChainRouter, onReceive receiveCbFunc, onError errorCbFunc) *MConnection {
 	return NewMConnectionWithConfig(
 		conn,
-		chDescs,
+		reactorsByChainId,
 		onReceive,
 		onError,
 		DefaultMConnConfig())
 }
 
 // NewMConnectionWithConfig wraps net.Conn and creates multiplex connection with a config
-func NewMConnectionWithConfig(conn net.Conn, chDescs []*ChannelDescriptor, onReceive receiveCbFunc, onError errorCbFunc, config *MConnConfig) *MConnection {
+func NewMConnectionWithConfig(conn net.Conn, reactorsByChainId map[string]*ChainRouter, onReceive receiveCbFunc, onError errorCbFunc, config *MConnConfig) *MConnection {
 	mconn := &MConnection{
 		conn:        conn,
 		bufReader:   bufio.NewReaderSize(conn, minReadBufferSize),
@@ -119,6 +120,7 @@ func NewMConnectionWithConfig(conn net.Conn, chDescs []*ChannelDescriptor, onRec
 		recvMonitor: flow.New(0, 0),
 		send:        make(chan struct{}, 1),
 		pong:        make(chan struct{}),
+		channelsByChainId: make(map[string]*ChainChannel),
 		onReceive:   onReceive,
 		onError:     onError,
 		config:      config,
@@ -127,18 +129,26 @@ func NewMConnectionWithConfig(conn net.Conn, chDescs []*ChannelDescriptor, onRec
 		RemoteAddress: NewNetAddress(conn.RemoteAddr()),
 	}
 
-	// Create channels
-	var channelsIdx = map[byte]*Channel{}
-	var channels = []*Channel{}
+	// Create the channels base on the Chain ID
+	for chainId, chainRouter := range reactorsByChainId {
+		// Create channels
+		var channelsIdx = map[byte]*Channel{}
+		var channels = []*Channel{}
 
-	for _, desc := range chDescs {
-		descCopy := *desc // copy the desc else unsafe access across connections
-		channel := newChannel(mconn, &descCopy)
-		channelsIdx[channel.id] = channel
-		channels = append(channels, channel)
+		for _, desc := range chainRouter.chDescs {
+			descCopy := *desc // copy the desc else unsafe access across connections
+			channel := newChannel(mconn, &descCopy)
+			channelsIdx[channel.id] = channel
+			channels = append(channels, channel)
+		}
+
+		// Create Chain Channel
+		chainChannel := &ChainChannel{
+			channels:    channels,
+			channelsIdx: channelsIdx,
+		}
+		mconn.channelsByChainId[chainId] = chainChannel
 	}
-	mconn.channels = channels
-	mconn.channelsIdx = channelsIdx
 
 	mconn.BaseService = *cmn.NewBaseService(log, "MConnection", mconn)
 
@@ -203,15 +213,21 @@ func (c *MConnection) stopForError(r interface{}) {
 }
 
 // Queues a message to be sent to channel.
-func (c *MConnection) Send(chID byte, msg interface{}) bool {
+func (c *MConnection) Send(chainID string, chID byte, msg interface{}) bool {
 	if !c.IsRunning() {
+		return false
+	}
+
+	chainChannel, ok := c.channelsByChainId[chainID]
+	if !ok {
+		log.Error(cmn.Fmt("Cannot send bytes, unknown chain ID %s", chainID))
 		return false
 	}
 
 	log.Debug("Send", "channel", chID, "conn", c, "msg", msg) //, "bytes", wire.BinaryBytes(msg))
 
 	// Send message to channel.
-	channel, ok := c.channelsIdx[chID]
+	channel, ok := chainChannel.channelsIdx[chID]
 	if !ok {
 		log.Error(cmn.Fmt("Cannot send bytes, unknown channel %X", chID))
 		return false
@@ -232,15 +248,21 @@ func (c *MConnection) Send(chID byte, msg interface{}) bool {
 
 // Queues a message to be sent to channel.
 // Nonblocking, returns true if successful.
-func (c *MConnection) TrySend(chID byte, msg interface{}) bool {
+func (c *MConnection) TrySend(chainID string, chID byte, msg interface{}) bool {
 	if !c.IsRunning() {
+		return false
+	}
+
+	chainChannel, ok := c.channelsByChainId[chainID]
+	if !ok {
+		log.Error(cmn.Fmt("Cannot send bytes, unknown chain ID %s", chainID))
 		return false
 	}
 
 	log.Debug("TrySend", "channel", chID, "conn", c, "msg", msg)
 
 	// Send message to channel.
-	channel, ok := c.channelsIdx[chID]
+	channel, ok := chainChannel.channelsIdx[chID]
 	if !ok {
 		log.Error(cmn.Fmt("Cannot send bytes, unknown channel %X", chID))
 		return false
@@ -260,12 +282,18 @@ func (c *MConnection) TrySend(chID byte, msg interface{}) bool {
 
 // CanSend returns true if you can send more data onto the chID, false
 // otherwise. Use only as a heuristic.
-func (c *MConnection) CanSend(chID byte) bool {
+func (c *MConnection) CanSend(chainID string, chID byte) bool {
 	if !c.IsRunning() {
 		return false
 	}
 
-	channel, ok := c.channelsIdx[chID]
+	chainChannel, ok := c.channelsByChainId[chainID]
+	if !ok {
+		log.Error(cmn.Fmt("Unknown chain ID %s", chainID))
+		return false
+	}
+
+	channel, ok := chainChannel.channelsIdx[chID]
 	if !ok {
 		log.Error(cmn.Fmt("Unknown channel %X", chID))
 		return false
@@ -287,8 +315,10 @@ FOR_LOOP:
 			// something is written to .bufWriter.
 			c.flush()
 		case <-c.chStatsTimer.Ch:
-			for _, channel := range c.channels {
-				channel.updateStats()
+			for _, chainChannel := range c.channelsByChainId {
+				for _, channel := range chainChannel.channels {
+					channel.updateStats()
+				}
 			}
 		case <-c.pingTimer.Ch:
 			log.Debug("Send Ping")
@@ -350,16 +380,18 @@ func (c *MConnection) sendMsgPacket() bool {
 	// The chosen channel will be the one whose recentlySent/priority is the least.
 	var leastRatio float32 = math.MaxFloat32
 	var leastChannel *Channel
-	for _, channel := range c.channels {
-		// If nothing to send, skip this channel
-		if !channel.isSendPending() {
-			continue
-		}
-		// Get ratio, and keep track of lowest ratio.
-		ratio := float32(channel.recentlySent) / float32(channel.priority)
-		if ratio < leastRatio {
-			leastRatio = ratio
-			leastChannel = channel
+	for _, chainChannel := range c.channelsByChainId {
+		for _, channel := range chainChannel.channels {
+			// If nothing to send, skip this channel
+			if !channel.isSendPending() {
+				continue
+			}
+			// Get ratio, and keep track of lowest ratio.
+			ratio := float32(channel.recentlySent) / float32(channel.priority)
+			if ratio < leastRatio {
+				leastRatio = ratio
+				leastChannel = channel
+			}
 		}
 	}
 
@@ -441,7 +473,14 @@ FOR_LOOP:
 				}
 				break FOR_LOOP
 			}
-			channel, ok := c.channelsIdx[pkt.ChannelID]
+
+			chainID := string(pkt.ChainID)
+			chainChannel, ok := c.channelsByChainId[chainID]
+			if !ok || chainChannel == nil {
+				cmn.PanicQ(cmn.Fmt("Unknown chain %s", chainID))
+			}
+
+			channel, ok := chainChannel.channelsIdx[pkt.ChannelID]
 			if !ok || channel == nil {
 				cmn.PanicQ(cmn.Fmt("Unknown channel %X", pkt.ChannelID))
 			}
@@ -455,7 +494,7 @@ FOR_LOOP:
 			}
 			if msgBytes != nil {
 				log.Debug("Received bytes", "chID", pkt.ChannelID, "msgBytes", msgBytes)
-				c.onReceive(pkt.ChannelID, msgBytes)
+				c.onReceive(chainID, pkt.ChannelID, msgBytes)
 			}
 		default:
 			cmn.PanicSanity(cmn.Fmt("Unknown message type %X", pktType))
@@ -476,7 +515,8 @@ FOR_LOOP:
 type ConnectionStatus struct {
 	SendMonitor flow.Status
 	RecvMonitor flow.Status
-	Channels    []ChannelStatus
+	ChannelsByChain map[string][]ChannelStatus
+	//Channels    []ChannelStatus
 }
 
 type ChannelStatus struct {
@@ -491,16 +531,22 @@ func (c *MConnection) Status() ConnectionStatus {
 	var status ConnectionStatus
 	status.SendMonitor = c.sendMonitor.Status()
 	status.RecvMonitor = c.recvMonitor.Status()
-	status.Channels = make([]ChannelStatus, len(c.channels))
-	for i, channel := range c.channels {
-		status.Channels[i] = ChannelStatus{
-			ID:                channel.id,
-			SendQueueCapacity: cap(channel.sendQueue),
-			SendQueueSize:     int(channel.sendQueueSize), // TODO use atomic
-			Priority:          channel.priority,
-			RecentlySent:      channel.recentlySent,
+
+	channelsByChain := make(map[string][]ChannelStatus)
+	for chainId, chainChannel := range c.channelsByChainId {
+		channels := make([]ChannelStatus, len(chainChannel.channels))
+		for i, channel := range chainChannel.channels {
+			channels[i] = ChannelStatus{
+				ID:                channel.id,
+				SendQueueCapacity: cap(channel.sendQueue),
+				SendQueueSize:     int(channel.sendQueueSize), // TODO use atomic
+				Priority:          channel.priority,
+				RecentlySent:      channel.recentlySent,
+			}
 		}
+		channelsByChain[chainId] = channels
 	}
+	status.ChannelsByChain = channelsByChain
 	return status
 }
 
@@ -676,11 +722,12 @@ const (
 
 // Messages in channels are chopped into smaller msgPackets for multiplexing.
 type msgPacket struct {
+	ChainID   []byte // Network
 	ChannelID byte
 	EOF       byte // 1 means message ends here.
 	Bytes     []byte
 }
 
 func (p msgPacket) String() string {
-	return fmt.Sprintf("MsgPacket{%X:%X T:%X}", p.ChannelID, p.Bytes, p.EOF)
+	return fmt.Sprintf("MsgPacket{%s, %X:%X T:%X}", p.ChainID, p.ChannelID, p.Bytes, p.EOF)
 }

@@ -14,13 +14,14 @@ const maxNodeInfoSize = 10240 // 10Kb
 type NodeInfo struct {
 	PubKey     crypto.PubKeyEd25519 `json:"pub_key"`
 	Moniker    string               `json:"moniker"`
-	Network    string               `json:"network"`
+	Networks   NetworkSet           `json:"network"` // Add support Multi-Chain, each node may has multiple network
 	RemoteAddr string               `json:"remote_addr"`
 	ListenAddr string               `json:"listen_addr"`
 	Version    string               `json:"version"` // major.minor.revision
 	Other      []string             `json:"other"`   // other application specific data
 }
 
+// CompatibleWith checks if two NodeInfo are compatible with eachother.
 // CONTRACT: two nodes are compatible if the major/minor versions match and network match
 func (info *NodeInfo) CompatibleWith(other *NodeInfo) error {
 	iMajor, iMinor, _, iErr := splitVersion(info.Version)
@@ -46,10 +47,22 @@ func (info *NodeInfo) CompatibleWith(other *NodeInfo) error {
 		return fmt.Errorf("Peer is on a different minor version. Got %v, expected %v", oMinor, iMinor)
 	}
 
-	// nodes must be on the same network
-	if info.Network != other.Network {
-		return fmt.Errorf("Peer is on a different network. Got %v, expected %v", other.Network, info.Network)
+	// nodes must be matched at least one network
+	foundNetwork := false
+	for network := range other.Networks {
+		if _, ok := info.Networks[network]; ok {
+			foundNetwork = true
+			break
+		}
 	}
+	if !foundNetwork {
+		return fmt.Errorf("Peer is on a different network. Got %v, expected %v", other.Networks, info.Networks)
+	}
+
+	// nodes must be on the same network
+	//if info.Network != other.Network {
+	//	return fmt.Errorf("Peer is on a different network. Got %v, expected %v", other.Network, info.Network)
+	//}
 
 	return nil
 }
@@ -74,4 +87,15 @@ func splitVersion(version string) (string, string, string, error) {
 		return "", "", "", fmt.Errorf("Invalid version format %v", version)
 	}
 	return spl[0], spl[1], spl[2], nil
+}
+
+// Set data type for Multi-Chain Network
+type NetworkSet map[string]struct{}
+
+func (set NetworkSet) String() string {
+	items := make([]string, 0, len(set))
+	for key := range set {
+		items = append(items, key)
+	}
+	return fmt.Sprintf("[%s]", strings.Join(items, ","))
 }

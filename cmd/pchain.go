@@ -5,6 +5,8 @@ import (
 	"github.com/pchain/chain"
 	"github.com/pchain/rpc"
 	"fmt"
+	"github.com/pchain/p2p"
+	etm "github.com/pchain/ethermint/cmd/ethermint"
 )
 
 func pchainCmd(ctx *cli.Context) error {
@@ -18,15 +20,24 @@ func pchainCmd(ctx *cli.Context) error {
 
 	fmt.Printf("pchain supports large scale block-chain applicaitons with multi-chain\n")
 
-	var chains []*chain.Chain = make([]*chain.Chain, 0)
-	mainChain := chain.LoadMainChain(ctx, chain.MainChain)
+	// Start PChain P2P Node
+	p2pConfig := etm.GetTendermintConfig(chain.MainChain, ctx)
+	pchainP2P, p2pErr := p2p.StartP2P(p2pConfig)
+	if p2pErr != nil {
+		fmt.Printf("Failed to start PChain P2P node: %v", p2pErr)
+		return nil
+	}
+
+	// Load PChain Node
+	chains := make([]*chain.Chain, 0)
+	mainChain := chain.LoadMainChain(ctx, chain.MainChain, pchainP2P)
 	if mainChain == nil {
 		fmt.Printf("main chain load failed\n")
 		return nil
 	}
 
 	childId := "child0"
-	childChain := chain.LoadChildChain(ctx, childId)
+	childChain := chain.LoadChildChain(ctx, childId, pchainP2P)
 	if childChain == nil {
 		fmt.Printf("child chain load failed, try to create one\n")
 		err := chain.CreateChildChain(ctx, childId, "{10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}")
@@ -34,7 +45,7 @@ func pchainCmd(ctx *cli.Context) error {
 			fmt.Printf("child chain creation failed\n")
 		}
 
-		childChain = chain.LoadChildChain(ctx, childId)
+		childChain = chain.LoadChildChain(ctx, childId, pchainP2P)
 		if childChain == nil {
 			fmt.Printf("child chain load failed\n")
 			return nil
@@ -44,32 +55,21 @@ func pchainCmd(ctx *cli.Context) error {
 	chains = append(chains, mainChain)
 	chains = append(chains, childChain)
 
-	chain.StartMainChain(ctx, mainChain, quit)
-	chain.StartChildChain(ctx, childChain, quit)
 
-	/*
-	err := startMainChain(ctx, quit)
-	if err != nil {
-		fmt.Printf("start main chain failed with %v\n", err)
-		return err
+
+	// Start the PChain
+	for _, c := range chains {
+		chain.StartChain(c, quit)
 	}
-	*/
-	/*
-	sideChains := []string{"a", "b"}
-	for i:=0; i<len(sideChains); i++ {
-		err = startSideChain(ctx, sideChains[i], quit)
-		if err != nil {
-			fmt.Printf("start main chain failed with %v\n", err)
-			return err
-		}
-	}
-	*/
+
+
+
 
 	rpc.StartRPC(ctx, chains)
-
 	<- quit
 
 	rpc.StopRPC()
+	pchainP2P.StopP2P()
 
 	return nil
 }

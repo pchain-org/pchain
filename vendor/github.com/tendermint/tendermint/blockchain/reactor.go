@@ -119,7 +119,7 @@ func (bcR *BlockchainReactor) GetChannels() []*p2p.ChannelDescriptor {
 
 // AddPeer implements Reactor by sending our state to peer.
 func (bcR *BlockchainReactor) AddPeer(peer *p2p.Peer) {
-	if !peer.Send(BlockchainChannel, struct{ BlockchainMessage }{&bcStatusResponseMessage{bcR.store.Height()}}) {
+	if !peer.Send(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{&bcStatusResponseMessage{bcR.store.Height()}}) {
 		// doing nothing, will try later in `poolRoutine`
 	}
 }
@@ -148,7 +148,7 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 		block := bcR.store.LoadBlock(msg.Height)
 		if block != nil {
 			msg := &bcBlockResponseMessage{Block: block}
-			queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{msg})
+			queued := src.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{msg})
 			if !queued {
 				// queue is full, just ignore.
 			}
@@ -160,7 +160,7 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 		bcR.pool.AddBlock(src.Key, msg.Block, len(msgBytes))
 	case *bcStatusRequestMessage:
 		// Send peer our state.
-		queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{&bcStatusResponseMessage{bcR.store.Height()}})
+		queued := src.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{&bcStatusResponseMessage{bcR.store.Height()}})
 		if !queued {
 			// sorry
 		}
@@ -174,7 +174,7 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 				valMsg := &bcValidatorResponseMessage{Account: NON_ACCOUNT, Epoch: epoch, AcceptVotes: v[i]}
 				fmt.Println("sending bcValidatorResponseMessage")
 				fmt.Println("valMsg:", valMsg)
-				queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{valMsg})
+				queued := src.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{valMsg})
 				if !queued {
 					fmt.Println("queue is full!!!")
 				}
@@ -185,7 +185,7 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 			valMsg := &bcValidatorResponseMessage{Account: account, Epoch: NON_EPOCH, AcceptVotes: acceptVote}
 			fmt.Println("sending bcValidatorResponseMessage")
 			fmt.Println("valMsg:", valMsg)
-			queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{valMsg})
+			queued := src.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{valMsg})
 			if !queued {
 				fmt.Println("queue is full!!!")
 			}
@@ -227,7 +227,7 @@ FOR_LOOP:
 			}
 			msg := &bcBlockRequestMessage{request.Height}
 			//fmt.Printf("poolRoutine(), bcR.requestsCh with height & PeerID: %v, %v\n", request.Height, request.PeerID)
-			queued := peer.TrySend(BlockchainChannel, struct{ BlockchainMessage }{msg})
+			queued := peer.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{msg})
 			//fmt.Printf("poolRoutine(), queued is %v\n", queued);
 			if !queued {
 				// We couldn't make the request, send-queue full.
@@ -237,7 +237,7 @@ FOR_LOOP:
 
 			valMsg := &bcValidatorRequestMessage{}
 			//fmt.Printf("poolRoutine(), bcR.requestsCh with height & PeerID: %v, %v\n", request.Height, request.PeerID)
-			queued = peer.TrySend(BlockchainChannel, struct{ BlockchainMessage }{valMsg})
+			queued = peer.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{valMsg})
 			//fmt.Printf("poolRoutine(), queued is %v\n", queued);
 			if !queued {
 				// We couldn't make the request, send-queue full.
@@ -269,7 +269,7 @@ FOR_LOOP:
 
 				_, val, _ := bcR.state.GetValidators()
 				fmt.Println("bcR.state.Validators:", val) //TODO
-				conR := bcR.Switch.Reactor("CONSENSUS").(consensusReactor)
+				conR := bcR.Switch.Reactor(bcR.state.ChainID, "CONSENSUS").(consensusReactor)
 				conR.SwitchToConsensus(bcR.state)
 
 				break FOR_LOOP
@@ -334,7 +334,7 @@ FOR_LOOP:
 
 // BroadcastStatusRequest broadcasts `BlockStore` height.
 func (bcR *BlockchainReactor) BroadcastStatusRequest() error {
-	bcR.Switch.Broadcast(BlockchainChannel, struct{ BlockchainMessage }{&bcStatusRequestMessage{bcR.store.Height()}})
+	bcR.Switch.Broadcast(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{&bcStatusRequestMessage{bcR.store.Height()}})
 	return nil
 }
 

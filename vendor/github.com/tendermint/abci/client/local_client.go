@@ -7,6 +7,8 @@ import (
 	cmn "github.com/tendermint/go-common"
 )
 
+var _ Client = (*localClient)(nil)
+
 type localClient struct {
 	cmn.BaseService
 	mtx *sync.Mutex

@@ -27,12 +27,14 @@ type MempoolReactor struct {
 	config  cfg.Config
 	Mempool *Mempool
 	evsw    types.EventSwitch
+	chainID string
 }
 
-func NewMempoolReactor(config cfg.Config, mempool *Mempool) *MempoolReactor {
+func NewMempoolReactor(config cfg.Config, mempool *Mempool, chainID string) *MempoolReactor {
 	memR := &MempoolReactor{
 		config:  config,
 		Mempool: mempool,
+		chainID: chainID,
 	}
 	memR.BaseReactor = *p2p.NewBaseReactor(log, "MempoolReactor", memR)
 	return memR
@@ -92,16 +94,10 @@ type PeerState interface {
 	GetHeight() int
 }
 
-type Peer interface {
-	IsRunning() bool
-	Send(byte, interface{}) bool
-	Get(string) interface{}
-}
-
 // Send new mempool txs to peer.
 // TODO: Handle mempool or reactor shutdown?
 // As is this routine may block forever if no new txs come in.
-func (memR *MempoolReactor) broadcastTxRoutine(peer Peer) {
+func (memR *MempoolReactor) broadcastTxRoutine(peer *p2p.Peer) {
 	if !memR.config.GetBool("mempool_broadcast") {
 		return
 	}
@@ -129,7 +125,7 @@ func (memR *MempoolReactor) broadcastTxRoutine(peer Peer) {
 		}
 		// send memTx
 		msg := &TxMessage{Tx: memTx.tx}
-		success := peer.Send(MempoolChannel, struct{ MempoolMessage }{msg})
+		success := peer.Send(memR.chainID, MempoolChannel, struct{ MempoolMessage }{msg})
 		if !success {
 			time.Sleep(peerCatchupSleepIntervalMS * time.Millisecond)
 			continue

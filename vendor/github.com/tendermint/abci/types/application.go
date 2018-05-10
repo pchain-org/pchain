@@ -4,7 +4,10 @@ import (
 	context "golang.org/x/net/context"
 )
 
-// Applications
+// Application is an interface that enables any finite, deterministic state machine
+// to be driven by a blockchain-based replication engine via the ABCI.
+// All methods take a RequestXxx argument and return a ResponseXxx argument,
+// except CheckTx/DeliverTx, which take `tx []byte`, and `Commit`, which takes nothing.
 type Application interface {
 	// Info/Query Connection
 	Info() ResponseInfo                              // Return application info
