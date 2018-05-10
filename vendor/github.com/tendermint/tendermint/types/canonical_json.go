@@ -30,6 +30,16 @@ type CanonicalJSONVote struct {
 	Type    byte                 `json:"type"`
 }
 
+type CanonicalJSONSignAggr struct {
+        Height  int                  `json:"height"`
+        Round   int                  `json:"round"`
+        Type    byte                 `json:"type"`
+	NumValidators int	     `json:"NumValidators"`
+        BlockID CanonicalJSONBlockID `json:"block_id"`
+        Maj23   CanonicalJSONBlockID `json:"maj23"`
+	Sum	int64		     `json:"sum"`
+}
+
 //------------------------------------
 // Messages including a "chain id" can only be applied to one chain, hence "Once"
 
@@ -41,6 +51,11 @@ type CanonicalJSONOnceProposal struct {
 type CanonicalJSONOnceVote struct {
 	ChainID string            `json:"chain_id"`
 	Vote    CanonicalJSONVote `json:"vote"`
+}
+
+type CanonicalJSONOnceSignAggr struct {
+	ChainID		string            	`json:"chain_id"`
+	SignAggr	CanonicalJSONSignAggr	`json:"sign_aggr"`
 }
 
 //-----------------------------
@@ -94,6 +109,18 @@ func CanonicalVote(vote *Vote) CanonicalJSONVote {
 		vote.Height,
 		vote.Round,
 		vote.Type,
+	}
+}
+
+func CanonicalSignAggr(signAggr *SignAggr) CanonicalJSONSignAggr {
+	return CanonicalJSONSignAggr{
+		signAggr.Height,
+		signAggr.Round,
+		signAggr.Type,
+		signAggr.NumValidators,
+		CanonicalBlockID(signAggr.BlockID),
+		CanonicalBlockID(signAggr.Maj23),
+		signAggr.Sum,
 	}
 }
 

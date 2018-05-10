@@ -23,23 +23,26 @@ type SignAggr struct {
 	Type             byte             `json:"type"`
 	NumValidators	 int              `json:"numValidators"`
 	BlockID          BlockID          `json:"block_id"` // zero if vote is nil.
-        BitArray         *BitArray         // valIndex -> hasVote?
+	Maj23		 BlockID	  `json:"maj23"`
+        BitArray         *BitArray        `json:"BitArray"`
+	Sum		 int64            `json:"Sum"` 
 
 	// BLS signature aggregation to be added here
-	SignatureAggr	crypto.BLSSignature
+	SignatureAggr	crypto.BLSSignature	`json:"SignatureAggr"`
 
-	sum		int64             // Sum of voting power for seen votes, discounting conflicts
-	maj23		BlockID		// First 2/3 majority seen
 }
 
-func (vote *SignAggr) WriteSignBytes(chainID string, w io.Writer, n *int, err *error) {
-	wire.WriteJSON(CanonicalJSONOnceVote{
+func (sa *SignAggr) WriteSignBytes(chainID string, w io.Writer, n *int, err *error) {
+	wire.WriteJSON(CanonicalJSONOnceSignAggr{
 		chainID,
-		CanonicalJSONVote{
-			CanonicalBlockID(vote.BlockID),
-			vote.Height,
-			vote.Round,
-			vote.Type,
+		CanonicalJSONSignAggr{
+			sa.Height,
+			sa.Round,
+			sa.Type,
+			sa.NumValidators,
+			CanonicalBlockID(sa.BlockID),
+			CanonicalBlockID(sa.BlockID),
+			sa.Sum,
 		},
 	}, w, n, err)
 }
@@ -51,10 +54,11 @@ func MakeSignAggr(height int, round int, mtype byte, numValidators int, blockID 
 		Type	: mtype,
 		NumValidators: numValidators,
 		BlockID	: blockID,
+		Maj23	: blockID,
 		ChainID: chainID,
                 BitArray: NewBitArray(numValidators),
 		SignatureAggr : signAggr,
-		sum	: 0,
+		Sum	: 0,
         }
 }
 
@@ -66,11 +70,11 @@ func (sa *SignAggr) HasTwoThirdsMajority() bool {
 	if sa == nil {
 		return false
 	}
-	return sa.maj23.IsZero()
+	return sa.Maj23.IsZero()
 }
 
 func (sa *SignAggr) SetMaj23(blockID BlockID) {
-	sa.maj23 = blockID
+	sa.Maj23 = blockID
 }
 
 func (sa *SignAggr) SetBitArray(newBitArray *BitArray) {
@@ -84,7 +88,7 @@ func (sa *SignAggr) IsCommit() bool {
 	if sa.Type != VoteTypePrecommit {
 		return false
 	}
-	return sa.maj23.IsZero() != false
+	return sa.Maj23.IsZero() != false
 }
 
 /*
@@ -106,10 +110,10 @@ func (sa *SignAggr) TwoThirdsMajority() (blockID BlockID, ok bool) {
 	if sa == nil {
 		return BlockID{}, false
 	}
-	if sa.maj23.IsZero() == true {
+	if sa.Maj23.IsZero() == true {
 		return BlockID{}, false
 	} else {
-		return sa.maj23, true
+		return sa.Maj23, true
 	}
 }
 

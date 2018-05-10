@@ -127,8 +127,11 @@ func (s *State) validateBlock(block *types.Block) error {
 		lastValidators, _, err := s.GetValidators()
 
 		if err != nil && lastValidators != nil {
+			logger.Warn("validateBlock: Skip block.LastCommit temporarily")
+/*
 			err = lastValidators.VerifyCommit(
 				s.ChainID, s.LastBlockID, block.Height - 1, block.LastCommit)
+*/
 		}
 
 		if err != nil {

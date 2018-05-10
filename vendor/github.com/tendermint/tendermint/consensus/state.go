@@ -1529,6 +1529,7 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 		logger.Info("Received complete proposal block", " height:", cs.ProposalBlock.Height, " hash:", cs.ProposalBlock.Hash())
 		fmt.Printf("Received complete proposal block is %v\n", cs.ProposalBlock.String())
 		fmt.Printf("block.LastCommit is %v\n", cs.ProposalBlock.LastCommit)
+		fmt.Printf("Current cs.Step %v\n", cs.Step)
 		if cs.Step == RoundStepPropose && cs.isProposalComplete() {
 			// Move onto the next step
 			cs.enterPrevote(height, cs.Round)
@@ -1727,6 +1728,7 @@ func (cs *ConsensusState) addPrecommitsAggrPart(height int, part *types.Part, ve
 
 // -----------------------------------------------------------------------------
 func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
+	logger.Info("enter setMaj23SignAggr()")
 	logger.Info("Received SignAggr %#v\n", signAggr)
 
 	// Does not apply
@@ -2099,10 +2101,11 @@ func (cs *ConsensusState) sendMaj23Vote(votetype byte) {
 
 // Build the 2/3+ signature aggregation based on vote set and send it to other validators
 func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
-	logger.Info("Enter sendMaj23SignAggr")
+	logger.Info("Enter sendMaj23SignAggr()")
 
 	var votes []*types.Vote
 	var blockID, maj23 types.BlockID
+	var ok bool
 
 	if voteType == types.VoteTypePrevote {
 		votes = cs.Votes.Prevotes(cs.Round).Votes()

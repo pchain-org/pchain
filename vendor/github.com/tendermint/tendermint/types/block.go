@@ -82,11 +82,18 @@ func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID B
 	if !bytes.Equal(b.LastCommitHash, b.LastCommit.Hash()) {
 		return errors.New(Fmt("Wrong Block.Header.LastCommitHash.  Expected %X, got %X", b.LastCommitHash, b.LastCommit.Hash()))
 	}
+
+	logger.Warn(Fmt("ValidateBasic: Temporarily skip b.LastCommit check for block %d", b.Header.Height))
+
+
+/*
 	if b.Header.Height != 1 {
 		if err := b.LastCommit.ValidateBasic(); err != nil {
 			return err
 		}
 	}
+*/
+
 	if !bytes.Equal(b.DataHash, b.Data.Hash()) {
 		return errors.New(Fmt("Wrong Block.Header.DataHash.  Expected %X, got %X", b.DataHash, b.Data.Hash()))
 	}
