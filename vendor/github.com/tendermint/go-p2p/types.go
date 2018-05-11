@@ -49,8 +49,8 @@ func (info *NodeInfo) CompatibleWith(other *NodeInfo) error {
 
 	// nodes must be matched at least one network
 	foundNetwork := false
-	for network := range other.Networks {
-		if _, ok := info.Networks[network]; ok {
+	for _, network := range other.Networks.NwArr {
+		if _, ok := info.Networks.nwSet[network]; ok {
 			foundNetwork = true
 			break
 		}
@@ -90,12 +90,29 @@ func splitVersion(version string) (string, string, string, error) {
 }
 
 // Set data type for Multi-Chain Network
-type NetworkSet map[string]struct{}
+type NetworkSet struct {
+	// Network Set, use for fast indexing and retrieving
+	nwSet map[string]struct{}
+	// Network Array, use for iteration and serialization in Go-Wire
+	NwArr []string
+}
 
 func (set NetworkSet) String() string {
-	items := make([]string, 0, len(set))
-	for key := range set {
+	items := make([]string, 0, len(set.NwArr))
+	for _, key := range set.NwArr {
 		items = append(items, key)
 	}
 	return fmt.Sprintf("[%s]", strings.Join(items, ","))
+}
+
+func MakeNetwork() NetworkSet {
+	return NetworkSet{
+		NwArr: make([]string, 0),
+		nwSet: make(map[string]struct{}),
+	}
+}
+
+func (info *NodeInfo) AddNetwork(network string) {
+	info.Networks.NwArr = append(info.Networks.NwArr, network)
+	info.Networks.nwSet[network] = struct{}{}
 }

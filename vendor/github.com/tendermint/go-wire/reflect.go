@@ -304,7 +304,7 @@ func readReflectBinary(rv reflect.Value, rt reflect.Type, opts Options, r io.Rea
 			rv.Set(sliceRv)
 		}
 
-	case reflect.Struct, reflect.Map:
+	case reflect.Struct:
 		if rt == timeType {
 			// Special case: time.Time
 			t := ReadTime(r, n, err)
@@ -516,7 +516,7 @@ func writeReflectBinary(rv reflect.Value, rt reflect.Type, opts Options, w io.Wr
 			}
 		}
 
-	case reflect.Struct, reflect.Map:
+	case reflect.Struct:
 		if rt == timeType {
 			// Special case: time.Time
 			WriteTime(rv.Interface().(time.Time), w, n, err)

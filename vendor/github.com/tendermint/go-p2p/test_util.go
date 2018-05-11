@@ -80,7 +80,7 @@ func makeSwitch(i int, network, version string, initSwitch func(int, *Switch) *S
 	s.SetNodeInfo(&NodeInfo{
 		PubKey:     privKey.PubKey().(crypto.PubKeyEd25519),
 		Moniker:    Fmt("switch%d", i),
-		Networks:   NetworkSet{network: {}},
+		Networks:   MakeNetwork(),
 		Version:    version,
 		RemoteAddr: Fmt("%v:%v", network, rand.Intn(64512)+1023),
 		ListenAddr: Fmt("%v:%v", network, rand.Intn(64512)+1023),

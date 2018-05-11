@@ -117,7 +117,7 @@ func makeNodeInfo(p2pconfig cfg.Config, privKey crypto.PrivKeyEd25519, sw *p2p.S
 	nodeInfo := &p2p.NodeInfo{
 		PubKey:   privKey.PubKey().(crypto.PubKeyEd25519),
 		Moniker:  p2pconfig.GetString("moniker"),
-		Networks: make(p2p.NetworkSet),
+		Networks: p2p.MakeNetwork(),
 		Version:  version.Version,
 		Other: []string{
 			cmn.Fmt("wire_version=%v", wire.Version),

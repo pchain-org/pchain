@@ -193,7 +193,7 @@ func (sw *Switch) StartChainReactor(chainID string) error {
 	chainRouter, ok := sw.reactorsByChainId[chainID]
 	if ok {
 		// Add Chain ID to Switch NodeInfo
-		sw.nodeInfo.Networks[chainID] = struct{}{}
+		sw.nodeInfo.AddNetwork(chainID)
 
 		// Start reactors
 		for _, reactor := range chainRouter.reactors {

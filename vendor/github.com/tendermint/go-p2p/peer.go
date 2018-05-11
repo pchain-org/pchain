@@ -175,6 +175,10 @@ func (p *Peer) HandshakeTimeout(ourNodeInfo *NodeInfo, timeout time.Duration) er
 	p.conn.SetDeadline(time.Time{})
 
 	peerNodeInfo.RemoteAddr = p.Addr().String()
+	// Add Networks Set from Array
+	for _, network := range peerNodeInfo.Networks.NwArr {
+		peerNodeInfo.Networks.nwSet[network] = struct{}{}
+	}
 
 	p.NodeInfo = peerNodeInfo
 	p.Key = peerNodeInfo.PubKey.KeyString()
@@ -278,16 +282,16 @@ func (p *Peer) Get(key string) interface{} {
 
 // IsInTheSameNetwork Check the Peer if it's in the same chain
 func (p *Peer) IsInTheSameNetwork(chainID string) bool {
-	_, same := p.Networks[chainID]
+	_, same := p.Networks.nwSet[chainID]
 	return same
 }
 
 // GetSameNetwork Return the same network slice between peer and current node
 func (p *Peer) GetSameNetwork(nodeNetwork NetworkSet) []string {
 	// initial the slice with cap = length of node network
-	sameNetwork := make([]string, 0, len(nodeNetwork))
-	for network := range nodeNetwork {
-		if _, ok := p.Networks[network]; ok {
+	sameNetwork := make([]string, 0, len(nodeNetwork.NwArr))
+	for _, network := range nodeNetwork.NwArr {
+		if _, ok := p.Networks.nwSet[network]; ok {
 			sameNetwork = append(sameNetwork, network)
 		}
 	}
@@ -309,17 +313,9 @@ func dial(addr *NetAddress, config *PeerConfig) (net.Conn, error) {
 
 func createMConnection(conn net.Conn, p *Peer, switchChainRouter map[string]*ChainRouter, onPeerError func(*Peer, interface{}), config *MConnConfig) *MConnection {
 
-	// Filter the Chain Router, only matched on both side will be added into the connection
-	peerChainRouter := make(map[string]*ChainRouter)
-	for network := range p.Networks {
-		if chainRouter, ok := switchChainRouter[network]; ok {
-			peerChainRouter[network] = chainRouter
-		}
-	}
-
 	onReceive := func(chainID string, chID byte, msgBytes []byte) {
 
-		chain, ok := peerChainRouter[chainID]
+		chain, ok := switchChainRouter[chainID]
 		if !ok {
 			cmn.PanicSanity(cmn.Fmt("Unknown chain %s", chainID))
 		}
@@ -335,5 +331,5 @@ func createMConnection(conn net.Conn, p *Peer, switchChainRouter map[string]*Cha
 		onPeerError(p, r)
 	}
 
-	return NewMConnectionWithConfig(conn, peerChainRouter, onReceive, onError, config)
+	return NewMConnectionWithConfig(conn, switchChainRouter, onReceive, onError, config)
 }
