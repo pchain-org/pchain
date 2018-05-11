@@ -55,16 +55,18 @@ func pchainCmd(ctx *cli.Context) error {
 	chains = append(chains, mainChain)
 	chains = append(chains, childChain)
 
-
-
 	// Start the PChain
 	for _, c := range chains {
+		// Add Chain ID to NodeInfo first
+		pchainP2P.AddNetwork(c.Id)
+		// Start each Chain
 		chain.StartChain(c, quit)
 	}
 
+	// Dial the Seeds after network has been added into NodeInfo
+	pchainP2P.DialSeeds(p2pConfig)
 
-
-
+	// Start PChain RPC
 	rpc.StartRPC(ctx, chains)
 	<- quit
 

@@ -76,14 +76,6 @@ func StartP2P(p2pconfig cfg.Config) (*PChainP2P, error) {
 		return nil, err
 	}
 
-	// If seeds exist, add them to the address book and dial out
-	if p2pconfig.GetString("seeds") != "" {
-		// dial out
-		seeds := strings.Split(p2pconfig.GetString("seeds"), ",")
-		if err := sw.DialSeeds(addrBook, seeds); err != nil {
-			return nil, err
-		}
-	}
 	return &PChainP2P{
 		privKey:  privKey,
 		sw:       sw,
@@ -95,6 +87,23 @@ func (pNode *PChainP2P) StopP2P() {
 	//log.Notice("Stopping Node")
 	// TODO: gracefully disconnect from peers.
 	pNode.sw.Stop()
+}
+
+func (pNode *PChainP2P) AddNetwork(chainID string) {
+	// Add Chain ID to Switch NodeInfo
+	pNode.sw.NodeInfo().AddNetwork(chainID)
+}
+
+func (pNode *PChainP2P) DialSeeds(p2pconfig cfg.Config) error {
+	// If seeds exist, add them to the address book and dial out
+	if p2pconfig.GetString("seeds") != "" {
+		// dial out
+		seeds := strings.Split(p2pconfig.GetString("seeds"), ",")
+		if err := pNode.sw.DialSeeds(pNode.addrBook, seeds); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Switch return the P2P Switch
