@@ -380,7 +380,8 @@ func (c *MConnection) sendMsgPacket() bool {
 	// The chosen channel will be the one whose recentlySent/priority is the least.
 	var leastRatio float32 = math.MaxFloat32
 	var leastChannel *Channel
-	for _, chainChannel := range c.channelsByChainId {
+	var leastChannelChainID string
+	for chainID, chainChannel := range c.channelsByChainId {
 		for _, channel := range chainChannel.channels {
 			// If nothing to send, skip this channel
 			if !channel.isSendPending() {
@@ -391,6 +392,7 @@ func (c *MConnection) sendMsgPacket() bool {
 			if ratio < leastRatio {
 				leastRatio = ratio
 				leastChannel = channel
+				leastChannelChainID = chainID
 			}
 		}
 	}
@@ -403,7 +405,7 @@ func (c *MConnection) sendMsgPacket() bool {
 	}
 
 	// Make & send a msgPacket from this channel
-	n, err := leastChannel.writeMsgPacketTo(c.bufWriter)
+	n, err := leastChannel.writeMsgPacketTo(c.bufWriter, leastChannelChainID)
 	if err != nil {
 		log.Warn("Failed to write msgPacket", "error", err)
 		c.stopForError(err)
@@ -653,8 +655,9 @@ func (ch *Channel) isSendPending() bool {
 
 // Creates a new msgPacket to send.
 // Not goroutine-safe
-func (ch *Channel) nextMsgPacket() msgPacket {
+func (ch *Channel) nextMsgPacket(chainID string) msgPacket {
 	packet := msgPacket{}
+	packet.ChainID = []byte(chainID)
 	packet.ChannelID = byte(ch.id)
 	packet.Bytes = ch.sending[:cmn.MinInt(maxMsgPacketPayloadSize, len(ch.sending))]
 	if len(ch.sending) <= maxMsgPacketPayloadSize {
@@ -670,8 +673,8 @@ func (ch *Channel) nextMsgPacket() msgPacket {
 
 // Writes next msgPacket to w.
 // Not goroutine-safe
-func (ch *Channel) writeMsgPacketTo(w io.Writer) (n int, err error) {
-	packet := ch.nextMsgPacket()
+func (ch *Channel) writeMsgPacketTo(w io.Writer, chainID string) (n int, err error) {
+	packet := ch.nextMsgPacket(chainID)
 	log.Debug("Write Msg Packet", "conn", ch.conn, "packet", packet)
 	wire.WriteByte(packetTypeMsg, w, &n, &err)
 	wire.WriteBinary(packet, w, &n, &err)
