@@ -176,6 +176,7 @@ func (p *Peer) HandshakeTimeout(ourNodeInfo *NodeInfo, timeout time.Duration) er
 
 	peerNodeInfo.RemoteAddr = p.Addr().String()
 	// Add Networks Set from Array
+	peerNodeInfo.Networks.nwSet = make(map[string]struct{})
 	for _, network := range peerNodeInfo.Networks.NwArr {
 		peerNodeInfo.Networks.nwSet[network] = struct{}{}
 	}
