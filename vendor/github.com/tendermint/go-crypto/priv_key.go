@@ -12,7 +12,11 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/Nik-U/pbc"
 	"crypto/sha256"
+	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 )
+
+
 
 // PrivKey is part of PrivAccount and state.PrivValidator.
 type PrivKey interface {
@@ -284,9 +288,27 @@ func GenPrivKeySecp256k1FromSecret(secret []byte) PrivKeySecp256k1 {
 //-------------------------------------
 // Implements PrivKey
 
-var params = pbc.GenerateA(160, 512)
-var pairing = params.NewPairing()
-var g = pairing.NewG2().Rand()
+func init() {
+	paramsString := "type a\n"+
+		"q 6810019449936382487924444340676335792486684152989565749316517380074446105713919870191983352817997578314362713972330796409852501768474201988787261287855671\n"+
+		"h 9319208786345675094887650862530830862537242472377645595444311486184402577395907493359426358133397009566152\n"+
+		"r 730750818665452757176057050065048642452048576511\n"+
+		"exp2 159\n"+
+		"exp1 110\n"+
+		"sign1 1\n"+
+		"sign0 -1\n"
+	gString := "0x22a80aa68ea4a9777a7417bd3e9508a6f9f4fe1d6b2c729e04cbdcf85f44e84be91edc6ee1fd10567cd784d0afc2b23ae14ec363ca300113b8b0553d399997942bdb71a1366b807ffa573eccb7d26ef61bf022d7d24a19a14ac605e092cea37cb5b59804e2d7aa9db9bf572904142c0652883c6d300a1c02dc6c4fdf4ca44585"
+	pairing_, pair_err := pbc.NewPairingFromString(paramsString)
+	if pair_err != nil {
+
+	}
+	g_ := pairing_.NewG2().SetBytes(common.FromHex(gString))
+	pairing = pairing_
+	g = g_
+}
+
+var pairing *pbc.Pairing
+var g *pbc.Element
 
 func Pairing() *pbc.Pairing {
 	return pairing

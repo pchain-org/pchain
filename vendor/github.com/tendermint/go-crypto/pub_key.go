@@ -319,11 +319,17 @@ func (pubKey BLSPubKey) MulWithSet1(other PubKey) bool {
 }
 
 func (pubKey BLSPubKey) Bytes() []byte {
-	return pubKey.getElement().Bytes()
+	return pubKey
 }
 
 func (pubKey BLSPubKey) Address() []byte {
-	return []byte("")
+	hasherSHA256 := sha256.New()
+	hasherSHA256.Write(pubKey[:]) // does not error
+	sha := hasherSHA256.Sum(nil)
+
+	hasherRIPEMD160 := ripemd160.New()
+	hasherRIPEMD160.Write(sha) // does not error
+	return hasherRIPEMD160.Sum(nil)
 }
 
 func (pubKey BLSPubKey) KeyString() string {

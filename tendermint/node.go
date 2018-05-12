@@ -39,6 +39,7 @@ import (
 	st "github.com/tendermint/tendermint/state"
 	"os"
 	"github.com/pchain/common/plogger"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var logger = plogger.GetLogger("node")
@@ -143,6 +144,8 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	fastSync := config.GetBool("fast_sync")
 	if state.Epoch.Validators.Size() == 1 {
 		addr, _ := state.Epoch.Validators.GetByIndex(0)
+		fmt.Println("address",common.ToHex(addr))
+		fmt.Println("validator addr:", common.ToHex(privValidator.Address))
 		if bytes.Equal(privValidator.Address, addr) {
 			fastSync = false
 		}

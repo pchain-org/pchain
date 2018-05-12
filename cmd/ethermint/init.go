@@ -28,6 +28,7 @@ import (
 	"github.com/tendermint/go-crypto"
 	"time"
 	"regexp"
+	"reflect"
 )
 
 type BalaceAmount struct {
@@ -73,8 +74,6 @@ func initCmd(ctx *cli.Context) error {
 	//	utils.Fatalf("init eth_genesis failed")
 	//	return err
 	//}
-	fmt.Println(config.GetString("eth_genesis_file"))
-	fmt.Println(ethGenesisPath)
 	init_eth_blockchain(config.GetString("eth_genesis_file"), ctx)
 
 	init_em_files(ethGenesisPath)
@@ -109,7 +108,7 @@ func initEthGenesis(ctx *cli.Context) error {
 		GasLimit: "0x8000000",
 		Difficulty: "0x400",
 		Mixhash: "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Coinbase: common.ToHex((*validators[0]).Address),
+		Coinbase: common.ToHex((*validators[0]).EtherumePubKey.Address()),
 		Alloc: map[string]struct {
 			Code    string
 			Storage map[string]string
@@ -117,19 +116,26 @@ func initEthGenesis(ctx *cli.Context) error {
 			Nonce   string
 			Amount  string
 			PubKey  string
+			ConsensusPubKey string
 		}{
 		},
 	}
 	for i,validator := range validators {
-		if otherEd, ok := validator.EthereumPubKey.(crypto.EtherumPubKey); ok{
-			coreGenesis.Alloc[common.ToHex(validator.Address)] = struct {
+		otherConPub, l := validator.PubKey.(crypto.BLSPubKey)
+		otherEthPub, r := validator.EtherumePubKey.(crypto.EtherumPubKey)
+		if l&&r {
+			fmt.Println("this is create")
+			coreGenesis.Alloc[common.ToHex(validator.EtherumePubKey.Address())] = struct {
 				Code    string
 				Storage map[string]string
 				Balance string
 				Nonce   string
 				Amount  string
 				PubKey  string
-			}{Balance: balanceAmounts[i].balance, Amount:balanceAmounts[i].amount, PubKey: common.ToHex(otherEd[:])}
+				ConsensusPubKey string
+			}{Balance: balanceAmounts[i].balance, Amount:balanceAmounts[i].amount, PubKey: common.ToHex(otherEthPub[:]), ConsensusPubKey:common.ToHex(otherConPub[:])}
+		} else {
+			fmt.Println(reflect.TypeOf(validator.EtherumePubKey))
 		}
 
 	}
@@ -246,7 +252,7 @@ func createGenesisDoc(coreGenesis *core.Genesis) error {
 					balance, amount)
 				return errors.New("no enough balance")
 			}
-			genDoc.CurrentEpoch.Validators[idx] = types.GenesisValidator{EthAccount: common.HexToAddress(k), PubKey:crypto.BLSPubKey(common.FromHex(v.PubKey)), Amount:amount}
+			genDoc.CurrentEpoch.Validators[idx] = types.GenesisValidator{EthAccount: common.HexToAddress(k), PubKey:crypto.BLSPubKey(common.FromHex(v.ConsensusPubKey)), Amount:amount}
 			idx ++
 		}
 		genDoc.SaveAs(genFile)
@@ -264,7 +270,7 @@ func createPriValidators(num int) []*types.PrivValidator {
 	privValFile := config.GetString("priv_validator_file_root")
 	for i:=0; i < num; i++ {
 		validators[i], newKey = types.GenPrivValidatorKey()
-		privKey := validators[i].EthereumPrivKey.(crypto.EtherumPrivKey)
+		privKey := validators[i].EtherumePrivKey.(crypto.EtherumPrivKey)
 		pwd := common.ToHex(privKey[0:7])
 		pwd = string([]byte(pwd)[2:])
 		pwd = strings.ToUpper(pwd)
@@ -285,7 +291,7 @@ func createPriValidators(num int) []*types.PrivValidator {
 }
 
 func checkAccount(coreGenesis core.Genesis) (common.Address, int64, error) {
-
+	fmt.Println("coinbase:",coreGenesis.Coinbase)
 	coinbase := common.HexToAddress(coreGenesis.Coinbase)
 	amount := int64(10)
 	balance := big.NewInt(-1)
