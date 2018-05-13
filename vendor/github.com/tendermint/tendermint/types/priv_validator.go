@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/accounts"
-	"reflect"
 	"github.com/ethereum/go-ethereum/common"
 )
 

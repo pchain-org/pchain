@@ -1833,8 +1833,13 @@ func (cs *ConsensusState) BLSVerifySignAggr(signAggr *types.SignAggr) (bool, err
 			}
 		}
 	}
-
-	if aggrPubKey.VerifyBytes(types.SignBytes(signAggr.ChainID, signAggr), (signAggr.SignAggr())) {
+	vote := &types.Vote{
+		BlockID:          signAggr.BlockID,
+		Height: signAggr.Height,
+		Round: signAggr.Round,
+		Type: signAggr.Type,
+	}
+	if !aggrPubKey.VerifyBytes(types.SignBytes(signAggr.ChainID, vote), (signAggr.SignAggr())) {
 		return false, errors.New("Invalid aggregate signature")
 	}
 	var maj23 bool

@@ -12,7 +12,6 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/Nik-U/pbc"
 	"crypto/sha256"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 )
 
