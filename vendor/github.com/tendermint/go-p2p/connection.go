@@ -224,7 +224,7 @@ func (c *MConnection) Send(chainID string, chID byte, msg interface{}) bool {
 		return false
 	}
 
-	log.Debug("Send", "channel", chID, "conn", c, "msg", msg) //, "bytes", wire.BinaryBytes(msg))
+	log.Debug("Send", "chain", chainID, "channel", chID, "conn", c, "msg", msg) //, "bytes", wire.BinaryBytes(msg))
 
 	// Send message to channel.
 	channel, ok := chainChannel.channelsIdx[chID]
@@ -241,7 +241,7 @@ func (c *MConnection) Send(chainID string, chID byte, msg interface{}) bool {
 		default:
 		}
 	} else {
-		log.Warn("Send failed", "channel", chID, "conn", c, "msg", msg)
+		log.Warn("Send failed", "chain", chainID, "channel", chID, "conn", c, "msg", msg)
 	}
 	return success
 }
@@ -495,7 +495,7 @@ FOR_LOOP:
 				break FOR_LOOP
 			}
 			if msgBytes != nil {
-				log.Debug("Received bytes", "chID", pkt.ChannelID, "msgBytes", msgBytes)
+				log.Debug("Received bytes", "chain", chainID, "chID", pkt.ChannelID, "msgBytes", msgBytes)
 				c.onReceive(chainID, pkt.ChannelID, msgBytes)
 			}
 		default:

@@ -123,7 +123,7 @@ func (conR *ConsensusReactor) AddPeer(peer *p2p.Peer) {
 
 	// Create peerState for peer
 	peerState := NewPeerState(peer)
-	peer.Data.Set(types.PeerStateKey, peerState)
+	peer.Data.Set(conR.conS.state.ChainID + "." + types.PeerStateKey, peerState)
 
 	// Begin routines for this peer.
 	go conR.gossipDataRoutine(peer, peerState)
@@ -170,7 +170,7 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 	log.Debug("Receive", "src", src, "chId", chID, "msg", msg)
 
 	// Get peer states
-	ps := src.Data.Get(types.PeerStateKey).(*PeerState)
+	ps := src.Data.Get(conR.conS.state.ChainID + "." + types.PeerStateKey).(*PeerState)
 
 	switch chID {
 	case StateChannel:

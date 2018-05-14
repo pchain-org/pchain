@@ -116,7 +116,7 @@ func (memR *MempoolReactor) broadcastTxRoutine(peer *p2p.Peer) {
 		memTx := next.Value.(*mempoolTx)
 		// make sure the peer is up to date
 		height := memTx.Height()
-		if peerState_i := peer.Get(types.PeerStateKey); peerState_i != nil {
+		if peerState_i := peer.Get(memR.chainID + "." + types.PeerStateKey); peerState_i != nil {
 			peerState := peerState_i.(PeerState)
 			if peerState.GetHeight() < height-1 { // Allow for a lag of 1 block
 				time.Sleep(peerCatchupSleepIntervalMS * time.Millisecond)
