@@ -51,6 +51,7 @@ type PrivValidator struct {
 	PrivKey crypto.PrivKey `json:"priv_key"`
 	EtherumePubKey  crypto.PubKey `json:"etherume_pub_key"`
 	EtherumePrivKey crypto.PrivKey `json:"etherume_priv_key"`
+	EtherumeAddress []byte         `json:"etherume_address"`
 	Signer  `json:"-"`
 
 	// For persistence.
@@ -112,6 +113,7 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 		Address:       blsPubKey.Address(),
 		PubKey:        blsPubKey,
 		PrivKey:       blsPrivKey,
+		EtherumeAddress:    pubKey.Address(),
 		EtherumePrivKey:    privKey,
 		EtherumePubKey:     pubKey,
 		LastHeight:    0,
@@ -231,6 +233,8 @@ func (privVal *PrivValidator) GetPubKey() crypto.PubKey {
 func (privVal *PrivValidator) SignVote(chainID string, vote *Vote) error {
 	privVal.mtx.Lock()
 	defer privVal.mtx.Unlock()
+fmt.Printf("SignVote: %#v\n", SignBytes(chainID, vote)[0:7])
+
 	signature, err := privVal.signBytesHRS(vote.Height, vote.Round, voteToStep(vote), SignBytes(chainID, vote))
 	if err != nil {
 		return errors.New(Fmt("Error signing vote: %v", err))

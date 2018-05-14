@@ -1843,7 +1843,7 @@ func (cs *ConsensusState) BLSVerifySignAggr(signAggr *types.SignAggr) (bool, err
 		return false, errors.New("Invalid aggregate signature")
 	}
 	var maj23 bool
-	if powerSum < quorum {
+	if powerSum >= quorum {
 		maj23 = true
 	} else {
 		maj23 = false
