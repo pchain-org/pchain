@@ -1268,10 +1268,12 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encod
 		return "", err
 	}
 
-	tx := new(types.Transaction)
-	if err := rlp.DecodeBytes(encodedTx, tx); err != nil {
+	oritx := new(types.OriTransaction)
+	if err := rlp.DecodeBytes(encodedTx, oritx); err != nil {
 		return "", err
 	}
+
+	tx := types.OriToTransaction(oritx)
 
 	if err := s.b.SendTx(ctx, tx); err != nil {
 		return "", err

@@ -244,7 +244,7 @@ func (app *EthermintApplication) validateTx(tx *ethTypes.Transaction) error {
 	}
 
 	etd := tx.ExtendTxData()
-	if etd == nil {
+	if etd == nil || etd.FuncName == "" {
 		// Check the transaction doesn't exceed the current
 		// block limit gas.
 		// TODO

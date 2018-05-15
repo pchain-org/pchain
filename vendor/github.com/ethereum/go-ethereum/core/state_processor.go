@@ -150,13 +150,14 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header,
 			tx *types.Transaction, usedGas *big.Int, totalUsedMoney *big.Int, cfg vm.Config) (*types.Receipt, *big.Int, error) {
 
-	etd := tx.ExtendTxData()
 
-	if  etd == nil {
-		msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
-		if err != nil {
-			return nil, nil, err
-		}
+	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	etd := tx.ExtendTxData()
+	if  etd == nil || etd.FuncName == "" {
 
 		// Create a new context to be used in the EVM environment
 		context := NewEVMContext(msg, header, bc)
@@ -215,6 +216,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool,
 		receipt.Logs = statedb.GetLogs(tx.Hash())
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
+		statedb.SetNonce(msg.From(), statedb.GetNonce(msg.From())+1)
 		glog.V(logger.Debug).Infoln(receipt)
 		glog.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
 
