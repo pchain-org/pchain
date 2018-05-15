@@ -31,7 +31,7 @@ func init() {
 	pubKeyMapper = data.NewMapper(PubKeyS{}).
 		RegisterImplementation(PubKeyEd25519{}, NameEd25519, TypeEd25519).
 		RegisterImplementation(PubKeySecp256k1{}, NameSecp256k1, TypeSecp256k1).
-		RegisterImplementation(EtherumPubKey{}, NameEtherum, TypeEtherum).
+		RegisterImplementation(EthereumPubKey{}, NameEthereum, TypeEthereum).
 		RegisterImplementation(BLSPubKey{}, NameBls, TypeBls)
 }
 
@@ -218,45 +218,45 @@ func (pubKey PubKeySecp256k1) Equals(other PubKey) bool {
 	}
 }
 
-type EtherumPubKey []byte
+type EthereumPubKey []byte
 
-func (pubKey EtherumPubKey) Address() []byte {
+func (pubKey EthereumPubKey) Address() []byte {
 	cKey := ethcrypto.ToECDSAPub(pubKey[:])
 	address := ethcrypto.PubkeyToAddress(*cKey)
 	return address[:]
 }
 
-func (pubKey EtherumPubKey) Bytes() []byte {
+func (pubKey EthereumPubKey) Bytes() []byte {
 	return wire.BinaryBytes(struct{ PubKey }{pubKey})
 }
 
-func (pubKey EtherumPubKey) KeyString() string {
+func (pubKey EthereumPubKey) KeyString() string {
 	return Fmt("EthPubKey{%X}", pubKey[:])
 }
 
-func (pubKey EtherumPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
+func (pubKey EthereumPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
 	msg = ethcrypto.Keccak256(msg)
-	recoveredPub, err := ethcrypto.Ecrecover(msg, sig_.(EtherumSignature).SigByte())
+	recoveredPub, err := ethcrypto.Ecrecover(msg, sig_.(EthereumSignature).SigByte())
 	if err != nil {
 		return false
 	}
 	return bytes.Equal(pubKey[:], recoveredPub[:])
 }
 
-func (pubKey EtherumPubKey) Equals(other PubKey) bool {
-	if otherEd, ok := other.(EtherumPubKey); ok {
+func (pubKey EthereumPubKey) Equals(other PubKey) bool {
+	if otherEd, ok := other.(EthereumPubKey); ok {
 		return bytes.Equal(pubKey[:], otherEd[:])
 	} else {
 		return false
 	}
 }
 
-func (pubKey EtherumPubKey) MarshalJSON() ([]byte, error) {
+func (pubKey EthereumPubKey) MarshalJSON() ([]byte, error) {
 
 	return data.Encoder.Marshal(pubKey[:])
 }
 
-func (p *EtherumPubKey) UnmarshalJSON(enc []byte) error {
+func (p *EthereumPubKey) UnmarshalJSON(enc []byte) error {
 	var ref []byte
 	err := data.Encoder.Unmarshal(&ref, enc)
 	copy((*p)[:], ref)

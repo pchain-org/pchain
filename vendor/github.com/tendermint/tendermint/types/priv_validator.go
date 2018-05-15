@@ -49,9 +49,9 @@ type PrivValidator struct {
 
 	// PrivKey should be empty if a Signer other than the default is being used.
 	PrivKey crypto.PrivKey `json:"priv_key"`
-	EtherumePubKey  crypto.PubKey `json:"etherume_pub_key"`
-	EtherumePrivKey crypto.PrivKey `json:"etherume_priv_key"`
-	EtherumeAddress []byte         `json:"etherume_address"`
+	EthereumePubKey  crypto.PubKey `json:"etherume_pub_key"`
+	EthereumePrivKey crypto.PrivKey `json:"etherume_priv_key"`
+	EthereumeAddress []byte         `json:"etherume_address"`
 	Signer  `json:"-"`
 
 	// For persistence.
@@ -98,8 +98,8 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 	if err != nil {
 		return nil,nil
 	}
-	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
-	privKey := crypto.EtherumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
+	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
+	privKey := crypto.EthereumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
 	blsPrivKey := crypto.CreateBLSPrivKey()
 	blsPubKey := blsPrivKey.PubKey()
 	fmt.Println("start")
@@ -113,9 +113,9 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 		Address:       blsPubKey.Address(),
 		PubKey:        blsPubKey,
 		PrivKey:       blsPrivKey,
-		EtherumeAddress:    pubKey.Address(),
-		EtherumePrivKey:    privKey,
-		EtherumePubKey:     pubKey,
+		EthereumeAddress:    pubKey.Address(),
+		EthereumePrivKey:    privKey,
+		EthereumePubKey:     pubKey,
 		LastHeight:    0,
 		LastRound:     0,
 		LastStep:      stepNone,
@@ -141,8 +141,8 @@ func GenPrivValidator() *PrivValidator {
 	if err := ks.StoreKey(a.URL.Path, newKey, ""); err != nil {
 		return nil
 	}
-	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
-	privKey := crypto.EtherumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
+	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
+	privKey := crypto.EthereumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
 	fmt.Println(len(privKey), len(pubKey), len(pubKey.Address()))
 	return &PrivValidator{
 		Address:       pubKey.Address(),

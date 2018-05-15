@@ -25,7 +25,7 @@ func init() {
 	sigMapper = data.NewMapper(SignatureS{}).
 		RegisterImplementation(SignatureEd25519{}, NameEd25519, TypeEd25519).
 		RegisterImplementation(SignatureSecp256k1{}, NameSecp256k1, TypeSecp256k1).
-		RegisterImplementation(EtherumSignature{}, NameEtherum, TypeEtherum).
+		RegisterImplementation(EthereumSignature{}, NameEthereum, TypeEthereum).
 		RegisterImplementation(BLSSignature{}, NameBls, TypeBls)
 }
 
@@ -123,41 +123,41 @@ func (p *SignatureSecp256k1) UnmarshalJSON(enc []byte) error {
 }
 
 
-type EtherumSignature []byte
+type EthereumSignature []byte
 
-func (sig EtherumSignature) SigByte() []byte {
+func (sig EthereumSignature) SigByte() []byte {
 	return sig[:]
 }
 
-func (sig EtherumSignature) Bytes() []byte {
+func (sig EthereumSignature) Bytes() []byte {
 	return wire.BinaryBytes(struct{ Signature }{sig})
 }
 
-func (sig EtherumSignature) IsZero() bool {
+func (sig EthereumSignature) IsZero() bool {
 	return len(sig) == 0
 }
 
-func (sig EtherumSignature) String() string {
+func (sig EthereumSignature) String() string {
 	return fmt.Sprintf("/%X.../", Fingerprint(sig[:]))
 }
 
-func (sig EtherumSignature) Equals(other Signature) bool {
+func (sig EthereumSignature) Equals(other Signature) bool {
 
-	if otherEd, ok := other.(EtherumSignature); ok {
+	if otherEd, ok := other.(EthereumSignature); ok {
 		return bytes.Equal(sig[:], otherEd[:])
 	} else {
 		return false
 	}
 }
 
-func (sig EtherumSignature) MarshalJSON() ([]byte, error) {
+func (sig EthereumSignature) MarshalJSON() ([]byte, error) {
 	return data.Encoder.Marshal(sig[:])
 }
 
-func (sig *EtherumSignature) UnmarshalJSON(enc []byte) error {
+func (sig *EthereumSignature) UnmarshalJSON(enc []byte) error {
 	var ref []byte
 	err := data.Encoder.Unmarshal(&ref, enc)
-	*sig = make(EtherumSignature, len(ref))
+	*sig = make(EthereumSignature, len(ref))
 	copy((*sig)[:], ref)
 	return err
 }
