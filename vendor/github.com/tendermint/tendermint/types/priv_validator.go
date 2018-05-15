@@ -49,9 +49,9 @@ type PrivValidator struct {
 
 	// PrivKey should be empty if a Signer other than the default is being used.
 	PrivKey crypto.PrivKey `json:"priv_key"`
-	EthereumePubKey  crypto.PubKey `json:"etherume_pub_key"`
-	EthereumePrivKey crypto.PrivKey `json:"etherume_priv_key"`
-	EthereumeAddress []byte         `json:"etherume_address"`
+	EthereumPubKey  crypto.PubKey `json:"ethereum_pub_key"`
+	EthereumPrivKey crypto.PrivKey `json:"ethereum_priv_key"`
+	EthereumAddress []byte         `json:"ethereum_address"`
 	Signer  `json:"-"`
 
 	// For persistence.
@@ -113,9 +113,9 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 		Address:       blsPubKey.Address(),
 		PubKey:        blsPubKey,
 		PrivKey:       blsPrivKey,
-		EthereumeAddress:    pubKey.Address(),
-		EthereumePrivKey:    privKey,
-		EthereumePubKey:     pubKey,
+		EthereumAddress:    pubKey.Address(),
+		EthereumPrivKey:    privKey,
+		EthereumPubKey:     pubKey,
 		LastHeight:    0,
 		LastRound:     0,
 		LastStep:      stepNone,

@@ -108,7 +108,7 @@ func initEthGenesis(ctx *cli.Context) error {
 		GasLimit: "0x8000000",
 		Difficulty: "0x400",
 		Mixhash: "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Coinbase: common.ToHex((*validators[0]).EthereumePubKey.Address()),
+		Coinbase: common.ToHex((*validators[0]).EthereumPubKey.Address()),
 		Alloc: map[string]struct {
 			Code    string
 			Storage map[string]string
@@ -122,10 +122,10 @@ func initEthGenesis(ctx *cli.Context) error {
 	}
 	for i,validator := range validators {
 		otherConPub, l := validator.PubKey.(crypto.BLSPubKey)
-		otherEthPub, r := validator.EthereumePubKey.(crypto.EthereumPubKey)
+		otherEthPub, r := validator.EthereumPubKey.(crypto.EthereumPubKey)
 		if l&&r {
 			fmt.Println("this is create")
-			coreGenesis.Alloc[common.ToHex(validator.EthereumePubKey.Address())] = struct {
+			coreGenesis.Alloc[common.ToHex(validator.EthereumPubKey.Address())] = struct {
 				Code    string
 				Storage map[string]string
 				Balance string
@@ -135,7 +135,7 @@ func initEthGenesis(ctx *cli.Context) error {
 				ConsensusPubKey string
 			}{Balance: balanceAmounts[i].balance, Amount:balanceAmounts[i].amount, PubKey: common.ToHex(otherEthPub[:]), ConsensusPubKey:common.ToHex(otherConPub[:])}
 		} else {
-			fmt.Println(reflect.TypeOf(validator.EthereumePubKey))
+			fmt.Println(reflect.TypeOf(validator.EthereumPubKey))
 		}
 
 	}
@@ -189,12 +189,12 @@ func init_em_files(genesisPath string) error  {
 	gensisFile, err := os.Open(genesisPath)
 	defer gensisFile.Close()
 	if err != nil {
-		utils.Fatalf("failed to read ethereume genesis file: %v", err)
+		utils.Fatalf("failed to read Ethereume genesis file: %v", err)
 		return err
 	}
 	contents, err := ioutil.ReadAll(gensisFile)
 	if err != nil {
-		utils.Fatalf("failed to read ethereume genesis file: %v", err)
+		utils.Fatalf("failed to read Ethereume genesis file: %v", err)
 		return err
 	}
 	var coreGenesis = core.Genesis{}
@@ -270,7 +270,7 @@ func createPriValidators(num int) []*types.PrivValidator {
 	privValFile := config.GetString("priv_validator_file_root")
 	for i:=0; i < num; i++ {
 		validators[i], newKey = types.GenPrivValidatorKey()
-		privKey := validators[i].EthereumePrivKey.(crypto.EthereumPrivKey)
+		privKey := validators[i].EthereumPrivKey.(crypto.EthereumPrivKey)
 		pwd := common.ToHex(privKey[0:7])
 		pwd = string([]byte(pwd)[2:])
 		pwd = strings.ToUpper(pwd)
