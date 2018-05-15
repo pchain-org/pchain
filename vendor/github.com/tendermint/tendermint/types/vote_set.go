@@ -164,7 +164,7 @@ fmt.Printf("VoteSet::addVote : before add vote, voteset is ##v\n", voteSet)
 	}
 
 	// Ensure that the signer has the right address
-	if !bytes.Equal(valAddr, lookupAddr) {
+	if !bytes.Equal(valAddr.Bytes(), lookupAddr) {
 		return false, ErrVoteInvalidValidatorAddress
 	}
 

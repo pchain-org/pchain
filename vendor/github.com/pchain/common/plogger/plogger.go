@@ -5,20 +5,39 @@ import (
 	"syscall"
 	"time"
 
-	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
+	"github.com/lestrrat-go/file-rotatelogs"
 	"github.com/rifflock/lfshook"
-	logrus "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
+	"os"
+	"runtime"
+	"sync"
 )
 
 var logger *logrus.Logger
 var verbosity = logrus.InfoLevel
+var once sync.Once
 
 func GetLogger(module string) *logrus.Logger {
+    once.Do(func(){
+    	getLogger(module)
+	})
+    return logger
+}
+
+func getLogger(module string) {
 	if logger != nil {
-		return logger
+		return
 	}
 
-	path := "/tmp/pchain.%Y%m%d-%H.log"
+	dir , err := initLogDir()
+	if err != nil {
+		fmt.Println("initLogDir error")
+		syscall.Exit(-1)
+	}
+
+	fmt.Printf("log directory %s\r\n", dir)
+	path := dir + "pchain.%Y%m%d-%H.log"
+
 	writer, err := rotatelogs.New(
 		path,
 		rotatelogs.WithLinkName(path),
@@ -33,8 +52,12 @@ func GetLogger(module string) *logrus.Logger {
 	}
 
 	logger = logrus.New()
-	logger.Formatter = &logrus.TextFormatter{}
 	logger.Level = verbosity
+	if runtime.GOOS == "windows"{
+	    logger.Formatter = &logrus.TextFormatter{DisableColors:true}
+	} else {
+		logger.Formatter = &logrus.TextFormatter{}
+	}
 
 	filelineHook := NewHook()
 	filelineHook.Field = "file" // Customize source field name
@@ -52,7 +75,7 @@ func GetLogger(module string) *logrus.Logger {
 		&logrus.TextFormatter{},
 	))
 
-	return logger
+	return
 }
 
 func SetVerbosity(level logrus.Level) {
@@ -64,4 +87,31 @@ func SetVerbosity(level logrus.Level) {
 
 func init() {
 	GetLogger("main")
+}
+
+func initLogDir() (string, error){
+	path := "";
+	if runtime.GOOS == "windows" {
+		path = ".\\log\\"
+	} else {
+		path = "/tmp/pchain/log/"
+	}
+
+	_, err := os.Stat(path)
+	if err == nil {
+		return path, nil
+	}
+
+	if os.IsNotExist(err) {
+        err = os.MkdirAll(path, os.ModePerm)
+        if err == nil {
+        	return path, nil
+		} else {
+			fmt.Println("os mkdir error")
+			return "", err
+		}
+	}
+
+
+	return "", err
 }

@@ -302,7 +302,7 @@ func (c *StateObject) AddLockedBalance(amount *big.Int) {
 
 	fmt.Printf("StateObject_AddLockedBalance : value after lock: addr %x balance %d\n", c.Address(), c.LockedBalance())
 
-	logger.Errorf("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.LockedBalance(), amount)
+	logger.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.LockedBalance(), amount)
 
 }
 

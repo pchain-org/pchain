@@ -49,6 +49,40 @@ func deriveSigner(V *big.Int) Signer {
 	}
 }
 
+type OriTransaction struct {
+	data oritxdata
+	// caches
+	hash atomic.Value
+	size atomic.Value
+	from atomic.Value
+}
+
+type oritxdata struct {
+	AccountNonce    uint64
+	Price, GasLimit *big.Int
+	Recipient       *common.Address `rlp:"nil"` // nil means contract creation
+	Amount          *big.Int
+	//Type            uint64
+	Payload         []byte
+	//ExtendTxData 	*ExtendTxData
+	V               *big.Int // signature
+	R, S            *big.Int // signature
+}
+
+type jsonOriTransaction struct {
+	Hash         *common.Hash            `json:"hash"`
+	AccountNonce *hexutil.Uint64         `json:"nonce"`
+	Price        *hexutil.Big            `json:"gasPrice"`
+	GasLimit     *hexutil.Big            `json:"gas"`
+	Recipient    *common.Address         `json:"to"`
+	Amount       *hexutil.Big            `json:"value"`
+	//Type         *hexutil.Uint64         `json:"type"`
+	Payload      *hexutil.Bytes          `json:"input"`
+	V            *hexutil.Big            `json:"v"`
+	R            *hexutil.Big            `json:"r"`
+	S            *hexutil.Big            `json:"s"`
+}
+
 type Transaction struct {
 	data txdata
 	// caches
@@ -87,6 +121,34 @@ type jsonTransaction struct {
 	V            *hexutil.Big            `json:"v"`
 	R            *hexutil.Big            `json:"r"`
 	S            *hexutil.Big            `json:"s"`
+}
+
+func OriToTransaction(oriTx *OriTransaction) *Transaction {
+
+	if oriTx == nil {
+		return nil
+	}
+
+	tx := &Transaction {
+		data : txdata{
+			AccountNonce: oriTx.data.AccountNonce,
+			Price: oriTx.data.Price,
+			GasLimit: oriTx.data.GasLimit,
+			Recipient: oriTx.data.Recipient,
+			Amount: oriTx.data.Amount,
+			Type: 0,
+			Payload: oriTx.data.Payload[:],
+			ExtendTxData: &ExtendTxData{},
+			V: oriTx.data.V,
+			R: oriTx.data.R,
+			S: oriTx.data.S,
+		},
+		hash : oriTx.hash,
+		size : oriTx.size,
+		from : oriTx.from,
+	}
+
+	return tx
 }
 
 func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
@@ -194,6 +256,22 @@ func isProtectedV(V *big.Int) bool {
 	}
 	// anything not 27 or 28 are considered unprotected
 	return true
+}
+
+// DecodeRLP implements rlp.Encoder
+func (tx *OriTransaction) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, &tx.data)
+}
+
+// DecodeRLP implements rlp.Decoder
+func (tx *OriTransaction) DecodeRLP(s *rlp.Stream) error {
+	_, size, _ := s.Kind()
+	err := s.Decode(&tx.data)
+	if err == nil {
+		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
+	}
+
+	return err
 }
 
 // DecodeRLP implements rlp.Encoder

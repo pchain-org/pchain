@@ -67,6 +67,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs      []*types.Log
 		gp           = new(GasPool).AddGas(block.GasLimit())
 	)
+
 	logger.Infof("Process() 0, totalUsedGas is %v\n", totalUsedGas)
 	// Mutate the the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
@@ -148,13 +149,14 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header,
 			tx *types.Transaction, usedGas *big.Int, totalUsedMoney *big.Int, cfg vm.Config) (*types.Receipt, *big.Int, error) {
 
-	etd := tx.ExtendTxData()
 
+	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	etd := tx.ExtendTxData()
 	if  etd == nil || etd.FuncName == "" {
-		msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
-		if err != nil {
-			return nil, nil, err
-		}
 
 		// Create a new context to be used in the EVM environment
 		context := NewEVMContext(msg, header, bc)
@@ -213,6 +215,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool,
 		receipt.Logs = statedb.GetLogs(tx.Hash())
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
+		statedb.SetNonce(msg.From(), statedb.GetNonce(msg.From())+1)
 		logger.Debug(receipt)
 		logger.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
 

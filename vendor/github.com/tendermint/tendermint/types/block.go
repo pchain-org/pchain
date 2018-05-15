@@ -11,7 +11,6 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
-	//"github.com/tendermint/go-data"
 )
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
@@ -42,8 +41,8 @@ func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
 			Time:           time.Now(),
 			NumTxs:         len(txs),
 			LastBlockID:    prevBlockID,
-			ValidatorsHash: valHash,
-			AppHash:        appHash, // state merkle root of txs from the previous block.
+			ValidatorsHash: BytesToHash160(valHash),
+			AppHash:        BytesToHash256(appHash), // state merkle root of txs from the previous block.
 		},
 		LastCommit: commit,
 		Data: data,
@@ -79,7 +78,7 @@ func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID B
 	if !b.LastBlockID.Equals(lastBlockID) {
 		return errors.New(Fmt("Wrong Block.Header.LastBlockID.  Expected %v, got %v", lastBlockID, b.LastBlockID))
 	}
-	if !bytes.Equal(b.LastCommitHash, b.LastCommit.Hash()) {
+	if !bytes.Equal(b.LastCommitHash.Bytes(), b.LastCommit.Hash().Bytes()) {
 		return errors.New(Fmt("Wrong Block.Header.LastCommitHash.  Expected %X, got %X", b.LastCommitHash, b.LastCommit.Hash()))
 	}
 	if b.Header.Height != 1 {
@@ -87,7 +86,7 @@ func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID B
 			return err
 		}
 	}
-	if !bytes.Equal(b.DataHash, b.Data.Hash()) {
+	if !bytes.Equal(b.DataHash.Bytes(), b.Data.Hash().Bytes()) {
 		return errors.New(Fmt("Wrong Block.Header.DataHash.  Expected %X, got %X", b.DataHash, b.Data.Hash()))
 	}
 	/*
@@ -100,20 +99,20 @@ func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID B
 }
 
 func (b *Block) FillHeader() {
-	if b.LastCommitHash == nil {
+	if bytes.Equal(b.LastCommitHash.Bytes(), EMPTY_HASH160.Bytes()) {
 		b.LastCommitHash = b.LastCommit.Hash()
 	}
-	if b.DataHash == nil {
+	if bytes.Equal(b.DataHash.Bytes(), EMPTY_HASH160.Bytes()) {
 		b.DataHash = b.Data.Hash()
 	}
 }
 
 // Computes and returns the block hash.
 // If the block is incomplete, block hash is nil for safety.
-func (b *Block) Hash() []byte {
+func (b *Block) Hash() Hash160 {
 	// fmt.Println(">>", b.Data)
 	if b == nil || b.Header == nil || b.Data == nil || b.LastCommit == nil {
-		return nil
+		return EMPTY_HASH160
 	}
 	b.FillHeader()
 	return b.Header.Hash()
@@ -126,14 +125,14 @@ func (b *Block) MakePartSet(partSize int) *PartSet {
 // Convenience.
 // A nil block never hashes to anything.
 // Nothing hashes to a nil hash.
-func (b *Block) HashesTo(hash []byte) bool {
+func (b *Block) HashesTo(hash Hash160) bool {
 	if len(hash) == 0 {
 		return false
 	}
 	if b == nil {
 		return false
 	}
-	return bytes.Equal(b.Hash(), hash)
+	return bytes.Equal(b.Hash().Bytes(), hash.Bytes())
 }
 
 func (b *Block) String() string {
@@ -173,18 +172,18 @@ type Header struct {
 	Time           time.Time `json:"time"`
 	NumTxs         int       `json:"num_txs"` // XXX: Can we get rid of this?
 	LastBlockID    BlockID   `json:"last_block_id"`
-	LastCommitHash []byte    `json:"last_commit_hash"` // commit from validators from the last block
-	DataHash       []byte    `json:"data_hash"`        // transactions
-	ValidatorsHash []byte    `json:"validators_hash"`  // validators for the current block
-	AppHash        []byte    `json:"app_hash"`         // state after txs from the previous block
+	LastCommitHash Hash160    `json:"last_commit_hash"` // commit from validators from the last block
+	DataHash       Hash160    `json:"data_hash"`        // transactions
+	ValidatorsHash Hash160    `json:"validators_hash"`  // validators for the current block
+	AppHash        Hash256    `json:"app_hash"`         // state after txs from the previous block
 }
 
 // NOTE: hash is nil if required fields are missing.
-func (h *Header) Hash() []byte {
+func (h *Header) Hash() Hash160 {
 	if len(h.ValidatorsHash) == 0 {
-		return nil
+		return EMPTY_HASH160
 	}
-	return merkle.SimpleHashFromMap(map[string]interface{}{
+	return BytesToHash160(merkle.SimpleHashFromMap(map[string]interface{}{
 		"ChainID":     h.ChainID,
 		"Height":      h.Height,
 		"Time":        h.Time,
@@ -194,7 +193,7 @@ func (h *Header) Hash() []byte {
 		"Data":        h.DataHash,
 		"Validators":  h.ValidatorsHash,
 		"App":         h.AppHash,
-	})
+	}))
 }
 
 func (h *Header) StringIndented(indent string) string {
@@ -336,7 +335,7 @@ func (commit *Commit) ValidateBasic() error {
 	return nil
 }
 
-func (commit *Commit) Hash() []byte {
+func (commit *Commit) Hash() Hash160 {
 	if commit.hash == nil {
 		bs := make([]interface{}, len(commit.Precommits))
 		for i, precommit := range commit.Precommits {
@@ -344,7 +343,7 @@ func (commit *Commit) Hash() []byte {
 		}
 		commit.hash = merkle.SimpleHashFromBinaries(bs)
 	}
-	return commit.hash
+	return BytesToHash160(commit.hash)
 }
 
 func (commit *Commit) StringIndented(indent string) string {
@@ -374,7 +373,7 @@ type Data struct {
 	Txs Txs `json:"txs"`
 
 	// Volatile
-	hash []byte
+	hash Hash160
 }
 
 type ExData struct {
@@ -382,7 +381,7 @@ type ExData struct {
 	BlockExData []byte `json:"ex_data"`
 
 	// Volatile
-	hash []byte
+	hash Hash160
 }
 
 func (exData *ExData) StringIndented(indent string) string {
@@ -397,8 +396,8 @@ func (exData *ExData) StringIndented(indent string) string {
 		indent, exData.hash)
 }
 
-func (data *Data) Hash() []byte {
-	if data.hash == nil {
+func (data *Data) Hash() Hash160 {
+	if bytes.Equal(data.hash.Bytes(), EMPTY_HASH160.Bytes()) {
 		data.hash = data.Txs.Hash() // NOTE: leaves of merkle tree are TxIDs
 	}
 	return data.hash
@@ -426,7 +425,7 @@ func (data *Data) StringIndented(indent string) string {
 //--------------------------------------------------------------------------------
 
 type BlockID struct {
-	Hash        []byte        `json:"hash"`
+	Hash        Hash160        `json:"hash"`
 	PartsHeader PartSetHeader `json:"parts"`
 }
 
@@ -435,12 +434,12 @@ func (blockID BlockID) IsZero() bool {
 }
 
 func (blockID BlockID) Equals(other BlockID) bool {
-	return bytes.Equal(blockID.Hash, other.Hash) &&
+	return bytes.Equal(blockID.Hash.Bytes(), other.Hash.Bytes()) &&
 		blockID.PartsHeader.Equals(other.PartsHeader)
 }
 
 func (blockID BlockID) Key() string {
-	return string(blockID.Hash) + string(wire.BinaryBytes(blockID.PartsHeader))
+	return string(blockID.Hash.Bytes()) + string(wire.BinaryBytes(blockID.PartsHeader))
 }
 
 func (blockID BlockID) WriteSignBytes(w io.Writer, n *int, err *error) {
