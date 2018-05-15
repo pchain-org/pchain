@@ -11,6 +11,7 @@ import (
 	etm "github.com/pchain/ethermint/cmd/ethermint"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/pchain/chain"
+	"github.com/ethereum/go-ethereum/cmd/geth"
 )
 
 
@@ -43,6 +44,13 @@ func main() {
 			Description: "Initialize the files",
 		},
 
+		// See consolecmd.go:
+		gethmain.ConsoleCommand,
+		gethmain.AttachCommand,
+		gethmain.JavascriptCommand,
+
+		gethmain.WalletCommand,
+		gethmain.AccountCommand,
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 
