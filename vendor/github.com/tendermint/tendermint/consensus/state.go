@@ -1826,6 +1826,7 @@ func (cs *ConsensusState) BLSVerifySignAggr(signAggr *types.SignAggr) (bool, err
 			if otherPubKey,ok := validators[i].PubKey.(crypto.BLSPubKey); ok {
 				if first {
 					aggrPubKey.MulWithSet1(otherPubKey)
+					first = false
 				} else {
 					aggrPubKey.Mul(otherPubKey)
 				}
