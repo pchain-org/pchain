@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+const TRANSACTION_NUM_LIMIT = 200000
 
 // used by Backend to call tendermint rpc endpoints
 // TODO: replace with HttpClient https://github.com/tendermint/go-rpc/issues/8
@@ -280,15 +281,15 @@ func (p *pending) preCheck(blockchain *core.BlockChain, config *eth.Config, tx *
 
 func (w *work) preCheck(blockchain *core.BlockChain, config *eth.Config, blockHash common.Hash, tx *ethTypes.Transaction) error {
 
-
-	if(w.txCount.Cmp(big.NewInt(1000)) > 0) {
+	/*
+	if(w.txCount.Cmp(big.NewInt(TRANSACTION_NUM_LIMIT)) > 0) {
 		return fmt.Errorf("transactions are too much for one block round, reached 1000 tx")
 	}
-
+	*/
 	w.txCount.Add(w.txCount, big.NewInt(1))
+
 	fmt.Printf("(w *work) preCheck(), checked %v transaction in one block\n", w.txCount)
 
-	/*
 	msg, err := tx.AsMessage(ethTypes.MakeSigner(config.ChainConfig, w.header.Number))
 	if err != nil {
 		return err
@@ -339,7 +340,7 @@ func (w *work) preCheck(blockchain *core.BlockChain, config *eth.Config, blockHa
 	}
 	fmt.Printf("(w *work) preCheck(); after sub, senderAddress %s has balance %v, gaslimit is now %v\n",
 		senderAddress, w.pcBalance[senderAccount], w.pcGp, mgas, mgval)
-	*/
+
 	return nil
 }
 

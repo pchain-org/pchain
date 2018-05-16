@@ -226,9 +226,9 @@ func createGenesisDoc(coreGenesis *core.Genesis) error {
 			},
 			CurrentEpoch: types.OneEpochDoc{
 				Number :		"0",
-				RewardPerBlock :	"1666666666666666666666667",
+				RewardPerBlock :	"184133873456790100",
 				StartBlock :		"0",
-				EndBlock :		"1295999",
+				EndBlock :		"2592000",
 				StartTime :		time.Now().Format(time.RFC3339Nano),
 				EndTime :		"0",//not accurate for current epoch
 				BlockGenerated :	"0",

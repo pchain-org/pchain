@@ -46,7 +46,7 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 	abciResponses := RefreshABCIResponses(block, state, eventCache, proxyAppConn)
 
 	// Begin block
-	err := proxyAppConn.BeginBlockSync(block.Hash(), types.TM2PB.Header(block.Header))
+	err := proxyAppConn.BeginBlockSync(block.Hash().Bytes(), types.TM2PB.Header(block.Header))
 	if err != nil {
 		logger.Warn("Error in proxyAppConn.BeginBlock", " error:", err)
 		return nil, err

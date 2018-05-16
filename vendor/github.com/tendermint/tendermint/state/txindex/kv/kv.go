@@ -49,7 +49,7 @@ func (txi *TxIndex) AddBatch(b *txindex.Batch) error {
 	storeBatch := txi.store.NewBatch()
 	for _, result := range b.Ops {
 		rawBytes := wire.BinaryBytes(&result)
-		storeBatch.Set(result.Tx.Hash(), rawBytes)
+		storeBatch.Set(result.Tx.Hash().Bytes(), rawBytes)
 	}
 	storeBatch.Write()
 	return nil

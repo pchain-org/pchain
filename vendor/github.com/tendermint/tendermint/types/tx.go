@@ -14,24 +14,24 @@ type Tx []byte
 // Tx has no types at this level, so just length-prefixed.
 // Alternatively, it may make sense to add types here and let
 // []byte be type 0x1 so we can have versioned txs if need be in the future.
-func (tx Tx) Hash() []byte {
-	return merkle.SimpleHashFromBinary(tx)
+func (tx Tx) Hash() Hash160 {
+	return BytesToHash160(merkle.SimpleHashFromBinary(tx))
 }
 
 type Txs []Tx
 
-func (txs Txs) Hash() []byte {
+func (txs Txs) Hash() Hash160 {
 	// Recursive impl.
 	// Copied from go-merkle to avoid allocations
 	switch len(txs) {
 	case 0:
-		return nil
+		return Hash160{}
 	case 1:
 		return txs[0].Hash()
 	default:
 		left := Txs(txs[:(len(txs)+1)/2]).Hash()
 		right := Txs(txs[(len(txs)+1)/2:]).Hash()
-		return merkle.SimpleHashFromTwoHashes(left, right)
+		return BytesToHash160(merkle.SimpleHashFromTwoHashes(left.Bytes(), right.Bytes()))
 	}
 }
 
@@ -48,7 +48,7 @@ func (txs Txs) Index(tx Tx) int {
 // Index returns the index of this transaction hash in the list, or -1 if not found
 func (txs Txs) IndexByHash(hash []byte) int {
 	for i := range txs {
-		if bytes.Equal(txs[i].Hash(), hash) {
+		if bytes.Equal(txs[i].Hash().Bytes(), hash) {
 			return i
 		}
 	}
@@ -64,7 +64,7 @@ func (txs Txs) Proof(i int) TxProof {
 	l := len(txs)
 	hashables := make([]merkle.Hashable, l)
 	for i := 0; i < l; i++ {
-		hashables[i] = txs[i]
+		hashables[i] = AdaptTx{Tx : txs[i]}
 	}
 	root, proofs := merkle.SimpleProofsFromHashables(hashables)
 
@@ -77,6 +77,14 @@ func (txs Txs) Proof(i int) TxProof {
 	}
 }
 
+type AdaptTx struct {
+	Tx Tx
+}
+
+func (at AdaptTx) Hash() []byte {
+	return merkle.SimpleHashFromBinary(at.Tx)
+}
+
 type TxProof struct {
 	Index, Total int
 	RootHash     []byte
@@ -85,7 +93,7 @@ type TxProof struct {
 }
 
 func (tp TxProof) LeafHash() []byte {
-	return tp.Data.Hash()
+	return tp.Data.Hash().Bytes()
 }
 
 // Validate returns nil if it matches the dataHash, and is internally consistent

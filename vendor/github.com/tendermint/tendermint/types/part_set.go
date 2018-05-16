@@ -58,11 +58,11 @@ func (part *Part) StringIndented(indent string) string {
 
 type PartSetHeader struct {
 	Total int    `json:"total"`
-	Hash  []byte `json:"hash"`
+	Hash  Hash160 `json:"hash"`
 }
 
 func (psh PartSetHeader) String() string {
-	return fmt.Sprintf("%v:%X", psh.Total, Fingerprint(psh.Hash))
+	return fmt.Sprintf("%v:%X", psh.Total, Fingerprint(psh.Hash.Bytes()))
 }
 
 func (psh PartSetHeader) IsZero() bool {
@@ -70,7 +70,7 @@ func (psh PartSetHeader) IsZero() bool {
 }
 
 func (psh PartSetHeader) Equals(other PartSetHeader) bool {
-	return psh.Total == other.Total && bytes.Equal(psh.Hash, other.Hash)
+	return psh.Total == other.Total && bytes.Equal(psh.Hash.Bytes(), other.Hash.Bytes())
 }
 
 func (psh PartSetHeader) WriteSignBytes(w io.Writer, n *int, err *error) {
@@ -81,7 +81,7 @@ func (psh PartSetHeader) WriteSignBytes(w io.Writer, n *int, err *error) {
 
 type PartSet struct {
 	total int
-	hash  []byte
+	hash  Hash160
 
 	mtx           sync.Mutex
 	parts         []*Part
@@ -113,7 +113,7 @@ func NewPartSetFromData(data []byte, partSize int) *PartSet {
 	}
 	return &PartSet{
 		total:         total,
-		hash:          root,
+		hash:          BytesToHash160(root),
 		parts:         parts,
 		partsBitArray: partsBitArray,
 		count:         total,
@@ -156,9 +156,9 @@ func (ps *PartSet) BitArray() *BitArray {
 	return ps.partsBitArray.Copy()
 }
 
-func (ps *PartSet) Hash() []byte {
+func (ps *PartSet) Hash() Hash160 {
 	if ps == nil {
-		return nil
+		return EMPTY_HASH160
 	}
 	return ps.hash
 }
@@ -167,7 +167,7 @@ func (ps *PartSet) HashesTo(hash []byte) bool {
 	if ps == nil {
 		return false
 	}
-	return bytes.Equal(ps.hash, hash)
+	return bytes.Equal(ps.hash.Bytes(), hash)
 }
 
 func (ps *PartSet) Count() int {
@@ -200,7 +200,7 @@ func (ps *PartSet) AddPart(part *Part, verify bool) (bool, error) {
 
 	// Check hash proof
 	if verify {
-		if !part.Proof.Verify(part.Index, ps.total, part.Hash(), ps.Hash()) {
+		if !part.Proof.Verify(part.Index, ps.total, part.Hash(), ps.Hash().Bytes()) {
 			return false, ErrPartSetInvalidProof
 		}
 	}
