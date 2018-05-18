@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"os"
-	"github.com/tendermint/abci/server"
 	cfg "github.com/tendermint/go-config"
 	"github.com/pchain/ethermint/ethereum"
 	"github.com/pchain/ethermint/version"
@@ -23,6 +22,8 @@ import (
 	"time"
 
 	"github.com/pchain/p2p"
+	"github.com/tendermint/go-rpc/server"
+	"github.com/tendermint/tendermint/proxy"
 )
 
 const (
@@ -46,9 +47,12 @@ func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chai
 	config := etm.GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
+	// Create Tendermint RPC Channel Listener first
+	listener := rpcserver.NewChannelListener()
+
 	//always start ethereum
 	fmt.Println("ethereum.MakeSystemNode")
-	stack := ethereum.MakeSystemNode(chainId, version.Version, config.GetString(RpcLaddrFlag.Name), ctx)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, listener, ctx)
 	chain.EthNode = stack
 
 	rpcHandler, err := stack.GetRPCHandler()
@@ -75,7 +79,7 @@ func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chai
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	fmt.Println("tm node")
-	chain.TdmNode = MakeTendermintNode(config, pNode)
+	chain.TdmNode = MakeTendermintNode(config, pNode, listener)
 
 	return chain
 }
@@ -94,9 +98,12 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 	config := etm.GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
+	// Create Tendermint RPC Channel Listener first
+	listener := rpcserver.NewChannelListener()
+
 	//always start ethereum
 	fmt.Println("chainId: %s, ethereum.MakeSystemNode", chainId)
-	stack := ethereum.MakeSystemNode(chainId, version.Version, config.GetString(RpcLaddrFlag.Name), ctx)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, listener, ctx)
 	chain.EthNode = stack
 
 	rpcHandler, err := stack.GetRPCHandler()
@@ -125,7 +132,7 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	fmt.Println("tm node")
-	tdmNode := MakeTendermintNode(config, pNode)
+	tdmNode := MakeTendermintNode(config, pNode, listener)
 	if tdmNode == nil {
 		fmt.Println("make tendermint node failed")
 		return nil
@@ -141,11 +148,6 @@ func StartChain(chain *Chain, quit chan int) error {
 	go func(){
 		fmt.Println("ethermintCmd->utils.StartNode(stack)")
 		utils.StartNode1(chain.EthNode)
-
-
-		config := chain.Config
-		addr := config.GetString("proxy_app")
-		abci := config.GetString("abci")
 
 		stack := chain.EthNode
 		var backend *ethereum.Backend
@@ -170,12 +172,19 @@ func StartChain(chain *Chain, quit chan int) error {
 		}
 		chain.EtmApp = etmApp
 
+		// Create ABCI Local Client Creator
+		proxy.SetAppClientCreator(chain.TdmNode.ProxyApp(), proxy.NewLocalClientCreator(etmApp))
+
+		/* ABCI Server is no longer required
+		addr := config.GetString("proxy_app")
+		abci := config.GetString("abci")
 		abciServer, err := server.NewServer(addr, abci, etmApp)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
 		chain.AbciServer = abciServer
+		*/
 
 		fmt.Println("tm node")
 		err = chain.TdmNode.OnStart1()
@@ -233,7 +242,7 @@ func testEthereumApi() {
 	fmt.Printf("testEthereumApi: balance is: %x\n", balance)
 }
 
-func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P) *tdm.Node{
+func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P, cl *rpcserver.ChannelListener) *tdm.Node {
 
 	genDocFile := config.GetString("genesis_file")
 	if !cmn.FileExists(genDocFile) {
@@ -259,7 +268,7 @@ func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P) *tdm.Node{
 		}
 	}
 
-	return tdm.NewNodeNotStart(config, pNode.Switch(), pNode.AddrBook())
+	return tdm.NewNodeNotStart(config, pNode.Switch(), pNode.AddrBook(), cl)
 }
 
 func CreateChildChain(ctx *cli.Context, chainId string, balStr string) error{

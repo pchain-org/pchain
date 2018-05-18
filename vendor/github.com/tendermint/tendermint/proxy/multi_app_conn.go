@@ -20,6 +20,13 @@ func NewAppConns(config cfg.Config, clientCreator ClientCreator, handshaker Hand
 	return NewMultiAppConn(config, clientCreator, handshaker)
 }
 
+// SetAppClientCreator Set the Client Creator, Note: invoke this Before the AppConns Start
+func SetAppClientCreator(proxyApp AppConns, clientCreator ClientCreator) {
+	if !proxyApp.IsRunning() {
+		proxyApp.(*multiAppConn).clientCreator = clientCreator
+	}
+}
+
 //-----------------------------
 // multiAppConn implements AppConns
 

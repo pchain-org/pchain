@@ -2,21 +2,17 @@ package tendermint
 
 import (
 	"bytes"
-	"io/ioutil"
 	"errors"
 	"net"
 	"net/http"
 	"strings"
-	"time"
-
 	abci "github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
-	crypto "github.com/tendermint/go-crypto"
+	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
-	p2p "github.com/tendermint/go-p2p"
+	"github.com/tendermint/go-p2p"
 
-	rpcserver "github.com/tendermint/go-rpc/server"
 	bc "github.com/tendermint/tendermint/blockchain"
 	"github.com/tendermint/tendermint/consensus"
 	mempl "github.com/tendermint/tendermint/mempool"
@@ -31,12 +27,14 @@ import (
 
 	_ "net/http/pprof"
 	"fmt"
-	"github.com/pchain/ethermint/app"
 	"github.com/tendermint/go-logger"
 	//"github.com/pchain/ethermint/utils"
 	ep "github.com/tendermint/tendermint/epoch"
-	st "github.com/tendermint/tendermint/state"
+	"io/ioutil"
 	"os"
+	"github.com/pchain/ethermint/app"
+	"time"
+	"github.com/tendermint/go-rpc/server"
 )
 
 var log = logger.New("module", "node")
@@ -231,11 +229,12 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	return node
 }
 
-func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook) *Node {
+func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, cl *rpcserver.ChannelListener) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
 	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
-	clientCreator := proxy.DefaultClientCreator(config)
+	// ClientCreator will be instantiated later after ethermint proxyapp created
+	// clientCreator := proxy.DefaultClientCreator(config)
 
 	// Get BlockStore
 	blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
@@ -255,10 +254,14 @@ func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook) 
 
 	// Create the proxyApp, which manages connections (consensus, mempool, query)
 	// and sync tendermint and the app by replaying any necessary blocks
-	proxyApp := proxy.NewAppConns(config, clientCreator, consensus.NewHandshaker(config, state, blockStore))
+	proxyApp := proxy.NewAppConns(config, nil, consensus.NewHandshaker(config, state, blockStore))
 
 	// Make event switch
 	eventSwitch := types.NewEventSwitch()
+
+	// Initial the RPC Listeners, the 1st one must be channel listener
+	rpcListeners := make([]net.Listener, 1)
+	rpcListeners[0] = cl
 
 	node := &Node{
 		config:        config,
@@ -271,9 +274,11 @@ func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook) 
 		sw:            sw,
 		addrBook:      addrBook,
 
-		evsw:             eventSwitch,
-		blockStore:       blockStore,
-		proxyApp:         proxyApp,
+		evsw:          eventSwitch,
+		blockStore:    blockStore,
+		proxyApp:      proxyApp,
+
+		rpcListeners:  rpcListeners,
 	}
 	node.BaseService = *cmn.NewBaseService(log, "Node", node)
 	return node
@@ -362,13 +367,13 @@ func (n *Node) OnStart1() error {
 	n.txIndexer = txIndexer
 
 	// Run the RPC server
-	if n.config.GetString("rpc_laddr") != "" {
-		listeners, err := n.StartRPC()
+	//if n.config.GetString("rpc_laddr") != "" {
+		_, err = n.StartRPC()
 		if err != nil {
 			return err
 		}
-		n.rpcListeners = listeners
-	}
+		//n.rpcListeners = listeners
+	//}
 
 	return nil
 }
@@ -462,6 +467,14 @@ func (n *Node) ConfigureRPC() {
 
 func (n *Node) StartRPC() ([]net.Listener, error) {
 	n.ConfigureRPC()
+
+	// We are using Channel Server instead of Http/Websocket Server
+	cl := n.rpcListeners[0]
+	mux := http.NewServeMux()
+	rpcserver.RegisterRPCFuncs(mux, rpccore.Routes)
+	rpcserver.StartChannelServer(cl, mux)
+
+	/*
 	listenAddrs := strings.Split(n.config.GetString("rpc_laddr"), ",")
 
 	// we may expose the rpc over both a unix and tcp socket
@@ -477,6 +490,7 @@ func (n *Node) StartRPC() ([]net.Listener, error) {
 		}
 		listeners[i] = listener
 	}
+	*/
 
 	// we expose a simplified api over grpc for convenience to app devs
 	grpcListenAddr := n.config.GetString("grpc_laddr")
@@ -485,10 +499,10 @@ func (n *Node) StartRPC() ([]net.Listener, error) {
 		if err != nil {
 			return nil, err
 		}
-		listeners = append(listeners, listener)
+		n.rpcListeners = append(n.rpcListeners, listener)
 	}
 
-	return listeners, nil
+	return n.rpcListeners, nil
 }
 
 func (n *Node) BlockStore() *bc.BlockStore {
@@ -524,9 +538,9 @@ func (n *Node) ProxyApp() proxy.AppConns {
 	return n.proxyApp
 }
 
-func InitStateAndEpoch(config cfg.Config, stateDB dbm.DB, epochDB dbm.DB) (state *st.State, epoch *ep.Epoch) {
+func InitStateAndEpoch(config cfg.Config, stateDB dbm.DB, epochDB dbm.DB) (state *sm.State, epoch *ep.Epoch) {
 
-	state = st.LoadState(stateDB)
+	state = sm.LoadState(stateDB)
 	if state == nil { //first run, generate state and epoch from genesis doc
 
 		genDocFile := config.GetString("genesis_file")
@@ -544,7 +558,7 @@ func InitStateAndEpoch(config cfg.Config, stateDB dbm.DB, epochDB dbm.DB) (state
 			cmn.PanicSanity(cmn.Fmt("InitStateAndEpoch(), Genesis doc parse json error: %v", err))
 		}
 
-		state = st.MakeGenesisState(stateDB, genDoc)
+		state = sm.MakeGenesisState(stateDB, genDoc)
 		state.Save()
 
 		rewardScheme := ep.MakeRewardScheme(epochDB, &genDoc.RewardScheme)

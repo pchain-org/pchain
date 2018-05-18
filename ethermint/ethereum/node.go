@@ -11,12 +11,13 @@ import (
 
 	"github.com/tendermint/go-rpc/client"
 	"path/filepath"
+	"github.com/tendermint/go-rpc/server"
 )
 
 var clientIdentifier = "geth" // Client identifier to advertise over the network
 
 // MakeSystemNode sets up a local node and configures the services to launch
-func MakeSystemNode(chainId, version, rpcuri string, ctx *cli.Context) *node.Node {
+func MakeSystemNode(chainId, version string, cl *rpcserver.ChannelListener, ctx *cli.Context) *node.Node {
 	params.TargetGasLimit = common.String2Big(ctx.GlobalString(utils.TargetGasLimitFlag.Name))
 
 	// Configure the node's service container
@@ -67,7 +68,7 @@ func MakeSystemNode(chainId, version, rpcuri string, ctx *cli.Context) *node.Nod
 	}
 
 	if err := stack.Register(func(nsc *node.ServiceContext) (node.Service, error) {
-		return NewBackend(nsc, ethConf, rpcclient.NewURIClient(rpcuri))
+		return NewBackend(nsc, ethConf, rpcclient.NewChannelClient(cl))
 	}); err != nil {
 		utils.Fatalf("Failed to register the TMSP application service: %v", err)
 	}
