@@ -600,7 +600,8 @@ OUTER_LOOP:
 
 		// Send Proposal && ProposalPOL BitArray?
 		if rs.Proposal != nil && !prs.Proposal {
-			fmt.Printf("gossipDataRoutine: Validator (pkey %v proposr %v) send proposal (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetPubKey(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round, peer.PeerKey())
+			//fmt.Printf("gossipDataRoutine: Validator (pkey %v proposr %v) send proposal (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetPubKey(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round, peer.PeerKey())
+			fmt.Printf("gossipDataRoutine: Validator (proposer %v) send proposal (height %d round %d) to peer %v\n", conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round, peer.PeerKey())
 
 			// Proposal: share the proposal metadata with peer.
 			{
@@ -664,7 +665,7 @@ OUTER_LOOP:
 		if rs.PrevoteMaj23SignAggr != nil && !prs.PrevoteMaj23SignAggr {
 			logger.Debug(Fmt("gossipDataRoutine: Validator (addr %v proposr %v) send prevoteAggr (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round))
 
-			fmt.Printf("The prevote Maj23SignAggr so send : %#v\n", rs.PrevoteMaj23SignAggr)
+			//fmt.Printf("The prevote Maj23SignAggr so send : %#v\n", rs.PrevoteMaj23SignAggr)
 
 			// share the Prevote signature aggregation with peer.
 			{
@@ -680,7 +681,7 @@ OUTER_LOOP:
 		if rs.PrecommitMaj23SignAggr != nil && !prs.PrecommitMaj23SignAggr {
 			logger.Debug(Fmt("gossipDataRoutine: Validator (addr %v proposr %v) send prevoteAggr (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round))
 
-			fmt.Printf("The precommit Maj23SignAggr to send : %#v\n", rs.PrecommitMaj23SignAggr)
+			//fmt.Printf("The precommit Maj23SignAggr to send : %#v\n", rs.PrecommitMaj23SignAggr)
 
 			// share the Prevote signature aggregation with peer.
 			{
@@ -1111,7 +1112,7 @@ func (ps *PeerState) SetHasMaj23Votes(votesAggr *types.VotesAggr) {
 		ps.PrecommitMaj23PartsHeader = votesAggr.VotePartsHeader
 		ps.PrecommitMaj23Parts = NewBitArray(votesAggr.VotePartsHeader.Total)
 
-fmt.Printf("SetHasMaj23Votes: peer (%s) set up ps.PrecommitMaj23Parts, header %#v\n", ps.Peer.PeerKey(), ps.PrecommitMaj23PartsHeader)
+		//fmt.Printf("SetHasMaj23Votes: peer (%s) set up ps.PrecommitMaj23Parts, header %#v\n", ps.Peer.PeerKey(), ps.PrecommitMaj23PartsHeader)
 	} else {
 		panic(Fmt("Invalid VotesAggr type %d", votesAggr.Type))
 	}
@@ -1153,7 +1154,7 @@ fmt.Printf("enter SetHasMaj23PrecommitPart: part %d\n", index)
 
 // Received msg saying proposer has 2/3+ votes including the signature aggregation
 func (ps *PeerState) SetHasMaj23SignAggr(signAggr *types.SignAggr) {
-	fmt.Printf("enter SetHasMaj23SignAggr()\n")
+	logger.Debug("enter SetHasMaj23SignAggr()\n")
 
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()

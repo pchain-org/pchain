@@ -233,7 +233,8 @@ func (privVal *PrivValidator) GetPubKey() crypto.PubKey {
 func (privVal *PrivValidator) SignVote(chainID string, vote *Vote) error {
 	privVal.mtx.Lock()
 	defer privVal.mtx.Unlock()
-fmt.Printf("SignVote: %#v\n", SignBytes(chainID, vote)[0:7])
+
+	//fmt.Printf("SignVote: %#v\n", SignBytes(chainID, vote)[0:7])
 
 	signature, err := privVal.signBytesHRS(vote.Height, vote.Round, voteToStep(vote), SignBytes(chainID, vote))
 	if err != nil {

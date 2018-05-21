@@ -984,7 +984,7 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 		// send proposal and block parts on internal msg queue
 		cs.sendInternalMessage(msgInfo{&ProposalMessage{proposal}, ""})
 
-		logger.Debug(Fmt("defaultDecideProposal: Proposal to send is %#v\n", proposal))
+		//logger.Debug(Fmt("defaultDecideProposal: Proposal to send is %#v\n", proposal))
 		//logger.Debug(Fmt("ProposalMessage to send is %+v\n", msgInfo{&ProposalMessage{proposal}, ""}))
 
 		for i := 0; i < blockParts.Total(); i++ {
@@ -992,7 +992,6 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 			cs.sendInternalMessage(msgInfo{&BlockPartMessage{cs.Height, cs.Round, part}, ""})
 		}
 		logger.Info("Signed proposal", " height:", height, " round:", round, " proposal:", proposal)
-		//logger.Debug(Fmt("Signed proposal block: %v", block))
 	} else {
 		if !cs.replayMode {
 			logger.Warn("enterPropose: Error signing proposal", " height:", height, " round:", round, " error:", err)
@@ -1728,8 +1727,8 @@ func (cs *ConsensusState) addPrecommitsAggrPart(height int, part *types.Part, ve
 
 // -----------------------------------------------------------------------------
 func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
-	logger.Info("enter setMaj23SignAggr()")
-	logger.Info("Received SignAggr %#v\n", signAggr)
+	logger.Debug("enter setMaj23SignAggr()")
+	logger.Debug("Received SignAggr %#v\n", signAggr)
 
 	// Does not apply
 	if signAggr.Height != cs.Height || signAggr.Round != cs.Round {
@@ -1739,7 +1738,7 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 	maj23, err := cs.verifyMaj23SignAggr(signAggr)
 
 	if err != nil || maj23 == false {
-		logger.Info(Fmt("verifyMaj23SignAggr: Received 2/3+ prevotes, enter precommit\n"))
+		logger.Info(Fmt("verifyMaj23SignAggr: Invalid signature aggregation for prevotes\n"))
 		return ErrInvalidSignatureAggr
 	}
 
@@ -1768,16 +1767,12 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 	}
 
 	if signAggr.Type == types.VoteTypePrevote {
-		logger.Info(Fmt("setMaj23SignAggr: Received 2/3+ prevotes, enter precommit\n"))
-
-		logger.Debug(Fmt("setMaj23SignAggr: Received 2/3+ prevotes, enter precommit\n"))
+		logger.Info(Fmt("setMaj23SignAggr: Received 2/3+ prevotes for block %d, enter precommit\n", cs.Height))
 
 		cs.enterPrecommit(cs.Height, cs.Round)
 
 	} else if signAggr.Type == types.VoteTypePrecommit {
-		logger.Info(Fmt("setMaj23SignAggr: Received 2/3+ precommits, enter commit\n"))
-
-		logger.Debug(Fmt("setMaj23SignAggr: Received 2/3+ precommits, enter commit\n"))
+		logger.Info(Fmt("setMaj23SignAggr: Received 2/3+ precommits for block %d, enter commit\n", cs.Height))
 
 		// TODO : Shall go to this state?
 		// cs.tryFinalizeCommit(height)
@@ -1809,7 +1804,7 @@ func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) (bool, e
 }
 
 func (cs *ConsensusState) BLSVerifySignAggr(signAggr *types.SignAggr) (bool, error) {
-	fmt.Printf("enter BLSVerifySignAggr()\n")
+	logger.Debug("enter BLSVerifySignAggr()\n")
 
 	aggrPubKey := crypto.CreateBLSPubKey()
 	aggrPubKey.Set1()
@@ -2045,7 +2040,6 @@ func (cs *ConsensusState) signAddVote(type_ byte, hash []byte, header types.Part
 	if err == nil {
 		cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
 		logger.Info("Signed and pushed vote", " height:", cs.Height, " round:", cs.Round, " vote:", vote, " error:", err)
-		fmt.Printf("The vote is %s\n", vote.String())
 		return vote
 	} else {
 		//if !cs.replayMode {
