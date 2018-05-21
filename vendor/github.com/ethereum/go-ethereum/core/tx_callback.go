@@ -5,10 +5,22 @@ import (
 	"errors"
 	st "github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"sync"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/event"
 )
 
-type EtdValidateCb func(tx *types.Transaction, state *st.StateDB) error
-type EtdApplyCb func(tx *types.Transaction, state *st.StateDB) error
+
+type CrossChainHelper interface {
+	GetMutex() *sync.Mutex
+	GetTypeMutex() *event.TypeMux
+	CanCreateChildChain(from common.Address, chainId string) error
+	CreateChildChain(from common.Address, chainId string) error
+}
+
+
+type EtdValidateCb func(tx *types.Transaction, state *st.StateDB, cch CrossChainHelper) error
+type EtdApplyCb func(tx *types.Transaction, state *st.StateDB, cch CrossChainHelper) error
 
 var validateCbMap map[string]EtdValidateCb = make(map[string]EtdValidateCb)
 var applyCbMap    map[string]EtdApplyCb = make(map[string]EtdApplyCb)

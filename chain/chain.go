@@ -52,7 +52,7 @@ func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chai
 
 	//always start ethereum
 	fmt.Println("ethereum.MakeSystemNode")
-	stack := ethereum.MakeSystemNode(chainId, version.Version, listener, ctx)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, listener, ctx, GetCMInstance(ctx).cch)
 	chain.EthNode = stack
 
 	rpcHandler, err := stack.GetRPCHandler()
@@ -90,6 +90,7 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 
 	chainDir := ChainDir(ctx, chainId)
 	empty, err :=cmn.IsDirEmpty(chainDir)
+	fmt.Printf("chainDir is : %s, empty is %v\n", chainDir, empty)
 	if empty || err != nil{
 		fmt.Printf("directory %s not exist or with error %v\n", chainDir, err)
 		return nil
@@ -102,8 +103,8 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 	listener := rpcserver.NewChannelListener()
 
 	//always start ethereum
-	fmt.Println("chainId: %s, ethereum.MakeSystemNode", chainId)
-	stack := ethereum.MakeSystemNode(chainId, version.Version, listener, ctx)
+	fmt.Printf("chainId: %s, ethereum.MakeSystemNode", chainId)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, listener, ctx, GetCMInstance(ctx).cch)
 	chain.EthNode = stack
 
 	rpcHandler, err := stack.GetRPCHandler()

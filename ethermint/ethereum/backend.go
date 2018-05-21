@@ -77,10 +77,10 @@ const (
 )
 
 // New creates a new Backend
-func NewBackend(ctx *node.ServiceContext, config *eth.Config, client Client) (*Backend, error) {
+func NewBackend(ctx *node.ServiceContext, config *eth.Config, client Client, cch core.CrossChainHelper) (*Backend, error) {
 	p := &pending{commitMutex: &sync.Mutex{}}
 
-	ethereum, err := eth.New(ctx, config, p, client)
+	ethereum, err := eth.New(ctx, config, p, client, cch)
 	if err != nil {
 		return nil, err
 	}
@@ -347,18 +347,21 @@ func (w *work) preCheck(blockchain *core.BlockChain, config *eth.Config, blockHa
 //----------------------------------------------------------------------
 
 func (b *Backend) DeliverTx(tx *ethTypes.Transaction) error {
-	return b.pending.deliverTx(b.ethereum.BlockChain(), b.config, tx)
+	return b.pending.deliverTx(b.ethereum.BlockChain(), b.config,
+				tx, b.Ethereum().ApiBackend.GetCrossChainHelper())
 }
 
-func (p *pending) deliverTx(blockchain *core.BlockChain, config *eth.Config, tx *ethTypes.Transaction) error {
+func (p *pending) deliverTx(blockchain *core.BlockChain, config *eth.Config,
+				tx *ethTypes.Transaction, cch core.CrossChainHelper) error {
 	p.commitMutex.Lock()
 	defer p.commitMutex.Unlock()
 
 	blockHash := common.Hash{}
-	return p.work.deliverTx(blockchain, config, blockHash, tx)
+	return p.work.deliverTx(blockchain, config, blockHash, tx, cch)
 }
 
-func (w *work) deliverTx(blockchain *core.BlockChain, config *eth.Config, blockHash common.Hash, tx *ethTypes.Transaction) error {
+func (w *work) deliverTx(blockchain *core.BlockChain, config *eth.Config, blockHash common.Hash,
+				tx *ethTypes.Transaction, cch core.CrossChainHelper) error {
 	w.state.StartRecord(tx.Hash(), blockHash, w.txIndex)
 	fmt.Printf("(w *work) deliverTx(); before apply transaction, w.gp is %v\n", w.gp)
 	receipt, _, err := core.ApplyTransactionEx(
@@ -371,6 +374,7 @@ func (w *work) deliverTx(blockchain *core.BlockChain, config *eth.Config, blockH
 		w.totalUsedGas,
 		w.totalUsedMoney,
 		vm.Config{EnablePreimageRecording: config.EnablePreimageRecording},
+		cch,
 	)
 	if err != nil {
 		return err

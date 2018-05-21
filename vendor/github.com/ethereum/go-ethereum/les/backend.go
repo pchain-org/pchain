@@ -68,11 +68,9 @@ type LightEthereum struct {
 
 	netVersionId  int
 	netRPCService *ethapi.PublicNetAPI
-
-	client        ethapi.Client
 }
 
-func New(ctx *node.ServiceContext, config *eth.Config, client ethapi.Client) (*LightEthereum, error) {
+func New(ctx *node.ServiceContext, config *eth.Config, client ethapi.Client, cch core.CrossChainHelper) (*LightEthereum, error) {
 	chainDb, err := eth.CreateDB(ctx, config, "lightchaindata")
 	if err != nil {
 		return nil, err
@@ -97,7 +95,6 @@ func New(ctx *node.ServiceContext, config *eth.Config, client ethapi.Client) (*L
 		shutdownChan:   make(chan bool),
 		netVersionId:   config.NetworkId,
 		solcPath:       config.SolcPath,
-		client:         client,
 	}
 
 	if config.ChainConfig == nil {
@@ -117,7 +114,7 @@ func New(ctx *node.ServiceContext, config *eth.Config, client ethapi.Client) (*L
 		return nil, err
 	}
 
-	eth.ApiBackend = &LesApiBackend{eth, nil}
+	eth.ApiBackend = &LesApiBackend{eth, nil, client, nil, cch}
 	eth.ApiBackend.gpo = gasprice.NewLightPriceOracle(eth.ApiBackend)
 	return eth, nil
 }
@@ -181,7 +178,6 @@ func (s *LightEthereum) TxPool() *light.TxPool              { return s.txPool }
 func (s *LightEthereum) LesVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *LightEthereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
-func (s *LightEthereum) Client() ethapi.Client              { return s.client }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.

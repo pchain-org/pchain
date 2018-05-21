@@ -47,6 +47,9 @@ type EthApiBackend struct {
 	gpo *gasprice.GasPriceOracle
 	pending miner.Pending
 	pcInt PreCheckInt
+	client ethapi.Client
+	apiBridge ethapi.InnerAPIBridge
+	crossChainHelper core.CrossChainHelper
 }
 
 func (b *EthApiBackend) ChainConfig() *params.ChainConfig {
@@ -220,7 +223,19 @@ func (b *EthApiBackend) AccountManager() *accounts.Manager {
 }
 
 func (b *EthApiBackend) Client() ethapi.Client {
-	return b.eth.Client()
+	return b.client
+}
+
+func (b *EthApiBackend) SetInnerAPIBridge(inBridge ethapi.InnerAPIBridge) {
+	b.apiBridge = inBridge
+}
+
+func (b *EthApiBackend) GetInnerAPIBridge() ethapi.InnerAPIBridge {
+	return b.apiBridge
+}
+
+func (b *EthApiBackend) GetCrossChainHelper() core.CrossChainHelper {
+	return b.crossChainHelper
 }
 
 type EthApiState struct {

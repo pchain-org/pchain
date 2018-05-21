@@ -75,6 +75,11 @@ type Backend interface {
 
 	//This client connects to tendermint part
 	Client() Client
+
+	SetInnerAPIBridge(inBridge InnerAPIBridge)
+	GetInnerAPIBridge() InnerAPIBridge
+	GetCrossChainHelper() core.CrossChainHelper
+
 	/*
 	//add by author@liaoyd
 	// Validator API
@@ -95,7 +100,7 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 	compiler := makeCompilerAPIs(solcPath)
 
 	txapi := NewPublicTransactionPoolAPI(apiBackend)
-	ApiBridge = APIBridge {txapi:txapi}
+	apiBackend.SetInnerAPIBridge(&APIBridge {txapi:txapi})
 
 	all := []rpc.API{
 		{
@@ -141,6 +146,11 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Namespace: "tdm",
 			Version:   "1.0",
 			Service:   NewPublicTendermintAPI(apiBackend),
+			Public:    true,
+		}, {
+			Namespace: "chain",
+			Version:   "1.0",
+			Service:   NewPublicChainAPI(apiBackend),
 			Public:    true,
 		},
 	}

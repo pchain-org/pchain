@@ -43,13 +43,15 @@ var (
 type StateProcessor struct {
 	config *params.ChainConfig
 	bc     *BlockChain
+	cch    CrossChainHelper
 }
 
 // NewStateProcessor initialises a new StateProcessor.
-func NewStateProcessor(config *params.ChainConfig, bc *BlockChain) *StateProcessor {
+func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, cch CrossChainHelper) *StateProcessor {
 	return &StateProcessor{
 		config: config,
 		bc:     bc,
+		cch:    cch,
 	}
 }
 
@@ -81,7 +83,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		//receipt, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
 		totalUsedMoney := big.NewInt(0)
 		receipt, _, err := ApplyTransactionEx(p.config, p.bc, gp, statedb, header, tx,
-							totalUsedGas, totalUsedMoney, cfg)
+							totalUsedGas, totalUsedMoney, cfg, p.cch)
 		glog.Infof("Process() 1, totalUsedGas is %v\n", totalUsedGas)
 		if err != nil {
 			return nil, nil, nil, err
@@ -148,7 +150,7 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header,
-			tx *types.Transaction, usedGas *big.Int, totalUsedMoney *big.Int, cfg vm.Config) (*types.Receipt, *big.Int, error) {
+			tx *types.Transaction, usedGas *big.Int, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper) (*types.Receipt, *big.Int, error) {
 
 
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
@@ -203,7 +205,9 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool,
 		glog.Infof("ApplyTransactionEx() 0, etd.FuncName is %v\n", etd.FuncName)
 
 		if applyCb := GetApplyCb(etd.FuncName); applyCb != nil {
-			if err := applyCb(tx, statedb); err != nil {
+			cch.GetMutex().Lock()
+			defer cch.GetMutex().Unlock()
+			if err := applyCb(tx, statedb, cch); err != nil {
 				return nil, nil, err
 			}
 		}

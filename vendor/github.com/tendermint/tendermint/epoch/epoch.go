@@ -268,6 +268,7 @@ func (epoch *Epoch) Bytes() []byte {
 	wire.WriteBinary(epochDoc, buf, n, err)
 	if *err != nil {
 		fmt.Printf("Epoch get bytes error: %v", err)
+		return nil
 	}
 	fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
 	return buf.Bytes()

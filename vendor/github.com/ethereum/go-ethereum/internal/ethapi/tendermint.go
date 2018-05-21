@@ -210,7 +210,7 @@ func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from com
 		ExtendTxData: etd,
 	}
 
-	return ApiBridge.SendTransaction(ctx, args)
+	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
@@ -254,7 +254,7 @@ func init() {
 }
 
 
-func svm_ValidateCb(tx *types.Transaction, state *st.StateDB) error{
+func svm_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
 
 	fmt.Println("svm_ValidateCb")
 
@@ -289,7 +289,7 @@ func svm_ValidateCb(tx *types.Transaction, state *st.StateDB) error{
 
 
 /*must not handle SVM_WITHDRAW here, need wait for 2 more epoch*/
-func svm_ApplyCb(tx *types.Transaction, state *st.StateDB) error{
+func svm_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
 
 	fmt.Println("svm_ApplyCb")
 

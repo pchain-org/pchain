@@ -39,6 +39,9 @@ import (
 type LesApiBackend struct {
 	eth *LightEthereum
 	gpo *gasprice.LightPriceOracle
+	client ethapi.Client
+	apiBridge ethapi.InnerAPIBridge
+	crossChainHelper core.CrossChainHelper
 }
 
 func (b *LesApiBackend) ChainConfig() *params.ChainConfig {
@@ -161,7 +164,18 @@ func (b *LesApiBackend) AccountManager() *accounts.Manager {
 }
 
 func (b *LesApiBackend) Client() ethapi.Client {
-	return b.eth.Client()
+	return b.client
+}
+
+func (b *LesApiBackend) SetInnerAPIBridge(inBridge ethapi.InnerAPIBridge) {
+	b.apiBridge = inBridge
+}
+
+func (b *LesApiBackend) GetInnerAPIBridge() ethapi.InnerAPIBridge {
+	return b.apiBridge
+}
+func (b *LesApiBackend) GetCrossChainHelper() core.CrossChainHelper {
+	return b.crossChainHelper
 }
 
 /*

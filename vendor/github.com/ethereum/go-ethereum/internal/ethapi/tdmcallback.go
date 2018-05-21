@@ -19,7 +19,7 @@ func init() {
 	core.RegisterApplyCb(UnlockAssertFuncName, UnlockAssert_ApplyCb)
 }
 
-func UnlockAssert_ApplyCb(tx *types.Transaction, state *st.StateDB) error{
+func UnlockAssert_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
 
 	fmt.Println("UnlockAssert_ApplyCb")
 

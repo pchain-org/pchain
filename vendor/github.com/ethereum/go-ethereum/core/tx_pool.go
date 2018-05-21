@@ -103,11 +103,14 @@ type TxPool struct {
 	quit chan struct{}
 
 	homestead bool
+
+	cch     CrossChainHelper
 }
 
 var TxPoolSigner types.Signer = nil
 
-func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentStateFn stateFn, gasLimitFn func() *big.Int) *TxPool {
+func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentStateFn stateFn,
+		gasLimitFn func() *big.Int, cch CrossChainHelper) *TxPool {
 
 	pool := &TxPool{
 		config:       config,
@@ -124,6 +127,7 @@ func NewTxPool(config *params.ChainConfig, eventMux *event.TypeMux, currentState
 		localTx:      newTxSet(),
 		events:       eventMux.Subscribe(ChainHeadEvent{}, GasPriceChanged{}, RemovedTransactionEvent{}),
 		quit:         make(chan struct{}),
+		cch:          cch,
 	}
 
 	TxPoolSigner = pool.signer
@@ -324,7 +328,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction) error {
 	} else {
 		fmt.Printf("etd.FuncName is %s\n", etd.FuncName)
 		if validateCb := GetValidateCb(etd.FuncName); validateCb != nil {
-			if err = validateCb(tx, currentState); err != nil {
+			pool.cch.GetMutex().Lock()
+			defer pool.cch.GetMutex().Unlock()
+			if err = validateCb(tx, currentState, pool.cch); err != nil {
 				return err
 			}
 		}

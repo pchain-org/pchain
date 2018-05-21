@@ -79,6 +79,11 @@ type GasPriceChanged struct{ Price *big.Int }
 type StartMining struct{}
 type TopMining struct{}
 
+type CreateChildChainEvent struct{
+	From common.Address
+	ChainId string
+}
+
 /*
 //add by author@liaoyd
 type ValidatorOperationEvent struct {
