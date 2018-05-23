@@ -90,7 +90,7 @@ func init() {
 }
 
 func initLogDir() (string, error){
-	path := "";
+	path := ""
 	if runtime.GOOS == "windows" {
 		path = ".\\log\\"
 	} else {
@@ -103,8 +103,8 @@ func initLogDir() (string, error){
 	}
 
 	if os.IsNotExist(err) {
-        err = os.MkdirAll(path, os.ModePerm)
-        if err == nil {
+            err = os.MkdirAll(path, os.ModePerm)
+            if err == nil {
         	return path, nil
 		} else {
 			fmt.Println("os mkdir error")

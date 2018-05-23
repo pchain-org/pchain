@@ -42,10 +42,7 @@ func ethermintCmd(ctx *cli.Context) error {
 		return nil
 	*/
 	verbosity := ctx.GlobalInt(VerbosityFlag.Name)
-	if verbosity != 0 {
-		plogger.SetVerbosity(logrus.Level(verbosity))
-	}
-
+	plogger.SetVerbosity(logrus.Level(verbosity))
 	log.Info("setVerbosity level ", verbosity)
 
 	//always start ethereum
