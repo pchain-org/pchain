@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/event"
 	dbm "github.com/tendermint/go-db"
-	"github.com/pkg/errors"
+	"errors"
 )
 
 type CrossChainHelper struct {
@@ -31,11 +31,18 @@ func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId st
 	//check if "chainId" has been created/registered
 	ci := GetChainInfo(cch.chainInfoDB, chainId)
 	if ci != nil {
-		return errors.New(fmt.Sprint("chain %s does exist, can't create again", chainId))
+		return errors.New(fmt.Sprintf("chain %s does exist, can't create again", chainId))
 	}
 
 	//check if "from" is a legal validator in main chain
+	chainMgr := GetCMInstance(nil)
+	epoch := chainMgr.mainChain.TdmNode.ConsensusState().Epoch
+	found := epoch.Validators.HasAddress(from.Bytes())
+	if !found {
+		return errors.New(fmt.Sprint("You are not a validator in Main Chain, therefore child chain creation is forbidden"))
+	}
 
+	// TODO Add More check
 	return nil
 }
 

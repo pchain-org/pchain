@@ -103,11 +103,13 @@ func (valSet *ValidatorSet) Equals(other *ValidatorSet) bool {
 	return true
 }
 
+// HasAddress returns true if address given is in the validator set, false -
+// otherwise.
 func (valSet *ValidatorSet) HasAddress(address []byte) bool {
 	idx := sort.Search(len(valSet.Validators), func(i int) bool {
 		return bytes.Compare(address, valSet.Validators[i].Address) <= 0
 	})
-	return idx != len(valSet.Validators) && bytes.Compare(valSet.Validators[idx].Address, address) == 0
+	return idx < len(valSet.Validators) && bytes.Equal(valSet.Validators[idx].Address, address)
 }
 
 func (valSet *ValidatorSet) GetByAddress(address []byte) (index int, val *Validator) {
