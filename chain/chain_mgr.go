@@ -131,7 +131,29 @@ func (cm *ChainManager) StartRPC() error {
 
 	return nil
 }
+/*
+func (cm *ChainManager) StartRPC1() error {
 
+	ids := make([]string, 0)
+	handlers := make([]http.Handler, 0)
+
+	ids = append(ids, cm.mainChain.Id)
+	handlers = append(handlers, cm.mainChain.RpcHandler)
+
+	for _, chain := range cm.childChains {
+		ids = append(ids, chain.Id)
+		handlers = append(handlers, chain.RpcHandler)
+	}
+
+	// Start PChain RPC
+	err := rpc.StartRPC1(cm.ctx, ids, handlers)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+*/
 
 func (cm *ChainManager) StartInspectEvent() {
 
