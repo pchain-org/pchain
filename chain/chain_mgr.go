@@ -69,7 +69,8 @@ func (cm *ChainManager)LoadChains() error {
 
 		chain := LoadChildChain(cm.ctx, chainId, cm.p2pObj)
 		if chain == nil {
-			return errors.New("load child chain failed")
+			fmt.Printf("Load Child Chain [%v] failed", chainId)
+			continue
 		}
 
 		cm.childChains[chainId] = chain
@@ -175,7 +176,7 @@ func (cm *ChainManager) StartInspectEvent() {
 
 			_, ok = cm.childChains[chainId]
 			if ok {
-				fmt.Printf("CreateChildChainEvent has been received, and chain has been loaded, just continue\n", event)
+				fmt.Println("CreateChildChainEvent has been received, and chain has been loaded, just continue")
 				continue
 			}
 
