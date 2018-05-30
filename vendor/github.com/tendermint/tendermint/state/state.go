@@ -22,7 +22,6 @@ import (
 
 var (
 	stateKey         = []byte("stateKey")
-	abciResponsesKey = []byte("abciResponsesKey")
 )
 
 //-----------------------------------------------------------------------------
@@ -104,29 +103,6 @@ func (s *State) Save() {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	s.db.SetSync(stateKey, s.Bytes())
-}
-
-// Sets the ABCIResponses in the state and writes them to disk
-// in case we crash after app.Commit and before s.Save()
-func (s *State) SaveABCIResponses(abciResponses *ABCIResponses) {
-	// save the validators to the db
-	s.db.SetSync(abciResponsesKey, abciResponses.Bytes())
-}
-
-func (s *State) LoadABCIResponses() *ABCIResponses {
-	abciResponses := new(ABCIResponses)
-
-	buf := s.db.Get(abciResponsesKey)
-	if len(buf) != 0 {
-		r, n, err := bytes.NewReader(buf), new(int), new(error)
-		wire.ReadBinaryPtr(abciResponses, r, 0, n, err)
-		if *err != nil {
-			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
-			Exit(Fmt("LoadABCIResponses: Data has been corrupted or its spec has changed: %v\n", *err))
-		}
-		// TODO: ensure that buf is completely read.
-	}
-	return abciResponses
 }
 
 func (s *State) Equals(s2 *State) bool {

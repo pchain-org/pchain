@@ -159,7 +159,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	s.indexTxs(abciResponses)
 
 	// save the results before we commit
-	s.SaveABCIResponses(abciResponses)
+	saveABCIResponses(s.db, block.Height, abciResponses)
 
 	fail.Fail() // XXX
 
