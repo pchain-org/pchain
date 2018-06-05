@@ -26,6 +26,8 @@ import (
 	tmTypes "github.com/tendermint/tendermint/types"
 	core_types "github.com/tendermint/tendermint/rpc/core/types"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/ethereum/go-ethereum/ethdb"
 )
 
 const TRANSACTION_NUM_LIMIT = 200000
@@ -42,6 +44,8 @@ type work struct {
 	header *ethTypes.Header
 	parent *ethTypes.Block
 	state  *state.StateDB
+	config *params.ChainConfig
+	chainDb ethdb.Database
 
 	txIndex      int
 	transactions []*ethTypes.Transaction
@@ -307,7 +311,6 @@ func (w *work) preCheck(blockchain *core.BlockChain, config *eth.Config, blockHa
 	senderAddress := msg.From()
 	if !w.state.Exist(senderAddress) {
 		err = fmt.Errorf("(w *work) preCheck(); sender does not exist")
-		fmt.Printf("(w *work) preCheck(); w.header is %s\n", w.header.String())
 		return err
 	}
 	senderAccount := w.state.GetAccount(senderAddress)
@@ -416,10 +419,10 @@ func (w *work) accumulateRewards(strategy emtTypes.Strategy) {
 //----------------------------------------------------------------------
 
 func (b *Backend) Commit(receiver common.Address) (common.Hash, error) {
-	return b.pending.commit(b.ethereum.BlockChain(), receiver)
+	return b.pending.commit(b.ethereum.BlockChain(), b.ethereum.ChainDb(), receiver)
 }
 
-func (p *pending) commit(blockchain *core.BlockChain, receiver common.Address) (common.Hash, error) {
+func (p *pending) commit(blockchain *core.BlockChain, chainDb ethdb.Database, receiver common.Address) (common.Hash, error) {
 	p.commitMutex.Lock()
 	defer p.commitMutex.Unlock()
 
@@ -428,7 +431,7 @@ func (p *pending) commit(blockchain *core.BlockChain, receiver common.Address) (
 		return common.Hash{}, err
 	}
 
-	work, err := p.resetWork(blockchain, receiver)
+	work, err := p.resetWork(blockchain, chainDb, receiver)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -439,6 +442,7 @@ func (p *pending) commit(blockchain *core.BlockChain, receiver common.Address) (
 
 func (w *work) commit(blockchain *core.BlockChain) (common.Hash, error) {
 	// commit ethereum state and update the header
+	/*
 	hashArray, err := w.state.Commit(false) // XXX: ugh hardforks
 	if err != nil {
 		return common.Hash{}, err
@@ -451,12 +455,6 @@ func (w *work) commit(blockchain *core.BlockChain) (common.Hash, error) {
 		log.BlockHash = hashArray
 	}
 
-	// create block object and compute final commit hash (hash of the ethereum block)
-	block := ethTypes.NewBlock(w.header, w.transactions, nil, w.receipts)
-	blockHash := block.Hash()
-
-	fmt.Printf("(w *work) commit(), commit %v transactions in one block\n", len(w.transactions))
-
 	// save the block to disk
 	glog.V(logger.Debug).Infof("Committing block with state hash %X and root hash %X", hashArray, blockHash)
 	_, err = blockchain.InsertChain([]*ethTypes.Block{block})
@@ -464,18 +462,82 @@ func (w *work) commit(blockchain *core.BlockChain) (common.Hash, error) {
 		glog.V(logger.Debug).Infof("Error inserting ethereum block in chain: %v", err)
 		return common.Hash{}, err
 	}
+	*/
+
+	// create block object and compute final commit hash (hash of the ethereum block)
+	hashArray, err := w.state.Commit(false)
+
+	w.header.Root = hashArray
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	block := ethTypes.NewBlock(w.header, w.transactions, nil, w.receipts)
+	blockHash := block.Hash()
+
+	fmt.Printf("(w *work) commit(), commit %v transactions in one block\n", len(w.transactions))
+
+	parent := blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		glog.V(logger.Error).Infoln("Invalid block found during mining")
+		return common.Hash{}, errors.New("Invalid block found during mining")
+	}
+
+	auxValidator := blockchain.AuxValidator()
+	if err := core.ValidateHeader(w.config, auxValidator, block.Header(), parent.Header(), true, false); err != nil && err != core.BlockFutureErr {
+		glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
+		return common.Hash{}, err
+	}
+
+	stat, err := blockchain.WriteBlock(block)
+	if err != nil {
+		glog.V(logger.Error).Infoln("error writing block to chain", err)
+		return common.Hash{}, err
+	}
+
+	// update block hash since it is now available and not when the receipt/log of individual transactions were created
+	for _, r := range w.receipts {
+		for _, l := range r.Logs {
+			l.BlockHash = block.Hash()
+		}
+	}
+
+	for _, log := range w.state.Logs() {
+		log.BlockHash = block.Hash()
+	}
+
+	// check if canon block and write transactions
+	if stat == core.CanonStatTy {
+		//fmt.Printf("(w *work) commit() stat == core.CanonStatTy\n")
+		// This puts transactions in a extra db for rpc
+		core.WriteTransactions(w.chainDb, block)
+		// store the receipts
+		core.WriteReceipts(w.chainDb, w.receipts)
+		// Write map map bloom filters
+		core.WriteMipmapBloom(w.chainDb, block.NumberU64(), w.receipts)
+		// implicit by posting ChainHeadEvent
+		//mustCommitNewWork = false
+	}
+
+	// broadcast before waiting for validation
+	go func(block *ethTypes.Block, logs []*ethTypes.Log, receipts []*ethTypes.Receipt) {
+		if err := core.WriteBlockReceipts(w.chainDb, block.Hash(), block.NumberU64(), receipts); err != nil {
+			glog.V(logger.Warn).Infoln("error writing block receipts:", err)
+		}
+	}(block, w.state.Logs(), w.receipts)
+
 	return blockHash, err
 }
 
 //----------------------------------------------------------------------
 
 func (b *Backend) ResetWork(receiver common.Address) error {
-	work, err := b.pending.resetWork(b.ethereum.BlockChain(), receiver)
+	work, err := b.pending.resetWork(b.ethereum.BlockChain(), b.ethereum.ChainDb(), receiver)
 	b.pending.work = work
 	return err
 }
 
-func (p *pending) resetWork(blockchain *core.BlockChain, receiver common.Address) (*work, error) {
+func (p *pending) resetWork(blockchain *core.BlockChain, chainDb ethdb.Database, receiver common.Address) (*work, error) {
 	state, err := blockchain.State()
 	if err != nil {
 		return nil, err
@@ -488,6 +550,8 @@ func (p *pending) resetWork(blockchain *core.BlockChain, receiver common.Address
 		header:       ethHeader,
 		parent:       currentBlock,
 		state:        state,
+		config:	      blockchain.Config(),
+		chainDb:      chainDb,
 		txIndex:      0,
 		totalUsedGas: big.NewInt(0),
 		totalUsedMoney: big.NewInt(0),
