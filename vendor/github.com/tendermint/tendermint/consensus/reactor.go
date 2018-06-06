@@ -459,6 +459,35 @@ OUTER_LOOP:
 		//logger.Info("gossipDataRoutine: rs.height ", rs.Height, " prs.height ", prs.Height)
 //		logger.Info(Fmt("gossipDataRoutine: rs.height %v prs.Height %v", rs.Height, prs.Height))
 
+		// Send Proposal && ProposalPOL BitArray?
+		if rs.Proposal != nil && !prs.Proposal {
+			//fmt.Printf("gossipDataRoutine: Validator (pkey %v proposr %v) send proposal (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetPubKey(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round, peer.PeerKey())
+			logger.Debug(Fmt("gossipDataRoutine: Validator (proposer %v) send proposal (height %d round %d) to peer %v\n", conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round, peer.PeerKey()))
+
+			// Proposal: share the proposal metadata with peer.
+			{
+				msg := &ProposalMessage{Proposal: rs.Proposal}
+				if peer.Send(DataChannel, struct{ ConsensusMessage }{msg}) {
+					ps.SetHasProposal(rs.Proposal)
+				}
+			}
+			// ProposalPOL: lets peer know which POL votes we have so far.
+			// Peer must receive ProposalMessage first.
+			// rs.Proposal was validated, so rs.Proposal.POLRound <= rs.Round,
+			// so we definitely have rs.Votes.Prevotes(rs.Proposal.POLRound).
+			if 0 <= rs.Proposal.POLRound {
+				msg := &ProposalPOLMessage{
+					Height:           rs.Height,
+					ProposalPOLRound: rs.Proposal.POLRound,
+					ProposalPOL:      rs.Votes.Prevotes(rs.Proposal.POLRound).BitArray(),
+				}
+				peer.Send(DataChannel, struct{ ConsensusMessage }{msg})
+
+				logger.Debug(Fmt("gossipDataRoutine: Validator (pkey %v proposer %v) send POL (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetPubKey(), rs.Height, rs.Proposal.POLRound, peer.PeerKey()))
+			}
+			continue OUTER_LOOP
+		}
+
 		// Send proposal Block parts?
 		if rs.ProposalBlockParts.HasHeader(prs.ProposalBlockPartsHeader) {
 			//logger.Info("ProposalBlockParts matched", "blockParts", prs.ProposalBlockParts)
@@ -477,6 +506,12 @@ OUTER_LOOP:
 
 				continue OUTER_LOOP
 			}
+		}
+
+//		if strings.Compare(peer.PeerKey(), conR.conS.ProposerPeerKey) != 0 {
+		if conR.conS.IsProposer() == false {
+			time.Sleep(peerGossipSleepDuration)
+			continue OUTER_LOOP
 		}
 
 //		logger.Debug(Fmt("gossipDataRoutine: peer check prevotes parts"))
@@ -598,6 +633,7 @@ OUTER_LOOP:
 
 //		logger.Debug(Fmt("gossipDataRoutine: peer (%s) check send proposal"), peer.PeerKey())
 
+/*
 		// Send Proposal && ProposalPOL BitArray?
 		if rs.Proposal != nil && !prs.Proposal {
 			//fmt.Printf("gossipDataRoutine: Validator (pkey %v proposr %v) send proposal (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetPubKey(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round, peer.PeerKey())
@@ -626,6 +662,7 @@ OUTER_LOOP:
 			}
 			continue OUTER_LOOP
 		}
+*/
 
 //		logger.Debug(Fmt("gossipDataRoutine: peer check send PrevoteAggr"))
 
@@ -1059,8 +1096,8 @@ func (ps *PeerState) SetHasProposal(proposal *types.Proposal) {
 	ps.ProposalPOLRound = proposal.POLRound
 	ps.ProposalPOL = nil // Nil until ProposalPOLMessage received.
 
-	logger.Debug(Fmt("SetHasProposal: reset PrevoteAggr %v %v", ps.PrevoteAggr, ps.PrevoteMaj23PartsHeader))
-	logger.Debug(Fmt("SetHasProposal: reset PrecommitAggr %v %v", ps.PrecommitAggr, ps.PrecommitMaj23PartsHeader))
+	logger.Debug(Fmt("SetHasProposal(peer %s): reset PrevoteAggr %v %v", ps.Peer.PeerKey(), ps.PrevoteAggr, ps.PrevoteMaj23PartsHeader))
+	logger.Debug(Fmt("SetHasProposal(peer %s): reset PrecommitAggr %v %v", ps.Peer.PeerKey(), ps.PrecommitAggr, ps.PrecommitMaj23PartsHeader))
 
 	ps.PrevoteAggr = false
 	ps.PrevoteMaj23PartsHeader = types.PartSetHeader{}
@@ -1069,7 +1106,7 @@ func (ps *PeerState) SetHasProposal(proposal *types.Proposal) {
 	ps.PrecommitMaj23PartsHeader = types.PartSetHeader{}
 	ps.PrecommitMaj23Parts = nil
 
-	logger.Debug("SetHasProposal: reset PrevoteMaj23SignAggr/PrecommitMaj23SignAggr\n")
+	logger.Debug(Fmt("SetHasProposal(peer %s): reset PrevoteMaj23SignAggr/PrecommitMaj23SignAggr\n", ps.Peer.PeerKey()))
 
 	ps.PrevoteMaj23SignAggr = false
 	ps.PrecommitMaj23SignAggr = false

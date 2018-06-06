@@ -27,6 +27,8 @@ import (
 
 const (
 	newHeightChangeSleepDuration     = 2000 * time.Millisecond
+	sendPrecommitSleepDuration       = 100 * time.Millisecond
+	preProposeSleepDuration          = 60000 * time.Millisecond // Time to sleep before starting consensus.
 )
 
 //-----------------------------------------------------------------------------
@@ -89,6 +91,7 @@ var (
 	ErrVoteHeightMismatch       = errors.New("Error vote height mismatch")
 	ErrInvalidSignatureAggr	    = errors.New("Invalid signature aggregation")
 	ErrDuplicateSignatureAggr   = errors.New("Duplicate signature aggregation")
+	ErrNotMaj23SignatureAggr    = errors.New("Signature aggregation has no +2/3 power")
 )
 
 //-----------------------------------------------------------------------------
@@ -336,8 +339,8 @@ func (cs *ConsensusState) GetState() *sm.State {
 }
 
 func (cs *ConsensusState) GetRoundState() *RoundState {
-//	cs.mtx.Lock()
-//	defer cs.mtx.Unlock()
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
 	return cs.getRoundState()
 }
 
@@ -422,7 +425,12 @@ func (cs *ConsensusState) OnStart() error {
 
 	// schedule the first round!
 	// use GetRoundState so we don't race the receiveRoutine for access
-	cs.scheduleRound0(cs.GetRoundState())
+	//cs.scheduleRound0(cs.GetRoundState())
+
+	// Sleep for 30s before starting consensus, thus all other validators
+	// that started after current validator could have the chance to join.
+	rs := cs.GetRoundState()
+	cs.scheduleTimeout(preProposeSleepDuration, rs.Height, 0, RoundStepNewHeight)
 
 	return nil
 }
@@ -744,8 +752,8 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 
 // state transitions on complete-proposal, 2/3-any, 2/3-one
 func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
-	cs.mtx.Lock()
-	defer cs.mtx.Unlock()
+//	cs.mtx.Lock()
+//	defer cs.mtx.Unlock()
 
 	var err error
 	msg, peerKey := mi.Msg, mi.PeerKey
@@ -754,35 +762,57 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 		// will not cause transition.
 		// once proposal is set, we can receive block parts
 		logger.Debug(Fmt("handleMsg: Received proposal message %+v\n", msg))
+
+		cs.mtx.Lock()
 		err = cs.setProposal(msg.Proposal)
+		cs.mtx.Unlock()
 	case *BlockPartMessage:
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
 		logger.Debug(Fmt("handleMsg: Received proposal block part message %+v\n", msg.Part))
+
+		cs.mtx.Lock()
 		_, err = cs.addProposalBlockPart(msg.Height, msg.Part, peerKey != "")
 		if err != nil && msg.Round != cs.Round {
 			err = nil
 		}
+		cs.mtx.Unlock()
         case *Maj23VotesAggrMessage:
 		// Msg saying a set of 2/3+ votes had been received
 		logger.Debug(Fmt("handleMsg1: Received Maj23VotesAggrMessage %#v\n", (msg.Maj23VotesAggr)))
+
+		cs.mtx.Lock()
 		err = cs.setMaj23VotesAggr(msg.Maj23VotesAggr)
+		cs.mtx.Unlock()
         case *VotesAggrPartMessage:
 		// Major 2/3+ vote (prevote/precommit) part message, if the votes are complete,
 		// we'll enterPrecommit or tryFinalizeCommit
+		cs.mtx.Lock()
 		_, err = cs.addMaj23VotesPart(msg.Height, msg.Part, msg.Type, peerKey != "")
 		if err != nil && msg.Round != cs.Round {
 			err = nil
 		}
+		cs.mtx.Unlock()
         case *Maj23SignAggrMessage:
 		// Msg saying a set of 2/3+ signatures had been received
 		logger.Debug(Fmt("handleMsg: Received Maj23SignAggrMessage %#v\n", (msg.Maj23SignAggr)))
+
+		cs.mtx.Lock()
 		err = cs.setMaj23SignAggr(msg.Maj23SignAggr)
+		cs.mtx.Unlock()
 	case *VoteMessage:
 		// attempt to add the vote and dupeout the validator if its a duplicate signature
 		// if the vote gives us a 2/3-any or 2/3-one, we transition
+
+		cs.mtx.Lock()
 		err := cs.tryAddVote(msg.Vote, peerKey)
 		if err == ErrAddingVote {
 			// TODO: punish peer
+		}
+		cs.mtx.Unlock()
+
+		if cs.PrecommitMaj23SignAggr != nil {
+			fmt.Println("Sleeping 100ms waiting for sending sign aggr ")
+			time.Sleep(sendPrecommitSleepDuration)
 		}
 
 		// NOTE: the vote is broadcast to peers by the reactor listening
@@ -1383,9 +1413,11 @@ logger.Info("finalizeCommit: beginning", "cur height", cs.Height, "cur round", c
 		"height", block.Height, "hash", block.Hash(), "root", block.AppHash)
 	logger.Info(Fmt("%v", block))
 
-logger.Info("finalizeCommit: Wait for 15 minues before new height", "cur height", cs.Height, "cur round", cs.Round)
-//logger.Info(Fmt("finalizeCommit: cs.State: %#v\n", cs.GetRoundState()))
-time.Sleep(newHeightChangeSleepDuration)
+//	if cs.IsProposer() == true {
+//		logger.Info("finalizeCommit: Wait for 2 seconds before new height", "cur height", cs.Height, "cur round", cs.Round)
+		//logger.Info(Fmt("finalizeCommit: cs.State: %#v\n", cs.GetRoundState()))
+//		time.Sleep(newHeightChangeSleepDuration)
+	}
 
 	fail.Fail() // XXX
 
@@ -1529,9 +1561,27 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 		fmt.Printf("Received complete proposal block is %v\n", cs.ProposalBlock.String())
 		fmt.Printf("block.LastCommit is %v\n", cs.ProposalBlock.LastCommit)
 		fmt.Printf("Current cs.Step %v\n", cs.Step)
-		if cs.Step == RoundStepPropose && cs.isProposalComplete() {
-			// Move onto the next step
-			cs.enterPrevote(height, cs.Round)
+
+		if cs.isProposalComplete() {
+			// if current step is RoundStepNewHeight, it means
+			// this proposal is got from other validator (proposer),
+			// current validator is not the proposer. 
+			if cs.Step == RoundStepNewHeight {
+				if bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
+					panic("I am proposer, not expected to receive proposal from others")
+				}
+
+				fmt.Printf("Enter propose from NewHeight for block%v\n", height)
+
+				// Move on to the following steps
+				cs.enterPropose(height, cs.Round)
+				cs.enterPrevote(height, cs.Round)
+			} else if cs.Step == RoundStepPropose {
+				fmt.Printf("Enter prevote from Propose for block%v\n", height)
+
+				// Move onto the next step
+				cs.enterPrevote(height, cs.Round)
+			}
 		} else if cs.Step == RoundStepCommit {
 			// If we're waiting on the proposal block...
 			cs.tryFinalizeCommit(height)
@@ -1735,36 +1785,46 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 		return nil
 	}
 
-	maj23, err := cs.verifyMaj23SignAggr(signAggr)
+	// Proposer already set up this when generating signature aggregation.
+	// only validators need to validate and set up it.
+	if cs.IsProposer() == false {
+		maj23, err := cs.verifyMaj23SignAggr(signAggr)
 
-	if err != nil || maj23 == false {
-		logger.Info(Fmt("verifyMaj23SignAggr: Invalid signature aggregation for prevotes\n"))
-		return ErrInvalidSignatureAggr
-	}
-
-	if signAggr.Type == types.VoteTypePrevote {
-		// How if the signagure aggregation is for another block
-		if cs.PrevoteMaj23SignAggr != nil {
-			return ErrDuplicateSignatureAggr
+		if err != nil {
+			logger.Info(Fmt("verifyMaj23SignAggr: Invalid signature aggregation for prevotes\n"))
+			return ErrInvalidSignatureAggr
 		}
 
-		cs.VoteSignAggr.AddSignAggr(signAggr)
-		cs.PrevoteMaj23SignAggr = signAggr
-
-		logger.Debug("setMaj23SignAggr:prevote aggr %#v\n", cs.PrevoteMaj23SignAggr)
-	} else if signAggr.Type == types.VoteTypePrecommit {
-		if cs.PrecommitMaj23SignAggr != nil {
-			return ErrDuplicateSignatureAggr
+		if maj23 == false {
+			logger.Info(Fmt("verifyMaj23SignAggr: signature aggregation has no +2/3 power for prevotes\n"))
+			return ErrNotMaj23SignatureAggr 
 		}
 
-		cs.VoteSignAggr.AddSignAggr(signAggr)
-		cs.PrecommitMaj23SignAggr = signAggr
+		if signAggr.Type == types.VoteTypePrevote {
+			// How if the signagure aggregation is for another block
+			if cs.PrevoteMaj23SignAggr != nil {
+				return ErrDuplicateSignatureAggr
+			}
 
-		logger.Debug("setMaj23SignAggr:precommit aggr %#v\n", cs.PrecommitMaj23SignAggr)
-	} else {
-		logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
-		return ErrInvalidSignatureAggr
+			cs.PrevoteMaj23SignAggr = signAggr
+
+			logger.Debug("setMaj23SignAggr:prevote aggr %#v\n", cs.PrevoteMaj23SignAggr)
+		} else if signAggr.Type == types.VoteTypePrecommit {
+			if cs.PrecommitMaj23SignAggr != nil {
+				return ErrDuplicateSignatureAggr
+			}
+
+			cs.PrecommitMaj23SignAggr = signAggr
+
+			logger.Debug("setMaj23SignAggr:precommit aggr %#v\n", cs.PrecommitMaj23SignAggr)
+		} else {
+			logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
+			return ErrInvalidSignatureAggr
+		}
 	}
+
+	// Save the signature aggregation locally
+	cs.VoteSignAggr.AddSignAggr(signAggr)
 
 	if signAggr.Type == types.VoteTypePrevote {
 		logger.Info(Fmt("setMaj23SignAggr: Received 2/3+ prevotes for block %d, enter precommit\n", cs.Height))
@@ -2163,7 +2223,19 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 
 	logger.Debug(Fmt("Generate Maj23SignAggr %#v\n", signAggr))
 
-	// send sign aggregate msg on internal msg queue
+	// By this, the gossipDataRoutine() task will be able to detect this
+	// signature aggregation and send it to peers as early as possible.
+	if voteType == types.VoteTypePrevote {
+		cs.PrevoteMaj23SignAggr = signAggr
+	} else if voteType == types.VoteTypePrecommit {
+		cs.PrecommitMaj23SignAggr = signAggr
+	} else {
+		panic("Invalid signature aggregation type")
+	}
+
+	// Send sign aggregate msg on internal msg queue
+	// Put it into the queue as early as possible, thus the reader could
+	// get it as early as possible
 	cs.sendInternalMessage(msgInfo{&Maj23SignAggrMessage{signAggr}, ""})
 }
 

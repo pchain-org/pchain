@@ -82,7 +82,7 @@ func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID B
 		return errors.New(Fmt("Wrong Block.Header.LastCommitHash.  Expected %X, got %X", b.LastCommitHash, b.LastCommit.Hash()))
 	}
 
-	logger.Warn(Fmt("ValidateBasic: Temporarily skip b.LastCommit check for block %d", b.Header.Height))
+	logger.Debug(Fmt("ValidateBasic: Temporarily skip b.LastCommit check for block %d", b.Header.Height))
 
 
 /*
