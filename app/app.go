@@ -133,6 +133,7 @@ func (app *EthermintApplication) EndBlock(height uint64) abciTypes.ResponseEndBl
 }
 
 // Commit commits the block and returns a hash of the current state
+// this function make ethereum generate block, then the ResultOK make tendermint generate block
 func (app *EthermintApplication) Commit(validators []*abciTypes.Validator, rewardPerBlock string) abciTypes.Result {
 	blockHash, err := app.backend.Commit(app.Receiver())
 	if err != nil {
