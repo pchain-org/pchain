@@ -9,13 +9,34 @@ import (
 	"bytes"
 	"sync"
 	"strings"
+	"math/big"
 )
+
+type SimpleBalance struct {
+	//when deposit, hash is from main chain;
+	//when withdraw, hash is from child chain
+	Txhash		common.Hash
+	Balance		*big.Int
+	LockedBalance   *big.Int
+}
 
 type ChainInfo struct {
 	owner	common.Address
 	chainId	string
+
+	//for creation
 	joined  []common.Address
+
+	//for ledger check, only change when there are PAI flew between main chain and this child chain
+	//not consistent with the realtime chain accounts
+	deposit map[common.Address]*SimpleBalance
+	withdraw map[common.Address]*SimpleBalance
+
+	//totalDeposit should always be greater or equal than totalWithdraw
+	totalDeposit *big.Int
+	totalWithdraw *big.Int
 }
+
 
 const chainInfoKey = "CHAIN"
 var allChainKey = []byte("AllChainID")
@@ -30,20 +51,22 @@ func calcChainInfoKey(chainId string) []byte {
 
 func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
 
-	chainInfo := &ChainInfo{}
+	ac := &adaptChainInfo{}
 	buf := db.Get(calcChainInfoKey(chainId))
 	if len(buf) == 0 {
 		return nil
 	} else {
 		r, n, err := bytes.NewReader(buf), new(int), new(error)
-		wire.ReadBinaryPtr(&chainInfo, r, 0, n, err)
+		wire.ReadBinaryPtr(&ac, r, 0, n, err)
 		if *err != nil {
 			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
 			fmt.Printf("LoadChainInfo: Data has been corrupted or its spec has changed: %v\n", *err)
 			os.Exit(1)
 		}
-		fmt.Printf("LoadChainInfo(), chainInfo is: %v\n", chainInfo)
-		return chainInfo
+
+		ci := toChainInfo(ac)
+		fmt.Printf("LoadChainInfo(), chainInfo is: %v\n", ci)
+		return ci
 	}
 
 	return nil
@@ -106,13 +129,74 @@ func GetChildChainIds(db dbm.DB) []string{
 
 func (ci *ChainInfo) Bytes() []byte {
 
+	ac := fromChainInfo(ci)
+
 	buf, n, err := new(bytes.Buffer), new(int), new(error)
 	fmt.Printf("(ci *ChainInfo) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
-	wire.WriteBinary(ci, buf, n, err)
+	wire.WriteBinary(ac, buf, n, err)
 	if *err != nil {
 		fmt.Printf("ChainInfo get bytes error: %v", err)
 		return nil
 	}
 	fmt.Printf("(ci *ChainInfo) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
 	return buf.Bytes()
+}
+
+
+/*
+Here are the adapted types to make wire.XXX() works; because go-wire not support 'map'
+ */
+type adaptSimpleBalance struct {
+	addr common.Address
+	sb *SimpleBalance
+}
+
+type adaptChainInfo struct {
+	owner	common.Address
+	chainId	string
+
+	//for creation
+	joined  []common.Address
+
+	//for ledger
+	accounts []*adaptSimpleBalance
+}
+
+func fromChainInfo(ci *ChainInfo) *adaptChainInfo{
+
+	if ci == nil { return nil }
+
+	ac := &adaptChainInfo{
+		owner: ci.owner,
+		chainId: ci.chainId,
+		joined: ci.joined,
+	}
+
+	ac.accounts = make([]*adaptSimpleBalance, len(ci.accounts))
+	for addr, sb := range ci.accounts {
+		ac.accounts = append(ac.accounts,
+					&adaptSimpleBalance{
+						addr: addr,
+						sb: sb,
+					})
+	}
+
+	return ac
+}
+
+func toChainInfo(ac *adaptChainInfo) *ChainInfo {
+	if ac == nil {return nil}
+
+	ci := &ChainInfo {
+		owner: ac.owner,
+		chainId: ac.chainId,
+		joined: ac.joined,
+	}
+
+	ci.accounts = make(map[common.Address]*SimpleBalance, len(ac.accounts))
+	for _, account := range ac.accounts {
+		ci.accounts[account.addr] = account.sb
+	}
+
+	return ci
 }

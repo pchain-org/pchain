@@ -23,7 +23,6 @@ type ChainManager struct {
 	childQuits  map[string]chan int
 	p2pObj	*p2p.PChainP2P
 	cch 	*CrossChainHelper
-	//leger
 }
 
 var chainMgr *ChainManager
@@ -69,8 +68,7 @@ func (cm *ChainManager)LoadChains() error {
 
 		chain := LoadChildChain(cm.ctx, chainId, cm.p2pObj)
 		if chain == nil {
-			fmt.Printf("Load Child Chain [%v] failed", chainId)
-			continue
+			return errors.New("load child chain failed")
 		}
 
 		cm.childChains[chainId] = chain
@@ -176,7 +174,7 @@ func (cm *ChainManager) StartInspectEvent() {
 
 			_, ok = cm.childChains[chainId]
 			if ok {
-				fmt.Println("CreateChildChainEvent has been received, and chain has been loaded, just continue")
+				fmt.Printf("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue\n", event)
 				continue
 			}
 
