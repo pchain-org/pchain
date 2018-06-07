@@ -12,6 +12,7 @@ checkout:
     - mkdir -p $HOME/.go_workspace/src/github.com/$CIRCLE_PROJECT_USERNAME
     - mv $HOME/$CIRCLE_PROJECT_REPONAME $REPO
 
+
 test:
   override:
     - "go version"
