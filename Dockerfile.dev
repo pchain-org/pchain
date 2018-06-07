@@ -10,3 +10,5 @@ COPY glide.lock /go/src/github.com/tendermint/ethermint/
 RUN make get_vendor_deps
 
 COPY . /go/src/github.com/tendermint/ethermint
+
+
