@@ -8,6 +8,7 @@ import (
 	"sync"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
+	dbm "github.com/tendermint/go-db"
 )
 
 
@@ -16,6 +17,7 @@ type CrossChainHelper interface {
 	GetTypeMutex() *event.TypeMux
 	CanCreateChildChain(from common.Address, chainId string) error
 	CreateChildChain(from common.Address, chainId string) error
+	GetChainInfoDB() dbm.DB
 }
 
 

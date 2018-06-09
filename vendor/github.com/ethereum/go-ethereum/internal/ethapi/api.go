@@ -801,7 +801,6 @@ type RPCTransaction struct {
 	Hash             common.Hash     `json:"hash"`
 	Input            hexutil.Bytes   `json:"input"`
 	Nonce            hexutil.Uint64  `json:"nonce"`
-	Type		 hexutil.Uint64 `json:"type"`
 	To               *common.Address `json:"to"`
 	TransactionIndex hexutil.Uint    `json:"transactionIndex"`
 	Value            *hexutil.Big    `json:"value"`
@@ -825,7 +824,6 @@ func newRPCPendingTransaction(tx *types.Transaction) *RPCTransaction {
 		Hash:     tx.Hash(),
 		Input:    hexutil.Bytes(tx.Data()),
 		Nonce:    hexutil.Uint64(tx.Nonce()),
-		Type:     (hexutil.Uint64)(tx.Type()),
 		To:       tx.To(),
 		Value:    (*hexutil.Big)(tx.Value()),
 		V:        (*hexutil.Big)(v),
@@ -853,7 +851,6 @@ func newRPCTransactionFromBlockIndex(b *types.Block, txIndex uint) (*RPCTransact
 			Hash:             tx.Hash(),
 			Input:            hexutil.Bytes(tx.Data()),
 			Nonce:            hexutil.Uint64(tx.Nonce()),
-			Type:   	  (hexutil.Uint64)(tx.Type()),
 			To:               tx.To(),
 			TransactionIndex: hexutil.Uint(txIndex),
 			Value:            (*hexutil.Big)(tx.Value()),
@@ -1231,14 +1228,6 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	fmt.Printf("(s *PublicBlockChainAPI) SendTransaction(), tx(%s) has nonce(%v)\n", tx.Hash(), tx.Nonce())
 	//fmt.Println("(s *PublicBlockChainAPI) SendTransaction() 2")
 
-	// Set TX type based on input
-	if args.Type != nil {
-		tx.SetType(args.Type.ToInt().Uint64())
-
-		fmt.Printf("SendTransaction: Set type to %d for tx %s\n", tx.Type(), tx.Hash().Hex())
-	} else {
-		glog.V(logger.Info).Infof("Tx(%s): Not set type, default type %d \n", tx.Hash().Hex(), tx.Type())
-	}
 	var chainID *big.Int
 	if config := s.b.ChainConfig(); config.IsEIP155(s.b.CurrentBlock().Number()) {
 		chainID = config.ChainId

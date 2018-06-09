@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	dbm "github.com/tendermint/go-db"
 	"errors"
+	"github.com/ethereum/go-ethereum/core"
 )
 
 type CrossChainHelper struct {
@@ -23,13 +24,17 @@ func (cch *CrossChainHelper) GetTypeMutex() *event.TypeMux {
 	return cch.typeMut
 }
 
+func (cch *CrossChainHelper) GetChainInfoDB() dbm.DB {
+	return cch.chainInfoDB
+}
+
 //TODO multi-chain
 func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId string) error {
 
 	fmt.Printf("cch CanCreateChildChain called")
 
 	//check if "chainId" has been created/registered
-	ci := GetChainInfo(cch.chainInfoDB, chainId)
+	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
 	if ci != nil {
 		return errors.New(fmt.Sprintf("chain %s does exist, can't create again", chainId))
 	}
@@ -51,16 +56,16 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 	fmt.Printf("cch CreateChildChain called\n")
 
 	//write the child chain info to "multi-chain" db
-	ci := GetChainInfo(cch.chainInfoDB, chainId)
+	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
 	if ci != nil {
 		fmt.Printf("chain %s does exist, can't create again\n", chainId)
 		//return nil, because this could be executed for the same TX!!!
 		return nil
 	}
 
-	ci = &ChainInfo {owner: from, chainId: chainId}
+	ci = &core.ChainInfo {Owner: from, ChainId: chainId}
 
-	SaveChainInfo(cch.chainInfoDB, ci)
+	core.SaveChainInfo(cch.chainInfoDB, ci)
 
 	return nil
 }

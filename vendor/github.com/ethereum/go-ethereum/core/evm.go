@@ -36,9 +36,6 @@ func NewEVMContext(msg Message, header *types.Header, chain HeaderFetcher) vm.Co
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
-		CanUnlockAsset:  CanUnlockAsset,
-		LockAsset:       LockAsset,
-		UnlockAsset:	 UnlockAsset,
 
 		Origin:      msg.From(),
 		Coinbase:    header.Coinbase,
@@ -73,24 +70,5 @@ func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
-}
-
-// CanLock checks wether there are enough funds in the address' account to unlock.
-func CanUnlockAsset(db vm.StateDB, addr common.Address, amount *big.Int) bool {
-	return db.GetLockedBalance(addr).Cmp(amount) >= 0
-}
-
-// lock amount from sender and put it into lock state using the given Db
-func LockAsset(db vm.StateDB, sender common.Address, amount *big.Int) {
-	db.SubBalance(sender, amount)
-	db.AddLockedBalance(sender, amount)
-}
-
-// unlock amount from sender and put it into Balance using the given Db
-func UnlockAsset(db vm.StateDB, sender common.Address, amount *big.Int) {
-	if CanUnlockAsset(db, sender, amount) {
-		db.SubLockedBalance(sender, amount)
-		db.AddBalance(sender, amount)
-	}
 }
 

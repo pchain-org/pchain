@@ -61,7 +61,7 @@ func (cm *ChainManager)LoadChains() error {
 	//set the event.TypeMutex to cch
 	cm.InitCrossChainHelper(cm.mainChain.EthNode.EventMux())
 
-	childChainIds := GetChildChainIds(cm.cch.chainInfoDB)
+	childChainIds := core.GetChildChainIds(cm.cch.chainInfoDB)
 	fmt.Printf("LoadChains 0, childChainIds is %v, len is %d\n", childChainIds, len(childChainIds))
 
 	for _, chainId := range childChainIds {
@@ -186,7 +186,7 @@ func (cm *ChainManager) StartInspectEvent() {
 func (cm *ChainManager) LoadChildChainInRT(from common.Address, chainId string) {
 
 	//LoadChildChain if from and chainId matches
-	ci := GetChainInfo(cm.cch.chainInfoDB, chainId)
+	ci := core.GetChainInfo(cm.cch.chainInfoDB, chainId)
 	if ci == nil {
 		fmt.Printf("child chain: %s does not exist, can't load", chainId)
 		return
