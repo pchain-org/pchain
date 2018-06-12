@@ -9,7 +9,7 @@ import (
 type ReceiveTxCb func() error
 type CheckTxCb func(tx *ethTypes.Transaction) error
 type DeliverTxCb func(tx *ethTypes.Transaction) error
-type CommitCb func(state BrState, block int) error
+type CommitCb func(brCommit BrCommit) error
 type RefreshABCIResponseCb func() error
 
 var receiveTxCbMap map[string]ReceiveTxCb = make(map[string]ReceiveTxCb)

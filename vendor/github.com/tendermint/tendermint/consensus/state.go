@@ -21,6 +21,7 @@ import (
 	ep "github.com/tendermint/tendermint/epoch"
 	//ethTypes "github.com/ethereum/go-ethereum/core/types"
 	//"github.com/ethereum/go-ethereum/common"
+	"github.com/tendermint/tendermint/rpc/core/txhook"
 )
 
 //-----------------------------------------------------------------------------
@@ -239,6 +240,8 @@ type ConsensusState struct {
 	mempool      types.Mempool
 	privValidator PrivValidator // for signing votes
 
+	cch 	core.CrossChainHelper
+
 	mtx sync.Mutex
 	RoundState
 	epoch *ep.Epoch
@@ -265,13 +268,14 @@ type ConsensusState struct {
 }
 
 func NewConsensusState(config cfg.Config, state *sm.State, proxyAppConn proxy.AppConnConsensus,
-	blockStore types.BlockStore, mempool types.Mempool, epoch *ep.Epoch) *ConsensusState {
+	blockStore types.BlockStore, mempool types.Mempool, epoch *ep.Epoch, cch  core.CrossChainHelper) *ConsensusState {
 	// fmt.Println("state.Validator in newconsensus:", state.Validators)
 	cs := &ConsensusState{
 		config:           config,
 		proxyAppConn:     proxyAppConn,
 		blockStore:       blockStore,
 		mempool:          mempool,
+		cch:              cch,
 		peerMsgQueue:     make(chan msgInfo, msgQueueSize),
 		internalMsgQueue: make(chan msgInfo, msgQueueSize),
 		timeoutTicker:    NewTimeoutTicker(),
@@ -1306,7 +1310,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	// Execute and commit the block, update and save the state, and update the mempool.
 	// All calls to the proxyAppConn come here.
 	// NOTE: the block.AppHash wont reflect these txs until the next block
-	err := stateCopy.ApplyBlock(eventCache, cs.proxyAppConn, block, blockParts.Header(), cs.mempool)
+	err := stateCopy.ApplyBlock(eventCache, cs.proxyAppConn, block, blockParts.Header(), cs.mempool, cs.cch)
 	if err != nil {
 		log.Error("Error on ApplyBlock. Did the application crash? Please restart tendermint", "error", err)
 		return

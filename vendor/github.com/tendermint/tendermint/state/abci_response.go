@@ -42,6 +42,9 @@ type ABCIResponses struct {
 	InvalidTxs int
 	TxIndex int
 	Commited bool
+
+	block	*types.Block
+	cch 	rpcTxHook.CrossChainHelper
 }
 
 var abciMap map[string]*ABCIResponses = make(map[string]*ABCIResponses)
@@ -59,7 +62,8 @@ var abciMap map[string]*ABCIResponses = make(map[string]*ABCIResponses)
 //}
 
 // NewABCIResponses returns a new ABCIResponses
-func NewABCIResponses(block *types.Block, state *State, eventCache types.Fireable) *ABCIResponses {
+func NewABCIResponses(block *types.Block, state *State,
+			eventCache types.Fireable, cch 	rpcTxHook.CrossChainHelper) *ABCIResponses {
 
 	return &ABCIResponses{
 		State:      state,
@@ -72,17 +76,20 @@ func NewABCIResponses(block *types.Block, state *State, eventCache types.Fireabl
 		InvalidTxs: 0,
 		TxIndex:    0,
 		Commited:   false,
+		block:      block,
+		cch:	    cch,
 	}
 }
 
 func RefreshABCIResponses(block *types.Block, state *State,
-		eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus) *ABCIResponses {
+		eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus,
+		cch rpcTxHook.CrossChainHelper) *ABCIResponses {
 
 	chainID := state.ChainID
 
 	instance, ok := abciMap[chainID]
 	if !ok {
-		instance = NewABCIResponses(block, state, eventCache)
+		instance = NewABCIResponses(block, state, eventCache, cch)
 		abciMap[chainID] = instance
 	} else {
 		instance.State = state
@@ -95,6 +102,8 @@ func RefreshABCIResponses(block *types.Block, state *State,
 		instance.InvalidTxs = 0
 		instance.TxIndex = 0
 		instance.Commited = false
+		instance.block = block
+		instance.cch = cch
 	}
 
 	if !instance.Commited {
@@ -217,11 +226,27 @@ func (a *ABCIResponses) ResCb(req *abci.Request, res *abci.Response) {
 		commitCbMap := rpcTxHook.GetCommitCbMap()
 		fmt.Printf("abci.Response_Commit, len of commitCbMap is %v\n", len(commitCbMap))
 		for _, commitCb := range commitCbMap {
-			commitCb(a.State, a.Height)
+			commitCb(a)
 		}
 
 		vals := req.GetCommit().Validators
 		fmt.Printf("abci.Response_Commit, Validators are %v, a.Commited is %v\n", vals, a.Commited)
 
 	}
+}
+
+func (a *ABCIResponses) GetChainId() string {
+	return a.State.ChainID
+}
+
+func (a *ABCIResponses) GetValidators() (*types.ValidatorSet, *types.ValidatorSet, error) {
+	return a.State.GetValidators()
+}
+
+func (a *ABCIResponses) GetCurrentBlock() (*types.Block) {
+	return a.block
+}
+
+func (a *ABCIResponses) GetCrossChainHelper() rpcTxHook.CrossChainHelper {
+	return a.cch
 }

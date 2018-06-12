@@ -8,6 +8,8 @@ import (
 	dbm "github.com/tendermint/go-db"
 	"errors"
 	"github.com/ethereum/go-ethereum/core"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	tdmTypes "github.com/tendermint/tendermint/types"
 )
 
 type CrossChainHelper struct {
@@ -67,5 +69,30 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 
 	core.SaveChainInfo(cch.chainInfoDB, ci)
 
+	return nil
+}
+
+//should return varified transaction
+func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *ethTypes.Transaction {
+	return nil
+}
+
+//should return varified transaction
+func (cch *CrossChainHelper) GetTxFromChildChain(txHash common.Hash, chainId string) *ethTypes.Transaction {
+	return nil
+}
+
+//Save child chain's block to main block
+func (cch *CrossChainHelper) SaveBlock(block *tdmTypes.Block, chainId string) error {
+	return nil
+}
+
+//get one chain's block by number
+func (cch *CrossChainHelper) GetBlockByNumber(number int64, chainId string) *tdmTypes.Block {
+	return nil
+}
+
+//get one chain's block by hash
+func (cch *CrossChainHelper) GetBlockByHash(hash common.Hash, chainId string) *tdmTypes.Block {
 	return nil
 }

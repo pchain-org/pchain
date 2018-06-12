@@ -162,12 +162,12 @@ func svmDeliverTxCb(tx *ethTypes.Transaction) error {
 	return nil
 }
 
-func svmCommitCb(state BrState, block int) error {
+func svmCommitCb(brCommit BrCommit) error {
 
 	fmt.Println("svm_CommitCb")
 
 	var err error = nil
-	valSet, _, err := state.GetValidators()
+	valSet, _, err := brCommit.GetValidators()
 	if err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ func svmCommitCb(state BrState, block int) error {
 				}
 				if total > totalPower*2/3 {
 					vo.Confirmed = true
-					vo.ConfirmedBlock = block
+					vo.ConfirmedBlock = brCommit.GetCurrentBlock().Height
 					toConfirmedVOList = append(toConfirmedVOList, vo)
 				}
 			}

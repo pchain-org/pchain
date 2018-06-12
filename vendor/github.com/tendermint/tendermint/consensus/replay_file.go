@@ -17,13 +17,14 @@ import (
 	sm "github.com/tendermint/tendermint/state"
 	ep "github.com/tendermint/tendermint/epoch"
 	"github.com/tendermint/tendermint/types"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 )
 
 //--------------------------------------------------------
 // replay messages interactively or all at once
 
 func RunReplayFile(config cfg.Config, walFile string, console bool) {
-	consensusState := newConsensusStateForReplay(config)
+	consensusState := newConsensusStateForReplay(config, nil)
 
 	if err := consensusState.ReplayFile(walFile, console); err != nil {
 		Exit(Fmt("Error during consensus replay: %v", err))
@@ -103,7 +104,7 @@ func (pb *playback) replayReset(count int, newStepCh chan interface{}) error {
 	pb.cs.Stop()
 	pb.cs.Wait()
 
-	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.proxyAppConn, pb.cs.blockStore, pb.cs.mempool, pb.cs.epoch)
+	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.proxyAppConn, pb.cs.blockStore, pb.cs.mempool, pb.cs.epoch, pb.cs.cch)
 	newCS.SetEventSwitch(pb.cs.evsw)
 	newCS.startForReplay()
 
@@ -237,7 +238,7 @@ func (pb *playback) replayConsoleLoop() int {
 //--------------------------------------------------------------------------------
 
 // convenience for replay mode
-func newConsensusStateForReplay(config cfg.Config) *ConsensusState {
+func newConsensusStateForReplay(config cfg.Config, cch rpcTxHook.CrossChainHelper) *ConsensusState {
 	// Get BlockStore
 	blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
 	blockStore := bc.NewBlockStore(blockStoreDB)
@@ -251,7 +252,7 @@ func newConsensusStateForReplay(config cfg.Config) *ConsensusState {
 	state.Epoch = epoch
 
 	// Create proxyAppConn connection (consensus, mempool, query)
-	proxyApp := proxy.NewAppConns(config, proxy.DefaultClientCreator(config), NewHandshaker(config, state, blockStore))
+	proxyApp := proxy.NewAppConns(config, proxy.DefaultClientCreator(config), NewHandshaker(config, state, blockStore, cch))
 	_, err := proxyApp.Start()
 	if err != nil {
 		Exit(Fmt("Error starting proxy app conns: %v", err))
@@ -268,7 +269,7 @@ func newConsensusStateForReplay(config cfg.Config) *ConsensusState {
 
 	mempool := mempl.NewMempool(config, proxyApp.Mempool())
 
-	consensusState := NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch)
+	consensusState := NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch, cch)
 	consensusState.SetEventSwitch(eventSwitch)
 	return consensusState
 }
