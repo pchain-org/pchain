@@ -8,14 +8,14 @@ import (
 
 //-----------------------------------------------------------------------------
 
-func NetInfo() (*ctypes.ResultNetInfo, error) {
-	listening := p2pSwitch.IsListening()
+func NetInfo(context *RPCDataContext) (*ctypes.ResultNetInfo, error) {
+	listening := context.p2pSwitch.IsListening()
 	listeners := []string{}
-	for _, listener := range p2pSwitch.Listeners() {
+	for _, listener := range context.p2pSwitch.Listeners() {
 		listeners = append(listeners, listener.String())
 	}
 	peers := []ctypes.Peer{}
-	for _, peer := range p2pSwitch.Peers().List() {
+	for _, peer := range context.p2pSwitch.Peers().List() {
 		peers = append(peers, ctypes.Peer{
 			NodeInfo:         *peer.NodeInfo,
 			IsOutbound:       peer.IsOutbound(),
@@ -32,14 +32,14 @@ func NetInfo() (*ctypes.ResultNetInfo, error) {
 //-----------------------------------------------------------------------------
 
 // Dial given list of seeds
-func UnsafeDialSeeds(seeds []string) (*ctypes.ResultDialSeeds, error) {
+func UnsafeDialSeeds(context *RPCDataContext, seeds []string) (*ctypes.ResultDialSeeds, error) {
 
 	if len(seeds) == 0 {
 		return &ctypes.ResultDialSeeds{}, fmt.Errorf("No seeds provided")
 	}
 	// starts go routines to dial each seed after random delays
-	log.Info("DialSeeds", "addrBook", addrBook, "seeds", seeds)
-	err := p2pSwitch.DialSeeds(addrBook, seeds)
+	log.Info("DialSeeds", "addrBook", context.addrBook, "seeds", seeds)
+	err := context.p2pSwitch.DialSeeds(context.addrBook, seeds)
 	if err != nil {
 		return &ctypes.ResultDialSeeds{}, err
 	}
@@ -48,6 +48,6 @@ func UnsafeDialSeeds(seeds []string) (*ctypes.ResultDialSeeds, error) {
 
 //-----------------------------------------------------------------------------
 
-func Genesis() (*ctypes.ResultGenesis, error) {
-	return &ctypes.ResultGenesis{genDoc}, nil
+func Genesis(context *RPCDataContext) (*ctypes.ResultGenesis, error) {
+	return &ctypes.ResultGenesis{context.genDoc}, nil
 }

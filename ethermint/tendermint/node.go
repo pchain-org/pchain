@@ -461,27 +461,31 @@ func (n *Node) AddListener(l p2p.Listener) {
 
 // ConfigureRPC sets all variables in rpccore so they will serve
 // rpc calls from this node
-func (n *Node) ConfigureRPC() {
-	rpccore.SetConfig(n.config)
-	rpccore.SetEventSwitch(n.evsw)
-	rpccore.SetBlockStore(n.blockStore)
-	rpccore.SetConsensusState(n.consensusState)
-	rpccore.SetMempool(n.mempoolReactor.Mempool)
-	rpccore.SetSwitch(n.sw)
-	rpccore.SetPubKey(n.privValidator.PubKey)
-	rpccore.SetGenesisDoc(n.genesisDoc)
-	rpccore.SetAddrBook(n.addrBook)
-	rpccore.SetProxyAppQuery(n.proxyApp.Query())
-	rpccore.SetTxIndexer(n.txIndexer)
+func (n *Node) ConfigureRPC() *rpccore.RPCDataContext {
+	rpcData := &rpccore.RPCDataContext{}
+
+	rpcData.SetConfig(n.config)
+	rpcData.SetEventSwitch(n.evsw)
+	rpcData.SetBlockStore(n.blockStore)
+	rpcData.SetConsensusState(n.consensusState)
+	rpcData.SetMempool(n.mempoolReactor.Mempool)
+	rpcData.SetSwitch(n.sw)
+	rpcData.SetPubKey(n.privValidator.PubKey)
+	rpcData.SetGenesisDoc(n.genesisDoc)
+	rpcData.SetAddrBook(n.addrBook)
+	rpcData.SetProxyAppQuery(n.proxyApp.Query())
+	rpcData.SetTxIndexer(n.txIndexer)
+
+	return rpcData
 }
 
 func (n *Node) StartRPC() ([]net.Listener, error) {
-	n.ConfigureRPC()
+	rpcData := n.ConfigureRPC()
 
 	// We are using Channel Server instead of Http/Websocket Server
 	cl := n.rpcListeners[0]
 	mux := http.NewServeMux()
-	rpcserver.RegisterRPCFuncs(mux, rpccore.Routes)
+	rpcserver.RegisterRPCFuncs(mux, rpccore.Routes, rpcData)
 	rpcserver.StartChannelServer(cl, mux)
 
 	/*
