@@ -466,7 +466,7 @@ func (self *StateDB) deleteStateObject(stateObject *StateObject) {
 	self.trie.Delete(addr[:])
 }
 
-// Retrieve a state object given my the address. Returns nil if not found.
+// Retrieve a state object given by the address. Returns nil if not found.
 func (self *StateDB) GetStateObject(addr common.Address) (stateObject *StateObject) {
 	// Prefer 'live' objects.
 	if obj := self.stateObjects[addr]; obj != nil {
