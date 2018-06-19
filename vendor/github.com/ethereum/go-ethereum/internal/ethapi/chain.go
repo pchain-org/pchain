@@ -268,12 +268,12 @@ func init() {
 	core.RegisterApplyCb(CCCFuncName, ccc_ApplyCb)
 
 	//DepositInMainChain
-	core.RegisterValidateCb(CCCFuncName, dimc_ValidateCb)
-	core.RegisterApplyCb(CCCFuncName, dimc_ApplyCb)
+	core.RegisterValidateCb(DIMCFuncName, dimc_ValidateCb)
+	core.RegisterApplyCb(DIMCFuncName, dimc_ApplyCb)
 
 	//DepositInChildChain
-	core.RegisterValidateCb(CCCFuncName, dicc_ValidateCb)
-	core.RegisterApplyCb(CCCFuncName, dicc_ApplyCb)
+	core.RegisterValidateCb(DICCFuncName, dicc_ValidateCb)
+	core.RegisterApplyCb(DICCFuncName, dicc_ApplyCb)
 
 	//WithdrawFromChildChain
 	core.RegisterValidateCb(WFCCFuncName, wfcc_ValidateCb)
