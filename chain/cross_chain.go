@@ -10,12 +10,16 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	tdmTypes "github.com/tendermint/tendermint/types"
+	"encoding/json"
+	"github.com/ethereum/go-ethereum/ethclient"
 )
 
 type CrossChainHelper struct {
 	mtx  sync.Mutex
 	typeMut *event.TypeMux
 	chainInfoDB dbm.DB
+	//the client does only connect to main chain
+	client *ethclient.Client
 }
 
 func (cch *CrossChainHelper) GetMutex() *sync.Mutex {
@@ -28,6 +32,10 @@ func (cch *CrossChainHelper) GetTypeMutex() *event.TypeMux {
 
 func (cch *CrossChainHelper) GetChainInfoDB() dbm.DB {
 	return cch.chainInfoDB
+}
+
+func (cch *CrossChainHelper) GetClient() *ethclient.Client {
+	return cch.client
 }
 
 //TODO multi-chain
@@ -74,25 +82,72 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 
 //should return varified transaction
 func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *ethTypes.Transaction {
-	return nil
+
+	chainMgr := GetCMInstance(nil)
+	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
+
+	tx, _, _, _ := core.GetTransaction(chainDb, txHash)
+
+	return tx
 }
 
 //should return varified transaction
 func (cch *CrossChainHelper) GetTxFromChildChain(txHash common.Hash, chainId string) *ethTypes.Transaction {
+
+	chainMgr := GetCMInstance(nil)
+	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
+
+	tx, _ := core.GetChildTransactionByHash(chainDb, txHash, chainId)
+
+	return tx
+
+}
+
+//get one child chain's block by number
+func (cch *CrossChainHelper) GetChildBlockByNumber(number int64, chainId string) *tdmTypes.Block {
+
+	chainMgr := GetCMInstance(nil)
+	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
+
+	block, _ := core.GetChildTdmBlockByNumber(chainDb, number, chainId)
+
+	return block
+}
+
+//get one child chain's block by hash
+func (cch *CrossChainHelper) GetChildBlockByHash(hash []byte, chainId string) *tdmTypes.Block {
+
+	chainMgr := GetCMInstance(nil)
+	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
+
+	block, _ := core.GetChildTdmBlockByHash(chainDb, hash, chainId)
+
+	return block
+}
+
+func (cch *CrossChainHelper) VerifyTdmBlock(from common.Address, block string) error {
+
+	var tdmBlock tdmTypes.Block
+	err := json.Unmarshal([]byte(block), &tdmBlock)
+	if err != nil {
+		return err
+
+	}
+
 	return nil
 }
 
-//Save child chain's block to main block
-func (cch *CrossChainHelper) SaveBlock(block *tdmTypes.Block, chainId string) error {
-	return nil
-}
+func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block string) error {
 
-//get one chain's block by number
-func (cch *CrossChainHelper) GetBlockByNumber(number int64, chainId string) *tdmTypes.Block {
-	return nil
-}
+	var tdmBlock tdmTypes.Block
+	err := json.Unmarshal([]byte(block), &tdmBlock)
+	if err != nil {
+		return err
 
-//get one chain's block by hash
-func (cch *CrossChainHelper) GetBlockByHash(hash common.Hash, chainId string) *tdmTypes.Block {
-	return nil
+	}
+
+	chainMgr := GetCMInstance(nil)
+	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
+
+	return core.WriteTdmBlockWithDetail(chainDb, &tdmBlock)
 }

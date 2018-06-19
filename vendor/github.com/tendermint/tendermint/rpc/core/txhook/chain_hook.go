@@ -16,10 +16,6 @@ func init() {
 func wfccCommitCb(brCommit BrCommit) error {
 
 	fmt.Println("wfccCommitCb")
-
-	cch := brCommit.GetCrossChainHelper()
-	block := brCommit.GetCurrentBlock()
-	chainId := brCommit.GetChainId()
-	return cch.SaveBlock(block, chainId)
-
+	brCommit.SaveCurrentBlock2MainChain()
+	return nil
 }

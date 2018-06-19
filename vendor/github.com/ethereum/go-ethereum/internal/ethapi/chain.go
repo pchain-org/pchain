@@ -19,6 +19,7 @@ var (
 	DICCFuncName string = "DepositInChildChain"
 	WFCCFuncName string = "WithdrawFromChildChain"
 	WFMCFuncName string = "WithdrawFromMainChain"
+	SB2MCFuncName string = "SaveBlockToMainChain"
 )
 
 
@@ -262,6 +263,42 @@ func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
+func (s *PublicChainAPI) SaveBlockToMainChain(ctx context.Context, from common.Address,
+						block string) (common.Hash, error) {
+
+	localChainId := s.b.ChainConfig().PChainId
+	if localChainId != "pchain" {
+		return common.Hash{}, errors.New("this api can only be called in main chain")
+	}
+
+	fromStr := fmt.Sprintf("%X", from.Bytes())
+
+	params := types.MakeKeyValueSet()
+	params.Set("from", fromStr)
+	params.Set("block", block)
+
+	fmt.Printf("params are : %s\n", params.String())
+
+	etd := &types.ExtendTxData {
+		FuncName:    SB2MCFuncName,
+		Params:      params,
+	}
+
+	args := SendTxArgs {
+		From:         from,
+		To:           nil,
+		Gas:          nil,
+		GasPrice:     nil,
+		Value:        nil,
+		Data:         nil,
+		Nonce:        nil,
+		Type:         nil,
+		ExtendTxData: etd,
+	}
+
+	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
+}
+
 func init() {
 	//CreateChildChain
 	core.RegisterValidateCb(CCCFuncName, ccc_ValidateCb)
@@ -282,6 +319,10 @@ func init() {
 	//WithdrawFromMainChain
 	core.RegisterValidateCb(WFMCFuncName, wfmc_ValidateCb)
 	core.RegisterApplyCb(WFMCFuncName, wfmc_ApplyCb)
+
+	//SB2MCFuncName
+	core.RegisterValidateCb(SB2MCFuncName, sb2mc_ValidateCb)
+	core.RegisterApplyCb(SB2MCFuncName, sb2mc_ApplyCb)
 }
 
 func ccc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
@@ -573,4 +614,45 @@ func wfmc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainH
 	state.AddBalance(from, childAmount)
 
 	return nil
+}
+
+func sb2mc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
+
+	fmt.Println("sb2mc_ValidateCb")
+
+	etd := tx.ExtendTxData()
+	fmt.Printf("params are : %s\n", etd.Params.String())
+
+	//tx from ethereum, the params have not been converted to []byte
+	fromInt, _ := etd.Params.Get("from")
+	from := common.HexToAddress(fromInt.(string))
+	blockInt, _ := etd.Params.Get("block")
+	block := blockInt.(string)
+
+	fmt.Printf("from is %X, txHash is %x, block is %s\n", from.Hex(), block)
+
+	err := cch.VerifyTdmBlock(from, block)
+	if err != nil {
+		return errors.New(fmt.Sprintf("block does not pass verfication", from, block))
+	}
+
+	return nil
+}
+
+func sb2mc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
+
+	fmt.Println("sb2mc_ApplyCb")
+
+	etd := tx.ExtendTxData()
+	fmt.Printf("params are : %s\n", etd.Params.String())
+
+	//tx from ethereum, the params have not been converted to []byte
+	fromInt, _ := etd.Params.Get("from")
+	from := common.HexToAddress(fromInt.(string))
+	blockInt, _ := etd.Params.Get("block")
+	block := blockInt.(string)
+
+	fmt.Printf("from is %X, txHash is %x, block is %s\n", from.Hex(), block)
+
+	return cch.SaveTdmBlock2MainBlock(block)
 }
