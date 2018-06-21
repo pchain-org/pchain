@@ -99,18 +99,23 @@ func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID B
 	return nil
 }
 
-func MakeIntegratedBlock(block *Block, commit *Commit) (*Block) {
+type IntegratedBlock struct {
+	Block *Block
+	Commit *Commit
+	BlockPartSize int
+}
+
+func MakeIntegratedBlock(block *Block, commit *Commit, blockPartSize int) (*IntegratedBlock) {
 
 	if block == nil || commit == nil {
 		return nil
 	}
 
-	block.LastCommit = commit
-	block.LastCommitHash = block.LastCommit.Hash()
-
-	fmt.Printf("MakeIntegratedBlock(), block is %v\n", block.String())
-
-	return block
+	return &IntegratedBlock {
+		Block: block,
+		Commit: commit,
+		BlockPartSize: blockPartSize,
+	}
 }
 
 func (b *Block) FillHeader() {

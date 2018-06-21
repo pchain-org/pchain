@@ -419,6 +419,27 @@ func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, error) {
 	return nil, nil
 }
 
+func (epoch *Epoch) GetEpochByBlockNumber(blockNumber int) *Epoch {
+
+	if blockNumber >= epoch.StartBlock && blockNumber <= epoch.EndBlock {
+		return epoch
+	}
+
+	for number:=epoch.Number-1; number>=0; number-- {
+
+		ep := loadOneEpoch(epoch.db, number)
+		if ep == nil {
+			return nil
+		}
+
+		if blockNumber >= ep.StartBlock && blockNumber <= ep.EndBlock {
+			return ep
+		}
+	}
+
+	return nil
+}
+
 func (epoch *Epoch) Copy() *Epoch {
 	return epoch.copy(true)
 }

@@ -837,7 +837,7 @@ func (cs *ConsensusState) enterPropose(height int, round int) {
 			var err error = nil
 			if cs.state.BlockNumberToSave >= 0 && cs.state.BlockNumberToSave == height-1 {
 				lastBlock := cs.blockStore.LoadBlock(height - 1)
-				intBlock := types.MakeIntegratedBlock(lastBlock, cs.LastCommit.MakeCommit())
+				intBlock := types.MakeIntegratedBlock(lastBlock, cs.LastCommit.MakeCommit(), cs.config.GetInt("block_part_size"))
 				err = cs.saveBlockToMainChain(intBlock)
 			}
 			if err == nil {
@@ -1630,7 +1630,7 @@ func CompareHRS(h1, r1 int, s1 RoundStepType, h2, r2 int, s2 RoundStepType) int 
 	return 0
 }
 
-func (cs *ConsensusState) saveBlockToMainChain(block *types.Block) error {
+func (cs *ConsensusState) saveBlockToMainChain(block *types.IntegratedBlock) error {
 
 	client := cs.cch.GetClient()
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)

@@ -35,6 +35,7 @@ var (
 	blockPrefix = []byte("cc-block") //child-chain block
 	txPrefix  = []byte("cc-tx")	//child-chain tx
 	extraDataPrefix   = []byte("cc-ex") //child-chain extra data
+	blockPartSizePrefix = []byte("cc-bps") //child-chain blockPartSize
 	commitPrefix = []byte("cc-cm") //child-chain commits
 
 	NotFoundErr = errors.New("not found") // general not found error
@@ -120,6 +121,9 @@ func DeleteTdmBlockWithDetail(db ethdb.Database, number int64, chainId string) e
 	err = DeleteTdmExtraData(db, number, chainId)
 	if err != nil {return err}
 
+	err = DeleteTdmBlockPartSize(db, number, chainId)
+	if err != nil {return err}
+
 	return DeleteTdmCommits(db, number, chainId)
 }
 
@@ -138,9 +142,26 @@ func DeleteTdmExtraData(db ethdb.Database, number int64, chainId string) error {
 	return db.Delete(calExtraDataKey(number, chainId))
 }
 
+func DeleteTdmBlockPartSize(db ethdb.Database, number int64, chainId string) error {
+
+	return db.Delete(calBlockPartSizeKey(number, chainId))
+}
+
 func DeleteTdmCommits(db ethdb.Database, number int64, chainId string) error {
 
 	return db.Delete(calCommitKey(number, chainId))
+}
+
+
+func WriteTdmBlockWithDetail(db ethdb.Database, tdmBlock *tdmTypes.Block, blockPartSize int, commit *tdmTypes.Commit) error {
+
+	WriteTdmBlock(db, tdmBlock)
+	WriteTdmTransactions(db, tdmBlock)
+	WriteTdmExtraData(db, tdmBlock)
+	WriteTdmBlockPartSize(db, tdmBlock, blockPartSize)
+	WriteTdmCommits(db, tdmBlock, commit)
+
+	return nil
 }
 
 func WriteTdmBlock(db ethdb.Database, tdmBlock *tdmTypes.Block) error {
@@ -157,16 +178,6 @@ func WriteTdmBlock(db ethdb.Database, tdmBlock *tdmTypes.Block) error {
 
 	key = calBlockKeyByNumber(int64(tdmBlock.Height), chainId)
 	return db.Put(key, blockByte)
-}
-
-func WriteTdmBlockWithDetail(db ethdb.Database, tdmBlock *tdmTypes.Block) error {
-
-	WriteTdmBlock(db, tdmBlock)
-	WriteTdmTransactions(db, tdmBlock)
-	WriteTdmExtraData(db, tdmBlock)
-	WriteTdmCommits(db, tdmBlock)
-
-	return nil
 }
 
 func WriteTdmTransactions(db ethdb.Database, tdmBlock *tdmTypes.Block) error {
@@ -203,9 +214,17 @@ func WriteTdmExtraData(db ethdb.Database, tdmBlock *tdmTypes.Block) error {
 	return db.Put(key, tdmBlock.BlockExData)
 }
 
-func WriteTdmCommits(db ethdb.Database, tdmBlock *tdmTypes.Block) error {
+func WriteTdmBlockPartSize(db ethdb.Database, tdmBlock *tdmTypes.Block, blockPartSize int) error {
 
-	commitByte := wire.BinaryBytes(tdmBlock.LastCommit)
+	key := calBlockPartSizeKey(int64(tdmBlock.Height), tdmBlock.ChainID)
+	bpsByte := wire.BinaryBytes(blockPartSize)
+
+	return db.Put(key, bpsByte)
+}
+
+func WriteTdmCommits(db ethdb.Database, tdmBlock *tdmTypes.Block, commit *tdmTypes.Commit) error {
+
+	commitByte := wire.BinaryBytes(commit)
 	key := calCommitKey(int64(tdmBlock.Height), tdmBlock.ChainID)
 
 	return db.Put(key, commitByte)
@@ -229,6 +248,11 @@ func calTxKey(hash common.Hash, chainId string) []byte {
 func calExtraDataKey(number int64, chainId string) []byte {
 
 	return append(extraDataPrefix, []byte(fmt.Sprintf("-%v-%s", number, chainId))...)
+}
+
+func calBlockPartSizeKey(number int64, chainId string) []byte {
+
+	return append(blockPartSizePrefix, []byte(fmt.Sprintf("-%v-%s", number, chainId))...)
 }
 
 func calCommitKey(number int64, chainId string) []byte {

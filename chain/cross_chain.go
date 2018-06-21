@@ -12,6 +12,8 @@ import (
 	tdmTypes "github.com/tendermint/tendermint/types"
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"bytes"
+	"github.com/tendermint/tendermint/epoch"
 )
 
 type CrossChainHelper struct {
@@ -73,7 +75,9 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 		return nil
 	}
 
-	ci = &core.ChainInfo {Owner: from, ChainId: chainId}
+	ci = &core.ChainInfo {}
+	ci.Owner = from
+	ci.ChainId = chainId
 
 	core.SaveChainInfo(cch.chainInfoDB, ci)
 
@@ -125,29 +129,101 @@ func (cch *CrossChainHelper) GetChildBlockByHash(hash []byte, chainId string) *t
 	return block
 }
 
+//verify the signature of validators who voted for the block
 func (cch *CrossChainHelper) VerifyTdmBlock(from common.Address, block string) error {
 
-	var tdmBlock tdmTypes.Block
-	err := json.Unmarshal([]byte(block), &tdmBlock)
+	var intBlock tdmTypes.IntegratedBlock
+	err := json.Unmarshal([]byte(block), &intBlock)
 	if err != nil {
 		return err
-
 	}
 
-	return nil
+	tdmBlock := intBlock.Block
+	commit := intBlock.Commit
+	blockPartSize := intBlock.BlockPartSize
+
+	chainId := tdmBlock.ChainID
+	//1, check from is the validator of child chain
+	//   and check the validator hash
+	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
+	if ci == nil {
+		return errors.New(fmt.Sprintf("chain %s not exist", chainId))
+	}
+
+	epoch := ci.GetEpochByBlockNumber(tdmBlock.Height)
+	if epoch == nil {
+		return errors.New(fmt.Sprintf("could not get epoch for block height %v", tdmBlock.Height))
+	}
+
+	valSet := epoch.Validators
+	found := valSet.HasAddress(from.Bytes())
+	if !found {
+		return errors.New(fmt.Sprint("%x is not a validator of chain %s", from, chainId))
+	}
+
+	if !bytes.Equal(epoch.Validators.Hash(), tdmBlock.ValidatorsHash) {
+		return errors.New("validator set gets wrong")
+	}
+
+	//2, block header check:
+	//   *block hash
+	// must fail here, because the blockid is for the current block
+	firstParts := tdmBlock.MakePartSet(blockPartSize)
+	firstPartsHeader := firstParts.Header()
+	blockId :=  tdmTypes.BlockID {
+		tdmBlock.Hash(),
+		firstPartsHeader,
+	}
+	if !blockId.Equals(tdmBlock.LastBlockID) {
+		return errors.New("block id gets wrong")
+	}
+
+	//3£¬*data hash & num(tx)
+	if !bytes.Equal(tdmBlock.Data.Hash(), tdmBlock.DataHash) {
+		return errors.New("data hash gets wrong")
+	}
+
+	if tdmBlock.NumTxs != len(tdmBlock.Data.Txs) {
+		return errors.New("transaction number gets wrong")
+	}
+
+	//4, commit and vote check
+	if !bytes.Equal(tdmBlock.LastCommitHash, tdmBlock.LastCommit.Hash()) {
+		return errors.New("transaction number gets wrong")
+	}
+
+	return valSet.VerifyCommit(chainId, blockId, tdmBlock.Height, commit)
 }
 
 func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block string) error {
 
-	var tdmBlock tdmTypes.Block
-	err := json.Unmarshal([]byte(block), &tdmBlock)
-	if err != nil {
-		return err
+	var intBlock tdmTypes.IntegratedBlock
+	err := json.Unmarshal([]byte(block), &intBlock)
+	if err != nil { return err }
 
-	}
+	tdmBlock := intBlock.Block
+	blockPartSize := intBlock.BlockPartSize
+	commit := intBlock.Commit
 
 	chainMgr := GetCMInstance(nil)
 	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
 
-	return core.WriteTdmBlockWithDetail(chainDb, &tdmBlock)
+	err = core.WriteTdmBlockWithDetail(chainDb, tdmBlock, blockPartSize, commit)
+	if err != nil { return err }
+
+	//here is epoch update; should be a more general mechanism
+	if tdmBlock.BlockExData != nil && len(tdmBlock.BlockExData) != 0 {
+
+		ep := epoch.FromBytes(tdmBlock.BlockExData)
+		if ep != nil {
+			ci := core.GetChainInfo(cch.chainInfoDB, tdmBlock.ChainID)
+			if ep.Number > ci.EpochNumber {
+				ci.EpochNumber = ep.Number
+				ci.Epoch = ep
+				core.SaveChainInfo(cch.chainInfoDB, ci)
+			}
+		}
+	}
+
+	return nil
 }
