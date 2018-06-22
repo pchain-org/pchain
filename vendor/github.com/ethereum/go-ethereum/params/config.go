@@ -26,6 +26,7 @@ import (
 
 // MainnetChainConfig is the chain parameters to run a node on the main network.
 var MainnetChainConfig = &ChainConfig{
+	PChainId:	"pchain",
 	ChainId:        MainNetChainID,
 	HomesteadBlock: MainNetHomesteadBlock,
 	DAOForkBlock:   MainNetDAOForkBlock,
@@ -38,6 +39,7 @@ var MainnetChainConfig = &ChainConfig{
 
 // TestnetChainConfig is the chain parameters to run a node on the test network.
 var TestnetChainConfig = &ChainConfig{
+	PChainId:	"pchain_test",
 	ChainId:        big.NewInt(3),
 	HomesteadBlock: big.NewInt(0),
 	DAOForkBlock:   nil,
@@ -54,6 +56,7 @@ var TestnetChainConfig = &ChainConfig{
 // that any network, identified by its genesis block, can have its own
 // set of configuration options.
 type ChainConfig struct {
+	PChainId string `json:"pChainId"` //PChain id identifies the current chain
 	ChainId *big.Int `json:"chainId"` // Chain id identifies the current chain and is used for replay protection
 
 	HomesteadBlock *big.Int `json:"homesteadBlock"` // Homestead switch block (nil = no fork, 0 = already homestead)
@@ -70,7 +73,8 @@ type ChainConfig struct {
 
 // String implements the Stringer interface.
 func (c *ChainConfig) String() string {
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v}",
+	return fmt.Sprintf("{PChainId: %s ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v}",
+		c.PChainId,
 		c.ChainId,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -82,7 +86,7 @@ func (c *ChainConfig) String() string {
 }
 
 var (
-	TestChainConfig = &ChainConfig{big.NewInt(1), new(big.Int), new(big.Int), true, new(big.Int), common.Hash{}, new(big.Int), new(big.Int)}
+	TestChainConfig = &ChainConfig{"pchain_test0", big.NewInt(1), new(big.Int), new(big.Int), true, new(big.Int), common.Hash{}, new(big.Int), new(big.Int)}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 

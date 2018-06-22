@@ -11,6 +11,7 @@ import (
 	"github.com/tendermint/tendermint/state/txindex"
 	"github.com/tendermint/tendermint/types"
 	"github.com/tendermint/tendermint/epoch"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 )
 
 
@@ -20,14 +21,15 @@ import (
 // ValExecBlock executes the block, but does NOT mutate State.
 // + validates the block
 // + executes block.Txs on the proxyAppConn
-func (s *State) ValExecBlock(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus, block *types.Block) (*ABCIResponses, error) {
+func (s *State) ValExecBlock(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus, block *types.Block,
+				cch rpcTxHook.CrossChainHelper) (*ABCIResponses, error) {
 	// Validate the block.
 	if err := s.validateBlock(block); err != nil {
 		return nil, ErrInvalidBlock(err)
 	}
 
 	// Execute the block txs
-	abciResponses, err := execBlockOnProxyApp(eventCache, proxyAppConn, s, block)
+	abciResponses, err := execBlockOnProxyApp(eventCache, proxyAppConn, s, block, cch)
 	if err != nil {
 		// There was some error in proxyApp
 		// TODO Report error and wait for proxyApp to be available.
@@ -41,9 +43,9 @@ func (s *State) ValExecBlock(eventCache types.Fireable, proxyAppConn proxy.AppCo
 // Returns a list of transaction results and updates to the validator set
 // TODO: Generate a bitmap or otherwise store tx validity in state.
 func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus,
-				state *State, block *types.Block) (*ABCIResponses, error) {
+				state *State, block *types.Block, cch rpcTxHook.CrossChainHelper) (*ABCIResponses, error) {
 
-	abciResponses := RefreshABCIResponses(block, state, eventCache, proxyAppConn)
+	abciResponses := RefreshABCIResponses(block, state, eventCache, proxyAppConn, cch)
 
 	// Begin block
 	err := proxyAppConn.BeginBlockSync(block.Hash(), types.TM2PB.Header(block.Header))
@@ -146,9 +148,9 @@ func (s *State) validateBlock(block *types.Block) error {
 
 // Validate, execute, and commit block against app, save block and state
 func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus,
-	block *types.Block, partsHeader types.PartSetHeader, mempool types.Mempool) error {
+	block *types.Block, partsHeader types.PartSetHeader, mempool types.Mempool, cch rpcTxHook.CrossChainHelper) error {
 
-	abciResponses, err := s.ValExecBlock(eventCache, proxyAppConn, block)
+	abciResponses, err := s.ValExecBlock(eventCache, proxyAppConn, block, cch)
 	if err != nil {
 		return fmt.Errorf("Exec failed for application: %v", err)
 	}
@@ -159,7 +161,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	s.indexTxs(abciResponses)
 
 	// save the results before we commit
-	s.SaveABCIResponses(abciResponses)
+	saveABCIResponses(s.db, block.Height, abciResponses)
 
 	fail.Fail() // XXX
 
@@ -256,9 +258,9 @@ func (s *State) indexTxs(abciResponses *ABCIResponses) {
 
 // Exec and commit a block on the proxyApp without validating or mutating the state
 // Returns the application root hash (result of abci.Commit)
-func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, state *State, block *types.Block) ([]byte, error) {
+func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, state *State, block *types.Block, cch rpcTxHook.CrossChainHelper) ([]byte, error) {
 	var eventCache types.Fireable // nil
-	_, err := execBlockOnProxyApp(eventCache, appConnConsensus, state, block)
+	_, err := execBlockOnProxyApp(eventCache, appConnConsensus, state, block, cch)
 	if err != nil {
 		log.Warn("Error executing block on proxy app", "height", block.Height, "err", err)
 		return nil, err

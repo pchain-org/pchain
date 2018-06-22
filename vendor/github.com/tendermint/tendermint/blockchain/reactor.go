@@ -14,6 +14,7 @@ import (
 	"github.com/tendermint/tendermint/proxy"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 	//"fmt"
 )
 
@@ -54,12 +55,13 @@ type BlockchainReactor struct {
 	requestsCh   chan BlockRequest
 	timeoutsCh   chan string
 	lastBlock    *types.Block
+	cch          rpcTxHook.CrossChainHelper
 
 	evsw types.EventSwitch
 }
 
 // NewBlockchainReactor returns new reactor instance.
-func NewBlockchainReactor(config cfg.Config, state *sm.State, proxyAppConn proxy.AppConnConsensus, store *BlockStore, fastSync bool) *BlockchainReactor {
+func NewBlockchainReactor(config cfg.Config, state *sm.State, proxyAppConn proxy.AppConnConsensus, store *BlockStore, fastSync bool, cch rpcTxHook.CrossChainHelper) *BlockchainReactor {
 	if state.LastBlockHeight == store.Height()-1 {
 		store.height-- // XXX HACK, make this better
 	}
@@ -316,7 +318,7 @@ FOR_LOOP:
 					// NOTE: we could improve performance if we
 					// didn't make the app commit to disk every block
 					// ... but we would need a way to get the hash without it persisting
-					err := bcR.state.ApplyBlock(bcR.evsw, bcR.proxyAppConn, first, firstPartsHeader, types.MockMempool{})
+					err := bcR.state.ApplyBlock(bcR.evsw, bcR.proxyAppConn, first, firstPartsHeader, types.MockMempool{}, bcR.cch)
 					if err != nil {
 						// TODO This is bad, are we zombie?
 						cmn.PanicQ(cmn.Fmt("Failed to process committed block (%d:%X): %v", first.Height, first.Hash(), err))

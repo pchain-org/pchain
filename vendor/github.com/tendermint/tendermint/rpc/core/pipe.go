@@ -28,9 +28,8 @@ type P2P interface {
 	DialSeeds(*p2p.AddrBook, []string) error
 }
 
-//----------------------------------------------
-
-var (
+//----------------------------------------
+type RPCDataContext struct {
 	// external, thread safe interfaces
 	eventSwitch   types.EventSwitch
 	proxyAppQuery proxy.AppConnQuery
@@ -47,48 +46,48 @@ var (
 	genDoc    *types.GenesisDoc // cache the genesis structure
 	addrBook  *p2p.AddrBook
 	txIndexer txindex.TxIndexer
-)
-
-func SetConfig(c cfg.Config) {
-	config = c
 }
 
-func SetEventSwitch(evsw types.EventSwitch) {
-	eventSwitch = evsw
+func (r *RPCDataContext) SetConfig(c cfg.Config) {
+	r.config = c
 }
 
-func SetBlockStore(bs types.BlockStore) {
-	blockStore = bs
+func (r *RPCDataContext) SetEventSwitch(evsw types.EventSwitch) {
+	r.eventSwitch = evsw
 }
 
-func SetMempool(mem types.Mempool) {
-	mempool = mem
+func (r *RPCDataContext) SetBlockStore(bs types.BlockStore) {
+	r.blockStore = bs
 }
 
-func SetConsensusState(cs Consensus) {
-	consensusState = cs
+func (r *RPCDataContext) SetMempool(mem types.Mempool) {
+	r.mempool = mem
 }
 
-func SetSwitch(sw P2P) {
-	p2pSwitch = sw
+func (r *RPCDataContext) SetConsensusState(cs Consensus) {
+	r.consensusState = cs
 }
 
-func SetPubKey(pk crypto.PubKey) {
-	pubKey = pk
+func (r *RPCDataContext) SetSwitch(sw P2P) {
+	r.p2pSwitch = sw
 }
 
-func SetGenesisDoc(doc *types.GenesisDoc) {
-	genDoc = doc
+func (r *RPCDataContext) SetPubKey(pk crypto.PubKey) {
+	r.pubKey = pk
 }
 
-func SetAddrBook(book *p2p.AddrBook) {
-	addrBook = book
+func (r *RPCDataContext) SetGenesisDoc(doc *types.GenesisDoc) {
+	r.genDoc = doc
 }
 
-func SetProxyAppQuery(appConn proxy.AppConnQuery) {
-	proxyAppQuery = appConn
+func (r *RPCDataContext) SetAddrBook(book *p2p.AddrBook) {
+	r.addrBook = book
 }
 
-func SetTxIndexer(indexer txindex.TxIndexer) {
-	txIndexer = indexer
+func (r *RPCDataContext) SetProxyAppQuery(appConn proxy.AppConnQuery) {
+	r.proxyAppQuery = appConn
+}
+
+func (r *RPCDataContext) SetTxIndexer(indexer txindex.TxIndexer) {
+	r.txIndexer = indexer
 }

@@ -37,6 +37,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"fmt"
 	"net/http"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 var (
@@ -62,6 +63,7 @@ type Node struct {
 
 	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
 	services     map[reflect.Type]Service // Currently running services
+	backend      ethapi.Backend
 
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
@@ -792,6 +794,10 @@ func (n *Node) Service(service interface{}) error {
 		return nil
 	}
 	return ErrServiceUnknown
+}
+
+func (n *Node) Backend() ethapi.Backend {
+	return n.backend
 }
 
 // DataDir retrieves the current datadir used by the protocol stack.

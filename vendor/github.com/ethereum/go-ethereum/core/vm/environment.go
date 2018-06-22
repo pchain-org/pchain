@@ -46,13 +46,6 @@ type Context struct {
 	// Transfer transfers ether from one account to the other
 	Transfer	TransferFunc
 
-	// CanUnLockAsset returns whether there is enough locked asset to unlock
-	CanUnlockAsset	CanUnlockAssetFunc
-
-	// (Un)LockAsset locks ether from one account
-	LockAsset	LockAssetFunc
-	UnlockAsset	UnlockAssetFunc
-
 	// GetHash returns the hash corresponding to n
 	GetHash GetHashFunc
 
@@ -114,7 +107,7 @@ func (evm *EVM) Cancel() {
 // Call executes the contract associated with the addr with the given input as parameters. It also handles any
 // necessary value transfer required and takes the necessary steps to create accounts and reverses the state in
 // case of an execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int, mtype uint64) (ret []byte, err error) {
+func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas, value *big.Int) (ret []byte, err error) {
 	if evm.vmConfig.NoRecursion && evm.depth > 0 {
 		caller.ReturnGas(gas)
 
@@ -149,43 +142,27 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas,
 		to = evm.StateDB.GetAccount(addr)
 	}
 
-	if mtype == 0 {
-	        fmt.Printf("EVM_Call : transfer value %d for addr %x\n", value, to.Address())
+	//fmt.Printf("EVM_Call : transfer value %d for addr %x\n", value, to.Address())
 
-		evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
+	evm.Transfer(evm.StateDB, caller.Address(), to.Address(), value)
 
-		// initialise a new contract and set the code that is to be used by the
-		// E The contract is a scoped evmironment for this execution context
-		// only.
-		contract := NewContract(caller, to, value, gas)
-		contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
-		defer contract.Finalise()
+	// initialise a new contract and set the code that is to be used by the
+	// E The contract is a scoped evmironment for this execution context
+	// only.
+	contract := NewContract(caller, to, value, gas)
+	contract.SetCallCode(&addr, evm.StateDB.GetCodeHash(addr), evm.StateDB.GetCode(addr))
+	defer contract.Finalise()
 
-		ret, err = evm.interpreter.Run(contract, input)
-		// When an error was returned by the EVM or when setting the creation code
-		// above we revert to the snapshot and consume any gas remaining. Additionally
-		// when we're in homestead this also counts for code storage gas errors.
-		if err != nil {
-			contract.UseGas(contract.Gas)
+	ret, err = evm.interpreter.Run(contract, input)
+	// When an error was returned by the EVM or when setting the creation code
+	// above we revert to the snapshot and consume any gas remaining. Additionally
+	// when we're in homestead this also counts for code storage gas errors.
+	if err != nil {
+		contract.UseGas(contract.Gas)
 
-			evm.StateDB.RevertToSnapshot(snapshot)
-		}
-		return ret, err
-	} else if mtype == 1 {
-	        fmt.Printf("EVM_Call : lock value %d for addr %x\n", value, to.Address())
-
-		evm.LockAsset(evm.StateDB, caller.Address(), value)
-		return nil, nil
-	} else if mtype == 2 {
-	        fmt.Printf("EVM_Call : unlock value %d for addr %x\n", value, to.Address())
-
-		evm.UnlockAsset(evm.StateDB, caller.Address(), value)
-		return nil, nil
-	} else {
-		// print some log
-		return nil, nil
-
+		evm.StateDB.RevertToSnapshot(snapshot)
 	}
+	return ret, err
 }
 
 // CallCode executes the contract associated with the addr with the given input as parameters. It also handles any

@@ -21,6 +21,11 @@ import (
 	ep "github.com/tendermint/tendermint/epoch"
 	//ethTypes "github.com/ethereum/go-ethereum/core/types"
 	//"github.com/ethereum/go-ethereum/common"
+	"github.com/tendermint/tendermint/rpc/core/txhook"
+	"encoding/json"
+	"golang.org/x/net/context"
+	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 )
 
 //-----------------------------------------------------------------------------
@@ -239,6 +244,8 @@ type ConsensusState struct {
 	mempool      types.Mempool
 	privValidator PrivValidator // for signing votes
 
+	cch 	core.CrossChainHelper
+
 	mtx sync.Mutex
 	RoundState
 	epoch *ep.Epoch
@@ -265,13 +272,14 @@ type ConsensusState struct {
 }
 
 func NewConsensusState(config cfg.Config, state *sm.State, proxyAppConn proxy.AppConnConsensus,
-	blockStore types.BlockStore, mempool types.Mempool, epoch *ep.Epoch) *ConsensusState {
+	blockStore types.BlockStore, mempool types.Mempool, epoch *ep.Epoch, cch  core.CrossChainHelper) *ConsensusState {
 	// fmt.Println("state.Validator in newconsensus:", state.Validators)
 	cs := &ConsensusState{
 		config:           config,
 		proxyAppConn:     proxyAppConn,
 		blockStore:       blockStore,
 		mempool:          mempool,
+		cch:              cch,
 		peerMsgQueue:     make(chan msgInfo, msgQueueSize),
 		internalMsgQueue: make(chan msgInfo, msgQueueSize),
 		timeoutTicker:    NewTimeoutTicker(),
@@ -826,7 +834,15 @@ func (cs *ConsensusState) enterPropose(height int, round int) {
 		// else, we'll enterPrevote when the rest of the proposal is received (in AddProposalBlockPart),
 		// or else after timeoutPropose
 		if cs.isProposalComplete() {
-			cs.enterPrevote(height, cs.Round)
+			var err error = nil
+			if cs.state.BlockNumberToSave >= 0 && cs.state.BlockNumberToSave == height-1 {
+				lastBlock := cs.blockStore.LoadBlock(height - 1)
+				intBlock := types.MakeIntegratedBlock(lastBlock, cs.LastCommit.MakeCommit(), cs.config.GetInt("block_part_size"))
+				err = cs.saveBlockToMainChain(intBlock)
+			}
+			if err == nil {
+				cs.enterPrevote(height, cs.Round)
+			}
 		}
 	}()
 
@@ -1306,7 +1322,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	// Execute and commit the block, update and save the state, and update the mempool.
 	// All calls to the proxyAppConn come here.
 	// NOTE: the block.AppHash wont reflect these txs until the next block
-	err := stateCopy.ApplyBlock(eventCache, cs.proxyAppConn, block, blockParts.Header(), cs.mempool)
+	err := stateCopy.ApplyBlock(eventCache, cs.proxyAppConn, block, blockParts.Header(), cs.mempool, cs.cch)
 	if err != nil {
 		log.Error("Error on ApplyBlock. Did the application crash? Please restart tendermint", "error", err)
 		return
@@ -1612,4 +1628,45 @@ func CompareHRS(h1, r1 int, s1 RoundStepType, h2, r2 int, s2 RoundStepType) int 
 		return 1
 	}
 	return 0
+}
+
+func (cs *ConsensusState) saveBlockToMainChain(block *types.IntegratedBlock) error {
+
+	client := cs.cch.GetClient()
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+
+	number, err := client.BlockNumber(ctx)
+	if err != nil {
+		return err
+	}
+
+	jsonBlock, err := json.Marshal(block)
+	if err != nil {
+		return err
+	}
+	hash, err := client.SaveBlockToMainChain(ctx, common.BytesToAddress(cs.privValidator.GetAddress()), string(jsonBlock))
+	if err != nil {
+		return err
+	}
+
+	curNumber := number
+	//we wait for 3 blocks, if not write to main chain, just return error
+	for ; new(big.Int).Sub(curNumber, number).Int64() < 3; {
+
+		tmpNumber, err := client.BlockNumber(ctx)
+		if err != nil {
+			return err
+		}
+
+		if tmpNumber.Cmp(curNumber) > 0 {
+			_, isPending, err := client.TransactionByHash(ctx, hash)
+			if !isPending && err == nil {
+				return nil
+			}
+
+			curNumber = tmpNumber
+		}
+	}
+
+	return errors.New("block not saved after 3 main chain block generated")
 }

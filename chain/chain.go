@@ -24,6 +24,7 @@ import (
 	"github.com/pchain/p2p"
 	"github.com/tendermint/go-rpc/server"
 	"github.com/tendermint/tendermint/proxy"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 )
 
 const (
@@ -79,7 +80,7 @@ func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chai
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	fmt.Println("tm node")
-	chain.TdmNode = MakeTendermintNode(config, pNode, listener)
+	chain.TdmNode = MakeTendermintNode(config, pNode, listener, GetCMInstance(ctx).cch)
 
 	return chain
 }
@@ -104,7 +105,8 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 
 	//always start ethereum
 	fmt.Printf("chainId: %s, ethereum.MakeSystemNode", chainId)
-	stack := ethereum.MakeSystemNode(chainId, version.Version, listener, ctx, GetCMInstance(ctx).cch)
+	cch := GetCMInstance(ctx).cch
+	stack := ethereum.MakeSystemNode(chainId, version.Version, listener, ctx, cch)
 	chain.EthNode = stack
 
 	rpcHandler, err := stack.GetRPCHandler()
@@ -133,7 +135,7 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	fmt.Println("tm node")
-	tdmNode := MakeTendermintNode(config, pNode, listener)
+	tdmNode := MakeTendermintNode(config, pNode, listener, cch)
 	if tdmNode == nil {
 		fmt.Println("make tendermint node failed")
 		return nil
@@ -243,7 +245,8 @@ func testEthereumApi() {
 	fmt.Printf("testEthereumApi: balance is: %x\n", balance)
 }
 
-func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P, cl *rpcserver.ChannelListener) *tdm.Node {
+func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P, cl *rpcserver.ChannelListener,
+			cch rpcTxHook.CrossChainHelper) *tdm.Node {
 
 	genDocFile := config.GetString("genesis_file")
 	if !cmn.FileExists(genDocFile) {
@@ -269,7 +272,7 @@ func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P, cl *rpcserver.C
 		}
 	}
 
-	return tdm.NewNodeNotStart(config, pNode.Switch(), pNode.AddrBook(), cl)
+	return tdm.NewNodeNotStart(config, pNode.Switch(), pNode.AddrBook(), cl, cch)
 }
 
 func CreateChildChain(ctx *cli.Context, chainId string, balStr string) error{

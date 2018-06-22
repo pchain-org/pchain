@@ -11,13 +11,13 @@ import (
 	ep "github.com/tendermint/tendermint/epoch"
 )
 
-func CurrentEpochNumber() (*ctypes.ResultUint64, error) {
-	return &ctypes.ResultUint64{Value: uint64(consensusState.GetRoundState().Epoch.Number)}, nil
+func CurrentEpochNumber(context *RPCDataContext) (*ctypes.ResultUint64, error) {
+	return &ctypes.ResultUint64{Value: uint64(context.consensusState.GetRoundState().Epoch.Number)}, nil
 }
 
-func Epoch(number int)  (*ctypes.ResultEpoch, error) {
+func Epoch(context *RPCDataContext, number int)  (*ctypes.ResultEpoch, error) {
 
-	curEpoch := consensusState.GetRoundState().Epoch
+	curEpoch := context.consensusState.GetRoundState().Epoch
 	if number < 0 || number > curEpoch.Number {
 		return nil, errors.New("epoch number out of range")
 	}
@@ -31,12 +31,12 @@ func Epoch(number int)  (*ctypes.ResultEpoch, error) {
 	return &ctypes.ResultEpoch{Epoch: spEpoch.MakeOneEpochDoc()}, nil
 }
 
-func Validators() (*ctypes.ResultValidators, error) {
-	blockHeight, validators := consensusState.GetValidators()
+func Validators(context *RPCDataContext) (*ctypes.ResultValidators, error) {
+	blockHeight, validators := context.consensusState.GetValidators()
 	return &ctypes.ResultValidators{blockHeight, validators}, nil
 }
 
-func ValidatorOperation(from string, epoch int, power uint64, action string, target string, sig []byte) (*ctypes.ResultValidatorOperation, error) {
+func ValidatorOperation(context *RPCDataContext, from string, epoch int, power uint64, action string, target string, sig []byte) (*ctypes.ResultValidatorOperation, error) {
 
 	fmt.Println("in func ValidatorOperation(s string) (*ctypes.ResultValidatorOperation, error)")
 
@@ -69,7 +69,7 @@ func ValidatorOperation(from string, epoch int, power uint64, action string, tar
 	fmt.Printf("in func ValidatorOperation(), recovered address is %s, key is : %s\n", recoveredAddr.Hex(), key)
 
 	//check epoch
-	if epoch <= consensusState.GetRoundState().Epoch.Number {
+	if epoch <= context.consensusState.GetRoundState().Epoch.Number {
 		return &ctypes.ResultValidatorOperation{}, errors.New("epoch should be bigger than current epoch number")
 	}
 
@@ -91,10 +91,10 @@ func ValidatorOperation(from string, epoch int, power uint64, action string, tar
 	}, nil
 }
 
-func ValidatorEpoch(address string, epoch int) (*ctypes.ResultValidatorEpoch, error) {
+func ValidatorEpoch(context *RPCDataContext, address string, epoch int) (*ctypes.ResultValidatorEpoch, error) {
 
 	//fmt.Println("in func ValidatorEpoch(address string) (*ctypes.ResultValidatorEpoch, error)")
-	curEpoch := consensusState.GetRoundState().Epoch
+	curEpoch := context.consensusState.GetRoundState().Epoch
 	if epoch < 0 || epoch > curEpoch.Number {
 		return nil, errors.New("epoch number out of range")
 	}
@@ -204,17 +204,17 @@ func ValidatorEpoch(address string, epoch int) (*ctypes.ResultValidatorEpoch, er
 	*/
 }
 
-func UnconfirmedValidatorsOperation() (*ctypes.ResultValidatorsOperation, error){
-	return getValidatorsOperation(ep.VA_UNCONFIRMED_EPOCH)
+func UnconfirmedValidatorsOperation(context *RPCDataContext) (*ctypes.ResultValidatorsOperation, error){
+	return getValidatorsOperation(context, ep.VA_UNCONFIRMED_EPOCH)
 }
 
-func ConfirmedValidatorsOperation(epoch int) (*ctypes.ResultValidatorsOperation, error){
-	return getValidatorsOperation(epoch)
+func ConfirmedValidatorsOperation(context *RPCDataContext, epoch int) (*ctypes.ResultValidatorsOperation, error){
+	return getValidatorsOperation(context, epoch)
 }
 
-func getValidatorsOperation(epoch int) (*ctypes.ResultValidatorsOperation, error){
+func getValidatorsOperation(context *RPCDataContext, epoch int) (*ctypes.ResultValidatorsOperation, error){
 
-	curEpoch := consensusState.GetRoundState().Epoch
+	curEpoch := context.consensusState.GetRoundState().Epoch
 	if epoch < ep.VA_UNCONFIRMED_EPOCH || epoch > curEpoch.Number {
 		return nil, errors.New("epoch number out of range")
 	}

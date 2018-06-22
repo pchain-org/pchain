@@ -17,8 +17,8 @@ import (
 // NOTE: tx should be signed, but this is only checked at the app level (not by Tendermint!)
 
 // Returns right away, with no response
-func BroadcastTxAsync(tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
-	err := mempool.CheckTx(tx, nil)
+func BroadcastTxAsync(context *RPCDataContext, tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
+	err := context.mempool.CheckTx(tx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Error broadcasting transaction: %v", err)
 	}
@@ -26,7 +26,7 @@ func BroadcastTxAsync(tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
 }
 
 // Returns with the response from CheckTx
-func BroadcastTxSync(tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
+func BroadcastTxSync(context *RPCDataContext, tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
 
 	ethtx := new(ethTypes.Transaction)
 	rlpStream := rlp.NewStream(bytes.NewBuffer(tx), 0)
@@ -44,7 +44,7 @@ func BroadcastTxSync(tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
 	}
 
 	resCh := make(chan *abci.Response, 1)
-	err := mempool.CheckTx(tx, func(res *abci.Response) {
+	err := context.mempool.CheckTx(tx, func(res *abci.Response) {
 		resCh <- res
 	})
 	if err != nil {
@@ -64,17 +64,17 @@ func BroadcastTxSync(tx types.Tx) (*ctypes.ResultBroadcastTx, error) {
 // or if we timeout waiting for tx to commit.
 // If CheckTx or DeliverTx fail, no error will be returned, but the returned result
 // will contain a non-OK ABCI code.
-func BroadcastTxCommit(tx types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
+func BroadcastTxCommit(context *RPCDataContext, tx types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
 
 	// subscribe to tx being committed in block
 	deliverTxResCh := make(chan types.EventDataTx, 1)
-	types.AddListenerForEvent(eventSwitch, "rpc", types.EventStringTx(tx), func(data types.TMEventData) {
+	types.AddListenerForEvent(context.eventSwitch, "rpc", types.EventStringTx(tx), func(data types.TMEventData) {
 		deliverTxResCh <- data.(types.EventDataTx)
 	})
 
 	// broadcast the tx and register checktx callback
 	checkTxResCh := make(chan *abci.Response, 1)
-	err := mempool.CheckTx(tx, func(res *abci.Response) {
+	err := context.mempool.CheckTx(tx, func(res *abci.Response) {
 		checkTxResCh <- res
 	})
 	if err != nil {
@@ -123,11 +123,11 @@ func BroadcastTxCommit(tx types.Tx) (*ctypes.ResultBroadcastTxCommit, error) {
 	panic("Should never happen!")
 }
 
-func UnconfirmedTxs() (*ctypes.ResultUnconfirmedTxs, error) {
-	txs := mempool.Reap(-1)
+func UnconfirmedTxs(context *RPCDataContext) (*ctypes.ResultUnconfirmedTxs, error) {
+	txs := context.mempool.Reap(-1)
 	return &ctypes.ResultUnconfirmedTxs{len(txs), txs}, nil
 }
 
-func NumUnconfirmedTxs() (*ctypes.ResultUnconfirmedTxs, error) {
-	return &ctypes.ResultUnconfirmedTxs{N: mempool.Size()}, nil
+func NumUnconfirmedTxs(context *RPCDataContext) (*ctypes.ResultUnconfirmedTxs, error) {
+	return &ctypes.ResultUnconfirmedTxs{N: context.mempool.Size()}, nil
 }

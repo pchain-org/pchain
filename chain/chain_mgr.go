@@ -11,6 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/common"
 	dbm "github.com/tendermint/go-db"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"os"
 )
 
 type ChainManager struct {
@@ -23,7 +25,6 @@ type ChainManager struct {
 	childQuits  map[string]chan int
 	p2pObj	*p2p.PChainP2P
 	cch 	*CrossChainHelper
-	//leger
 }
 
 var chainMgr *ChainManager
@@ -62,7 +63,7 @@ func (cm *ChainManager)LoadChains() error {
 	//set the event.TypeMutex to cch
 	cm.InitCrossChainHelper(cm.mainChain.EthNode.EventMux())
 
-	childChainIds := GetChildChainIds(cm.cch.chainInfoDB)
+	childChainIds := core.GetChildChainIds(cm.cch.chainInfoDB)
 	fmt.Printf("LoadChains 0, childChainIds is %v, len is %d\n", childChainIds, len(childChainIds))
 
 	for _, chainId := range childChainIds {
@@ -83,6 +84,13 @@ func (cm *ChainManager)InitCrossChainHelper(typeMut *event.TypeMux) {
 	cm.cch.chainInfoDB = dbm.NewDB("chaininfo",
 					cm.mainChain.Config.GetString("db_backend"),
 					cm.ctx.GlobalString(DataDirFlag.Name))
+	client, err := ethclient.Dial("http://localhost:6969/pchain")
+	if err != nil {
+		fmt.Printf("can't connect to localhost:6969/pchain, exit")
+		os.Exit(0)
+	}
+
+	cm.cch.client = client
 }
 
 func (cm *ChainManager)StartChains() error{
@@ -175,7 +183,7 @@ func (cm *ChainManager) StartInspectEvent() {
 
 			_, ok = cm.childChains[chainId]
 			if ok {
-				fmt.Printf("CreateChildChainEvent has been received, and chain has been loaded, just continue\n", event)
+				fmt.Printf("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue\n", event)
 				continue
 			}
 
@@ -187,7 +195,7 @@ func (cm *ChainManager) StartInspectEvent() {
 func (cm *ChainManager) LoadChildChainInRT(from common.Address, chainId string) {
 
 	//LoadChildChain if from and chainId matches
-	ci := GetChainInfo(cm.cch.chainInfoDB, chainId)
+	ci := core.GetChainInfo(cm.cch.chainInfoDB, chainId)
 	if ci == nil {
 		fmt.Printf("child chain: %s does not exist, can't load", chainId)
 		return

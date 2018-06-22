@@ -85,10 +85,16 @@ func (app *localClient) CheckTxAsync(tx []byte, cb func(*types.Response)) *ReqRe
 	app.mtx.Lock()
 	res := app.Application.CheckTx(tx)
 	app.mtx.Unlock()
-	return app.callback(
+
+	reqres := app.callback(
 		types.ToRequestCheckTx(tx),
 		types.ToResponseCheckTx(res.Code, res.Data, res.Log),
 	)
+
+	if cb != nil {
+		reqres.SetCallback(cb)
+	}
+	return reqres
 }
 
 func (app *localClient) QueryAsync(reqQuery types.RequestQuery) *ReqRes {

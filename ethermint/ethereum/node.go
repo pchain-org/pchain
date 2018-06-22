@@ -50,7 +50,7 @@ func MakeSystemNode(chainId, version string, cl *rpcserver.ChannelListener, ctx 
 
 	// jitEnabled := ctx.GlobalBool(utils.VMEnableJitFlag.Name)
 	ethConf := &eth.Config{
-		ChainConfig: utils.MakeChainConfig(ctx, stack),
+		ChainConfig: utils.MakeChainConfigWithPChainId(ctx, stack, chainId),
 		// BlockChainVersion:       ctx.GlobalInt(utils.BlockchainVersionFlag.Name), TODO
 		DatabaseCache:   ctx.GlobalInt(utils.CacheFlag.Name),
 		DatabaseHandles: utils.MakeDatabaseHandles(),

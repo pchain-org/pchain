@@ -18,7 +18,7 @@ var Routes = map[string]*rpc.RPCFunc{
 	"blockchain":           rpc.NewRPCFunc(BlockchainInfoResult, "minHeight,maxHeight"),
 	"genesis":              rpc.NewRPCFunc(GenesisResult, ""),
 	"block":                rpc.NewRPCFunc(BlockResult, "height"),
-	"current_epochnumber":rpc.NewRPCFunc(CurrentEpochNumberResult, ""),
+	"current_epochnumber":  rpc.NewRPCFunc(CurrentEpochNumberResult, ""),
 	"epoch":                rpc.NewRPCFunc(EpochResult, "number"),
 	"commit":               rpc.NewRPCFunc(CommitResult, "height"),
 	"tx":                   rpc.NewRPCFunc(TxResult, "hash,prove"),
@@ -61,122 +61,122 @@ func UnsubscribeResult(wsCtx rpctypes.WSRPCContext, event string) (ctypes.TMResu
 	return Unsubscribe(wsCtx, event)
 }
 
-func StatusResult() (ctypes.TMResult, error) {
-	return Status()
+func StatusResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return Status(context)
 }
 
-func NetInfoResult() (ctypes.TMResult, error) {
-	return NetInfo()
+func NetInfoResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return NetInfo(context)
 }
 
-func UnsafeDialSeedsResult(seeds []string) (ctypes.TMResult, error) {
-	return UnsafeDialSeeds(seeds)
+func UnsafeDialSeedsResult(context *RPCDataContext, seeds []string) (ctypes.TMResult, error) {
+	return UnsafeDialSeeds(context, seeds)
 }
 
-func BlockchainInfoResult(min, max int) (ctypes.TMResult, error) {
-	return BlockchainInfo(min, max)
+func BlockchainInfoResult(context *RPCDataContext, min, max int) (ctypes.TMResult, error) {
+	return BlockchainInfo(context, min, max)
 }
 
-func GenesisResult() (ctypes.TMResult, error) {
-	return Genesis()
+func GenesisResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return Genesis(context)
 }
 
-func BlockResult(height int) (ctypes.TMResult, error) {
-	return Block(height)
+func BlockResult(context *RPCDataContext, height int) (ctypes.TMResult, error) {
+	return Block(context, height)
 }
 
-func CurrentEpochNumberResult() (ctypes.TMResult, error) {
-	return CurrentEpochNumber()
+func CurrentEpochNumberResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return CurrentEpochNumber(context)
 }
 
-func EpochResult(number int) (ctypes.TMResult, error) {
-	return Epoch(number)
+func EpochResult(context *RPCDataContext, number int) (ctypes.TMResult, error) {
+	return Epoch(context, number)
 }
 
-func CommitResult(height int) (ctypes.TMResult, error) {
-	return Commit(height)
+func CommitResult(context *RPCDataContext, height int) (ctypes.TMResult, error) {
+	return Commit(context, height)
 }
 
-func ValidatorsResult() (ctypes.TMResult, error) {
-	return Validators()
+func ValidatorsResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return Validators(context)
 }
 
-func DumpConsensusStateResult() (ctypes.TMResult, error) {
-	return DumpConsensusState()
+func DumpConsensusStateResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return DumpConsensusState(context)
 }
 
-func UnconfirmedTxsResult() (ctypes.TMResult, error) {
-	return UnconfirmedTxs()
+func UnconfirmedTxsResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return UnconfirmedTxs(context)
 }
 
-func NumUnconfirmedTxsResult() (ctypes.TMResult, error) {
-	return NumUnconfirmedTxs()
+func NumUnconfirmedTxsResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return NumUnconfirmedTxs(context)
 }
 
 // Tx allow user to query the transaction results. `nil` could mean the
 // transaction is in the mempool, invalidated, or was not send in the first
 // place.
-func TxResult(hash []byte, prove bool) (ctypes.TMResult, error) {
-	return Tx(hash, prove)
+func TxResult(context *RPCDataContext, hash []byte, prove bool) (ctypes.TMResult, error) {
+	return Tx(context, hash, prove)
 }
 
-func BroadcastTxCommitResult(tx []byte) (ctypes.TMResult, error) {
-	return BroadcastTxCommit(tx)
+func BroadcastTxCommitResult(context *RPCDataContext, tx []byte) (ctypes.TMResult, error) {
+	return BroadcastTxCommit(context, tx)
 }
 
-func BroadcastTxSyncResult(tx []byte) (ctypes.TMResult, error) {
-	return BroadcastTxSync(tx)
+func BroadcastTxSyncResult(context *RPCDataContext, tx []byte) (ctypes.TMResult, error) {
+	return BroadcastTxSync(context, tx)
 }
 
-func BroadcastTxAsyncResult(tx []byte) (ctypes.TMResult, error) {
-	return BroadcastTxAsync(tx)
+func BroadcastTxAsyncResult(context *RPCDataContext, tx []byte) (ctypes.TMResult, error) {
+	return BroadcastTxAsync(context, tx)
 }
 
-func ABCIQueryResult(path string, data []byte, prove bool) (ctypes.TMResult, error) {
-	return ABCIQuery(path, data, prove)
+func ABCIQueryResult(context *RPCDataContext, path string, data []byte, prove bool) (ctypes.TMResult, error) {
+	return ABCIQuery(context, path, data, prove)
 }
 
-func ABCIInfoResult() (ctypes.TMResult, error) {
-	return ABCIInfo()
+func ABCIInfoResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return ABCIInfo(context)
 }
 
-func UnsafeFlushMempoolResult() (ctypes.TMResult, error) {
-	return UnsafeFlushMempool()
+func UnsafeFlushMempoolResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return UnsafeFlushMempool(context)
 }
 
-func UnsafeSetConfigResult(typ, key, value string) (ctypes.TMResult, error) {
-	return UnsafeSetConfig(typ, key, value)
+func UnsafeSetConfigResult(context *RPCDataContext, typ, key, value string) (ctypes.TMResult, error) {
+	return UnsafeSetConfig(context, typ, key, value)
 }
 
-func UnsafeStartCPUProfilerResult(filename string) (ctypes.TMResult, error) {
-	return UnsafeStartCPUProfiler(filename)
+func UnsafeStartCPUProfilerResult(context *RPCDataContext, filename string) (ctypes.TMResult, error) {
+	return UnsafeStartCPUProfiler(context, filename)
 }
 
-func UnsafeStopCPUProfilerResult() (ctypes.TMResult, error) {
-	return UnsafeStopCPUProfiler()
+func UnsafeStopCPUProfilerResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return UnsafeStopCPUProfiler(context)
 }
 
-func UnsafeWriteHeapProfileResult(filename string) (ctypes.TMResult, error) {
-	return UnsafeWriteHeapProfile(filename)
+func UnsafeWriteHeapProfileResult(context *RPCDataContext, filename string) (ctypes.TMResult, error) {
+	return UnsafeWriteHeapProfile(context, filename)
 }
 
 
 
 //--------------
 //author@liaoyd
-func ValidatorOperationResult(from string, epoch int, power uint64, action string, target string, signature []byte) (ctypes.TMResult, error) {
+func ValidatorOperationResult(context *RPCDataContext, from string, epoch int, power uint64, action string, target string, signature []byte) (ctypes.TMResult, error) {
 	//fmt.Println("func ValidatorOperationResult(s string) (ctypes.TMResult, error)")
-	return ValidatorOperation(from, epoch, power, action, target, signature)
+	return ValidatorOperation(context, from, epoch, power, action, target, signature)
 }
 
-func ValidatorEpochResult(address string, epoch int) (ctypes.TMResult, error) {
-	return ValidatorEpoch(address, epoch)
+func ValidatorEpochResult(context *RPCDataContext, address string, epoch int) (ctypes.TMResult, error) {
+	return ValidatorEpoch(context, address, epoch)
 }
 
-func UnconfirmedValidatorsOperationResult() (ctypes.TMResult, error) {
-	return UnconfirmedValidatorsOperation()
+func UnconfirmedValidatorsOperationResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return UnconfirmedValidatorsOperation(context)
 }
 
-func ConfirmedValidatorsOperationResult(epoch int) (ctypes.TMResult, error) {
-	return ConfirmedValidatorsOperation(epoch)
+func ConfirmedValidatorsOperationResult(context *RPCDataContext, epoch int) (ctypes.TMResult, error) {
+	return ConfirmedValidatorsOperation(context, epoch)
 }

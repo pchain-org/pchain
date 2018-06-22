@@ -5,8 +5,8 @@ import (
 	"github.com/tendermint/tendermint/types"
 )
 
-func Status() (*ctypes.ResultStatus, error) {
-	latestHeight := blockStore.Height()
+func Status(context *RPCDataContext) (*ctypes.ResultStatus, error) {
+	latestHeight := context.blockStore.Height()
 	var (
 		latestBlockMeta *types.BlockMeta
 		latestBlockHash []byte
@@ -14,15 +14,15 @@ func Status() (*ctypes.ResultStatus, error) {
 		latestBlockTime int64
 	)
 	if latestHeight != 0 {
-		latestBlockMeta = blockStore.LoadBlockMeta(latestHeight)
+		latestBlockMeta = context.blockStore.LoadBlockMeta(latestHeight)
 		latestBlockHash = latestBlockMeta.BlockID.Hash
 		latestAppHash = latestBlockMeta.Header.AppHash
 		latestBlockTime = latestBlockMeta.Header.Time.UnixNano()
 	}
 
 	return &ctypes.ResultStatus{
-		NodeInfo:          p2pSwitch.NodeInfo(),
-		PubKey:            pubKey,
+		NodeInfo:          context.p2pSwitch.NodeInfo(),
+		PubKey:            context.pubKey,
 		LatestBlockHash:   latestBlockHash,
 		LatestAppHash:     latestAppHash,
 		LatestBlockHeight: latestHeight,

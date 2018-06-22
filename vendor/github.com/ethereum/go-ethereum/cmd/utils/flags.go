@@ -831,6 +831,19 @@ func MakeChainConfig(ctx *cli.Context, stack *node.Node) *params.ChainConfig {
 	return MakeChainConfigFromDb(ctx, db)
 }
 
+// MakeChainConfig reads the chain configuration from the database in ctx.Datadir.
+func MakeChainConfigWithPChainId(ctx *cli.Context, stack *node.Node, pchainId string) *params.ChainConfig {
+	db := MakeChainDatabase(ctx, stack)
+	defer db.Close()
+
+	config := MakeChainConfigFromDb(ctx, db)
+	if config != nil {
+		config.PChainId = pchainId
+	}
+
+	return config
+}
+
 // MakeChainConfigFromDb reads the chain configuration from the given database.
 func MakeChainConfigFromDb(ctx *cli.Context, db ethdb.Database) *params.ChainConfig {
 	// If the chain is already initialized, use any existing chain configs

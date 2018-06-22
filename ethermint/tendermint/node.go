@@ -35,6 +35,7 @@ import (
 	"github.com/pchain/ethermint/app"
 	"time"
 	"github.com/tendermint/go-rpc/server"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 )
 
 var log = logger.New("module", "node")
@@ -62,19 +63,21 @@ type Node struct {
 	proxyApp         proxy.AppConns              // connection to the application
 	rpcListeners     []net.Listener              // rpc servers
 	txIndexer        txindex.TxIndexer
+
+	cch rpcTxHook.CrossChainHelper
 }
 
 // Deprecated
-func NewNodeDefault(config cfg.Config) *Node {
+func NewNodeDefault(config cfg.Config, cch rpcTxHook.CrossChainHelper) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
 	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
-	return NewNode(config, privValidator, proxy.DefaultClientCreator(config))
+	return NewNode(config, privValidator, proxy.DefaultClientCreator(config), cch)
 }
 
 // Deprecated
 func NewNode(config cfg.Config, privValidator *types.PrivValidator,
-	clientCreator proxy.ClientCreator) *Node {
+	clientCreator proxy.ClientCreator, cch rpcTxHook.CrossChainHelper) *Node {
 
 	// Get BlockStore
 	blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
@@ -93,7 +96,7 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 
 	// Create the proxyApp, which manages connections (consensus, mempool, query)
 	// and sync tendermint and the app by replaying any necessary blocks
-	proxyApp := proxy.NewAppConns(config, clientCreator, consensus.NewHandshaker(config, state, blockStore))
+	proxyApp := proxy.NewAppConns(config, clientCreator, consensus.NewHandshaker(config, state, blockStore, cch))
 	if _, err := proxyApp.Start(); err != nil {
 		cmn.Exit(cmn.Fmt("Error starting proxy app connections: %v", err))
 	}
@@ -138,14 +141,14 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	}
 
 	// Make BlockchainReactor
-	bcReactor := bc.NewBlockchainReactor(config, state.Copy(), proxyApp.Consensus(), blockStore, fastSync)
+	bcReactor := bc.NewBlockchainReactor(config, state.Copy(), proxyApp.Consensus(), blockStore, fastSync, cch)
 
 	// Make MempoolReactor
 	mempool := mempl.NewMempool(config, proxyApp.Mempool())
 	mempoolReactor := mempl.NewMempoolReactor(config, mempool, state.ChainID)
 
 	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch)
+	consensusState := consensus.NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch, cch)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
@@ -224,12 +227,15 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 		consensusReactor: consensusReactor,
 		proxyApp:         proxyApp,
 		txIndexer:        txIndexer,
+
+		cch:              cch,
 	}
 	node.BaseService = *cmn.NewBaseService(log, "Node", node)
 	return node
 }
 
-func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, cl *rpcserver.ChannelListener) *Node {
+func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, cl *rpcserver.ChannelListener,
+		cch rpcTxHook.CrossChainHelper) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
 	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
@@ -254,7 +260,7 @@ func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, 
 
 	// Create the proxyApp, which manages connections (consensus, mempool, query)
 	// and sync tendermint and the app by replaying any necessary blocks
-	proxyApp := proxy.NewAppConns(config, nil, consensus.NewHandshaker(config, state, blockStore))
+	proxyApp := proxy.NewAppConns(config, nil, consensus.NewHandshaker(config, state, blockStore, cch))
 
 	// Make event switch
 	eventSwitch := types.NewEventSwitch()
@@ -279,6 +285,8 @@ func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, 
 		proxyApp:      proxyApp,
 
 		rpcListeners:  rpcListeners,
+
+		cch:           cch,
 	}
 	node.BaseService = *cmn.NewBaseService(log, "Node", node)
 	return node
@@ -326,14 +334,16 @@ func (n *Node) OnStart1() error {
 	}
 
 	// Make BlockchainReactor
-	bcReactor := bc.NewBlockchainReactor(n.config, state.Copy(), n.proxyApp.Consensus(), n.blockStore, fastSync)
+	bcReactor := bc.NewBlockchainReactor(n.config, state.Copy(), n.proxyApp.Consensus(),
+						n.blockStore, fastSync, n.cch)
 
 	// Make MempoolReactor
 	mempool := mempl.NewMempool(n.config, n.proxyApp.Mempool())
 	mempoolReactor := mempl.NewMempoolReactor(n.config, mempool, state.ChainID)
 
 	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(n.config, state.Copy(), n.proxyApp.Consensus(), n.blockStore, mempool, epoch)
+	consensusState := consensus.NewConsensusState(n.config, state.Copy(), n.proxyApp.Consensus(),
+						n.blockStore, mempool, epoch, n.cch)
 	if n.privValidator != nil {
 		consensusState.SetPrivValidator(n.privValidator)
 	}
@@ -451,27 +461,31 @@ func (n *Node) AddListener(l p2p.Listener) {
 
 // ConfigureRPC sets all variables in rpccore so they will serve
 // rpc calls from this node
-func (n *Node) ConfigureRPC() {
-	rpccore.SetConfig(n.config)
-	rpccore.SetEventSwitch(n.evsw)
-	rpccore.SetBlockStore(n.blockStore)
-	rpccore.SetConsensusState(n.consensusState)
-	rpccore.SetMempool(n.mempoolReactor.Mempool)
-	rpccore.SetSwitch(n.sw)
-	rpccore.SetPubKey(n.privValidator.PubKey)
-	rpccore.SetGenesisDoc(n.genesisDoc)
-	rpccore.SetAddrBook(n.addrBook)
-	rpccore.SetProxyAppQuery(n.proxyApp.Query())
-	rpccore.SetTxIndexer(n.txIndexer)
+func (n *Node) ConfigureRPC() *rpccore.RPCDataContext {
+	rpcData := &rpccore.RPCDataContext{}
+
+	rpcData.SetConfig(n.config)
+	rpcData.SetEventSwitch(n.evsw)
+	rpcData.SetBlockStore(n.blockStore)
+	rpcData.SetConsensusState(n.consensusState)
+	rpcData.SetMempool(n.mempoolReactor.Mempool)
+	rpcData.SetSwitch(n.sw)
+	rpcData.SetPubKey(n.privValidator.PubKey)
+	rpcData.SetGenesisDoc(n.genesisDoc)
+	rpcData.SetAddrBook(n.addrBook)
+	rpcData.SetProxyAppQuery(n.proxyApp.Query())
+	rpcData.SetTxIndexer(n.txIndexer)
+
+	return rpcData
 }
 
 func (n *Node) StartRPC() ([]net.Listener, error) {
-	n.ConfigureRPC()
+	rpcData := n.ConfigureRPC()
 
 	// We are using Channel Server instead of Http/Websocket Server
 	cl := n.rpcListeners[0]
 	mux := http.NewServeMux()
-	rpcserver.RegisterRPCFuncs(mux, rpccore.Routes)
+	rpcserver.RegisterRPCFuncs(mux, rpccore.Routes, rpcData)
 	rpcserver.StartChannelServer(cl, mux)
 
 	/*
@@ -626,7 +640,7 @@ func RunNode(config cfg.Config, app *app.EthermintApplication) {
 	}
 
 	// Create & start node
-	n := NewNodeDefault(config)
+	n := NewNodeDefault(config, nil)
 
 	//protocol, address := ProtocolAndAddress(config.GetString("node_laddr"))
 	//l := p2p.NewDefaultListener(protocol, address, config.GetBool("skip_upnp"))
