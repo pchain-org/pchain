@@ -2,6 +2,7 @@ package core
 
 import (
 
+	"math/big"
 	"errors"
 	st "github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -15,8 +16,8 @@ import (
 type CrossChainHelper interface {
 	GetMutex() *sync.Mutex
 	GetTypeMutex() *event.TypeMux
-	CanCreateChildChain(from common.Address, chainId string) error
-	CreateChildChain(from common.Address, chainId string) error
+	CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64) error
+	CreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64) error
 	GetChainInfoDB() dbm.DB
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction	//should return varified transaction
 	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction	//should return varified transaction

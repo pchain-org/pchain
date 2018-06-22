@@ -1,26 +1,33 @@
 package ethapi
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"fmt"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
 	st "github.com/ethereum/go-ethereum/core/state"
-	"golang.org/x/net/context"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
-	"strings"
+	"golang.org/x/net/context"
 	"math/big"
+	"strings"
 )
 
-var (
-	CCCFuncName string = "CreateChildChain"
-	DIMCFuncName string = "DepositInMainChain"
-	DICCFuncName string = "DepositInChildChain"
-	WFCCFuncName string = "WithdrawFromChildChain"
-	WFMCFuncName string = "WithdrawFromMainChain"
-)
+const (
+	CCCFuncName  = "CreateChildChain"
+	DIMCFuncName = "DepositInMainChain"
+	DICCFuncName = "DepositInChildChain"
+	WFCCFuncName = "WithdrawFromChildChain"
+	WFMCFuncName = "WithdrawFromMainChain"
 
+	CCC_ARGS_FROM                = "from"
+	CCC_ARGS_CHAINID             = "chainId"
+	CCC_ARGS_VALIDATOR_THRESHOLD = "validatorThreshold"
+	CCC_ARGS_TOKEN_THRESHOLD     = "tokenThreshold"
+	CCC_ARGS_START_BLOCK         = "startBlock"
+	CCC_ARGS_END_BLOCK           = "endBlock"
+
+)
 
 type PublicChainAPI struct {
 	am *accounts.Manager
@@ -37,27 +44,29 @@ func NewPublicChainAPI(b Backend) *PublicChainAPI {
 	}
 }
 
-func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Address,
-						chainId string) (common.Hash, error) {
+func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Address, chainId string,
+	minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
 	}
 
-	fromStr := fmt.Sprintf("%X", from.Bytes())
-
 	params := types.MakeKeyValueSet()
-	params.Set("from", fromStr)
-	params.Set("chainId", chainId)
+	params.Set(CCC_ARGS_FROM, from)
+	params.Set(CCC_ARGS_CHAINID, chainId)
+	params.Set(CCC_ARGS_VALIDATOR_THRESHOLD, minValidators)
+	params.Set(CCC_ARGS_TOKEN_THRESHOLD, minDepositAmount)
+	params.Set(CCC_ARGS_START_BLOCK, startBlock)
+	params.Set(CCC_ARGS_END_BLOCK, endBlock)
 
 	fmt.Printf("params are : %s\n", params.String())
 
-	etd := &types.ExtendTxData {
-		FuncName:    CCCFuncName,
-		Params:      params,
+	etd := &types.ExtendTxData{
+		FuncName: CCCFuncName,
+		Params:   params,
 	}
 
-	args := SendTxArgs {
+	args := SendTxArgs{
 		From:         from,
 		To:           nil,
 		Gas:          nil,
@@ -73,7 +82,7 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 }
 
 func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Address,
-						chainId string, amount *big.Int) (common.Hash, error) {
+	chainId string, amount *big.Int) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
@@ -96,12 +105,12 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 
 	fmt.Printf("params are : %s\n", params.String())
 
-	etd := &types.ExtendTxData {
-		FuncName:    DIMCFuncName,
-		Params:      params,
+	etd := &types.ExtendTxData{
+		FuncName: DIMCFuncName,
+		Params:   params,
 	}
 
-	args := SendTxArgs {
+	args := SendTxArgs{
 		From:         from,
 		To:           nil,
 		Gas:          nil,
@@ -117,7 +126,7 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 }
 
 func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Address,
-						txHash common.Hash) (common.Hash, error) {
+	txHash common.Hash) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
 	if chainId == "pchain" {
@@ -152,12 +161,12 @@ func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Ad
 
 	fmt.Printf("params are : %s\n", params.String())
 
-	etd := &types.ExtendTxData {
-		FuncName:    DICCFuncName,
-		Params:      params,
+	etd := &types.ExtendTxData{
+		FuncName: DICCFuncName,
+		Params:   params,
 	}
 
-	args := SendTxArgs {
+	args := SendTxArgs{
 		From:         from,
 		To:           nil,
 		Gas:          nil,
@@ -173,7 +182,7 @@ func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Ad
 }
 
 func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common.Address,
-						amount *big.Int) (common.Hash, error) {
+	amount *big.Int) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
 	if chainId == "pchain" {
@@ -188,12 +197,12 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 
 	fmt.Printf("params are : %s\n", params.String())
 
-	etd := &types.ExtendTxData {
-		FuncName:    WFCCFuncName,
-		Params:      params,
+	etd := &types.ExtendTxData{
+		FuncName: WFCCFuncName,
+		Params:   params,
 	}
 
-	args := SendTxArgs {
+	args := SendTxArgs{
 		From:         from,
 		To:           nil,
 		Gas:          nil,
@@ -209,7 +218,7 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 }
 
 func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.Address,
-                                                chainId string, txHash common.Hash) (common.Hash, error) {
+	chainId string, txHash common.Hash) (common.Hash, error) {
 
 	if chainId == "pchain" {
 		return common.Hash{}, errors.New("this api can only be called in main chain")
@@ -242,12 +251,12 @@ func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.
 
 	fmt.Printf("params are : %s\n", params.String())
 
-	etd := &types.ExtendTxData {
-		FuncName:    WFMCFuncName,
-		Params:      params,
+	etd := &types.ExtendTxData{
+		FuncName: WFMCFuncName,
+		Params:   params,
 	}
 
-	args := SendTxArgs {
+	args := SendTxArgs{
 		From:         from,
 		To:           nil,
 		Gas:          nil,
@@ -284,7 +293,7 @@ func init() {
 	core.RegisterApplyCb(WFMCFuncName, wfmc_ApplyCb)
 }
 
-func ccc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
+func ccc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 
 	fmt.Println("ccc_ValidateCb")
 
@@ -292,16 +301,20 @@ func ccc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChai
 	fmt.Printf("params are : %s\n", etd.Params.String())
 
 	//tx from ethereum, the params have not been converted to []byte
-	fromInt, _ := etd.Params.Get("from")
-	from := common.HexToAddress(fromInt.(string))
-	chainIdInt, _ := etd.Params.Get("chainId")
-	chainId := chainIdInt.(string)
+	fromVar, _ := etd.Params.Get(CCC_ARGS_FROM)
+	from := fromVar.(common.Address)
+	chainIdVar, _ := etd.Params.Get(CCC_ARGS_CHAINID)
+	chainId := chainIdVar.(string)
+	minValidatorsVar, _ := etd.Params.Get(CCC_ARGS_VALIDATOR_THRESHOLD)
+	minValidators := minValidatorsVar.(uint16)
+	minDepositAmountVar, _ := etd.Params.Get(CCC_ARGS_TOKEN_THRESHOLD)
+	minDepositAmount := minDepositAmountVar.(*big.Int)
+	startBlockVar, _ := etd.Params.Get(CCC_ARGS_START_BLOCK)
+	startBlock := startBlockVar.(uint64)
+	endBlockVar, _ := etd.Params.Get(CCC_ARGS_END_BLOCK)
+	endBlock := endBlockVar.(uint64)
 
-	if chainId == "pchain" {
-		return errors.New("chainId should not be \"pchain\"")
-	}
-
-	err := cch.CanCreateChildChain(from, chainId)
+	err := cch.CanCreateChildChain(from, chainId, minValidators, minDepositAmount, startBlock, endBlock)
 	if err != nil {
 		return err
 	}
@@ -311,7 +324,7 @@ func ccc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChai
 	return nil
 }
 
-func ccc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
+func ccc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 
 	fmt.Println("ccc_ApplyCb")
 
@@ -319,22 +332,35 @@ func ccc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHe
 	fmt.Printf("params are : %s\n", etd.Params.String())
 
 	//tx from ethereum, the params have not been converted to []byte
-	fromInt, _ := etd.Params.Get("from")
-	from := common.BytesToAddress(common.FromHex(string(fromInt.([]byte))))
-	chainIdInt, _ := etd.Params.Get("chainId")
-	chainId := string(chainIdInt.([]byte))
+	fromVar, _ := etd.Params.Get(CCC_ARGS_FROM)
+	from := common.BytesToAddress(fromVar.([]byte))
+	chainIdVar, _ := etd.Params.Get(CCC_ARGS_CHAINID)
+	chainId := string(chainIdVar.([]byte))
+
+	// TODO double check the parameters
+	minValidatorsVar, _ := etd.Params.Get(CCC_ARGS_VALIDATOR_THRESHOLD)
+	minValidators := minValidatorsVar.(uint16)
+	minDepositAmountVar, _ := etd.Params.Get(CCC_ARGS_TOKEN_THRESHOLD)
+	minDepositAmount := minDepositAmountVar.(*big.Int)
+	startBlockVar, _ := etd.Params.Get(CCC_ARGS_START_BLOCK)
+	startBlock := startBlockVar.(uint64)
+	endBlockVar, _ := etd.Params.Get(CCC_ARGS_END_BLOCK)
+	endBlock := endBlockVar.(uint64)
 
 	fmt.Printf("from is %X, childId is %s\n", from.Hex(), chainId)
 
-	err := cch.CreateChildChain(from, chainId)
-	if err != nil {return err}
+	err := cch.CreateChildChain(from, chainId, minValidators, minDepositAmount, startBlock, endBlock)
+	if err != nil {
+		return err
+	}
 
-	cch.GetTypeMutex().Post(core.CreateChildChainEvent{From:from, ChainId:chainId})
+	// TODO Move to apply commit callback
+	// cch.GetTypeMutex().Post(core.CreateChildChainEvent{From: from, ChainId: chainId})
 
 	return nil
 }
 
-func dimc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
+func dimc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 
 	fmt.Println("dimc_ValidateCb")
 
@@ -358,7 +384,7 @@ func dimc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCha
 	return nil
 }
 
-func dimc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
+func dimc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 
 	fmt.Println("dimc_ApplyCb")
 
@@ -380,7 +406,7 @@ func dimc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainH
 	return nil
 }
 
-func dicc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
+func dicc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 
 	fmt.Println("dicc_ValidateCb")
 
@@ -400,7 +426,7 @@ func dicc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCha
 	return nil
 }
 
-func dicc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
+func dicc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 
 	fmt.Println("dicc_ApplyCb")
 
@@ -437,7 +463,7 @@ func dicc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainH
 	return nil
 }
 
-func wfcc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
+func wfcc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 
 	fmt.Println("wfcc_ValidateCb")
 
@@ -459,7 +485,7 @@ func wfcc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCha
 	return nil
 }
 
-func wfcc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
+func wfcc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 
 	fmt.Println("wfcc_ApplyCb")
 
@@ -483,7 +509,7 @@ func wfcc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainH
 	return nil
 }
 
-func wfmc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
+func wfmc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 
 	fmt.Println("wfmc_ValidateCb")
 
@@ -527,7 +553,7 @@ func wfmc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCha
 	return nil
 }
 
-func wfmc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error{
+func wfmc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 
 	fmt.Println("wfmc_ApplyCb")
 
