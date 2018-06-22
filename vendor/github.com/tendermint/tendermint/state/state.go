@@ -51,6 +51,7 @@ type State struct {
 
 	TxIndexer txindex.TxIndexer `json:"-"` // Transaction indexer.
 
+	BlockNumberToSave int //record the number of the block which should be saved to main chain
 	// Intermediate results from processing
 	// Persisted separately from the state
 	//abciResponses *ABCIResponses
@@ -232,6 +233,7 @@ func MakeGenesisState(db dbm.DB, genDoc *types.GenesisDoc) *State {
 		LastBlockID:     types.BlockID{},
 		LastBlockTime:   genDoc.GenesisTime,
 		LastEpochNumber: 0,
+		BlockNumberToSave: -1,
 		//Validators:      types.NewValidatorSet(validators),
 		//LastValidators:  types.NewValidatorSet(nil),
 		AppHash:         genDoc.AppHash,

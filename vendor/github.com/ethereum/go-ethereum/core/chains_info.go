@@ -10,9 +10,12 @@ import (
 	"sync"
 	"strings"
 	"math/big"
+	ep "github.com/tendermint/tendermint/epoch"
 )
 
-type ChainInfo struct {
+type CoreChainInfo struct {
+	db dbm.DB
+
 	Owner	common.Address
 	ChainId	string
 
@@ -20,7 +23,7 @@ type ChainInfo struct {
 	Joined  []common.Address
 
 	//validators - for stable phase; should be Epoch information
-	Validators []common.Address
+	EpochNumber int
 
 	//the statitics for balance in & out
 	//depositInMainChain >= depositInChildChain
@@ -32,6 +35,14 @@ type ChainInfo struct {
 	WithdrawFromMainChain *big.Int   //total withdraw refund to users in main chain
 }
 
+type ChainInfo struct {
+	CoreChainInfo
+
+	//be careful, this Epoch could be different with the current epoch in the child chain
+	//it is just for cache
+	Epoch *ep.Epoch
+}
+
 
 const chainInfoKey = "CHAIN"
 var allChainKey = []byte("AllChainID")
@@ -40,28 +51,28 @@ const specialSep = ";"
 var mtx sync.Mutex
 
 
-func calcChainInfoKey(chainId string) []byte {
+func calcCoreChainInfoKey(chainId string) []byte {
 	return []byte(chainInfoKey + ":" + chainId)
+}
+
+func calcEpochKey(number int, chainId string) []byte {
+	return []byte(chainInfoKey + fmt.Sprintf("-%v-%s", number, chainId))
 }
 
 func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
 
-	ci := &ChainInfo{}
-	buf := db.Get(calcChainInfoKey(chainId))
-	if len(buf) == 0 {
-		return nil
-	} else {
-		r, n, err := bytes.NewReader(buf), new(int), new(error)
-		wire.ReadBinaryPtr(&ci, r, 0, n, err)
-		if *err != nil {
-			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
-			fmt.Printf("LoadChainInfo: Data has been corrupted or its spec has changed: %v\n", *err)
-			os.Exit(1)
-		}
+	cci := loadCoreChainInfo(db, chainId)
+	if cci == nil {return nil}
 
-		fmt.Printf("LoadChainInfo(), chainInfo is: %v\n", ci)
-		return ci
+	epoch := loadEpoch(db, cci.EpochNumber, chainId)
+	if epoch == nil {return nil}
+
+	ci := &ChainInfo {
+		CoreChainInfo: *cci,
+		Epoch: epoch,
 	}
+
+	fmt.Printf("LoadChainInfo(), chainInfo is: %v\n", ci)
 
 	return nil
 }
@@ -72,8 +83,95 @@ func SaveChainInfo(db dbm.DB, ci *ChainInfo) error{
 	defer mtx.Unlock()
 	fmt.Printf("ChainInfo Save(), info is: (%v, %v)\n", ci)
 
-	db.SetSync(calcChainInfoKey(ci.ChainId), ci.Bytes())
+	err := saveCoreChainInfo(db, &ci.CoreChainInfo)
+	if err != nil {return err}
+
+	err = saveEpoch(db, ci.Epoch, ci.ChainId)
+	if err != nil {return err}
+
 	SaveId(db, ci.ChainId)
+
+	return nil
+}
+
+func loadCoreChainInfo(db dbm.DB, chainId string) *CoreChainInfo {
+
+	cci := CoreChainInfo{db:db}
+	buf := db.Get(calcCoreChainInfoKey(chainId))
+	if len(buf) == 0 {
+		return nil
+	} else {
+		r, n, err := bytes.NewReader(buf), new(int), new(error)
+		wire.ReadBinaryPtr(&cci, r, 0, n, err)
+		if *err != nil {
+			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
+			fmt.Printf("LoadChainInfo: Data has been corrupted or its spec has changed: %v\n", *err)
+			os.Exit(1)
+		}
+	}
+	return &cci
+}
+
+func saveCoreChainInfo(db dbm.DB, cci *CoreChainInfo) error {
+
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	db.SetSync(calcCoreChainInfoKey(cci.ChainId), cci.Bytes())
+	return nil
+}
+
+func (cci *CoreChainInfo) Bytes() []byte {
+
+	buf, n, err := new(bytes.Buffer), new(int), new(error)
+	wire.WriteBinary(cci, buf, n, err)
+	if *err != nil {
+		return nil
+	}
+	return buf.Bytes()
+}
+
+func loadEpoch(db dbm.DB, number int, chainId string) *ep.Epoch {
+
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	epochBytes := db.Get(calcEpochKey(number,chainId))
+	return ep.FromBytes(epochBytes)
+}
+
+func saveEpoch(db dbm.DB, epoch *ep.Epoch, chainId string) error {
+
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	db.SetSync(calcEpochKey(epoch.Number, chainId), epoch.Bytes())
+	return nil
+}
+
+
+func (ci *ChainInfo)GetEpochByBlockNumber(blockNumber int) *ep.Epoch {
+
+	if blockNumber < 0 {
+		return ci.Epoch
+	} else {
+		epoch := ci.Epoch
+		if blockNumber >= epoch.StartBlock && blockNumber <= epoch.EndBlock {
+			return epoch
+		}
+
+		for number:=epoch.Number-1; number>=0; number-- {
+
+			ep := loadEpoch(ci.db, number, ci.ChainId)
+			if ep == nil {
+				return nil
+			}
+
+			if blockNumber >= ep.StartBlock && blockNumber <= ep.EndBlock {
+				return ep
+			}
+		}
+	}
 	return nil
 }
 
@@ -121,16 +219,4 @@ func GetChildChainIds(db dbm.DB) []string{
 	return strIdArr
 }
 
-func (ci *ChainInfo) Bytes() []byte {
-
-	buf, n, err := new(bytes.Buffer), new(int), new(error)
-	fmt.Printf("(ci *ChainInfo) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
-	wire.WriteBinary(ci, buf, n, err)
-	if *err != nil {
-		fmt.Printf("ChainInfo get bytes error: %v", err)
-		return nil
-	}
-	fmt.Printf("(ci *ChainInfo) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
-	return buf.Bytes()
-}
 

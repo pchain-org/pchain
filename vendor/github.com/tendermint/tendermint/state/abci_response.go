@@ -247,6 +247,11 @@ func (a *ABCIResponses) GetCurrentBlock() (*types.Block) {
 	return a.block
 }
 
+func (a *ABCIResponses) SaveCurrentBlock2MainChain() {
+
+	a.State.BlockNumberToSave = a.block.Height
+}
+
 func (a *ABCIResponses) GetCrossChainHelper() rpcTxHook.CrossChainHelper {
 	return a.cch
 }
