@@ -349,6 +349,10 @@ func init() {
 	core.RegisterValidateCb(CCCFuncName, ccc_ValidateCb)
 	core.RegisterApplyCb(CCCFuncName, ccc_ApplyCb)
 
+	//JoinChildChain
+	core.RegisterValidateCb(JCCFuncName, jcc_ValidateCb)
+	core.RegisterApplyCb(JCCFuncName, jcc_ApplyCb)
+
 	//DepositInMainChain
 	core.RegisterValidateCb(DIMCFuncName, dimc_ValidateCb)
 	core.RegisterApplyCb(DIMCFuncName, dimc_ApplyCb)
