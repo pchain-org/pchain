@@ -112,6 +112,8 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 		MinDepositAmount: minDepositAmount,
 		StartBlock:       startBlock,
 		EndBlock:         endBlock,
+		Joined:           make([]common.Address, 0),
+		DepositAmount:    new(big.Int),
 	}
 
 	ci = &core.ChainInfo{}
@@ -119,6 +121,61 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 
 	core.SaveChainInfo(cch.chainInfoDB, ci)
 
+	return nil
+}
+
+func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, chainId string, depositAmount *big.Int) error {
+	plog.Infoln("ValidateJoinChildChain - start")
+
+	if chainId == MainChain {
+		return errors.New("you can't join PChain as a child chain, try use other name instead")
+	}
+
+	// Check if "chainId" has been created/registered
+	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
+	if ci == nil {
+		return errors.New(fmt.Sprintf("Child Chain %s not exist, try use other name instead", chainId))
+	}
+
+	// Check if already joined the chain
+	find := false
+	fromStr := from.Str()
+	for _, joined := range ci.Joined {
+		if fromStr == joined.Str() {
+			find = true
+			break
+		}
+	}
+
+	if find {
+		return errors.New(fmt.Sprintf("You have already joined the Child Chain %s", chainId))
+	}
+
+	// Check the deposit amount
+	if !(depositAmount != nil && depositAmount.Sign() == 1) {
+		return errors.New("deposit amount must be greater than 0")
+	}
+
+	plog.Infoln("ValidateJoinChildChain - end")
+	return nil
+}
+
+// JoinChildChain Join the Child Chain
+func (cch *CrossChainHelper) JoinChildChain(from common.Address, chainId string, depositAmount *big.Int) error {
+	plog.Infoln("JoinChildChain - start")
+
+	// Load the Child Chain first
+	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
+	if ci == nil {
+		plog.Infof("JoinChildChain - Child Chain %s not exist, you can't join the chain\n", chainId)
+		return errors.New(fmt.Sprintf("Child Chain %s not exist, you can't join the chain", chainId))
+	}
+
+	ci.Joined = append(ci.Joined, from)
+	ci.DepositAmount.Add(ci.DepositAmount, depositAmount)
+
+	core.SaveChainInfo(cch.chainInfoDB, ci)
+	plog.Infoln("JoinChildChain - end")
 	return nil
 }
 
@@ -208,7 +265,7 @@ func (cch *CrossChainHelper) VerifyTdmBlock(from common.Address, block string) e
 	// must fail here, because the blockid is for the current block
 	firstParts := tdmBlock.MakePartSet(blockPartSize)
 	firstPartsHeader := firstParts.Header()
-	blockId :=  tdmTypes.BlockID {
+	blockId := tdmTypes.BlockID{
 		tdmBlock.Hash(),
 		firstPartsHeader,
 	}
@@ -237,7 +294,9 @@ func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block string) error {
 
 	var intBlock tdmTypes.IntegratedBlock
 	err := json.Unmarshal([]byte(block), &intBlock)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	tdmBlock := intBlock.Block
 	blockPartSize := intBlock.BlockPartSize
@@ -247,7 +306,9 @@ func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block string) error {
 	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
 
 	err = core.WriteTdmBlockWithDetail(chainDb, tdmBlock, blockPartSize, commit)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	//here is epoch update; should be a more general mechanism
 	if tdmBlock.BlockExData != nil && len(tdmBlock.BlockExData) != 0 {

@@ -1,34 +1,34 @@
 package core
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"fmt"
-	"os"
-	wire "github.com/tendermint/go-wire"
-	dbm "github.com/tendermint/go-db"
 	"bytes"
-	"sync"
-	"strings"
-	"math/big"
+	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	dbm "github.com/tendermint/go-db"
+	wire "github.com/tendermint/go-wire"
 	ep "github.com/tendermint/tendermint/epoch"
+	"math/big"
+	"os"
+	"strings"
+	"sync"
 )
 
 type CoreChainInfo struct {
 	db dbm.DB
 
 	// Common Info
-	Owner	common.Address
-	ChainId	string
+	Owner   common.Address
+	ChainId string
 
 	// Setup Info
-	MinValidators uint16
+	MinValidators    uint16
 	MinDepositAmount *big.Int
-	StartBlock uint64
-	EndBlock uint64
-
+	StartBlock       uint64
+	EndBlock         uint64
 
 	//joined - during creation phase
-	Joined  []common.Address
+	Joined        []common.Address
+	DepositAmount *big.Int
 
 	//validators - for stable phase; should be Epoch information
 	EpochNumber int
@@ -37,10 +37,10 @@ type CoreChainInfo struct {
 	//depositInMainChain >= depositInChildChain
 	//withdrawFromChildChain >= withdrawFromMainChain
 	//depositInMainChain >= withdrawFromChildChain
-	DepositInMainChain *big.Int      //total deposit by users from main
-	DepositInChildChain *big.Int     //total deposit allocated to users in child chain
-	WithdrawFromChildChain *big.Int  //total withdraw by users from child chain
-	WithdrawFromMainChain *big.Int   //total withdraw refund to users in main chain
+	DepositInMainChain     *big.Int //total deposit by users from main
+	DepositInChildChain    *big.Int //total deposit allocated to users in child chain
+	WithdrawFromChildChain *big.Int //total withdraw by users from child chain
+	WithdrawFromMainChain  *big.Int //total withdraw refund to users in main chain
 }
 
 type ChainInfo struct {
@@ -51,13 +51,13 @@ type ChainInfo struct {
 	Epoch *ep.Epoch
 }
 
-
 const chainInfoKey = "CHAIN"
+
 var allChainKey = []byte("AllChainID")
+
 const specialSep = ";"
 
 var mtx sync.Mutex
-
 
 func calcCoreChainInfoKey(chainId string) []byte {
 	return []byte(chainInfoKey + ":" + chainId)
@@ -74,7 +74,7 @@ func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
 		return nil
 	}
 
-	ci := &ChainInfo {
+	ci := &ChainInfo{
 		CoreChainInfo: *cci,
 	}
 
@@ -91,18 +91,22 @@ func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
 	return ci
 }
 
-func SaveChainInfo(db dbm.DB, ci *ChainInfo) error{
+func SaveChainInfo(db dbm.DB, ci *ChainInfo) error {
 
 	mtx.Lock()
 	defer mtx.Unlock()
 	fmt.Printf("ChainInfo Save(), info is: (%v, %v)\n", ci)
 
 	err := saveCoreChainInfo(db, &ci.CoreChainInfo)
-	if err != nil {return err}
+	if err != nil {
+		return err
+	}
 
 	if ci.Epoch != nil {
 		err = saveEpoch(db, ci.Epoch, ci.ChainId)
-		if err != nil {return err}
+		if err != nil {
+			return err
+		}
 	}
 
 	SaveId(db, ci.ChainId)
@@ -112,7 +116,7 @@ func SaveChainInfo(db dbm.DB, ci *ChainInfo) error{
 
 func loadCoreChainInfo(db dbm.DB, chainId string) *CoreChainInfo {
 
-	cci := CoreChainInfo{db:db}
+	cci := CoreChainInfo{db: db}
 	buf := db.Get(calcCoreChainInfoKey(chainId))
 	if len(buf) == 0 {
 		return nil
@@ -149,7 +153,7 @@ func loadEpoch(db dbm.DB, number int, chainId string) *ep.Epoch {
 	mtx.Lock()
 	defer mtx.Unlock()
 
-	epochBytes := db.Get(calcEpochKey(number,chainId))
+	epochBytes := db.Get(calcEpochKey(number, chainId))
 	return ep.FromBytes(epochBytes)
 }
 
@@ -159,8 +163,7 @@ func saveEpoch(db dbm.DB, epoch *ep.Epoch, chainId string) error {
 	return nil
 }
 
-
-func (ci *ChainInfo)GetEpochByBlockNumber(blockNumber int) *ep.Epoch {
+func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber int) *ep.Epoch {
 
 	if blockNumber < 0 {
 		return ci.Epoch
@@ -170,7 +173,7 @@ func (ci *ChainInfo)GetEpochByBlockNumber(blockNumber int) *ep.Epoch {
 			return epoch
 		}
 
-		for number:=epoch.Number-1; number>=0; number-- {
+		for number := epoch.Number - 1; number >= 0; number-- {
 
 			ep := loadEpoch(ci.db, number, ci.ChainId)
 			if ep == nil {
@@ -214,13 +217,15 @@ func SaveId(db dbm.DB, chainId string) {
 	}
 }
 
-func GetChildChainIds(db dbm.DB) []string{
+func GetChildChainIds(db dbm.DB) []string {
 
 	buf := db.Get(allChainKey)
 
 	fmt.Printf("GetChildChainIds 0, buf is %v, len is %d\n", buf, len(buf))
 
-	if len(buf) == 0 {return []string{}}
+	if len(buf) == 0 {
+		return []string{}
+	}
 
 	strIdArr := strings.Split(string(buf), specialSep)
 
@@ -228,5 +233,3 @@ func GetChildChainIds(db dbm.DB) []string{
 
 	return strIdArr
 }
-
-

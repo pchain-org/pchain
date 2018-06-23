@@ -1,36 +1,35 @@
 package core
 
 import (
-
-	"math/big"
 	"errors"
+	"github.com/ethereum/go-ethereum/common"
 	st "github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"sync"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	dbm "github.com/tendermint/go-db"
+	"math/big"
+	"sync"
 )
-
 
 type CrossChainHelper interface {
 	GetMutex() *sync.Mutex
 	GetTypeMutex() *event.TypeMux
 	CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64) error
 	CreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64) error
+	ValidateJoinChildChain(from common.Address, chainId string, depositAmount *big.Int) error
+	JoinChildChain(from common.Address, chainId string, depositAmount *big.Int) error
 	GetChainInfoDB() dbm.DB
-	GetTxFromMainChain(txHash common.Hash) *types.Transaction	//should return varified transaction
-	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction	//should return varified transaction
+	GetTxFromMainChain(txHash common.Hash) *types.Transaction                  //should return varified transaction
+	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction //should return varified transaction
 	VerifyTdmBlock(from common.Address, block string) error
 	SaveTdmBlock2MainBlock(block string) error
 }
-
 
 type EtdValidateCb func(tx *types.Transaction, state *st.StateDB, cch CrossChainHelper) error
 type EtdApplyCb func(tx *types.Transaction, state *st.StateDB, cch CrossChainHelper) error
 
 var validateCbMap map[string]EtdValidateCb = make(map[string]EtdValidateCb)
-var applyCbMap    map[string]EtdApplyCb = make(map[string]EtdApplyCb)
+var applyCbMap map[string]EtdApplyCb = make(map[string]EtdApplyCb)
 
 func RegisterValidateCb(name string, validateCb EtdValidateCb) error {
 
@@ -76,4 +75,3 @@ func GetApplyCb(name string) EtdApplyCb {
 
 	return nil
 }
-
