@@ -24,25 +24,27 @@ type Proposal struct {
 	BlockPartsHeader PartSetHeader    `json:"block_parts_header"`
 	POLRound         int              `json:"pol_round"`    // -1 if null.
 	POLBlockID       BlockID          `json:"pol_block_id"` // zero if null.
+	ProposerNetAddr	 string           `json:"proposer_net_addr"`
 	ProposerPeerKey  string           `json:"proposer_peer_key"`
 	Signature        crypto.Signature `json:"signature"`
 }
 
 // polRound: -1 if no polRound.
-func NewProposal(height int, round int, blockPartsHeader PartSetHeader, polRound int, polBlockID BlockID, peerKey string) *Proposal {
+func NewProposal(height int, round int, blockPartsHeader PartSetHeader, polRound int, polBlockID BlockID, netAddr string, peerKey string) *Proposal {
 	return &Proposal{
 		Height:           height,
 		Round:            round,
 		BlockPartsHeader: blockPartsHeader,
 		POLRound:         polRound,
 		POLBlockID:       polBlockID,
+		ProposerNetAddr:  netAddr,
 		ProposerPeerKey:  peerKey,
 	}
 }
 
 func (p *Proposal) String() string {
-	return fmt.Sprintf("Proposal{%v/%v %v (%v,%v) %s %v}", p.Height, p.Round,
-		p.BlockPartsHeader, p.POLRound, p.POLBlockID, p.ProposerPeerKey, p.Signature)
+	return fmt.Sprintf("Proposal{%v/%v %v (%v,%v) %s %s %v}", p.Height, p.Round,
+		p.BlockPartsHeader, p.POLRound, p.POLBlockID, p.ProposerNetAddr, p.ProposerPeerKey, p.Signature)
 }
 
 func (p *Proposal) WriteSignBytes(chainID string, w io.Writer, n *int, err *error) {

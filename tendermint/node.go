@@ -164,6 +164,7 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 		consensusState.SetPrivValidator(privValidator)
 	}
 /*
+	// node privKey is not set yet, so nodeInfo generated here cannot be used
 	nodeInfo := n.makeNodeInfo()
 fmt.Printf("node: nodeInfo %x\n", nodeInfo)
 fmt.Printf("node: nodeInfo %#v\n", nodeInfo)

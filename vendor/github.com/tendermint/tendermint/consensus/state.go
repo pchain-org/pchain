@@ -28,7 +28,7 @@ import (
 const (
 	newHeightChangeSleepDuration     = 2000 * time.Millisecond
 	sendPrecommitSleepDuration       = 100 * time.Millisecond
-	preProposeSleepDuration          = 60000 * time.Millisecond // Time to sleep before starting consensus.
+	preProposeSleepDuration          = 120000 * time.Millisecond // Time to sleep before starting consensus.
 )
 
 //-----------------------------------------------------------------------------
@@ -153,6 +153,7 @@ type RoundState struct {
 	Proposal           *types.Proposal
 	ProposalBlock      *types.Block
 	ProposalBlockParts *types.PartSet
+	ProposerNetAddr	   string		// Proposer's IP address and port
 	ProposerPeerKey	   string		// Proposer's peer key
 	LockedRound        int
 	LockedBlock        *types.Block
@@ -886,7 +887,7 @@ func (cs *ConsensusState) enterNewRound(height int, round int) {
 
 	//liaoyd
 	// fmt.Println("in func (cs *ConsensusState) enterNewRound(height int, round int)")
-	fmt.Println(cs.Validators)
+	//fmt.Println(cs.Validators)
 	// Increment validators if necessary
 	validators := cs.Validators
 	if cs.Round < round {
@@ -969,28 +970,16 @@ func (cs *ConsensusState) enterPropose(height int, round int) {
 func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 	var block *types.Block
 	var blockParts *types.PartSet
+	var proposerNetAddr  string
 	var proposerPeerKey string
 
 //logger.Debug(Fmt("defaultDecideProposal: ConsensusState %+v\n", cs))
 
 	// Decide on block
 	if cs.LockedBlock != nil {
-		// Use current validator or last proposer's peer key?
-		proposerPeerKey = "peer key from locked block"
-
 		// If we're locked onto a block, just choose that.
 		block, blockParts = cs.LockedBlock, cs.LockedBlockParts
 	} else {
-		// Need to find some way to get current validators nodeInfo
-		if cs.nodeInfo != nil {
-			proposerPeerKey = cs.nodeInfo.ListenAddres()
-		} else {
-			panic("cs.nodeInfo is nil\n")
-		}
-
-		// fmt.Println("defaultDecideProposal: cs nodeInfo %#v\n", cs.nodeInfo)
-		logger.Debug(Fmt("defaultDecideProposal: Proposer peer key %s", proposerPeerKey))
-
 		// Create a new proposal block from state/txs from the mempool.
 		block, blockParts = cs.createProposalBlock()
 		if block == nil { // on error
@@ -998,9 +987,20 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 		}
 	}
 
+	// Get IP and pub key of current validators from nodeInfo
+	if cs.nodeInfo != nil {
+		proposerNetAddr = cs.nodeInfo.ListenAddres()
+		proposerPeerKey = cs.nodeInfo.PubKey.KeyString()
+	} else {
+		panic("cs.nodeInfo is nil when decide the next block\n")
+	}
+
+	// fmt.Println("defaultDecideProposal: cs nodeInfo %#v\n", cs.nodeInfo)
+	logger.Debug(Fmt("defaultDecideProposal: Proposer (ip %s peer key %s)", proposerNetAddr, proposerPeerKey))
+
 	// Make proposal
 	polRound, polBlockID := cs.VoteSignAggr.POLInfo()
-	proposal := types.NewProposal(height, round, blockParts.Header(), polRound, polBlockID, proposerPeerKey)
+	proposal := types.NewProposal(height, round, blockParts.Header(), polRound, polBlockID, proposerNetAddr, proposerPeerKey)
 	err := cs.privValidator.SignProposal(cs.state.ChainID, proposal)
 	if err == nil {
 		// Set fields
@@ -1068,6 +1068,8 @@ func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts 
 
 	// Mempool validated transactions
 	txs := cs.mempool.Reap(cs.config.GetInt("block_size"))
+
+	logger.Info("createProposalBlock(): get %v txs from pool (%v txs in pool)\n", len(txs), cs.mempool.Size())
 
 	epTxs, err := cs.Epoch.ProposeTransactions("proposer", cs.Height)
 	if err != nil {
@@ -1415,9 +1417,9 @@ logger.Info("finalizeCommit: beginning", "cur height", cs.Height, "cur round", c
 
 //	if cs.IsProposer() == true {
 //		logger.Info("finalizeCommit: Wait for 2 seconds before new height", "cur height", cs.Height, "cur round", cs.Round)
-		//logger.Info(Fmt("finalizeCommit: cs.State: %#v\n", cs.GetRoundState()))
+//		logger.Info(Fmt("finalizeCommit: cs.State: %#v\n", cs.GetRoundState()))
 //		time.Sleep(newHeightChangeSleepDuration)
-	}
+//	}
 
 	fail.Fail() // XXX
 
@@ -1530,6 +1532,7 @@ func (cs *ConsensusState) defaultSetProposal(proposal *types.Proposal) error {
 
 	cs.Proposal = proposal
 	cs.ProposalBlockParts = types.NewPartSetFromHeader(proposal.BlockPartsHeader)
+	cs.ProposerNetAddr = proposal.ProposerNetAddr
 	cs.ProposerPeerKey = proposal.ProposerPeerKey
 	return nil
 }
@@ -1561,6 +1564,8 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 		fmt.Printf("Received complete proposal block is %v\n", cs.ProposalBlock.String())
 		fmt.Printf("block.LastCommit is %v\n", cs.ProposalBlock.LastCommit)
 		fmt.Printf("Current cs.Step %v\n", cs.Step)
+		fmt.Printf("ProposerNetAddr %s\n", cs.ProposerNetAddr)
+		fmt.Printf("ProposerPeerKey %s\n", cs.ProposerPeerKey)
 
 		if cs.isProposalComplete() {
 			// if current step is RoundStepNewHeight, it means
