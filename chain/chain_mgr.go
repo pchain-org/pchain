@@ -13,7 +13,10 @@ import (
 	dbm "github.com/tendermint/go-db"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"os"
+	"github.com/pchain/common/plogger"
 )
+
+var plog = plogger.GetLogger("ChainManager")
 
 type ChainManager struct {
 
@@ -172,18 +175,18 @@ func (cm *ChainManager) StartInspectEvent() {
 
 		for obj := range txSub.Chan() {
 			event := obj.Data.(core.CreateChildChainEvent)
-			fmt.Printf("CreateChildChainEvent received: %v\n", event)
+			plog.Infof("CreateChildChainEvent received: %v\n", event)
 			chainId := event.ChainId
 			_, ok := eventMap[chainId]
 			if ok {
-				fmt.Printf("CreateChildChainEvent has been received: %v, just continue\n", event)
+				plog.Infof("CreateChildChainEvent has been received: %v, just continue\n", event)
 				continue
 			}
 			eventMap[chainId] = true
 
 			_, ok = cm.childChains[chainId]
 			if ok {
-				fmt.Printf("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue\n", event)
+				plog.Infof("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue\n", event)
 				continue
 			}
 

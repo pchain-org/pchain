@@ -1,31 +1,30 @@
 package chain
 
 import (
-	"sync"
-	"github.com/ethereum/go-ethereum/common"
-	"fmt"
-	"github.com/ethereum/go-ethereum/event"
-	dbm "github.com/tendermint/go-db"
+	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	tdmTypes "github.com/tendermint/tendermint/types"
-	"encoding/json"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"bytes"
+	"github.com/ethereum/go-ethereum/event"
+	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/tendermint/epoch"
+	tdmTypes "github.com/tendermint/tendermint/types"
 	"math/big"
+	"sync"
 )
 
 const (
 	OFFICIAL_MINIMUM_VALIDATORS = 10
-	OFFICIAL_MINIMUM_DEPOSIT = "100000000000000000000000" // 10,000 * e18
-
+	OFFICIAL_MINIMUM_DEPOSIT    = "100000000000000000000000" // 100,000 * e18
 )
 
 type CrossChainHelper struct {
-	mtx  sync.Mutex
-	typeMut *event.TypeMux
+	mtx         sync.Mutex
+	typeMut     *event.TypeMux
 	chainInfoDB dbm.DB
 	//the client does only connect to main chain
 	client *ethclient.Client
@@ -106,9 +105,17 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 		return nil
 	}
 
-	ci = &core.ChainInfo {}
-	ci.Owner = from
-	ci.ChainId = chainId
+	coreChainInfo := core.CoreChainInfo{
+		Owner:            from,
+		ChainId:          chainId,
+		MinValidators:    minValidators,
+		MinDepositAmount: minDepositAmount,
+		StartBlock:       startBlock,
+		EndBlock:         endBlock,
+	}
+
+	ci = &core.ChainInfo{}
+	ci.CoreChainInfo = coreChainInfo
 
 	core.SaveChainInfo(cch.chainInfoDB, ci)
 

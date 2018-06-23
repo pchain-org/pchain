@@ -11,6 +11,7 @@ import (
 	"golang.org/x/net/context"
 	"math/big"
 	"strings"
+	"encoding/binary"
 )
 
 const (
@@ -21,6 +22,7 @@ const (
 	WFMCFuncName = "WithdrawFromMainChain"
 	SB2MCFuncName = "SaveBlockToMainChain"
 
+	// Create Child Chain Parameters
 	CCC_ARGS_FROM                = "from"
 	CCC_ARGS_CHAINID             = "chainId"
 	CCC_ARGS_VALIDATOR_THRESHOLD = "validatorThreshold"
@@ -370,7 +372,6 @@ func ccc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHe
 	fmt.Println("ccc_ApplyCb")
 
 	etd := tx.ExtendTxData()
-	fmt.Printf("params are : %s\n", etd.Params.String())
 
 	//tx from ethereum, the params have not been converted to []byte
 	fromVar, _ := etd.Params.Get(CCC_ARGS_FROM)
@@ -378,17 +379,17 @@ func ccc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHe
 	chainIdVar, _ := etd.Params.Get(CCC_ARGS_CHAINID)
 	chainId := string(chainIdVar.([]byte))
 
-	// TODO double check the parameters
 	minValidatorsVar, _ := etd.Params.Get(CCC_ARGS_VALIDATOR_THRESHOLD)
-	minValidators := minValidatorsVar.(uint16)
-	minDepositAmountVar, _ := etd.Params.Get(CCC_ARGS_TOKEN_THRESHOLD)
-	minDepositAmount := minDepositAmountVar.(*big.Int)
-	startBlockVar, _ := etd.Params.Get(CCC_ARGS_START_BLOCK)
-	startBlock := startBlockVar.(uint64)
-	endBlockVar, _ := etd.Params.Get(CCC_ARGS_END_BLOCK)
-	endBlock := endBlockVar.(uint64)
+	minValidators := convertByteSliceToUint16(minValidatorsVar.([]byte))
 
-	fmt.Printf("from is %X, childId is %s\n", from.Hex(), chainId)
+	minDepositAmountVar, _ := etd.Params.Get(CCC_ARGS_TOKEN_THRESHOLD)
+	minDepositAmount := new(big.Int).SetBytes(minDepositAmountVar.([]byte))
+
+	startBlockVar, _ := etd.Params.Get(CCC_ARGS_START_BLOCK)
+	startBlock := convertByteSliceToUint64(startBlockVar.([]byte))
+
+	endBlockVar, _ := etd.Params.Get(CCC_ARGS_END_BLOCK)
+	endBlock := convertByteSliceToUint64(endBlockVar.([]byte))
 
 	err := cch.CreateChildChain(from, chainId, minValidators, minDepositAmount, startBlock, endBlock)
 	if err != nil {
@@ -396,7 +397,7 @@ func ccc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHe
 	}
 
 	// TODO Move to apply commit callback
-	// cch.GetTypeMutex().Post(core.CreateChildChainEvent{From: from, ChainId: chainId})
+	//cch.GetTypeMutex().Post(core.CreateChildChainEvent{From: from, ChainId: chainId})
 
 	return nil
 }
@@ -681,4 +682,31 @@ func sb2mc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChain
 	fmt.Printf("from is %X, txHash is %x, block is %s\n", from.Hex(), block)
 
 	return cch.SaveTdmBlock2MainBlock(block)
+}
+
+// ---------------------------------------------
+// Utility Func
+const (
+	UINT64_BYTE_SIZE = 8
+	UINT16_BYTE_SIZE = 2
+)
+
+// Convert the Byte Slice to uint64
+func convertByteSliceToUint64(input []byte) uint64 {
+	result := make([]byte, UINT64_BYTE_SIZE)
+
+	l := UINT64_BYTE_SIZE - len(input)
+	copy(result[l:], input)
+
+	return binary.BigEndian.Uint64(result)
+}
+
+// Convert the Byte Slice to uint16
+func convertByteSliceToUint16(input []byte) uint16 {
+	result := make([]byte, UINT16_BYTE_SIZE)
+
+	l := UINT16_BYTE_SIZE - len(input)
+	copy(result[l:], input)
+
+	return binary.BigEndian.Uint16(result)
 }

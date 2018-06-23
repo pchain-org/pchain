@@ -16,8 +16,16 @@ import (
 type CoreChainInfo struct {
 	db dbm.DB
 
+	// Common Info
 	Owner	common.Address
 	ChainId	string
+
+	// Setup Info
+	MinValidators uint16
+	MinDepositAmount *big.Int
+	StartBlock uint64
+	EndBlock uint64
+
 
 	//joined - during creation phase
 	Joined  []common.Address
@@ -62,19 +70,25 @@ func calcEpochKey(number int, chainId string) []byte {
 func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
 
 	cci := loadCoreChainInfo(db, chainId)
-	if cci == nil {return nil}
-
-	epoch := loadEpoch(db, cci.EpochNumber, chainId)
-	if epoch == nil {return nil}
+	if cci == nil {
+		return nil
+	}
 
 	ci := &ChainInfo {
 		CoreChainInfo: *cci,
-		Epoch: epoch,
+	}
+
+	if cci.EpochNumber != 0 {
+		epoch := loadEpoch(db, cci.EpochNumber, chainId)
+		if epoch == nil {
+			return nil
+		}
+		ci.Epoch = epoch
 	}
 
 	fmt.Printf("LoadChainInfo(), chainInfo is: %v\n", ci)
 
-	return nil
+	return ci
 }
 
 func SaveChainInfo(db dbm.DB, ci *ChainInfo) error{
@@ -86,8 +100,10 @@ func SaveChainInfo(db dbm.DB, ci *ChainInfo) error{
 	err := saveCoreChainInfo(db, &ci.CoreChainInfo)
 	if err != nil {return err}
 
-	err = saveEpoch(db, ci.Epoch, ci.ChainId)
-	if err != nil {return err}
+	if ci.Epoch != nil {
+		err = saveEpoch(db, ci.Epoch, ci.ChainId)
+		if err != nil {return err}
+	}
 
 	SaveId(db, ci.ChainId)
 
@@ -114,9 +130,6 @@ func loadCoreChainInfo(db dbm.DB, chainId string) *CoreChainInfo {
 
 func saveCoreChainInfo(db dbm.DB, cci *CoreChainInfo) error {
 
-	mtx.Lock()
-	defer mtx.Unlock()
-
 	db.SetSync(calcCoreChainInfoKey(cci.ChainId), cci.Bytes())
 	return nil
 }
@@ -124,7 +137,7 @@ func saveCoreChainInfo(db dbm.DB, cci *CoreChainInfo) error {
 func (cci *CoreChainInfo) Bytes() []byte {
 
 	buf, n, err := new(bytes.Buffer), new(int), new(error)
-	wire.WriteBinary(cci, buf, n, err)
+	wire.WriteBinary(*cci, buf, n, err)
 	if *err != nil {
 		return nil
 	}
@@ -141,9 +154,6 @@ func loadEpoch(db dbm.DB, number int, chainId string) *ep.Epoch {
 }
 
 func saveEpoch(db dbm.DB, epoch *ep.Epoch, chainId string) error {
-
-	mtx.Lock()
-	defer mtx.Unlock()
 
 	db.SetSync(calcEpochKey(epoch.Number, chainId), epoch.Bytes())
 	return nil
