@@ -208,7 +208,10 @@ func (privKey EtherumPrivKey) Bytes() []byte {
 }
 
 func (privKey EtherumPrivKey) Sign(msg []byte) Signature {
-	priv := ethcrypto.ToECDSA(privKey)
+	priv, err := ethcrypto.ToECDSA(privKey)
+	if err != nil {
+		return nil
+	}
 	msg = ethcrypto.Keccak256(msg)
 	sig, err := ethcrypto.Sign(msg, priv)
 	if err != nil {
@@ -218,7 +221,10 @@ func (privKey EtherumPrivKey) Sign(msg []byte) Signature {
 }
 
 func (privKey EtherumPrivKey) PubKey() PubKey {
-	priv := ethcrypto.ToECDSA(privKey)
+	priv, err := ethcrypto.ToECDSA(privKey)
+	if err != nil {
+		return nil
+	}
 	pubKey := ethcrypto.FromECDSAPub(&priv.PublicKey)
 	return EtherumPubKey(pubKey)
 }

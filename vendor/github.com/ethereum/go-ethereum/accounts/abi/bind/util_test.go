@@ -17,6 +17,7 @@
 package bind_test
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -27,25 +28,24 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"golang.org/x/net/context"
 )
 
 var testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 
 var waitDeployedTests = map[string]struct {
 	code        string
-	gas         *big.Int
+	gas         uint64
 	wantAddress common.Address
 	wantErr     error
 }{
 	"successful deploy": {
 		code:        `6060604052600a8060106000396000f360606040526008565b00`,
-		gas:         big.NewInt(3000000),
+		gas:         3000000,
 		wantAddress: common.HexToAddress("0x3a220f351252089d385b29beca14e27f204c296a"),
 	},
 	"empty code": {
 		code:        ``,
-		gas:         big.NewInt(300000),
+		gas:         300000,
 		wantErr:     bind.ErrNoCodeAfterDeploy,
 		wantAddress: common.HexToAddress("0x3a220f351252089d385b29beca14e27f204c296a"),
 	},
@@ -53,9 +53,8 @@ var waitDeployedTests = map[string]struct {
 
 func TestWaitDeployed(t *testing.T) {
 	for name, test := range waitDeployedTests {
-		backend := backends.NewSimulatedBackend(core.GenesisAccount{
-			Address: crypto.PubkeyToAddress(testKey.PublicKey),
-			Balance: big.NewInt(10000000000),
+		backend := backends.NewSimulatedBackend(core.GenesisAlloc{
+			crypto.PubkeyToAddress(testKey.PublicKey): {Balance: big.NewInt(10000000000)},
 		})
 
 		// Create the transaction.

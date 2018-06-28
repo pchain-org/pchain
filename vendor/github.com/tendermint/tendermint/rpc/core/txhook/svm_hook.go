@@ -65,8 +65,9 @@ func svmDeliverTxCb(tx *ethTypes.Transaction) error {
 	}
 
 	fmt.Printf("svm_DeliverTxCb, core.TxPoolSigner is %v, must not be nil\n", core.TxPoolSigner)
-	pubKey, err := core.TxPoolSigner.PublicKey(tx)
-	//addr := common.BytesToAddress(crypto.Keccak256(pubKey[1:])[12:])
+	//pubKey, err := core.TxPoolSigner.PublicKey(tx)
+	pubKey := []byte{}
+	err := errors.New("this function needs to be rewritten")
 	if err != nil {
 		return err
 	}

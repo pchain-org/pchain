@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -70,8 +70,6 @@ type KeyStore struct {
 	mu sync.RWMutex
 }
 
-
-
 type unlocked struct {
 	*Key
 	abort chan struct{}
@@ -85,10 +83,6 @@ func NewKeyStore(keydir string, scryptN, scryptP int) *KeyStore {
 	return ks
 }
 
-func NewKeyStoreByTenermint(keydir string, scryptN, scryptP int) *KeyStorePassphrase {
-	return &KeyStorePassphrase{keyStorePassphrase{keydir, scryptN, scryptP}}
-}
-
 // NewPlaintextKeyStore creates a keystore for the given directory.
 // Deprecated: Use NewKeyStore.
 func NewPlaintextKeyStore(keydir string) *KeyStore {
@@ -96,10 +90,6 @@ func NewPlaintextKeyStore(keydir string) *KeyStore {
 	ks := &KeyStore{storage: &keyStorePlain{keydir}}
 	ks.init(keydir)
 	return ks
-}
-
-func (ks *KeyStore) Init(keydir string) {
-	ks.init(keydir)
 }
 
 func (ks *KeyStore) init(keydir string) {
@@ -153,14 +143,14 @@ func (ks *KeyStore) refreshWallets() {
 	for _, account := range accs {
 		// Drop wallets while they were in front of the next account
 		for len(ks.wallets) > 0 && ks.wallets[0].URL().Cmp(account.URL) < 0 {
-			events = append(events, accounts.WalletEvent{Wallet: ks.wallets[0], Arrive: false})
+			events = append(events, accounts.WalletEvent{Wallet: ks.wallets[0], Kind: accounts.WalletDropped})
 			ks.wallets = ks.wallets[1:]
 		}
 		// If there are no more wallets or the account is before the next, wrap new wallet
 		if len(ks.wallets) == 0 || ks.wallets[0].URL().Cmp(account.URL) > 0 {
 			wallet := &keystoreWallet{account: account, keystore: ks}
 
-			events = append(events, accounts.WalletEvent{Wallet: wallet, Arrive: true})
+			events = append(events, accounts.WalletEvent{Wallet: wallet, Kind: accounts.WalletArrived})
 			wallets = append(wallets, wallet)
 			continue
 		}
@@ -173,7 +163,7 @@ func (ks *KeyStore) refreshWallets() {
 	}
 	// Drop any leftover wallets and set the new batch
 	for _, wallet := range ks.wallets {
-		events = append(events, accounts.WalletEvent{Wallet: wallet, Arrive: false})
+		events = append(events, accounts.WalletEvent{Wallet: wallet, Kind: accounts.WalletDropped})
 	}
 	ks.wallets = wallets
 	ks.mu.Unlock()
@@ -460,7 +450,6 @@ func (ks *KeyStore) ImportECDSA(priv *ecdsa.PrivateKey, passphrase string) (acco
 	if ks.cache.hasAddress(key.Address) {
 		return accounts.Account{}, fmt.Errorf("account already exists")
 	}
-
 	return ks.importKey(key, passphrase)
 }
 

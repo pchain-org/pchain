@@ -40,7 +40,6 @@ func NewEthermintApplication(backend *ethereum.Backend,
 		currentState: backend.Ethereum().BlockChain().State,
 		strategy:     strategy,
 	}
-	backend.SetPreCheckInt(app)
 
 	err := app.backend.ResetWork(app.Receiver()) // init the block results
 	return app, err
@@ -79,11 +78,6 @@ func (app *EthermintApplication) InitChain(validators []*abciTypes.Validator) {
 	glog.V(logger.Debug).Infof("Should not invoked. exit")
 	os.Exit(1)
 	//app.SetValidators(validators)
-}
-
-
-func (app *EthermintApplication) PreCheck(tx *ethTypes.Transaction) error {
-	return app.backend.PreCheck(tx)
 }
 
 // CheckTx checks a transaction is valid but does not mutate the state
@@ -240,7 +234,7 @@ func (app *EthermintApplication) validateTx(tx *ethTypes.Transaction) error {
 
 	// Last but not least check for nonce errors
 	if currentState.GetNonce(from) > tx.Nonce() {
-		return core.ErrNonce
+		return core.ErrNonceTooLow
 	}
 
 	etd := tx.ExtendTxData()
@@ -250,7 +244,7 @@ func (app *EthermintApplication) validateTx(tx *ethTypes.Transaction) error {
 		// TODO
 		/*if pool.gasLimit().Cmp(tx.Gas()) < 0 {
 		return core.ErrGasLimit
-	}*/
+		}*/
 
 		// Transactions can't be negative. This may never happen
 		// using RLP decoded transactions but may occur if you create
@@ -265,8 +259,11 @@ func (app *EthermintApplication) validateTx(tx *ethTypes.Transaction) error {
 			return core.ErrInsufficientFunds
 		}
 
-		intrGas := core.IntrinsicGas(tx.Data(), tx.To() == nil, true) // homestead == true
-		if tx.Gas().Cmp(intrGas) < 0 {
+		intrGas, err := core.IntrinsicGas(tx.Data(), tx.To() == nil, true) // homestead == true
+		if err != nil {
+			return err
+		}
+		if tx.Gas() < intrGas {
 			return core.ErrIntrinsicGas
 		}
 

@@ -1,22 +1,23 @@
-// Copyright 2016 The go-ethereum Authors
-// This file is part of go-ethereum.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
+// GNU Lesser General Public License for more details.
 //
-// You should have received a copy of the GNU General Public License
-// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package mailserver
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"encoding/binary"
 	"io/ioutil"
@@ -26,12 +27,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 )
 
 const powRequirement = 0.00001
-const keyName = "6d604bac5401ce9a6b995f1b45a4ab"
 
+var keyID string
 var shh *whisper.Whisper
 var seed = time.Now().Unix()
 
@@ -58,15 +59,19 @@ func TestDBKey(t *testing.T) {
 }
 
 func generateEnvelope(t *testing.T) *whisper.Envelope {
+	h := crypto.Keccak256Hash([]byte("test sample data"))
 	params := &whisper.MessageParams{
-		KeySym:   []byte("test key"),
-		Topic:    whisper.TopicType{},
+		KeySym:   h[:],
+		Topic:    whisper.TopicType{0x1F, 0x7E, 0xA1, 0x7F},
 		Payload:  []byte("test payload"),
 		PoW:      powRequirement,
 		WorkTime: 2,
 	}
 
-	msg := whisper.NewSentMessage(params)
+	msg, err := whisper.NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	env, err := msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed to wrap with seed %d: %s.", seed, err)
@@ -78,17 +83,19 @@ func TestMailServer(t *testing.T) {
 	const password = "password_for_this_test"
 	const dbPath = "whisper-server-test"
 
-	_, err := ioutil.TempDir("", dbPath)
+	dir, err := ioutil.TempDir("", dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var server WMailServer
-	shh = whisper.NewWhisper(&server)
-	server.Init(shh, dbPath, password, powRequirement)
+	shh = whisper.New(&whisper.DefaultConfig)
+	shh.RegisterServer(&server)
+
+	server.Init(shh, dir, password, powRequirement)
 	defer server.Close()
 
-	err = shh.AddSymKey(keyName, []byte(password))
+	keyID, err = shh.AddSymKeyFromPassword(password)
 	if err != nil {
 		t.Fatalf("Failed to create symmetric key for mail request: %s", err)
 	}
@@ -100,7 +107,14 @@ func TestMailServer(t *testing.T) {
 }
 
 func deliverTest(t *testing.T, server *WMailServer, env *whisper.Envelope) {
-	testPeerID := shh.NewIdentity()
+	id, err := shh.NewKeyPair()
+	if err != nil {
+		t.Fatalf("failed to generate new key pair with seed %d: %s.", seed, err)
+	}
+	testPeerID, err := shh.GetPrivateKey(id)
+	if err != nil {
+		t.Fatalf("failed to retrieve new key pair with seed %d: %s.", seed, err)
+	}
 	birth := env.Expiry - env.TTL
 	p := &ServerTestParams{
 		topic: env.Topic,
@@ -108,6 +122,7 @@ func deliverTest(t *testing.T, server *WMailServer, env *whisper.Envelope) {
 		upp:   birth + 1,
 		key:   testPeerID,
 	}
+
 	singleRequest(t, server, env, p, true)
 
 	p.low, p.upp = birth+1, 0xffffffff
@@ -118,14 +133,14 @@ func deliverTest(t *testing.T, server *WMailServer, env *whisper.Envelope) {
 
 	p.low = birth - 1
 	p.upp = birth + 1
-	p.topic[0]++
+	p.topic[0] = 0xFF
 	singleRequest(t, server, env, p, false)
 }
 
 func singleRequest(t *testing.T, server *WMailServer, env *whisper.Envelope, p *ServerTestParams, expect bool) {
 	request := createRequest(t, p)
 	src := crypto.FromECDSAPub(&p.key.PublicKey)
-	ok, lower, upper, topic := server.validateRequest(src, request)
+	ok, lower, upper, bloom := server.validateRequest(src, request)
 	if !ok {
 		t.Fatalf("request validation failed, seed: %d.", seed)
 	}
@@ -135,12 +150,13 @@ func singleRequest(t *testing.T, server *WMailServer, env *whisper.Envelope, p *
 	if upper != p.upp {
 		t.Fatalf("request validation failed (upper bound), seed: %d.", seed)
 	}
-	if topic != p.topic {
+	expectedBloom := whisper.TopicToBloom(p.topic)
+	if !bytes.Equal(bloom, expectedBloom) {
 		t.Fatalf("request validation failed (topic), seed: %d.", seed)
 	}
 
 	var exist bool
-	mail := server.processRequest(nil, p.low, p.upp, p.topic)
+	mail := server.processRequest(nil, p.low, p.upp, bloom)
 	for _, msg := range mail {
 		if msg.Hash() == env.Hash() {
 			exist = true
@@ -153,20 +169,27 @@ func singleRequest(t *testing.T, server *WMailServer, env *whisper.Envelope, p *
 	}
 
 	src[0]++
-	ok, lower, upper, topic = server.validateRequest(src, request)
-	if ok {
-		t.Fatalf("request validation false positive, seed: %d.", seed)
+	ok, lower, upper, bloom = server.validateRequest(src, request)
+	if !ok {
+		// request should be valid regardless of signature
+		t.Fatalf("request validation false negative, seed: %d (lower: %d, upper: %d).", seed, lower, upper)
 	}
 }
 
 func createRequest(t *testing.T, p *ServerTestParams) *whisper.Envelope {
-	data := make([]byte, 8+whisper.TopicLength)
+	bloom := whisper.TopicToBloom(p.topic)
+	data := make([]byte, 8)
 	binary.BigEndian.PutUint32(data, p.low)
 	binary.BigEndian.PutUint32(data[4:], p.upp)
-	copy(data[8:], p.topic[:])
+	data = append(data, bloom...)
+
+	key, err := shh.GetSymKey(keyID)
+	if err != nil {
+		t.Fatalf("failed to retrieve sym key with seed %d: %s.", seed, err)
+	}
 
 	params := &whisper.MessageParams{
-		KeySym:   shh.GetSymKey(keyName),
+		KeySym:   key,
 		Topic:    p.topic,
 		Payload:  data,
 		PoW:      powRequirement * 2,
@@ -174,7 +197,10 @@ func createRequest(t *testing.T, p *ServerTestParams) *whisper.Envelope {
 		Src:      p.key,
 	}
 
-	msg := whisper.NewSentMessage(params)
+	msg, err := whisper.NewSentMessage(params)
+	if err != nil {
+		t.Fatalf("failed to create new message with seed %d: %s.", seed, err)
+	}
 	env, err := msg.Wrap(params)
 	if err != nil {
 		t.Fatalf("failed to wrap with seed %d: %s.", seed, err)

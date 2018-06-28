@@ -215,6 +215,20 @@ func MustParseNode(rawurl string) *Node {
 	return n
 }
 
+// MarshalText implements encoding.TextMarshaler.
+func (n *Node) MarshalText() ([]byte, error) {
+	return []byte(n.String()), nil
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (n *Node) UnmarshalText(text []byte) error {
+	dec, err := ParseNode(string(text))
+	if err == nil {
+		*n = *dec
+	}
+	return err
+}
+
 // type nodeQueue []*Node
 //
 // // pushNew adds n to the end if it is not present.
@@ -259,6 +273,11 @@ func (n NodeID) GoString() string {
 	return fmt.Sprintf("discover.HexID(\"%x\")", n[:])
 }
 
+// TerminalString returns a shortened hex string for terminal logging.
+func (n NodeID) TerminalString() string {
+	return hex.EncodeToString(n[:8])
+}
+
 // HexID converts a hex string to a NodeID.
 // The string may be prefixed with 0x.
 func HexID(in string) (NodeID, error) {
@@ -297,7 +316,7 @@ func PubkeyID(pub *ecdsa.PublicKey) NodeID {
 // Pubkey returns the public key represented by the node ID.
 // It returns an error if the ID is not a point on the curve.
 func (id NodeID) Pubkey() (*ecdsa.PublicKey, error) {
-	p := &ecdsa.PublicKey{Curve: S256(), X: new(big.Int), Y: new(big.Int)}
+	p := &ecdsa.PublicKey{Curve: crypto.S256(), X: new(big.Int), Y: new(big.Int)}
 	half := len(id) / 2
 	p.X.SetBytes(id[:half])
 	p.Y.SetBytes(id[half:])

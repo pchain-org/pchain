@@ -22,16 +22,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 type DumpAccount struct {
-	Balance  	string            `json:"balance"`
-	LockedBalance	string            `json:"balance"`
-	Nonce		uint64            `json:"nonce"`
-	Root		string            `json:"root"`
-	CodeHash	string            `json:"codeHash"`
-	Code		string            `json:"code"`
-	Storage		map[string]string `json:"storage"`
+	Balance  string            `json:"balance"`
+	Nonce    uint64            `json:"nonce"`
+	Root     string            `json:"root"`
+	CodeHash string            `json:"codeHash"`
+	Code     string            `json:"code"`
+	Storage  map[string]string `json:"storage"`
 }
 
 type Dump struct {
@@ -41,11 +41,11 @@ type Dump struct {
 
 func (self *StateDB) RawDump() Dump {
 	dump := Dump{
-		Root:     common.Bytes2Hex(self.trie.Root()),
+		Root:     fmt.Sprintf("%x", self.trie.Hash()),
 		Accounts: make(map[string]DumpAccount),
 	}
 
-	it := self.trie.Iterator()
+	it := trie.NewIterator(self.trie.NodeIterator(nil))
 	for it.Next() {
 		addr := self.trie.GetKey(it.Key)
 		var data Account
@@ -56,14 +56,13 @@ func (self *StateDB) RawDump() Dump {
 		obj := newObject(nil, common.BytesToAddress(addr), data, nil)
 		account := DumpAccount{
 			Balance:  data.Balance.String(),
-			LockedBalance:  data.LockedBalance.String(),
 			Nonce:    data.Nonce,
 			Root:     common.Bytes2Hex(data.Root[:]),
 			CodeHash: common.Bytes2Hex(data.CodeHash),
 			Code:     common.Bytes2Hex(obj.Code(self.db)),
 			Storage:  make(map[string]string),
 		}
-		storageIt := obj.getTrie(self.db).Iterator()
+		storageIt := trie.NewIterator(obj.getTrie(self.db).NodeIterator(nil))
 		for storageIt.Next() {
 			account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
 		}

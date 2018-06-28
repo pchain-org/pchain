@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/pborman/uuid"
 )
 
@@ -92,14 +91,6 @@ type cipherparamsJSON struct {
 	IV string `json:"iv"`
 }
 
-type scryptParamsJSON struct {
-	N     int    `json:"n"`
-	R     int    `json:"r"`
-	P     int    `json:"p"`
-	DkLen int    `json:"dklen"`
-	Salt  string `json:"salt"`
-}
-
 func (k *Key) MarshalJSON() (j []byte, err error) {
 	jStruct := plainKeyJSON{
 		hex.EncodeToString(k.Address[:]),
@@ -125,14 +116,13 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	if err != nil {
 		return err
 	}
-
-	privkey, err := hex.DecodeString(keyJSON.PrivateKey)
+	privkey, err := crypto.HexToECDSA(keyJSON.PrivateKey)
 	if err != nil {
 		return err
 	}
 
 	k.Address = common.BytesToAddress(addr)
-	k.PrivateKey = crypto.ToECDSA(privkey)
+	k.PrivateKey = privkey
 
 	return nil
 }
@@ -157,7 +147,7 @@ func NewKeyForDirectICAP(rand io.Reader) *Key {
 		panic("key generation: could not read from random source: " + err.Error())
 	}
 	reader := bytes.NewReader(randBytes)
-	privateKeyECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), reader)
+	privateKeyECDSA, err := ecdsa.GenerateKey(crypto.S256(), reader)
 	if err != nil {
 		panic("key generation: ecdsa.GenerateKey failed: " + err.Error())
 	}
@@ -169,15 +159,11 @@ func NewKeyForDirectICAP(rand io.Reader) *Key {
 }
 
 func newKey(rand io.Reader) (*Key, error) {
-	privateKeyECDSA, err := ecdsa.GenerateKey(secp256k1.S256(), rand)
+	privateKeyECDSA, err := ecdsa.GenerateKey(crypto.S256(), rand)
 	if err != nil {
 		return nil, err
 	}
 	return newKeyFromECDSA(privateKeyECDSA), nil
-}
-
-func NewKey(rand io.Reader) (*Key, error) {
-	return newKey(rand)
 }
 
 func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, accounts.Account, error) {
@@ -220,10 +206,6 @@ func writeKeyFile(file string, content []byte) error {
 func keyFileName(keyAddr common.Address) string {
 	ts := time.Now().UTC()
 	return fmt.Sprintf("UTC--%s--%s", toISO8601(ts), hex.EncodeToString(keyAddr[:]))
-}
-
-func KeyFileName(keyAddr common.Address) string {
-	return keyFileName(keyAddr)
 }
 
 func toISO8601(t time.Time) string {

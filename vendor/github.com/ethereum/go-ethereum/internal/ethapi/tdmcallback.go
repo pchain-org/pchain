@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	st "github.com/ethereum/go-ethereum/core/state"
+	"math/big"
 )
 
 //this module records all apis called from tendermint side
@@ -30,7 +31,7 @@ func UnlockAssert_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.Cro
 	accountInt, _ := etd.Params.Get("account")
 	account := common.BytesToAddress(common.FromHex(string(accountInt.([]byte))))
 	amountInt, _ := etd.Params.Get("amount")
-	biAmount := common.BytesToBig(amountInt.([]byte))
+	biAmount := new(big.Int).SetBytes(amountInt.([]byte))
 
 	fmt.Printf("balance for(%s) is : (%v, %v), biPower is %v\n",
 		account.Hex(), state.GetBalance(account), state.GetLockedBalance(account), biAmount.String())

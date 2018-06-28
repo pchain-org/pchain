@@ -21,8 +21,7 @@ package keystore
 import (
 	"time"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/rjeczalik/notify"
 )
 
@@ -64,15 +63,15 @@ func (w *watcher) loop() {
 		w.starting = false
 		w.ac.mu.Unlock()
 	}()
+	logger := log.New("path", w.ac.keydir)
 
-	err := notify.Watch(w.ac.keydir, w.ev, notify.All)
-	if err != nil {
-		glog.V(logger.Detail).Infof("can't watch %s: %v", w.ac.keydir, err)
+	if err := notify.Watch(w.ac.keydir, w.ev, notify.All); err != nil {
+		logger.Trace("Failed to watch keystore folder", "err", err)
 		return
 	}
 	defer notify.Stop(w.ev)
-	glog.V(logger.Detail).Infof("now watching %s", w.ac.keydir)
-	defer glog.V(logger.Detail).Infof("no longer watching %s", w.ac.keydir)
+	logger.Trace("Started watching keystore folder")
+	defer logger.Trace("Stopped watching keystore folder")
 
 	w.ac.mu.Lock()
 	w.running = true
@@ -82,32 +81,28 @@ func (w *watcher) loop() {
 	// When an event occurs, the reload call is delayed a bit so that
 	// multiple events arriving quickly only cause a single reload.
 	var (
-		debounce          = time.NewTimer(0)
-		debounceDuration  = 500 * time.Millisecond
-		inCycle, hadEvent bool
+		debounceDuration = 500 * time.Millisecond
+		rescanTriggered  = false
+		debounce         = time.NewTimer(0)
 	)
+	// Ignore initial trigger
+	if !debounce.Stop() {
+		<-debounce.C
+	}
 	defer debounce.Stop()
 	for {
 		select {
 		case <-w.quit:
 			return
 		case <-w.ev:
-			if !inCycle {
+			// Trigger the scan (with delay), if not already triggered
+			if !rescanTriggered {
 				debounce.Reset(debounceDuration)
-				inCycle = true
-			} else {
-				hadEvent = true
+				rescanTriggered = true
 			}
 		case <-debounce.C:
-			w.ac.mu.Lock()
-			w.ac.reload()
-			w.ac.mu.Unlock()
-			if hadEvent {
-				debounce.Reset(debounceDuration)
-				inCycle, hadEvent = true, false
-			} else {
-				inCycle, hadEvent = false, false
-			}
+			w.ac.scanAccounts()
+			rescanTriggered = false
 		}
 	}
 }

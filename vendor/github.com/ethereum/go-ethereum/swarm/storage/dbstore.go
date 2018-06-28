@@ -23,16 +23,26 @@
 package storage
 
 import (
+	"archive/tar"
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
+)
+
+//metrics variables
+var (
+	gcCounter            = metrics.NewRegisteredCounter("storage.db.dbstore.gc.count", nil)
+	dbStoreDeleteCounter = metrics.NewRegisteredCounter("storage.db.dbstore.rm.count", nil)
 )
 
 const (
@@ -69,12 +79,12 @@ type DbStore struct {
 	gcPos, gcStartPos []byte
 	gcArray           []*gcItem
 
-	hashfunc Hasher
+	hashfunc SwarmHasher
 
 	lock sync.Mutex
 }
 
-func NewDbStore(path string, hash Hasher, capacity uint64, radius int) (s *DbStore, err error) {
+func NewDbStore(path string, hash SwarmHasher, capacity uint64, radius int) (s *DbStore, err error) {
 	s = new(DbStore)
 
 	s.hashfunc = hash
@@ -252,6 +262,7 @@ func (s *DbStore) collectGarbage(ratio float32) {
 	// actual gc
 	for i := 0; i < gcnt; i++ {
 		if s.gcArray[i].value <= cutval {
+			gcCounter.Inc(1)
 			s.delete(s.gcArray[i].idx, s.gcArray[i].idxKey)
 		}
 	}
@@ -259,6 +270,84 @@ func (s *DbStore) collectGarbage(ratio float32) {
 	// fmt.Println(s.entryCnt)
 
 	s.db.Put(keyGCPos, s.gcPos)
+}
+
+// Export writes all chunks from the store to a tar archive, returning the
+// number of chunks written.
+func (s *DbStore) Export(out io.Writer) (int64, error) {
+	tw := tar.NewWriter(out)
+	defer tw.Close()
+
+	it := s.db.NewIterator()
+	defer it.Release()
+	var count int64
+	for ok := it.Seek([]byte{kpIndex}); ok; ok = it.Next() {
+		key := it.Key()
+		if (key == nil) || (key[0] != kpIndex) {
+			break
+		}
+
+		var index dpaDBIndex
+		decodeIndex(it.Value(), &index)
+
+		data, err := s.db.Get(getDataKey(index.Idx))
+		if err != nil {
+			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v", key[:], err))
+			continue
+		}
+
+		hdr := &tar.Header{
+			Name: hex.EncodeToString(key[1:]),
+			Mode: 0644,
+			Size: int64(len(data)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return count, err
+		}
+		if _, err := tw.Write(data); err != nil {
+			return count, err
+		}
+		count++
+	}
+
+	return count, nil
+}
+
+// Import reads chunks into the store from a tar archive, returning the number
+// of chunks read.
+func (s *DbStore) Import(in io.Reader) (int64, error) {
+	tr := tar.NewReader(in)
+
+	var count int64
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return count, err
+		}
+
+		if len(hdr.Name) != 64 {
+			log.Warn("ignoring non-chunk file", "name", hdr.Name)
+			continue
+		}
+
+		key, err := hex.DecodeString(hdr.Name)
+		if err != nil {
+			log.Warn("ignoring invalid chunk file", "name", hdr.Name, "err", err)
+			continue
+		}
+
+		data, err := ioutil.ReadAll(tr)
+		if err != nil {
+			return count, err
+		}
+
+		s.Put(&Chunk{Key: key, SData: data})
+		count++
+	}
+
+	return count, nil
 }
 
 func (s *DbStore) Cleanup() {
@@ -279,7 +368,7 @@ func (s *DbStore) Cleanup() {
 
 		data, err := s.db.Get(getDataKey(index.Idx))
 		if err != nil {
-			glog.V(logger.Warn).Infof("Chunk %x found but could not be accessed: %v", key[:], err)
+			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v", key[:], err))
 			s.delete(index.Idx, getIndexKey(key[1:]))
 			errorsFound++
 		} else {
@@ -287,7 +376,7 @@ func (s *DbStore) Cleanup() {
 			hasher.Write(data)
 			hash := hasher.Sum(nil)
 			if !bytes.Equal(hash, key[1:]) {
-				glog.V(logger.Warn).Infof("Found invalid chunk. Hash mismatch. hash=%x, key=%x", hash, key[:])
+				log.Warn(fmt.Sprintf("Found invalid chunk. Hash mismatch. hash=%x, key=%x", hash, key[:]))
 				s.delete(index.Idx, getIndexKey(key[1:]))
 				errorsFound++
 			}
@@ -295,13 +384,14 @@ func (s *DbStore) Cleanup() {
 		it.Next()
 	}
 	it.Release()
-	glog.V(logger.Warn).Infof("Found %v errors out of %v entries", errorsFound, total)
+	log.Warn(fmt.Sprintf("Found %v errors out of %v entries", errorsFound, total))
 }
 
 func (s *DbStore) delete(idx uint64, idxKey []byte) {
 	batch := new(leveldb.Batch)
 	batch.Delete(idxKey)
 	batch.Delete(getDataKey(idx))
+	dbStoreDeleteCounter.Inc(1)
 	s.entryCnt--
 	batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
 	s.db.Write(batch)
@@ -324,7 +414,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 		if chunk.dbStored != nil {
 			close(chunk.dbStored)
 		}
-		glog.V(logger.Detail).Infof("Storing to DB: chunk already exists, only update access")
+		log.Trace(fmt.Sprintf("Storing to DB: chunk already exists, only update access"))
 		return // already exists, only update access
 	}
 
@@ -356,7 +446,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 	if chunk.dbStored != nil {
 		close(chunk.dbStored)
 	}
-	glog.V(logger.Detail).Infof("DbStore.Put: %v. db storage counter: %v ", chunk.Key.Log(), s.dataIdx)
+	log.Trace(fmt.Sprintf("DbStore.Put: %v. db storage counter: %v ", chunk.Key.Log(), s.dataIdx))
 }
 
 // try to find index; if found, update access cnt and return true
@@ -390,7 +480,7 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		var data []byte
 		data, err = s.db.Get(getDataKey(index.Idx))
 		if err != nil {
-			glog.V(logger.Detail).Infof("DBStore: Chunk %v found but could not be accessed: %v", key.Log(), err)
+			log.Trace(fmt.Sprintf("DBStore: Chunk %v found but could not be accessed: %v", key.Log(), err))
 			s.delete(index.Idx, getIndexKey(key))
 			return
 		}
@@ -400,7 +490,7 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		hash := hasher.Sum(nil)
 		if !bytes.Equal(hash, key) {
 			s.delete(index.Idx, getIndexKey(key))
-			panic("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+			log.Warn("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
 		}
 
 		chunk = &Chunk{
@@ -433,8 +523,7 @@ func (s *DbStore) setCapacity(c uint64) {
 	s.capacity = c
 
 	if s.entryCnt > c {
-		var ratio float32
-		ratio = float32(1.01) - float32(c)/float32(s.entryCnt)
+		ratio := float32(1.01) - float32(c)/float32(s.entryCnt)
 		if ratio < gcArrayFreeRatio {
 			ratio = gcArrayFreeRatio
 		}
@@ -445,10 +534,6 @@ func (s *DbStore) setCapacity(c uint64) {
 			s.collectGarbage(ratio)
 		}
 	}
-}
-
-func (s *DbStore) getEntryCnt() uint64 {
-	return s.entryCnt
 }
 
 func (s *DbStore) Close() {

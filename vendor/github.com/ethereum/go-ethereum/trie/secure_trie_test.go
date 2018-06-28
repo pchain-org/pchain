@@ -28,16 +28,20 @@ import (
 )
 
 func newEmptySecure() *SecureTrie {
-	db, _ := ethdb.NewMemDatabase()
-	trie, _ := NewSecure(common.Hash{}, db, 0)
+	diskdb, _ := ethdb.NewMemDatabase()
+	triedb := NewDatabase(diskdb)
+
+	trie, _ := NewSecure(common.Hash{}, triedb, 0)
 	return trie
 }
 
 // makeTestSecureTrie creates a large enough secure trie for testing.
-func makeTestSecureTrie() (ethdb.Database, *SecureTrie, map[string][]byte) {
+func makeTestSecureTrie() (*Database, *SecureTrie, map[string][]byte) {
 	// Create an empty trie
-	db, _ := ethdb.NewMemDatabase()
-	trie, _ := NewSecure(common.Hash{}, db, 0)
+	diskdb, _ := ethdb.NewMemDatabase()
+	triedb := NewDatabase(diskdb)
+
+	trie, _ := NewSecure(common.Hash{}, triedb, 0)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
@@ -51,17 +55,17 @@ func makeTestSecureTrie() (ethdb.Database, *SecureTrie, map[string][]byte) {
 		content[string(key)] = val
 		trie.Update(key, val)
 
-		// Add some other data to inflate th trie
+		// Add some other data to inflate the trie
 		for j := byte(3); j < 13; j++ {
 			key, val = common.LeftPadBytes([]byte{j, i}, 32), []byte{j, i}
 			content[string(key)] = val
 			trie.Update(key, val)
 		}
 	}
-	trie.Commit()
+	trie.Commit(nil)
 
 	// Return the generated trie
-	return db, trie, content
+	return triedb, trie, content
 }
 
 func TestSecureDelete(t *testing.T) {
@@ -137,7 +141,7 @@ func TestSecureTrieConcurrency(t *testing.T) {
 					tries[index].Update(key, val)
 				}
 			}
-			tries[index].Commit()
+			tries[index].Commit(nil)
 		}(i)
 	}
 	// Wait for all threads to finish

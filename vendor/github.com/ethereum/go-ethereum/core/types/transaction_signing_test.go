@@ -30,7 +30,7 @@ func TestEIP155Signing(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
 	signer := NewEIP155Signer(big.NewInt(18))
-	tx, err := SignTx(NewTransaction(0, addr, new(big.Int), new(big.Int), new(big.Int), nil), signer, key)
+	tx, err := SignTx(NewTransaction(0, addr, new(big.Int), 0, new(big.Int), nil), signer, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestEIP155ChainId(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
 	signer := NewEIP155Signer(big.NewInt(18))
-	tx, err := SignTx(NewTransaction(0, addr, new(big.Int), new(big.Int), new(big.Int), nil), signer, key)
+	tx, err := SignTx(NewTransaction(0, addr, new(big.Int), 0, new(big.Int), nil), signer, key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestEIP155ChainId(t *testing.T) {
 		t.Error("expected chainId to be", signer.chainId, "got", tx.ChainId())
 	}
 
-	tx = NewTransaction(0, addr, new(big.Int), new(big.Int), new(big.Int), nil)
+	tx = NewTransaction(0, addr, new(big.Int), 0, new(big.Int), nil)
 	tx, err = SignTx(tx, HomesteadSigner{}, key)
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ func TestEIP155ChainId(t *testing.T) {
 		t.Error("didn't expect tx to be protected")
 	}
 
-	if tx.ChainId().BitLen() > 0 {
+	if tx.ChainId().Sign() != 0 {
 		t.Error("expected chain id to be 0 got", tx.ChainId())
 	}
 }
@@ -118,7 +118,7 @@ func TestEIP155SigningVitalik(t *testing.T) {
 func TestChainId(t *testing.T) {
 	key, _ := defaultTestKey()
 
-	tx := NewTransaction(0, common.Address{}, new(big.Int), new(big.Int), new(big.Int), nil)
+	tx := NewTransaction(0, common.Address{}, new(big.Int), 0, new(big.Int), nil)
 
 	var err error
 	tx, err = SignTx(tx, NewEIP155Signer(big.NewInt(1)), key)

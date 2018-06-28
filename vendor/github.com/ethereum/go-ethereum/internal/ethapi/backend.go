@@ -18,11 +18,13 @@
 package ethapi
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -30,8 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/net/context"
-	"sync"
 )
 
 // used by Backend to call tendermint rpc endpoints
@@ -44,62 +44,50 @@ type Client interface {
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
 type Backend interface {
-	// general Ethereum API
+	// General Ethereum API
 	Downloader() *downloader.Downloader
 	ProtocolVersion() int
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	ChainDb() ethdb.Database
 	EventMux() *event.TypeMux
 	AccountManager() *accounts.Manager
+
 	// BlockChain API
 	SetHead(number uint64)
 	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
 	BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error)
-	StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (State, *types.Header, error)
+	StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.Header, error)
 	GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetTd(blockHash common.Hash) *big.Int
-	GetVMEnv(ctx context.Context, msg core.Message, state State, header *types.Header) (*vm.EVM, func() error, error)
+	GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header, vmCfg vm.Config) (*vm.EVM, func() error, error)
+	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
+	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription
+
 	// TxPool API
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
-	RemoveTx(txHash common.Hash)
-	GetSendTxMutex() *sync.Mutex
 	GetPoolTransactions() (types.Transactions, error)
 	GetPoolTransaction(txHash common.Hash) *types.Transaction
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 	Stats() (pending int, queued int)
 	TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions)
+	SubscribeTxPreEvent(chan<- core.TxPreEvent) event.Subscription
 
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
-
 	//This client connects to tendermint part
 	Client() Client
 
 	SetInnerAPIBridge(inBridge InnerAPIBridge)
 	GetInnerAPIBridge() InnerAPIBridge
 	GetCrossChainHelper() core.CrossChainHelper
-
-	/*
-	//add by author@liaoyd
-	// Validator API
-	SendValidatorMessage(height int, key string, power uint64, flag string) error
-	*/
 }
 
-type State interface {
-	GetBalance(ctx context.Context, addr common.Address) (*big.Int, error)
-	GetLockedBalance(ctx context.Context, addr common.Address) (*big.Int, error)
-	GetCode(ctx context.Context, addr common.Address) ([]byte, error)
-	GetState(ctx context.Context, a common.Address, b common.Hash) (common.Hash, error)
-	GetNonce(ctx context.Context, addr common.Address) (uint64, error)
-}
-
-//modified by author@liaoyd add extension module
 func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 	compiler := makeCompilerAPIs(solcPath)
-
-	txapi := NewPublicTransactionPoolAPI(apiBackend)
+	nonceLock := new(AddrLocker)
+	txapi := NewPublicTransactionPoolAPI(apiBackend, nonceLock)
 	apiBackend.SetInnerAPIBridge(&APIBridge {txapi:txapi})
 
 	all := []rpc.API{
@@ -140,7 +128,7 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 		}, {
 			Namespace: "personal",
 			Version:   "1.0",
-			Service:   NewPrivateAccountAPI(apiBackend),
+			Service:   NewPrivateAccountAPI(apiBackend, nonceLock),
 			Public:    false,
 		}, {
 			Namespace: "tdm",

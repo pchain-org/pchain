@@ -19,10 +19,17 @@
 package storage
 
 import (
+	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+//metrics variables
+var (
+	memstorePutCounter    = metrics.NewRegisteredCounter("storage.db.memstore.put.count", nil)
+	memstoreRemoveCounter = metrics.NewRegisteredCounter("storage.db.memstore.rm.count", nil)
 )
 
 const (
@@ -78,7 +85,7 @@ type memTree struct {
 func newMemTree(b uint, parent *memTree, pidx uint) (node *memTree) {
 	node = new(memTree)
 	node.bits = b
-	node.width = 1 << uint(b)
+	node.width = 1 << b
 	node.subtree = make([]*memTree, node.width)
 	node.access = make([]uint64, node.width-1)
 	node.parent = parent
@@ -130,7 +137,7 @@ func (s *MemStore) setCapacity(c uint) {
 	s.capacity = c
 }
 
-func (s *MemStore) getEntryCnt() uint {
+func (s *MemStore) Counter() uint {
 	return s.entryCnt
 }
 
@@ -148,6 +155,8 @@ func (s *MemStore) Put(entry *Chunk) {
 	}
 
 	s.accessCnt++
+
+	memstorePutCounter.Inc(1)
 
 	node := s.memtree
 	bitpos := uint(0)
@@ -206,8 +215,6 @@ func (s *MemStore) Put(entry *Chunk) {
 	node.lastDBaccess = s.dbAccessCnt
 	node.updateAccess(s.accessCnt)
 	s.entryCnt++
-
-	return
 }
 
 func (s *MemStore) Get(hash Key) (chunk *Chunk, err error) {
@@ -287,14 +294,15 @@ func (s *MemStore) removeOldest() {
 	}
 
 	if node.entry.dbStored != nil {
-		glog.V(logger.Detail).Infof("Memstore Clean: Waiting for chunk %v to be saved", node.entry.Key.Log())
+		log.Trace(fmt.Sprintf("Memstore Clean: Waiting for chunk %v to be saved", node.entry.Key.Log()))
 		<-node.entry.dbStored
-		glog.V(logger.Detail).Infof("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log())
+		log.Trace(fmt.Sprintf("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log()))
 	} else {
-		glog.V(logger.Detail).Infof("Memstore Clean: Chunk %v already in DB. Ready to delete.", node.entry.Key.Log())
+		log.Trace(fmt.Sprintf("Memstore Clean: Chunk %v already in DB. Ready to delete.", node.entry.Key.Log()))
 	}
 
 	if node.entry.SData != nil {
+		memstoreRemoveCounter.Inc(1)
 		node.entry = nil
 		s.entryCnt--
 	}
@@ -323,6 +331,4 @@ func (s *MemStore) removeOldest() {
 }
 
 // Close memstore
-func (s *MemStore) Close() {
-	return
-}
+func (s *MemStore) Close() {}

@@ -1,4 +1,4 @@
-// Copyright 2014 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,15 +25,11 @@ import (
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
-	GetAccount(common.Address) Account
-	CreateAccount(common.Address) Account
+	CreateAccount(common.Address)
 
 	SubBalance(common.Address, *big.Int)
 	AddBalance(common.Address, *big.Int)
-	SubLockedBalance(common.Address, *big.Int)
-	AddLockedBalance(common.Address, *big.Int)
 	GetBalance(common.Address) *big.Int
-	GetLockedBalance(common.Address) *big.Int
 
 	GetNonce(common.Address) uint64
 	SetNonce(common.Address, uint64)
@@ -43,8 +39,8 @@ type StateDB interface {
 	SetCode(common.Address, []byte)
 	GetCodeSize(common.Address) int
 
-	AddRefund(*big.Int)
-	GetRefund() *big.Int
+	AddRefund(uint64)
+	GetRefund() uint64
 
 	GetState(common.Address, common.Hash) common.Hash
 	SetState(common.Address, common.Hash, common.Hash)
@@ -64,27 +60,15 @@ type StateDB interface {
 
 	AddLog(*types.Log)
 	AddPreimage(common.Hash, []byte)
-}
 
-// Account represents a contract or basic ethereum account.
-type Account interface {
-	SubBalance(amount *big.Int)
-	AddBalance(amount *big.Int)
-	SetBalance(*big.Int)
-	SetNonce(uint64)
-	Balance() *big.Int
-	Address() common.Address
-	ReturnGas(*big.Int)
-	SetCode(common.Hash, []byte)
-	ForEachStorage(cb func(key, value common.Hash) bool)
-	Value() *big.Int
+	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool)
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM EVM
 // depends on this context being implemented for doing subcalls and initialising new EVM contracts.
 type CallContext interface {
 	// Call another contract
-	Call(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int, mtype uint64) ([]byte, error)
+	Call(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
 	// Take another's contract code and execute within our own context
 	CallCode(env *EVM, me ContractRef, addr common.Address, data []byte, gas, value *big.Int) ([]byte, error)
 	// Same as CallCode except sender and value is propagated from parent to child scope

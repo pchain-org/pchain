@@ -28,6 +28,7 @@ package keystore
 import (
 	"bytes"
 	"crypto/aes"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -36,6 +37,7 @@ import (
 	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/pborman/uuid"
@@ -72,11 +74,6 @@ type keyStorePassphrase struct {
 	scryptP     int
 }
 
-type KeyStorePassphrase struct {
-	Ks keyStorePassphrase
-}
-
-
 func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) (*Key, error) {
 	// Load the key from the keystore and decrypt its contents
 	keyjson, err := ioutil.ReadFile(filename)
@@ -94,10 +91,11 @@ func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) 
 	return key, nil
 }
 
-func (ks KeyStorePassphrase) GetKey(addr common.Address, filename, auth string) (*Key, error) {
-	return (ks.Ks).GetKey(addr,filename,auth)
+// StoreKey generates a key, encrypts with 'auth' and stores in the given directory
+func StoreKey(dir, auth string, scryptN, scryptP int) (common.Address, error) {
+	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP}, crand.Reader, auth)
+	return a.Address, err
 }
-
 
 func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) error {
 	keyjson, err := EncryptKey(key, auth, ks.scryptN, ks.scryptP)
@@ -107,20 +105,12 @@ func (ks keyStorePassphrase) StoreKey(filename string, key *Key, auth string) er
 	return writeKeyFile(filename, keyjson)
 }
 
-func (ks KeyStorePassphrase) StoreKey(filename string, key *Key, auth string) error {
-	return (ks.Ks).StoreKey(filename, key, auth)
-}
-
 func (ks keyStorePassphrase) JoinPath(filename string) string {
 	if filepath.IsAbs(filename) {
 		return filename
 	} else {
 		return filepath.Join(ks.keysDirPath, filename)
 	}
-}
-
-func (ks KeyStorePassphrase) JoinPath(filename string) string {
-	return (ks.Ks).JoinPath(filename)
 }
 
 // EncryptKey encrypts a key using the specified scrypt parameters into a json
@@ -133,8 +123,7 @@ func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
 		return nil, err
 	}
 	encryptKey := derivedKey[:16]
-	keyBytes0 := crypto.FromECDSA(key.PrivateKey)
-	keyBytes := common.LeftPadBytes(keyBytes0, 32)
+	keyBytes := math.PaddedBigBytes(key.PrivateKey.D, 32)
 
 	iv := randentropy.GetEntropyCSPRNG(aes.BlockSize) // 16
 	cipherText, err := aesCTRXOR(encryptKey, keyBytes, iv)
@@ -158,7 +147,7 @@ func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
 		Cipher:       "aes-128-ctr",
 		CipherText:   hex.EncodeToString(cipherText),
 		CipherParams: cipherParamsJSON,
-		KDF:          "scrypt",
+		KDF:          keyHeaderKDF,
 		KDFParams:    scryptParamsJSON,
 		MAC:          hex.EncodeToString(mac),
 	}
@@ -200,7 +189,8 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	key := crypto.ToECDSA(keyBytes)
+	key := crypto.ToECDSAUnsafe(keyBytes)
+
 	return &Key{
 		Id:         uuid.UUID(keyId),
 		Address:    crypto.PubkeyToAddress(key.PublicKey),
@@ -292,7 +282,7 @@ func getKDFKey(cryptoJSON cryptoJSON, auth string) ([]byte, error) {
 	}
 	dkLen := ensureInt(cryptoJSON.KDFParams["dklen"])
 
-	if cryptoJSON.KDF == "scrypt" {
+	if cryptoJSON.KDF == keyHeaderKDF {
 		n := ensureInt(cryptoJSON.KDFParams["n"])
 		r := ensureInt(cryptoJSON.KDFParams["r"])
 		p := ensureInt(cryptoJSON.KDFParams["p"])

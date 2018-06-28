@@ -66,7 +66,6 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
-		Type:         nil,
 		ExtendTxData: etd,
 	}
 
@@ -110,7 +109,6 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
-		Type:         nil,
 		ExtendTxData: etd,
 	}
 
@@ -166,7 +164,6 @@ func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Ad
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
-		Type:         nil,
 		ExtendTxData: etd,
 	}
 
@@ -202,7 +199,6 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
-		Type:         nil,
 		ExtendTxData: etd,
 	}
 
@@ -256,7 +252,6 @@ func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
-		Type:         nil,
 		ExtendTxData: etd,
 	}
 
@@ -292,7 +287,6 @@ func (s *PublicChainAPI) SaveBlockToMainChain(ctx context.Context, from common.A
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
-		Type:         nil,
 		ExtendTxData: etd,
 	}
 

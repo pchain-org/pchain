@@ -106,31 +106,21 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 	validators := createPriValidators(config, len(balanceAmounts))
 
 	var coreGenesis = core.Genesis{
-		Nonce: "0xdeadbeefdeadbeef",
-		Timestamp: "0x0",
-		ParentHash: "0x0000000000000000000000000000000000000000000000000000000000000000",
-		ExtraData: "0x0",
-		GasLimit: "0x8000000",
-		Difficulty: "0x400",
-		Mixhash: "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Coinbase: common.ToHex((*validators[0]).Address),
-		Alloc: map[string]struct {
-			Code    string
-			Storage map[string]string
-			Balance string
-			Nonce   string
-			Amount  string
-		}{
-		},
+		Nonce: 0xdeadbeefdeadbeef,
+		Timestamp: 0x0,
+		ParentHash: common.StringToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		ExtraData: []byte("0x0"),
+		GasLimit: 0x8000000,
+		Difficulty: new(big.Int).SetUint64(0x400),
+		Mixhash: common.StringToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		Coinbase: common.BytesToAddress((*validators[0]).Address),
+		Alloc: core.GenesisAlloc{},
 	}
 	for i,validator := range validators {
-		coreGenesis.Alloc[common.ToHex(validator.Address)] = struct {
-			Code    string
-			Storage map[string]string
-			Balance string
-			Nonce   string
-			Amount  string
-		}{Balance: balanceAmounts[i].balance, Amount:balanceAmounts[i].amount}
+		coreGenesis.Alloc[common.BytesToAddress(validator.Address)] = core.GenesisAccount{
+			Balance:  string2Big(balanceAmounts[i].balance),
+			Amount:   string2Big(balanceAmounts[i].amount),
+		}
 	}
 
 	contents, err := json.Marshal(coreGenesis)
@@ -238,10 +228,10 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 			cmn.Exit(checkErr.Error())
 		}
 
-		genDoc.CurrentEpoch.Validators = []types.GenesisValidator{{
+		genDoc.CurrentEpoch.Validators = []types.GenesisValidator{types.GenesisValidator{
 			EthAccount: coinbase,
-			PubKey:     privValidator.PubKey,
-			Amount:     amount,
+			PubKey: privValidator.PubKey,
+			Amount: amount.Int64(),
 		}}
 		genDoc.SaveAs(genFile)
 	}
@@ -278,32 +268,31 @@ func createPriValidators(config cfg.Config, num int) []*types.PrivValidator {
 	return validators
 }
 
-func checkAccount(coreGenesis core.Genesis) (common.Address, int64, error) {
+func checkAccount(coreGenesis core.Genesis) (common.Address, *big.Int, error) {
 
-	coinbase := common.HexToAddress(coreGenesis.Coinbase)
-	amount := int64(10)
+	coinbase := coreGenesis.Coinbase
+	amount := big.NewInt(10)
 	balance := big.NewInt(-1)
 	found := false
 	fmt.Printf("checkAccount(), coinbase is %x\n", coinbase)
-	for addr, account := range coreGenesis.Alloc {
-		address := common.HexToAddress(addr)
+	for address, account := range coreGenesis.Alloc {
 		fmt.Printf("checkAccount(), address is %x\n", address)
 		if coinbase == address {
-			balance = common.String2Big(account.Balance)
-			amount, _ = strconv.ParseInt(account.Amount, 10, 64)
+			balance = account.Balance
+			amount = account.Amount
 			found = true
 			break
 		}
 	}
 	if !found {
 		fmt.Printf("invalidate eth_account\n")
-		return common.Address{}, int64(0), errors.New("invalidate eth_account")
+		return common.Address{}, nil, errors.New("invalidate eth_account")
 	}
 
-	if balance.Cmp(big.NewInt(amount)) < 0 {
+	if balance.Cmp(amount) < 0 {
 		fmt.Printf("balance is not enough to be support validator's amount, balance is %v, amount is %v\n",
 			balance, amount)
-		return common.Address{}, int64(0), errors.New("no enough balance")
+		return common.Address{}, nil, errors.New("no enough balance")
 	}
 
 	return coinbase, amount, nil
@@ -330,4 +319,10 @@ func getPassPhrase(prompt string, confirmation bool) string {
 		}
 	}
 	return password
+}
+
+func string2Big(num string) *big.Int {
+	n := new(big.Int)
+	n.SetString(num, 0)
+	return n
 }

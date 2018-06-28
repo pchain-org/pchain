@@ -178,7 +178,7 @@ func (cch *CrossChainHelper) VerifyTdmBlock(from common.Address, block string) e
 		return errors.New("block id gets wrong")
 	}
 
-	//3£¬*data hash & num(tx)
+	//3, *data hash & num(tx)
 	if !bytes.Equal(tdmBlock.Data.Hash(), tdmBlock.DataHash) {
 		return errors.New("data hash gets wrong")
 	}

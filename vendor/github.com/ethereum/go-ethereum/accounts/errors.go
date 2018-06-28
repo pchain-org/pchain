@@ -38,7 +38,7 @@ var ErrNotSupported = errors.New("not supported")
 var ErrInvalidPassphrase = errors.New("invalid passphrase")
 
 // ErrWalletAlreadyOpen is returned if a wallet is attempted to be opened the
-// secodn time.
+// second time.
 var ErrWalletAlreadyOpen = errors.New("wallet already open")
 
 // ErrWalletClosed is returned if a wallet is attempted to be opened the
@@ -62,7 +62,7 @@ func NewAuthNeededError(needed string) error {
 	}
 }
 
-// Error implements the standard error interfacel.
+// Error implements the standard error interface.
 func (err *AuthNeededError) Error() string {
 	return fmt.Sprintf("authentication needed: %s", err.Needed)
 }

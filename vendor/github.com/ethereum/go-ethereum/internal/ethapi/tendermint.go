@@ -206,7 +206,6 @@ func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from com
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
-		Type:         nil,
 		ExtendTxData: etd,
 	}
 
@@ -300,7 +299,7 @@ func svm_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHe
 	actionInt, _ := etd.Params.Get("action")
 	action := string(actionInt.([]byte))
 	powerInt, _ := etd.Params.Get("power")
-	biPower := common.BytesToBig(powerInt.([]byte))
+	biPower := new(big.Int).SetBytes(powerInt.([]byte))
 
 	fmt.Printf("balance for(%s) is : (%v, %v), biPower is %v\n",
 		from.Hex(), state.GetBalance(from), state.GetLockedBalance(from), biPower.String())

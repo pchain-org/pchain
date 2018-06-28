@@ -26,8 +26,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -44,8 +44,8 @@ var (
 // Reduce some of the parameters to make the tester faster.
 func init() {
 	MaxForkAncestry = uint64(10000)
-	blockCacheLimit = 1024
-	fsCriticalTrials = 10
+	blockCacheItems = 1024
+	fsHeaderContCheck = 500 * time.Millisecond
 }
 
 // downloadTester is a test simulator for mocking out local block chain.
@@ -96,9 +96,7 @@ func newTester() *downloadTester {
 	tester.stateDb, _ = ethdb.NewMemDatabase()
 	tester.stateDb.Put(genesis.Root().Bytes(), []byte{0x00})
 
-	tester.downloader = New(FullSync, tester.stateDb, new(event.TypeMux), tester.hasHeader, tester.hasBlock, tester.getHeader,
-		tester.getBlock, tester.headHeader, tester.headBlock, tester.headFastBlock, tester.commitHeadBlock, tester.getTd,
-		tester.insertHeaders, tester.insertBlocks, tester.insertReceipts, tester.rollback, tester.dropPeer)
+	tester.downloader = New(FullSync, tester.stateDb, new(event.TypeMux), tester, nil, tester.dropPeer)
 
 	return tester
 }
@@ -109,7 +107,7 @@ func newTester() *downloadTester {
 // reassembly.
 func (dl *downloadTester) makeChain(n int, seed byte, parent *types.Block, parentReceipts types.Receipts, heavy bool) ([]common.Hash, map[common.Hash]*types.Header, map[common.Hash]*types.Block, map[common.Hash]types.Receipts) {
 	// Generate the block chain
-	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, dl.peerDb, n, func(i int, block *core.BlockGen) {
+	blocks, receipts := core.GenerateChain(params.TestChainConfig, parent, ethash.NewFaker(), dl.peerDb, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 
 		// If a heavy chain is requested, delay blocks to raise difficulty
@@ -218,39 +216,34 @@ func (dl *downloadTester) sync(id string, td *big.Int, mode SyncMode) error {
 	return err
 }
 
-// hasHeader checks if a header is present in the testers canonical chain.
-func (dl *downloadTester) hasHeader(hash common.Hash) bool {
-	return dl.getHeader(hash) != nil
+// HasHeader checks if a header is present in the testers canonical chain.
+func (dl *downloadTester) HasHeader(hash common.Hash, number uint64) bool {
+	return dl.GetHeaderByHash(hash) != nil
 }
 
-// hasBlock checks if a block and associated state is present in the testers canonical chain.
-func (dl *downloadTester) hasBlock(hash common.Hash) bool {
-	block := dl.getBlock(hash)
-	if block == nil {
-		return false
-	}
-	_, err := dl.stateDb.Get(block.Root().Bytes())
-	return err == nil
+// HasBlock checks if a block is present in the testers canonical chain.
+func (dl *downloadTester) HasBlock(hash common.Hash, number uint64) bool {
+	return dl.GetBlockByHash(hash) != nil
 }
 
-// getHeader retrieves a header from the testers canonical chain.
-func (dl *downloadTester) getHeader(hash common.Hash) *types.Header {
+// GetHeader retrieves a header from the testers canonical chain.
+func (dl *downloadTester) GetHeaderByHash(hash common.Hash) *types.Header {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	return dl.ownHeaders[hash]
 }
 
-// getBlock retrieves a block from the testers canonical chain.
-func (dl *downloadTester) getBlock(hash common.Hash) *types.Block {
+// GetBlock retrieves a block from the testers canonical chain.
+func (dl *downloadTester) GetBlockByHash(hash common.Hash) *types.Block {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	return dl.ownBlocks[hash]
 }
 
-// headHeader retrieves the current head header from the canonical chain.
-func (dl *downloadTester) headHeader() *types.Header {
+// CurrentHeader retrieves the current head header from the canonical chain.
+func (dl *downloadTester) CurrentHeader() *types.Header {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -262,8 +255,8 @@ func (dl *downloadTester) headHeader() *types.Header {
 	return dl.genesis.Header()
 }
 
-// headBlock retrieves the current head block from the canonical chain.
-func (dl *downloadTester) headBlock() *types.Block {
+// CurrentBlock retrieves the current head block from the canonical chain.
+func (dl *downloadTester) CurrentBlock() *types.Block {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -277,8 +270,8 @@ func (dl *downloadTester) headBlock() *types.Block {
 	return dl.genesis
 }
 
-// headFastBlock retrieves the current head fast-sync block from the canonical chain.
-func (dl *downloadTester) headFastBlock() *types.Block {
+// CurrentFastBlock retrieves the current head fast-sync block from the canonical chain.
+func (dl *downloadTester) CurrentFastBlock() *types.Block {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
@@ -290,26 +283,26 @@ func (dl *downloadTester) headFastBlock() *types.Block {
 	return dl.genesis
 }
 
-// commitHeadBlock manually sets the head block to a given hash.
-func (dl *downloadTester) commitHeadBlock(hash common.Hash) error {
+// FastSyncCommitHead manually sets the head block to a given hash.
+func (dl *downloadTester) FastSyncCommitHead(hash common.Hash) error {
 	// For now only check that the state trie is correct
-	if block := dl.getBlock(hash); block != nil {
-		_, err := trie.NewSecure(block.Root(), dl.stateDb, 0)
+	if block := dl.GetBlockByHash(hash); block != nil {
+		_, err := trie.NewSecure(block.Root(), trie.NewDatabase(dl.stateDb), 0)
 		return err
 	}
 	return fmt.Errorf("non existent block: %x", hash[:4])
 }
 
-// getTd retrieves the block's total difficulty from the canonical chain.
-func (dl *downloadTester) getTd(hash common.Hash) *big.Int {
+// GetTd retrieves the block's total difficulty from the canonical chain.
+func (dl *downloadTester) GetTd(hash common.Hash, number uint64) *big.Int {
 	dl.lock.RLock()
 	defer dl.lock.RUnlock()
 
 	return dl.ownChainTd[hash]
 }
 
-// insertHeaders injects a new batch of headers into the simulated chain.
-func (dl *downloadTester) insertHeaders(headers []*types.Header, checkFreq int) (int, error) {
+// InsertHeaderChain injects a new batch of headers into the simulated chain.
+func (dl *downloadTester) InsertHeaderChain(headers []*types.Header, checkFreq int) (int, error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
@@ -337,8 +330,8 @@ func (dl *downloadTester) insertHeaders(headers []*types.Header, checkFreq int) 
 	return len(headers), nil
 }
 
-// insertBlocks injects a new batch of blocks into the simulated chain.
-func (dl *downloadTester) insertBlocks(blocks types.Blocks) (int, error) {
+// InsertChain injects a new batch of blocks into the simulated chain.
+func (dl *downloadTester) InsertChain(blocks types.Blocks) (int, error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
@@ -359,8 +352,8 @@ func (dl *downloadTester) insertBlocks(blocks types.Blocks) (int, error) {
 	return len(blocks), nil
 }
 
-// insertReceipts injects a new batch of receipts into the simulated chain.
-func (dl *downloadTester) insertReceipts(blocks types.Blocks, receipts []types.Receipts) (int, error) {
+// InsertReceiptChain injects a new batch of receipts into the simulated chain.
+func (dl *downloadTester) InsertReceiptChain(blocks types.Blocks, receipts []types.Receipts) (int, error) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
@@ -377,8 +370,8 @@ func (dl *downloadTester) insertReceipts(blocks types.Blocks, receipts []types.R
 	return len(blocks), nil
 }
 
-// rollback removes some recently added elements from the chain.
-func (dl *downloadTester) rollback(hashes []common.Hash) {
+// Rollback removes some recently added elements from the chain.
+func (dl *downloadTester) Rollback(hashes []common.Hash) {
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
@@ -405,15 +398,7 @@ func (dl *downloadTester) newSlowPeer(id string, version int, hashes []common.Ha
 	dl.lock.Lock()
 	defer dl.lock.Unlock()
 
-	var err error
-	switch version {
-	case 62:
-		err = dl.downloader.RegisterPeer(id, version, dl.peerCurrentHeadFn(id), dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay), nil, nil)
-	case 63:
-		err = dl.downloader.RegisterPeer(id, version, dl.peerCurrentHeadFn(id), dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay), dl.peerGetReceiptsFn(id, delay), dl.peerGetNodeDataFn(id, delay))
-	case 64:
-		err = dl.downloader.RegisterPeer(id, version, dl.peerCurrentHeadFn(id), dl.peerGetRelHeadersFn(id, delay), dl.peerGetAbsHeadersFn(id, delay), dl.peerGetBodiesFn(id, delay), dl.peerGetReceiptsFn(id, delay), dl.peerGetNodeDataFn(id, delay))
-	}
+	var err = dl.downloader.RegisterPeer(id, version, &downloadTesterPeer{dl: dl, id: id, delay: delay})
 	if err == nil {
 		// Assign the owned hashes, headers and blocks to the peer (deep copy)
 		dl.peerHashes[id] = make([]common.Hash, len(hashes))
@@ -471,139 +456,151 @@ func (dl *downloadTester) dropPeer(id string) {
 	dl.downloader.UnregisterPeer(id)
 }
 
-// peerCurrentHeadFn constructs a function to retrieve a peer's current head hash
+type downloadTesterPeer struct {
+	dl    *downloadTester
+	id    string
+	delay time.Duration
+	lock  sync.RWMutex
+}
+
+// setDelay is a thread safe setter for the network delay value.
+func (dlp *downloadTesterPeer) setDelay(delay time.Duration) {
+	dlp.lock.Lock()
+	defer dlp.lock.Unlock()
+
+	dlp.delay = delay
+}
+
+// waitDelay is a thread safe way to sleep for the configured time.
+func (dlp *downloadTesterPeer) waitDelay() {
+	dlp.lock.RLock()
+	delay := dlp.delay
+	dlp.lock.RUnlock()
+
+	time.Sleep(delay)
+}
+
+// Head constructs a function to retrieve a peer's current head hash
 // and total difficulty.
-func (dl *downloadTester) peerCurrentHeadFn(id string) func() (common.Hash, *big.Int) {
-	return func() (common.Hash, *big.Int) {
-		dl.lock.RLock()
-		defer dl.lock.RUnlock()
+func (dlp *downloadTesterPeer) Head() (common.Hash, *big.Int) {
+	dlp.dl.lock.RLock()
+	defer dlp.dl.lock.RUnlock()
 
-		return dl.peerHashes[id][0], nil
-	}
+	return dlp.dl.peerHashes[dlp.id][0], nil
 }
 
-// peerGetRelHeadersFn constructs a GetBlockHeaders function based on a hashed
+// RequestHeadersByHash constructs a GetBlockHeaders function based on a hashed
 // origin; associated with a particular peer in the download tester. The returned
 // function can be used to retrieve batches of headers from the particular peer.
-func (dl *downloadTester) peerGetRelHeadersFn(id string, delay time.Duration) func(common.Hash, int, int, bool) error {
-	return func(origin common.Hash, amount int, skip int, reverse bool) error {
-		// Find the canonical number of the hash
-		dl.lock.RLock()
-		number := uint64(0)
-		for num, hash := range dl.peerHashes[id] {
-			if hash == origin {
-				number = uint64(len(dl.peerHashes[id]) - num - 1)
-				break
-			}
+func (dlp *downloadTesterPeer) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+	// Find the canonical number of the hash
+	dlp.dl.lock.RLock()
+	number := uint64(0)
+	for num, hash := range dlp.dl.peerHashes[dlp.id] {
+		if hash == origin {
+			number = uint64(len(dlp.dl.peerHashes[dlp.id]) - num - 1)
+			break
 		}
-		dl.lock.RUnlock()
-
-		// Use the absolute header fetcher to satisfy the query
-		return dl.peerGetAbsHeadersFn(id, delay)(number, amount, skip, reverse)
 	}
+	dlp.dl.lock.RUnlock()
+
+	// Use the absolute header fetcher to satisfy the query
+	return dlp.RequestHeadersByNumber(number, amount, skip, reverse)
 }
 
-// peerGetAbsHeadersFn constructs a GetBlockHeaders function based on a numbered
+// RequestHeadersByNumber constructs a GetBlockHeaders function based on a numbered
 // origin; associated with a particular peer in the download tester. The returned
 // function can be used to retrieve batches of headers from the particular peer.
-func (dl *downloadTester) peerGetAbsHeadersFn(id string, delay time.Duration) func(uint64, int, int, bool) error {
-	return func(origin uint64, amount int, skip int, reverse bool) error {
-		time.Sleep(delay)
+func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+	dlp.waitDelay()
 
-		dl.lock.RLock()
-		defer dl.lock.RUnlock()
+	dlp.dl.lock.RLock()
+	defer dlp.dl.lock.RUnlock()
 
-		// Gather the next batch of headers
-		hashes := dl.peerHashes[id]
-		headers := dl.peerHeaders[id]
-		result := make([]*types.Header, 0, amount)
-		for i := 0; i < amount && len(hashes)-int(origin)-1-i*(skip+1) >= 0; i++ {
-			if header, ok := headers[hashes[len(hashes)-int(origin)-1-i*(skip+1)]]; ok {
-				result = append(result, header)
-			}
+	// Gather the next batch of headers
+	hashes := dlp.dl.peerHashes[dlp.id]
+	headers := dlp.dl.peerHeaders[dlp.id]
+	result := make([]*types.Header, 0, amount)
+	for i := 0; i < amount && len(hashes)-int(origin)-1-i*(skip+1) >= 0; i++ {
+		if header, ok := headers[hashes[len(hashes)-int(origin)-1-i*(skip+1)]]; ok {
+			result = append(result, header)
 		}
-		// Delay delivery a bit to allow attacks to unfold
-		go func() {
-			time.Sleep(time.Millisecond)
-			dl.downloader.DeliverHeaders(id, result)
-		}()
-		return nil
 	}
+	// Delay delivery a bit to allow attacks to unfold
+	go func() {
+		time.Sleep(time.Millisecond)
+		dlp.dl.downloader.DeliverHeaders(dlp.id, result)
+	}()
+	return nil
 }
 
-// peerGetBodiesFn constructs a getBlockBodies method associated with a particular
+// RequestBodies constructs a getBlockBodies method associated with a particular
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block bodies from the particularly requested peer.
-func (dl *downloadTester) peerGetBodiesFn(id string, delay time.Duration) func([]common.Hash) error {
-	return func(hashes []common.Hash) error {
-		time.Sleep(delay)
+func (dlp *downloadTesterPeer) RequestBodies(hashes []common.Hash) error {
+	dlp.waitDelay()
 
-		dl.lock.RLock()
-		defer dl.lock.RUnlock()
+	dlp.dl.lock.RLock()
+	defer dlp.dl.lock.RUnlock()
 
-		blocks := dl.peerBlocks[id]
+	blocks := dlp.dl.peerBlocks[dlp.id]
 
-		transactions := make([][]*types.Transaction, 0, len(hashes))
-		uncles := make([][]*types.Header, 0, len(hashes))
+	transactions := make([][]*types.Transaction, 0, len(hashes))
+	uncles := make([][]*types.Header, 0, len(hashes))
 
-		for _, hash := range hashes {
-			if block, ok := blocks[hash]; ok {
-				transactions = append(transactions, block.Transactions())
-				uncles = append(uncles, block.Uncles())
-			}
+	for _, hash := range hashes {
+		if block, ok := blocks[hash]; ok {
+			transactions = append(transactions, block.Transactions())
+			uncles = append(uncles, block.Uncles())
 		}
-		go dl.downloader.DeliverBodies(id, transactions, uncles)
-
-		return nil
 	}
+	go dlp.dl.downloader.DeliverBodies(dlp.id, transactions, uncles)
+
+	return nil
 }
 
-// peerGetReceiptsFn constructs a getReceipts method associated with a particular
+// RequestReceipts constructs a getReceipts method associated with a particular
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block receipts from the particularly requested peer.
-func (dl *downloadTester) peerGetReceiptsFn(id string, delay time.Duration) func([]common.Hash) error {
-	return func(hashes []common.Hash) error {
-		time.Sleep(delay)
+func (dlp *downloadTesterPeer) RequestReceipts(hashes []common.Hash) error {
+	dlp.waitDelay()
 
-		dl.lock.RLock()
-		defer dl.lock.RUnlock()
+	dlp.dl.lock.RLock()
+	defer dlp.dl.lock.RUnlock()
 
-		receipts := dl.peerReceipts[id]
+	receipts := dlp.dl.peerReceipts[dlp.id]
 
-		results := make([][]*types.Receipt, 0, len(hashes))
-		for _, hash := range hashes {
-			if receipt, ok := receipts[hash]; ok {
-				results = append(results, receipt)
-			}
+	results := make([][]*types.Receipt, 0, len(hashes))
+	for _, hash := range hashes {
+		if receipt, ok := receipts[hash]; ok {
+			results = append(results, receipt)
 		}
-		go dl.downloader.DeliverReceipts(id, results)
-
-		return nil
 	}
+	go dlp.dl.downloader.DeliverReceipts(dlp.id, results)
+
+	return nil
 }
 
-// peerGetNodeDataFn constructs a getNodeData method associated with a particular
+// RequestNodeData constructs a getNodeData method associated with a particular
 // peer in the download tester. The returned function can be used to retrieve
 // batches of node state data from the particularly requested peer.
-func (dl *downloadTester) peerGetNodeDataFn(id string, delay time.Duration) func([]common.Hash) error {
-	return func(hashes []common.Hash) error {
-		time.Sleep(delay)
+func (dlp *downloadTesterPeer) RequestNodeData(hashes []common.Hash) error {
+	dlp.waitDelay()
 
-		dl.lock.RLock()
-		defer dl.lock.RUnlock()
+	dlp.dl.lock.RLock()
+	defer dlp.dl.lock.RUnlock()
 
-		results := make([][]byte, 0, len(hashes))
-		for _, hash := range hashes {
-			if data, err := dl.peerDb.Get(hash.Bytes()); err == nil {
-				if !dl.peerMissingStates[id][hash] {
-					results = append(results, data)
-				}
+	results := make([][]byte, 0, len(hashes))
+	for _, hash := range hashes {
+		if data, err := dlp.dl.peerDb.Get(hash.Bytes()); err == nil {
+			if !dlp.dl.peerMissingStates[dlp.id][hash] {
+				results = append(results, data)
 			}
 		}
-		go dl.downloader.DeliverNodeData(id, results)
-
-		return nil
 	}
+	go dlp.dl.downloader.DeliverNodeData(dlp.id, results)
+
+	return nil
 }
 
 // assertOwnChain checks if the local chain contains the correct number of items
@@ -616,28 +613,22 @@ func assertOwnChain(t *testing.T, tester *downloadTester, length int) {
 // number of items of the various chain components.
 func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, lengths []int) {
 	// Initialize the counters for the first fork
-	headers, blocks := lengths[0], lengths[0]
+	headers, blocks, receipts := lengths[0], lengths[0], lengths[0]-fsMinFullBlocks
 
-	minReceipts, maxReceipts := lengths[0]-fsMinFullBlocks-fsPivotInterval, lengths[0]-fsMinFullBlocks
-	if minReceipts < 0 {
-		minReceipts = 1
-	}
-	if maxReceipts < 0 {
-		maxReceipts = 1
+	if receipts < 0 {
+		receipts = 1
 	}
 	// Update the counters for each subsequent fork
 	for _, length := range lengths[1:] {
 		headers += length - common
 		blocks += length - common
-
-		minReceipts += length - common - fsMinFullBlocks - fsPivotInterval
-		maxReceipts += length - common - fsMinFullBlocks
+		receipts += length - common - fsMinFullBlocks
 	}
 	switch tester.downloader.mode {
 	case FullSync:
-		minReceipts, maxReceipts = 1, 1
+		receipts = 1
 	case LightSync:
-		blocks, minReceipts, maxReceipts = 1, 1, 1
+		blocks, receipts = 1, 1
 	}
 	if hs := len(tester.ownHeaders); hs != headers {
 		t.Fatalf("synchronised headers mismatch: have %v, want %v", hs, headers)
@@ -645,11 +636,12 @@ func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, leng
 	if bs := len(tester.ownBlocks); bs != blocks {
 		t.Fatalf("synchronised blocks mismatch: have %v, want %v", bs, blocks)
 	}
-	if rs := len(tester.ownReceipts); rs < minReceipts || rs > maxReceipts {
-		t.Fatalf("synchronised receipts mismatch: have %v, want between [%v, %v]", rs, minReceipts, maxReceipts)
+	if rs := len(tester.ownReceipts); rs != receipts {
+		t.Fatalf("synchronised receipts mismatch: have %v, want %v", rs, receipts)
 	}
 	// Verify the state trie too for fast syncs
-	if tester.downloader.mode == FastSync {
+	/*if tester.downloader.mode == FastSync {
+		pivot := uint64(0)
 		var index int
 		if pivot := int(tester.downloader.queue.fastSyncPivot); pivot < common {
 			index = pivot
@@ -657,11 +649,11 @@ func assertOwnForkedChain(t *testing.T, tester *downloadTester, common int, leng
 			index = len(tester.ownHashes) - lengths[len(lengths)-1] + int(tester.downloader.queue.fastSyncPivot)
 		}
 		if index > 0 {
-			if statedb, err := state.New(tester.ownHeaders[tester.ownHashes[index]].Root, tester.stateDb); statedb == nil || err != nil {
+			if statedb, err := state.New(tester.ownHeaders[tester.ownHashes[index]].Root, state.NewDatabase(trie.NewDatabase(tester.stateDb))); statedb == nil || err != nil {
 				t.Fatalf("state reconstruction failed: %v", err)
 			}
 		}
-	}
+	}*/
 }
 
 // Tests that simple synchronization against a canonical chain works correctly.
@@ -681,7 +673,7 @@ func testCanonicalSynchronisation(t *testing.T, protocol int, mode SyncMode) {
 	defer tester.terminate()
 
 	// Create a small enough block chain to download
-	targetBlocks := blockCacheLimit - 15
+	targetBlocks := blockCacheItems - 15
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	tester.newPeer("peer", protocol, hashes, headers, blocks, receipts)
@@ -702,11 +694,12 @@ func TestThrottling64Full(t *testing.T) { testThrottling(t, 64, FullSync) }
 func TestThrottling64Fast(t *testing.T) { testThrottling(t, 64, FastSync) }
 
 func testThrottling(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
 	tester := newTester()
 	defer tester.terminate()
 
 	// Create a long block chain to download and the tester
-	targetBlocks := 8 * blockCacheLimit
+	targetBlocks := 8 * blockCacheItems
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	tester.newPeer("peer", protocol, hashes, headers, blocks, receipts)
@@ -741,9 +734,9 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 			cached = len(tester.downloader.queue.blockDonePool)
 			if mode == FastSync {
 				if receipts := len(tester.downloader.queue.receiptDonePool); receipts < cached {
-					if tester.downloader.queue.resultCache[receipts].Header.Number.Uint64() < tester.downloader.queue.fastSyncPivot {
-						cached = receipts
-					}
+					//if tester.downloader.queue.resultCache[receipts].Header.Number.Uint64() < tester.downloader.queue.fastSyncPivot {
+					cached = receipts
+					//}
 				}
 			}
 			frozen = int(atomic.LoadUint32(&blocked))
@@ -751,7 +744,7 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 			tester.downloader.queue.lock.Unlock()
 			tester.lock.Unlock()
 
-			if cached == blockCacheLimit || retrieved+cached+frozen == targetBlocks+1 {
+			if cached == blockCacheItems || retrieved+cached+frozen == targetBlocks+1 {
 				break
 			}
 		}
@@ -761,8 +754,8 @@ func testThrottling(t *testing.T, protocol int, mode SyncMode) {
 		tester.lock.RLock()
 		retrieved = len(tester.ownBlocks)
 		tester.lock.RUnlock()
-		if cached != blockCacheLimit && retrieved+cached+frozen != targetBlocks+1 {
-			t.Fatalf("block count mismatch: have %v, want %v (owned %v, blocked %v, target %v)", cached, blockCacheLimit, retrieved, frozen, targetBlocks+1)
+		if cached != blockCacheItems && retrieved+cached+frozen != targetBlocks+1 {
+			t.Fatalf("block count mismatch: have %v, want %v (owned %v, blocked %v, target %v)", cached, blockCacheItems, retrieved, frozen, targetBlocks+1)
 		}
 		// Permit the blocked blocks to import
 		if atomic.LoadUint32(&blocked) > 0 {
@@ -970,7 +963,7 @@ func testCancel(t *testing.T, protocol int, mode SyncMode) {
 	defer tester.terminate()
 
 	// Create a small enough block chain to download and the tester
-	targetBlocks := blockCacheLimit - 15
+	targetBlocks := blockCacheItems - 15
 	if targetBlocks >= MaxHashFetch {
 		targetBlocks = MaxHashFetch - 15
 	}
@@ -982,7 +975,7 @@ func testCancel(t *testing.T, protocol int, mode SyncMode) {
 	tester.newPeer("peer", protocol, hashes, headers, blocks, receipts)
 
 	// Make sure canceling works with a pristine downloader
-	tester.downloader.cancel()
+	tester.downloader.Cancel()
 	if !tester.downloader.queue.Idle() {
 		t.Errorf("download queue not idle")
 	}
@@ -990,7 +983,7 @@ func testCancel(t *testing.T, protocol int, mode SyncMode) {
 	if err := tester.sync("peer", nil, mode); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
 	}
-	tester.downloader.cancel()
+	tester.downloader.Cancel()
 	if !tester.downloader.queue.Idle() {
 		t.Errorf("download queue not idle")
 	}
@@ -1012,12 +1005,12 @@ func testMultiSynchronisation(t *testing.T, protocol int, mode SyncMode) {
 
 	// Create various peers with various parts of the chain
 	targetPeers := 8
-	targetBlocks := targetPeers*blockCacheLimit - 15
+	targetBlocks := targetPeers*blockCacheItems - 15
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	for i := 0; i < targetPeers; i++ {
 		id := fmt.Sprintf("peer #%d", i)
-		tester.newPeer(id, protocol, hashes[i*blockCacheLimit:], headers, blocks, receipts)
+		tester.newPeer(id, protocol, hashes[i*blockCacheItems:], headers, blocks, receipts)
 	}
 	if err := tester.sync("peer #0", nil, mode); err != nil {
 		t.Fatalf("failed to synchronise blocks: %v", err)
@@ -1041,7 +1034,7 @@ func testMultiProtoSync(t *testing.T, protocol int, mode SyncMode) {
 	defer tester.terminate()
 
 	// Create a small enough block chain to download
-	targetBlocks := blockCacheLimit - 15
+	targetBlocks := blockCacheItems - 15
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	// Create peers of every type
@@ -1080,7 +1073,7 @@ func testEmptyShortCircuit(t *testing.T, protocol int, mode SyncMode) {
 	defer tester.terminate()
 
 	// Create a block chain to download
-	targetBlocks := 2*blockCacheLimit - 15
+	targetBlocks := 2*blockCacheItems - 15
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	tester.newPeer("peer", protocol, hashes, headers, blocks, receipts)
@@ -1106,8 +1099,8 @@ func testEmptyShortCircuit(t *testing.T, protocol int, mode SyncMode) {
 			bodiesNeeded++
 		}
 	}
-	for hash, receipt := range receipts {
-		if mode == FastSync && len(receipt) > 0 && headers[hash].Number.Uint64() <= tester.downloader.queue.fastSyncPivot {
+	for _, receipt := range receipts {
+		if mode == FastSync && len(receipt) > 0 {
 			receiptsNeeded++
 		}
 	}
@@ -1135,7 +1128,7 @@ func testMissingHeaderAttack(t *testing.T, protocol int, mode SyncMode) {
 	defer tester.terminate()
 
 	// Create a small enough block chain to download
-	targetBlocks := blockCacheLimit - 15
+	targetBlocks := blockCacheItems - 15
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	// Attempt a full sync with an attacker feeding gapped headers
@@ -1164,11 +1157,13 @@ func TestShiftedHeaderAttack64Fast(t *testing.T)  { testShiftedHeaderAttack(t, 6
 func TestShiftedHeaderAttack64Light(t *testing.T) { testShiftedHeaderAttack(t, 64, LightSync) }
 
 func testShiftedHeaderAttack(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	tester := newTester()
 	defer tester.terminate()
 
 	// Create a small enough block chain to download
-	targetBlocks := blockCacheLimit - 15
+	targetBlocks := blockCacheItems - 15
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	// Attempt a full sync with an attacker feeding shifted headers
@@ -1196,11 +1191,13 @@ func TestInvalidHeaderRollback64Fast(t *testing.T)  { testInvalidHeaderRollback(
 func TestInvalidHeaderRollback64Light(t *testing.T) { testInvalidHeaderRollback(t, 64, LightSync) }
 
 func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
+	t.Parallel()
+
 	tester := newTester()
 	defer tester.terminate()
 
 	// Create a small enough block chain to download
-	targetBlocks := 3*fsHeaderSafetyNet + fsPivotInterval + fsMinFullBlocks
+	targetBlocks := 3*fsHeaderSafetyNet + 256 + fsMinFullBlocks
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	// Attempt to sync with an attacker that feeds junk during the fast sync phase.
@@ -1212,7 +1209,7 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	if err := tester.sync("fast-attack", nil, mode); err == nil {
 		t.Fatalf("succeeded fast attacker synchronisation")
 	}
-	if head := tester.headHeader().Number.Int64(); int(head) > MaxHeaderFetch {
+	if head := tester.CurrentHeader().Number.Int64(); int(head) > MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, MaxHeaderFetch)
 	}
 	// Attempt to sync with an attacker that feeds junk during the block import phase.
@@ -1226,11 +1223,11 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	if err := tester.sync("block-attack", nil, mode); err == nil {
 		t.Fatalf("succeeded block attacker synchronisation")
 	}
-	if head := tester.headHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
+	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
 	}
 	if mode == FastSync {
-		if head := tester.headBlock().NumberU64(); head != 0 {
+		if head := tester.CurrentBlock().NumberU64(); head != 0 {
 			t.Errorf("fast sync pivot block #%d not rolled back", head)
 		}
 	}
@@ -1240,7 +1237,6 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	tester.newPeer("withhold-attack", protocol, hashes, headers, blocks, receipts)
 	missing = 3*fsHeaderSafetyNet + MaxHeaderFetch + 1
 
-	tester.downloader.fsPivotFails = 0
 	tester.downloader.syncInitHook = func(uint64, uint64) {
 		for i := missing; i <= len(hashes); i++ {
 			delete(tester.peerHeaders["withhold-attack"], hashes[len(hashes)-i])
@@ -1251,16 +1247,14 @@ func testInvalidHeaderRollback(t *testing.T, protocol int, mode SyncMode) {
 	if err := tester.sync("withhold-attack", nil, mode); err == nil {
 		t.Fatalf("succeeded withholding attacker synchronisation")
 	}
-	if head := tester.headHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
+	if head := tester.CurrentHeader().Number.Int64(); int(head) > 2*fsHeaderSafetyNet+MaxHeaderFetch {
 		t.Errorf("rollback head mismatch: have %v, want at most %v", head, 2*fsHeaderSafetyNet+MaxHeaderFetch)
 	}
 	if mode == FastSync {
-		if head := tester.headBlock().NumberU64(); head != 0 {
+		if head := tester.CurrentBlock().NumberU64(); head != 0 {
 			t.Errorf("fast sync pivot block #%d not rolled back", head)
 		}
 	}
-	tester.downloader.fsPivotFails = fsCriticalTrials
-
 	// Synchronise with the valid peer and make sure sync succeeds. Since the last
 	// rollback should also disable fast syncing for this process, verify that we
 	// did a fresh full sync. Note, we can't assert anything about the receipts
@@ -1308,6 +1302,8 @@ func TestBlockHeaderAttackerDropping63(t *testing.T) { testBlockHeaderAttackerDr
 func TestBlockHeaderAttackerDropping64(t *testing.T) { testBlockHeaderAttackerDropping(t, 64) }
 
 func testBlockHeaderAttackerDropping(t *testing.T, protocol int) {
+	t.Parallel()
+
 	// Define the disconnection requirement for individual hash fetch errors
 	tests := []struct {
 		result error
@@ -1373,7 +1369,7 @@ func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	defer tester.terminate()
 
 	// Create a small enough block chain to download
-	targetBlocks := blockCacheLimit - 15
+	targetBlocks := blockCacheItems - 15
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	// Set a sync init hook to catch progress changes
@@ -1396,7 +1392,7 @@ func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("peer-half", nil, mode); err != nil {
-			t.Fatalf("failed to synchronise blocks: %v", err)
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
 		}
 	}()
 	<-starting
@@ -1413,7 +1409,7 @@ func testSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("peer-full", nil, mode); err != nil {
-			t.Fatalf("failed to synchronise blocks: %v", err)
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
 		}
 	}()
 	<-starting
@@ -1469,7 +1465,7 @@ func testForkedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("fork A", nil, mode); err != nil {
-			t.Fatalf("failed to synchronise blocks: %v", err)
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
 		}
 	}()
 	<-starting
@@ -1489,7 +1485,7 @@ func testForkedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("fork B", nil, mode); err != nil {
-			t.Fatalf("failed to synchronise blocks: %v", err)
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
 		}
 	}()
 	<-starting
@@ -1522,7 +1518,7 @@ func testFailedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	defer tester.terminate()
 
 	// Create a small enough block chain to download
-	targetBlocks := blockCacheLimit - 15
+	targetBlocks := blockCacheItems - 15
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
 
 	// Set a sync init hook to catch progress changes
@@ -1550,7 +1546,7 @@ func testFailedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("faulty", nil, mode); err == nil {
-			t.Fatalf("succeeded faulty synchronisation")
+			panic("succeeded faulty synchronisation")
 		}
 	}()
 	<-starting
@@ -1567,7 +1563,7 @@ func testFailedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("valid", nil, mode); err != nil {
-			t.Fatalf("failed to synchronise blocks: %v", err)
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
 		}
 	}()
 	<-starting
@@ -1599,7 +1595,7 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	defer tester.terminate()
 
 	// Create a small block chain
-	targetBlocks := blockCacheLimit - 15
+	targetBlocks := blockCacheItems - 15
 	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks+3, 0, tester.genesis, nil, false)
 
 	// Set a sync init hook to catch progress changes
@@ -1628,7 +1624,7 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("attack", nil, mode); err == nil {
-			t.Fatalf("succeeded attacker synchronisation")
+			panic("succeeded attacker synchronisation")
 		}
 	}()
 	<-starting
@@ -1645,7 +1641,7 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	go func() {
 		defer pending.Done()
 		if err := tester.sync("valid", nil, mode); err != nil {
-			t.Fatalf("failed to synchronise blocks: %v", err)
+			panic(fmt.Sprintf("failed to synchronise blocks: %v", err))
 		}
 	}()
 	<-starting
@@ -1663,12 +1659,72 @@ func testFakedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 
 // This test reproduces an issue where unexpected deliveries would
 // block indefinitely if they arrived at the right time.
-func TestDeliverHeadersHang62(t *testing.T)      { testDeliverHeadersHang(t, 62, FullSync) }
-func TestDeliverHeadersHang63Full(t *testing.T)  { testDeliverHeadersHang(t, 63, FullSync) }
-func TestDeliverHeadersHang63Fast(t *testing.T)  { testDeliverHeadersHang(t, 63, FastSync) }
-func TestDeliverHeadersHang64Full(t *testing.T)  { testDeliverHeadersHang(t, 64, FullSync) }
-func TestDeliverHeadersHang64Fast(t *testing.T)  { testDeliverHeadersHang(t, 64, FastSync) }
-func TestDeliverHeadersHang64Light(t *testing.T) { testDeliverHeadersHang(t, 64, LightSync) }
+// We use data driven subtests to manage this so that it will be parallel on its own
+// and not with the other tests, avoiding intermittent failures.
+func TestDeliverHeadersHang(t *testing.T) {
+	testCases := []struct {
+		protocol int
+		syncMode SyncMode
+	}{
+		{62, FullSync},
+		{63, FullSync},
+		{63, FastSync},
+		{64, FullSync},
+		{64, FastSync},
+		{64, LightSync},
+	}
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("protocol %d mode %v", tc.protocol, tc.syncMode), func(t *testing.T) {
+			testDeliverHeadersHang(t, tc.protocol, tc.syncMode)
+		})
+	}
+}
+
+type floodingTestPeer struct {
+	peer   Peer
+	tester *downloadTester
+	pend   sync.WaitGroup
+}
+
+func (ftp *floodingTestPeer) Head() (common.Hash, *big.Int) { return ftp.peer.Head() }
+func (ftp *floodingTestPeer) RequestHeadersByHash(hash common.Hash, count int, skip int, reverse bool) error {
+	return ftp.peer.RequestHeadersByHash(hash, count, skip, reverse)
+}
+func (ftp *floodingTestPeer) RequestBodies(hashes []common.Hash) error {
+	return ftp.peer.RequestBodies(hashes)
+}
+func (ftp *floodingTestPeer) RequestReceipts(hashes []common.Hash) error {
+	return ftp.peer.RequestReceipts(hashes)
+}
+func (ftp *floodingTestPeer) RequestNodeData(hashes []common.Hash) error {
+	return ftp.peer.RequestNodeData(hashes)
+}
+
+func (ftp *floodingTestPeer) RequestHeadersByNumber(from uint64, count, skip int, reverse bool) error {
+	deliveriesDone := make(chan struct{}, 500)
+	for i := 0; i < cap(deliveriesDone); i++ {
+		peer := fmt.Sprintf("fake-peer%d", i)
+		ftp.pend.Add(1)
+
+		go func() {
+			ftp.tester.downloader.DeliverHeaders(peer, []*types.Header{{}, {}, {}, {}})
+			deliveriesDone <- struct{}{}
+			ftp.pend.Done()
+		}()
+	}
+	// Deliver the actual requested headers.
+	go ftp.peer.RequestHeadersByNumber(from, count, skip, reverse)
+	// None of the extra deliveries should block.
+	timeout := time.After(60 * time.Second)
+	for i := 0; i < cap(deliveriesDone); i++ {
+		select {
+		case <-deliveriesDone:
+		case <-timeout:
+			panic("blocked")
+		}
+	}
+	return nil
+}
 
 func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
 	t.Parallel()
@@ -1677,7 +1733,6 @@ func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
 	defer master.terminate()
 
 	hashes, headers, blocks, receipts := master.makeChain(5, 0, master.genesis, nil, false)
-	fakeHeads := []*types.Header{{}, {}, {}, {}}
 	for i := 0; i < 200; i++ {
 		tester := newTester()
 		tester.peerDb = master.peerDb
@@ -1685,113 +1740,16 @@ func testDeliverHeadersHang(t *testing.T, protocol int, mode SyncMode) {
 		tester.newPeer("peer", protocol, hashes, headers, blocks, receipts)
 		// Whenever the downloader requests headers, flood it with
 		// a lot of unrequested header deliveries.
-		tester.downloader.peers.peers["peer"].getAbsHeaders = func(from uint64, count, skip int, reverse bool) error {
-			deliveriesDone := make(chan struct{}, 500)
-			for i := 0; i < cap(deliveriesDone); i++ {
-				peer := fmt.Sprintf("fake-peer%d", i)
-				go func() {
-					tester.downloader.DeliverHeaders(peer, fakeHeads)
-					deliveriesDone <- struct{}{}
-				}()
-			}
-			// Deliver the actual requested headers.
-			impl := tester.peerGetAbsHeadersFn("peer", 0)
-			go impl(from, count, skip, reverse)
-			// None of the extra deliveries should block.
-			timeout := time.After(15 * time.Second)
-			for i := 0; i < cap(deliveriesDone); i++ {
-				select {
-				case <-deliveriesDone:
-				case <-timeout:
-					panic("blocked")
-				}
-			}
-			return nil
+		tester.downloader.peers.peers["peer"].peer = &floodingTestPeer{
+			peer:   tester.downloader.peers.peers["peer"].peer,
+			tester: tester,
 		}
 		if err := tester.sync("peer", nil, mode); err != nil {
-			t.Errorf("sync failed: %v", err)
+			t.Errorf("test %d: sync failed: %v", i, err)
 		}
 		tester.terminate()
+
+		// Flush all goroutines to prevent messing with subsequent tests
+		tester.downloader.peers.peers["peer"].peer.(*floodingTestPeer).pend.Wait()
 	}
-}
-
-// Tests that if fast sync aborts in the critical section, it can restart a few
-// times before giving up.
-func TestFastCriticalRestartsFail63(t *testing.T) { testFastCriticalRestarts(t, 63, false) }
-func TestFastCriticalRestartsFail64(t *testing.T) { testFastCriticalRestarts(t, 64, false) }
-func TestFastCriticalRestartsCont63(t *testing.T) { testFastCriticalRestarts(t, 63, true) }
-func TestFastCriticalRestartsCont64(t *testing.T) { testFastCriticalRestarts(t, 64, true) }
-
-func testFastCriticalRestarts(t *testing.T, protocol int, progress bool) {
-	tester := newTester()
-	defer tester.terminate()
-
-	// Create a large enough blockchin to actually fast sync on
-	targetBlocks := fsMinFullBlocks + 2*fsPivotInterval - 15
-	hashes, headers, blocks, receipts := tester.makeChain(targetBlocks, 0, tester.genesis, nil, false)
-
-	// Create a tester peer with a critical section header missing (force failures)
-	tester.newPeer("peer", protocol, hashes, headers, blocks, receipts)
-	delete(tester.peerHeaders["peer"], hashes[fsMinFullBlocks-1])
-	tester.downloader.dropPeer = func(id string) {} // We reuse the same "faulty" peer throughout the test
-
-	// Remove all possible pivot state roots and slow down replies (test failure resets later)
-	for i := 0; i < fsPivotInterval; i++ {
-		tester.peerMissingStates["peer"][headers[hashes[fsMinFullBlocks+i]].Root] = true
-	}
-	tester.downloader.peers.peers["peer"].getNodeData = tester.peerGetNodeDataFn("peer", 500*time.Millisecond) // Enough to reach the critical section
-
-	// Synchronise with the peer a few times and make sure they fail until the retry limit
-	for i := 0; i < int(fsCriticalTrials)-1; i++ {
-		// Attempt a sync and ensure it fails properly
-		if err := tester.sync("peer", nil, FastSync); err == nil {
-			t.Fatalf("failing fast sync succeeded: %v", err)
-		}
-		time.Sleep(150 * time.Millisecond) // Make sure no in-flight requests remain
-
-		// If it's the first failure, pivot should be locked => reenable all others to detect pivot changes
-		if i == 0 {
-			if tester.downloader.fsPivotLock == nil {
-				time.Sleep(400 * time.Millisecond) // Make sure the first huge timeout expires too
-				t.Fatalf("pivot block not locked in after critical section failure")
-			}
-			tester.lock.Lock()
-			tester.peerHeaders["peer"][hashes[fsMinFullBlocks-1]] = headers[hashes[fsMinFullBlocks-1]]
-			tester.peerMissingStates["peer"] = map[common.Hash]bool{tester.downloader.fsPivotLock.Root: true}
-			tester.downloader.peers.peers["peer"].getNodeData = tester.peerGetNodeDataFn("peer", 0)
-			tester.lock.Unlock()
-		}
-	}
-	// Return all nodes if we're testing fast sync progression
-	if progress {
-		tester.lock.Lock()
-		tester.peerMissingStates["peer"] = map[common.Hash]bool{}
-		tester.lock.Unlock()
-
-		if err := tester.sync("peer", nil, FastSync); err != nil {
-			t.Fatalf("failed to synchronise blocks in progressed fast sync: %v", err)
-		}
-		time.Sleep(150 * time.Millisecond) // Make sure no in-flight requests remain
-
-		if fails := atomic.LoadUint32(&tester.downloader.fsPivotFails); fails != 1 {
-			t.Fatalf("progressed pivot trial count mismatch: have %v, want %v", fails, 1)
-		}
-		assertOwnChain(t, tester, targetBlocks+1)
-	} else {
-		if err := tester.sync("peer", nil, FastSync); err == nil {
-			t.Fatalf("succeeded to synchronise blocks in failed fast sync")
-		}
-		time.Sleep(150 * time.Millisecond) // Make sure no in-flight requests remain
-
-		if fails := atomic.LoadUint32(&tester.downloader.fsPivotFails); fails != fsCriticalTrials {
-			t.Fatalf("failed pivot trial count mismatch: have %v, want %v", fails, fsCriticalTrials)
-		}
-	}
-	// Retry limit exhausted, downloader will switch to full sync, should succeed
-	if err := tester.sync("peer", nil, FastSync); err != nil {
-		t.Fatalf("failed to synchronise blocks in slow sync: %v", err)
-	}
-	// Note, we can't assert the chain here because the test asserter assumes sync
-	// completed using a single mode of operation, whereas fast-then-slow can result
-	// in arbitrary intermediate state that's not cleanly verifiable.
 }

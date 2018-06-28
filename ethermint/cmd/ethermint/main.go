@@ -15,7 +15,7 @@ import (
 
 	cfg "github.com/tendermint/go-config"
 
-	"github.com/ethereum/go-ethereum/cmd/geth"
+	//"github.com/ethereum/go-ethereum/cmd/geth"
 )
 
 const (
@@ -57,12 +57,14 @@ func main() {
 		},
 
 		// See consolecmd.go:
+		/*
 		gethmain.ConsoleCommand,
 		gethmain.AttachCommand,
 		gethmain.JavascriptCommand,
 
 		gethmain.WalletCommand,
 		gethmain.AccountCommand,
+		*/
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 
@@ -119,24 +121,28 @@ func newCliApp(version, usage string) *cli.App {
 		utils.WSApiFlag,
 		utils.WSAllowedOriginsFlag,
 		utils.IPCDisabledFlag,
-		utils.IPCApiFlag,
+		//utils.IPCApiFlag,
 		utils.IPCPathFlag,
 		utils.ExecFlag,
 		utils.PreloadJSFlag,
+		/*
 		utils.TestNetFlag,
 		utils.VMForceJitFlag,
 		utils.VMJitCacheFlag,
 		utils.VMEnableJitFlag,
+		*/
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.MetricsEnabledFlag,
 		utils.SolcPathFlag,
+		/*
 		utils.GpoMinGasPriceFlag,
 		utils.GpoMaxGasPriceFlag,
 		utils.GpoFullBlockRatioFlag,
 		utils.GpobaseStepDownFlag,
 		utils.GpobaseStepUpFlag,
 		utils.GpobaseCorrectionFactorFlag,
+		*/
 		VerbosityFlag, // not exposed by go-ethereum
 		DataDirFlag,   // so we control defaults
 

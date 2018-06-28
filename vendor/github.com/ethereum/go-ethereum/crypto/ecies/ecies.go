@@ -151,14 +151,16 @@ var (
 func incCounter(ctr []byte) {
 	if ctr[3]++; ctr[3] != 0 {
 		return
-	} else if ctr[2]++; ctr[2] != 0 {
-		return
-	} else if ctr[1]++; ctr[1] != 0 {
-		return
-	} else if ctr[0]++; ctr[0] != 0 {
+	}
+	if ctr[2]++; ctr[2] != 0 {
 		return
 	}
-	return
+	if ctr[1]++; ctr[1] != 0 {
+		return
+	}
+	if ctr[0]++; ctr[0] != 0 {
+		return
+	}
 }
 
 // NIST SP 800-56 Concatenation Key Derivation Function (see section 5.8.1).
@@ -312,7 +314,7 @@ func (prv *PrivateKey) Decrypt(rand io.Reader, c, s1, s2 []byte) (m []byte, err 
 
 	switch c[0] {
 	case 2, 3, 4:
-		rLen = ((prv.PublicKey.Curve.Params().BitSize + 7) / 4)
+		rLen = (prv.PublicKey.Curve.Params().BitSize + 7) / 4
 		if len(c) < (rLen + hLen + 1) {
 			err = ErrInvalidMessage
 			return

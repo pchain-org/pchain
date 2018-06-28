@@ -59,6 +59,25 @@ type Command struct {
 	// Full name of command for help, defaults to full command name, including parent commands.
 	HelpName        string
 	commandNamePath []string
+
+	// CustomHelpTemplate the text template for the command help topic.
+	// cli.go uses text/template to render templates. You can
+	// render custom help text by setting this variable.
+	CustomHelpTemplate string
+}
+
+type CommandsByName []Command
+
+func (c CommandsByName) Len() int {
+	return len(c)
+}
+
+func (c CommandsByName) Less(i, j int) bool {
+	return c[i].Name < c[j].Name
+}
+
+func (c CommandsByName) Swap(i, j int) {
+	c[i], c[j] = c[j], c[i]
 }
 
 // FullName returns the full name of the command.
