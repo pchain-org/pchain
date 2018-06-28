@@ -30,6 +30,7 @@ import (
 	"regexp"
 	cfg "github.com/tendermint/go-config"
 	etm "github.com/pchain/ethermint/cmd/ethermint"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 type BalaceAmount struct {
@@ -106,6 +107,7 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 	validators := createPriValidators(config, len(balanceAmounts))
 
 	var coreGenesis = core.Genesis{
+		Config: params.MainnetChainConfig,
 		Nonce: 0xdeadbeefdeadbeef,
 		Timestamp: 0x0,
 		ParentHash: common.StringToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),

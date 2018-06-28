@@ -102,6 +102,7 @@ type genesisAccountMarshaling struct {
 	Code       hexutil.Bytes
 	Balance    *math.HexOrDecimal256
 	Nonce      math.HexOrDecimal64
+	Amount     *math.HexOrDecimal256
 	Storage    map[storageJSON]storageJSON
 	PrivateKey hexutil.Bytes
 }

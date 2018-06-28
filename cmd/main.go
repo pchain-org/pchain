@@ -80,7 +80,7 @@ func newCliApp(version, usage string) *cli.App {
 		utils.BootnodesFlag,
 		utils.BootnodesV4Flag,
 		utils.BootnodesV5Flag,
-		utils.DataDirFlag,
+		//utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
 		utils.NoUSBFlag,
 		utils.DashboardEnabledFlag,

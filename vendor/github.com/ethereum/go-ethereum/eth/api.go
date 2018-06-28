@@ -61,7 +61,11 @@ func (api *PublicEthereumAPI) Coinbase() (common.Address, error) {
 
 // Hashrate returns the POW hashrate
 func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
-	return hexutil.Uint64(api.e.Miner().HashRate())
+	if api.e.Miner() != nil {
+		return hexutil.Uint64(api.e.Miner().HashRate())
+	} else {
+		return 0
+	}
 }
 
 // PublicMinerAPI provides an API to control the miner.
@@ -74,14 +78,19 @@ type PublicMinerAPI struct {
 // NewPublicMinerAPI create a new PublicMinerAPI instance.
 func NewPublicMinerAPI(e *Ethereum) *PublicMinerAPI {
 	agent := miner.NewRemoteAgent(e.BlockChain(), e.Engine())
-	e.Miner().Register(agent)
+	if e.Miner() != nil {
+		e.Miner().Register(agent)
+	}
 
 	return &PublicMinerAPI{e, agent}
 }
 
 // Mining returns an indication if this node is currently mining.
 func (api *PublicMinerAPI) Mining() bool {
-	return api.e.IsMining()
+	if api.e.Miner() != nil {
+		return api.e.IsMining()
+	}
+	return false
 }
 
 // SubmitWork can be used by external miner to submit their POW solution. It returns an indication if the work was
