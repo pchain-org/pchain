@@ -2,10 +2,11 @@ package core
 
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	dbm "github.com/tendermint/go-db"
-	wire "github.com/tendermint/go-wire"
+	"github.com/tendermint/go-wire"
 	ep "github.com/tendermint/tendermint/epoch"
 	"math/big"
 	"os"
@@ -27,8 +28,7 @@ type CoreChainInfo struct {
 	EndBlock         uint64
 
 	//joined - during creation phase
-	Joined        []common.Address
-	DepositAmount *big.Int
+	JoinedValidators []JoinedValidator
 
 	//validators - for stable phase; should be Epoch information
 	EpochNumber int
@@ -41,6 +41,11 @@ type CoreChainInfo struct {
 	DepositInChildChain    *big.Int //total deposit allocated to users in child chain
 	WithdrawFromChildChain *big.Int //total withdraw by users from child chain
 	WithdrawFromMainChain  *big.Int //total withdraw refund to users in main chain
+}
+
+type JoinedValidator struct {
+	Address       common.Address
+	DepositAmount *big.Int
 }
 
 type ChainInfo struct {
@@ -148,6 +153,14 @@ func (cci *CoreChainInfo) Bytes() []byte {
 	return buf.Bytes()
 }
 
+func (cci *CoreChainInfo) TotalDeposit() *big.Int {
+	sum := big.NewInt(0)
+	for _, v := range cci.JoinedValidators {
+		sum.Add(sum, v.DepositAmount)
+	}
+	return sum
+}
+
 func loadEpoch(db dbm.DB, number int, chainId string) *ep.Epoch {
 
 	mtx.Lock()
@@ -232,4 +245,130 @@ func GetChildChainIds(db dbm.DB) []string {
 	fmt.Printf("GetChildChainIds 1, strIdArr is %v, len is %d\n", strIdArr, len(strIdArr))
 
 	return strIdArr
+}
+
+// ---------------------
+// Pending Chain
+var pendingChainMtx sync.Mutex
+
+var pendingChainIndexKey = []byte("PENDING_CHAIN_IDX")
+
+func calcPendingChainInfoKey(chainId string) []byte {
+	return []byte("PENDING_CHAIN:" + chainId)
+}
+
+type pendingIdxData struct {
+	ChainID string
+	Start   uint64
+	End     uint64
+}
+
+// GetPendingChildChainData get the pending child chain data from db with key pending chain
+func GetPendingChildChainData(db dbm.DB, chainId string) *CoreChainInfo {
+
+	pendingChainByteSlice := db.Get(calcPendingChainInfoKey(chainId))
+	if pendingChainByteSlice != nil {
+		var cci CoreChainInfo
+		gobReadBinaryBytes(pendingChainByteSlice, &cci)
+		return &cci
+	}
+
+	return nil
+}
+
+// CreatePendingChildChainData create the pending child chain data with index
+func CreatePendingChildChainData(db dbm.DB, cci *CoreChainInfo) {
+	storePendingChildChainData(db, cci, true)
+}
+
+// UpdatePendingChildChainData update the pending child chain data without index
+func UpdatePendingChildChainData(db dbm.DB, cci *CoreChainInfo) {
+	storePendingChildChainData(db, cci, false)
+}
+
+// storePendingChildChainData save the pending child chain data into db with key pending chain
+func storePendingChildChainData(db dbm.DB, cci *CoreChainInfo, create bool) {
+	pendingChainMtx.Lock()
+	defer pendingChainMtx.Unlock()
+
+	// store the data
+	db.SetSync(calcPendingChainInfoKey(cci.ChainId), gobBinaryBytes(*cci))
+
+	if create {
+		// index the data
+		var idx []pendingIdxData
+		pendingIdxByteSlice := db.Get(pendingChainIndexKey)
+		if pendingIdxByteSlice != nil {
+			gobReadBinaryBytes(pendingIdxByteSlice, &idx)
+		}
+		idx = append(idx, pendingIdxData{cci.ChainId, cci.StartBlock, cci.EndBlock})
+		db.SetSync(pendingChainIndexKey, gobBinaryBytes(idx))
+	}
+}
+
+// DeletePendingChildChainData delete the pending child chain data from db with chain id
+func DeletePendingChildChainData(db dbm.DB, chainId string) {
+	pendingChainMtx.Lock()
+	defer pendingChainMtx.Unlock()
+
+	db.DeleteSync(calcPendingChainInfoKey(chainId))
+}
+
+// GetChildChainForLaunch get the child chain for pending db for launch
+func GetChildChainForLaunch(db dbm.DB, height uint64) []string {
+	pendingChainMtx.Lock()
+	defer pendingChainMtx.Unlock()
+
+	// Get the Pending Index from db
+	var idx []pendingIdxData
+	pendingIdxByteSlice := db.Get(pendingChainIndexKey)
+	if pendingIdxByteSlice != nil {
+		gobReadBinaryBytes(pendingIdxByteSlice, &idx)
+	}
+
+	if len(idx) == 0 {
+		return nil
+	}
+
+	newPendingIdx := idx[:0]
+	readyForLaunch := make([]string, 0)
+
+	for _, v := range idx {
+		if v.Start > height {
+			// skip it
+			newPendingIdx = append(newPendingIdx, v)
+		} else if v.End < height {
+			// remove it
+			DeletePendingChildChainData(db, v.ChainID)
+		} else {
+			// check condition
+			cci := GetPendingChildChainData(db, v.ChainID)
+			if len(cci.JoinedValidators) >= int(cci.MinValidators) && cci.TotalDeposit().Cmp(cci.MinDepositAmount) >= 0 {
+				readyForLaunch = append(readyForLaunch, v.ChainID)
+			} else {
+				newPendingIdx = append(newPendingIdx, v)
+			}
+		}
+	}
+
+	if len(newPendingIdx) != len(idx) {
+		// Update the Pending Idx
+		db.SetSync(pendingChainIndexKey, gobBinaryBytes(newPendingIdx))
+	}
+
+	// Return the ready for launch Child Chain
+	return readyForLaunch
+}
+
+func gobBinaryBytes(o interface{}) []byte {
+	b := new(bytes.Buffer)
+	enc := gob.NewEncoder(b)
+	enc.Encode(o)
+	return b.Bytes()
+}
+
+func gobReadBinaryBytes(d []byte, ptr interface{}) error {
+	//bytes.NewBuffer(d)
+	dec := gob.NewDecoder(bytes.NewReader(d))
+	return dec.Decode(ptr)
 }

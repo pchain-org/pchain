@@ -12,29 +12,29 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 
-	cmn "github.com/tendermint/go-common"
-	"github.com/tendermint/tendermint/types"
-	"github.com/ethereum/go-ethereum/common"
-	"math/big"
-	"github.com/pkg/errors"
-	"io/ioutil"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
-	"strings"
-	"strconv"
-	"github.com/tendermint/go-crypto"
-	"time"
-	"regexp"
-	cfg "github.com/tendermint/go-config"
 	etm "github.com/pchain/ethermint/cmd/ethermint"
+	"github.com/pkg/errors"
+	cmn "github.com/tendermint/go-common"
+	cfg "github.com/tendermint/go-config"
+	"github.com/tendermint/go-crypto"
+	"github.com/tendermint/tendermint/types"
+	"io/ioutil"
+	"math/big"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type BalaceAmount struct {
 	balance string
-	amount string
+	amount  string
 }
 
 type InvalidArgs struct {
@@ -42,25 +42,25 @@ type InvalidArgs struct {
 }
 
 func (invalid InvalidArgs) Error() string {
-	return "invalid args:"+invalid.args
+	return "invalid args:" + invalid.args
 }
 
-func parseBalaceAmount(s string) ([]*BalaceAmount,error){
+func parseBalaceAmount(s string) ([]*BalaceAmount, error) {
 	r, _ := regexp.Compile("\\{[\\ \\t]*\\d+(\\.\\d+)?[\\ \\t]*\\,[\\ \\t]*\\d+(\\.\\d+)?[\\ \\t]*\\}")
 	parse_strs := r.FindAllString(s, -1)
 	if len(parse_strs) == 0 {
 		return nil, InvalidArgs{s}
 	}
 	balanceAmounts := make([]*BalaceAmount, len(parse_strs))
-	for i,v := range parse_strs {
+	for i, v := range parse_strs {
 		length := len(v)
-		balanceAmount := strings.Split(v[1:length-1],",")
+		balanceAmount := strings.Split(v[1:length-1], ",")
 		if len(balanceAmount) != 2 {
 			return nil, InvalidArgs{s}
 		}
-		balanceAmounts[i] = &BalaceAmount{strings.TrimSpace(balanceAmount[0]),strings.TrimSpace(balanceAmount[1])}
+		balanceAmounts[i] = &BalaceAmount{strings.TrimSpace(balanceAmount[0]), strings.TrimSpace(balanceAmount[1])}
 	}
-	return balanceAmounts,nil
+	return balanceAmounts, nil
 }
 
 func InitCmd(ctx *cli.Context) error {
@@ -106,37 +106,36 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 	validators := createPriValidators(config, len(balanceAmounts))
 
 	var coreGenesis = core.Genesis{
-		Nonce: "0xdeadbeefdeadbeef",
-		Timestamp: "0x0",
+		Nonce:      "0xdeadbeefdeadbeef",
+		Timestamp:  "0x0",
 		ParentHash: "0x0000000000000000000000000000000000000000000000000000000000000000",
-		ExtraData: "0x0",
-		GasLimit: "0x8000000",
+		ExtraData:  "0x0",
+		GasLimit:   "0x8000000",
 		Difficulty: "0x400",
-		Mixhash: "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Coinbase: common.ToHex((*validators[0]).Address),
+		Mixhash:    "0x0000000000000000000000000000000000000000000000000000000000000000",
+		Coinbase:   common.ToHex((*validators[0]).Address),
 		Alloc: map[string]struct {
 			Code    string
 			Storage map[string]string
 			Balance string
 			Nonce   string
 			Amount  string
-		}{
-		},
+		}{},
 	}
-	for i,validator := range validators {
+	for i, validator := range validators {
 		coreGenesis.Alloc[common.ToHex(validator.Address)] = struct {
 			Code    string
 			Storage map[string]string
 			Balance string
 			Nonce   string
 			Amount  string
-		}{Balance: balanceAmounts[i].balance, Amount:balanceAmounts[i].amount}
+		}{Balance: balanceAmounts[i].balance, Amount: balanceAmounts[i].amount}
 	}
 
 	contents, err := json.Marshal(coreGenesis)
 	if err != nil {
 		utils.Fatalf("marshal coreGenesis failed")
-		return  err
+		return err
 	}
 	ethGenesisPath := config.GetString("eth_genesis_file")
 	if err = ioutil.WriteFile(ethGenesisPath, contents, 0654); err != nil {
@@ -170,12 +169,11 @@ func init_eth_blockchain(chainId string, ethGenesisPath string, ctx *cli.Context
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
 
-
 	fmt.Printf("init_eth_blockchain end\n")
 	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
 }
 
-func init_em_files(config cfg.Config, chainId string, genesisPath string) error  {
+func init_em_files(config cfg.Config, chainId string, genesisPath string) error {
 	gensisFile, err := os.Open(genesisPath)
 	defer gensisFile.Close()
 	if err != nil {
@@ -207,9 +205,17 @@ func init_em_files(config cfg.Config, chainId string, genesisPath string) error 
 func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genesis, privValidator *types.PrivValidator) error {
 	genFile := config.GetString("genesis_file")
 	if _, err := os.Stat(genFile); os.IsNotExist(err) {
+
+		var rewardPerBlock string
+		if chainId == MainChain {
+			rewardPerBlock = "184133873456790100"
+		} else {
+			rewardPerBlock = "0"
+		}
+
 		genDoc := types.GenesisDoc{
-			ChainID:   chainId, //cmn.Fmt("pchain-%v", cmn.RandStr(6)),
-			Consensus: types.CONSENSUS_POS,
+			ChainID:     chainId, //cmn.Fmt("pchain-%v", cmn.RandStr(6)),
+			Consensus:   types.CONSENSUS_POS,
 			GenesisTime: time.Now(),
 			RewardScheme: types.RewardSchemeDoc{
 				TotalReward:        "210000000000000000000000000",
@@ -222,7 +228,7 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 			},
 			CurrentEpoch: types.OneEpochDoc{
 				Number:         "0",
-				RewardPerBlock: "184133873456790100",
+				RewardPerBlock: rewardPerBlock,
 				StartBlock:     "0",
 				EndBlock:       "2592000",
 				StartTime:      time.Now().Format(time.RFC3339Nano),
@@ -247,7 +253,6 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 	}
 	return nil
 }
-
 
 func createPriValidators(config cfg.Config, num int) []*types.PrivValidator {
 	validators := make([]*types.PrivValidator, num)

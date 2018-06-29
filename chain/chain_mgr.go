@@ -1,41 +1,40 @@
 package chain
 
 import (
-	"gopkg.in/urfave/cli.v1"
-	"github.com/pkg/errors"
+	"fmt"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/pchain/common/plogger"
+	etm "github.com/pchain/ethermint/cmd/ethermint"
+	"github.com/pchain/ethermint/ethereum"
 	"github.com/pchain/p2p"
 	"github.com/pchain/rpc"
-	etm "github.com/pchain/ethermint/cmd/ethermint"
-	"github.com/ethereum/go-ethereum/core"
-	"fmt"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 	dbm "github.com/tendermint/go-db"
-	"github.com/ethereum/go-ethereum/ethclient"
+	"gopkg.in/urfave/cli.v1"
 	"os"
-	"github.com/pchain/common/plogger"
 )
 
 var plog = plogger.GetLogger("ChainManager")
 
 type ChainManager struct {
-
 	ctx *cli.Context
 
 	mainChain   *Chain
 	childChains map[string]*Chain
 	mainQuit    chan int
 	childQuits  map[string]chan int
-	p2pObj	*p2p.PChainP2P
-	cch 	*CrossChainHelper
+	p2pObj      *p2p.PChainP2P
+	cch         *CrossChainHelper
 }
 
 var chainMgr *ChainManager
 
-func GetCMInstance(ctx *cli.Context) *ChainManager{
+func GetCMInstance(ctx *cli.Context) *ChainManager {
 
 	if chainMgr == nil {
-		chainMgr = &ChainManager{ctx:ctx}
+		chainMgr = &ChainManager{ctx: ctx}
 		chainMgr.childChains = make(map[string]*Chain)
 		chainMgr.childQuits = make(map[string]chan int)
 		chainMgr.cch = &CrossChainHelper{}
@@ -43,7 +42,7 @@ func GetCMInstance(ctx *cli.Context) *ChainManager{
 	return chainMgr
 }
 
-func (cm *ChainManager)StartP2P() error {
+func (cm *ChainManager) StartP2P() error {
 
 	// Start PChain P2P Node
 	mainChainConfig := etm.GetTendermintConfig(MainChain, cm.ctx)
@@ -56,7 +55,7 @@ func (cm *ChainManager)StartP2P() error {
 	return nil
 }
 
-func (cm *ChainManager)LoadChains() error {
+func (cm *ChainManager) LoadChains() error {
 
 	cm.mainChain = LoadMainChain(cm.ctx, MainChain, cm.p2pObj)
 	if cm.mainChain == nil {
@@ -82,11 +81,11 @@ func (cm *ChainManager)LoadChains() error {
 	return nil
 }
 
-func (cm *ChainManager)InitCrossChainHelper(typeMut *event.TypeMux) {
+func (cm *ChainManager) InitCrossChainHelper(typeMut *event.TypeMux) {
 	cm.cch.typeMut = typeMut
 	cm.cch.chainInfoDB = dbm.NewDB("chaininfo",
-					cm.mainChain.Config.GetString("db_backend"),
-					cm.ctx.GlobalString(DataDirFlag.Name))
+		cm.mainChain.Config.GetString("db_backend"),
+		cm.ctx.GlobalString(DataDirFlag.Name))
 	client, err := ethclient.Dial("http://localhost:6969/pchain")
 	if err != nil {
 		fmt.Printf("can't connect to localhost:6969/pchain, exit")
@@ -96,7 +95,7 @@ func (cm *ChainManager)InitCrossChainHelper(typeMut *event.TypeMux) {
 	cm.cch.client = client
 }
 
-func (cm *ChainManager)StartChains() error{
+func (cm *ChainManager) StartChains() error {
 
 	cm.p2pObj.AddNetwork(cm.mainChain.Id)
 	cm.mainQuit = make(chan int)
@@ -142,6 +141,7 @@ func (cm *ChainManager) StartRPC() error {
 
 	return nil
 }
+
 /*
 func (cm *ChainManager) StartRPC1() error {
 
@@ -168,8 +168,6 @@ func (cm *ChainManager) StartRPC1() error {
 
 func (cm *ChainManager) StartInspectEvent() {
 
-	eventMap := make(map[string]bool)
-
 	go func() {
 		txSub := cm.mainChain.EthNode.EventMux().Subscribe(core.CreateChildChainEvent{})
 
@@ -177,39 +175,62 @@ func (cm *ChainManager) StartInspectEvent() {
 			event := obj.Data.(core.CreateChildChainEvent)
 			plog.Infof("CreateChildChainEvent received: %v\n", event)
 			chainId := event.ChainId
-			_, ok := eventMap[chainId]
-			if ok {
-				plog.Infof("CreateChildChainEvent has been received: %v, just continue\n", event)
-				continue
-			}
-			eventMap[chainId] = true
 
-			_, ok = cm.childChains[chainId]
+			_, ok := cm.childChains[chainId]
 			if ok {
 				plog.Infof("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue\n", event)
 				continue
 			}
 
-			go cm.LoadChildChainInRT(event.From, event.ChainId)
+			go cm.LoadChildChainInRT(event.ChainId)
 		}
 	}()
 }
 
-func (cm *ChainManager) LoadChildChainInRT(from common.Address, chainId string) {
+func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
-	//LoadChildChain if from and chainId matches
-	ci := core.GetChainInfo(cm.cch.chainInfoDB, chainId)
-	if ci == nil {
-		fmt.Printf("child chain: %s does not exist, can't load", chainId)
+	// Load Child Chain data from pending data
+	cci := core.GetPendingChildChainData(cm.cch.chainInfoDB, chainId)
+	if cci == nil {
+		plog.Errorf("child chain: %s does not exist, can't load", chainId)
 		return
 	}
 
+	//privValidators := make([]types.GenesisValidator, len(cci.JoinedValidators))
+
+	validator := false
+	coinbase, _ := ethereum.Coinbase()
+	for _, v := range cci.JoinedValidators {
+		if v.Address == coinbase {
+			validator = true
+			break
+		}
+
+		//privValidator := types.GenesisValidator{
+		//	EthAccount: v.Address,
+		//	PubKey: nil,
+		//	Amount:
+		//}
+	}
+
+	if !validator {
+		plog.Warnf("You are not in the validators of child chain %v, no need to start the child chain", chainId)
+		return
+	}
+
+	//cm.p2pObj.Switch().Peers().Get()
+
 	chain := LoadChildChain(cm.ctx, chainId, cm.p2pObj)
 	if chain == nil {
-		fmt.Printf("child chain load failed, try to create one\n")
+		//fmt.Printf("child chain load failed, try to create one\n")
 		err := CreateChildChain(cm.ctx, chainId, "{10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}")
 		if err != nil {
-			fmt.Printf("child chain creation failed\n")
+			plog.Errorf("Create Child Chain %v failed!", chainId)
+		} else {
+			// Create success, store the chain info into db
+			core.SaveChainInfo(cm.cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: *cci})
+
+			core.DeletePendingChildChainData(cm.cch.chainInfoDB, chainId)
 		}
 
 		chain = LoadChildChain(cm.ctx, chainId, cm.p2pObj)
@@ -234,14 +255,14 @@ func (cm *ChainManager) LoadChildChainInRT(from common.Address, chainId string) 
 	//hookup rpc
 	rpc.Hookup(chain.Id, chain.RpcHandler)
 
-	<- quit
+	<-quit
 }
 
 func (cm *ChainManager) WaitChainsStop() {
 
-	<- cm.mainQuit
+	<-cm.mainQuit
 	for _, quit := range cm.childQuits {
-		<- quit
+		<-quit
 	}
 }
 
@@ -249,4 +270,3 @@ func (cm *ChainManager) Stop() {
 	rpc.StopRPC()
 	cm.p2pObj.StopP2P()
 }
-

@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	OFFICIAL_MINIMUM_VALIDATORS = 10
+	OFFICIAL_MINIMUM_VALIDATORS = 1
 	OFFICIAL_MINIMUM_DEPOSIT    = "100000000000000000000000" // 100,000 * e18
 )
 
@@ -53,10 +53,16 @@ func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId st
 		return errors.New("you can't create PChain as a child chain, try use other name instead")
 	}
 
-	// Check if "chainId" has been created/registered
+	// Check if "chainId" has been created
 	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
 	if ci != nil {
 		return errors.New(fmt.Sprintf("Chain %s has already exist, try use other name instead", chainId))
+	}
+
+	// Check if "chainId" has been registered
+	cci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
+	if cci != nil {
+		return errors.New(fmt.Sprintf("Chain %s has already applied, try use other name instead", chainId))
 	}
 
 	// Check the minimum validators
@@ -97,51 +103,38 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 
 	fmt.Printf("cch CreateChildChain called\n")
 
-	//write the child chain info to "multi-chain" db
-	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
-	if ci != nil {
-		fmt.Printf("chain %s does exist, can't create again\n", chainId)
-		//return nil, because this could be executed for the same TX!!!
-		return nil
-	}
-
-	coreChainInfo := core.CoreChainInfo{
+	cci := &core.CoreChainInfo{
 		Owner:            from,
 		ChainId:          chainId,
 		MinValidators:    minValidators,
 		MinDepositAmount: minDepositAmount,
 		StartBlock:       startBlock,
 		EndBlock:         endBlock,
-		Joined:           make([]common.Address, 0),
-		DepositAmount:    new(big.Int),
+		JoinedValidators: make([]core.JoinedValidator, 0),
 	}
-
-	ci = &core.ChainInfo{}
-	ci.CoreChainInfo = coreChainInfo
-
-	core.SaveChainInfo(cch.chainInfoDB, ci)
+	core.CreatePendingChildChainData(cch.chainInfoDB, cci)
 
 	return nil
 }
 
+// ValidateJoinChildChain check the criteria whether it meets the join child chain requirement
 func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, chainId string, depositAmount *big.Int) error {
-	plog.Infoln("ValidateJoinChildChain - start")
+	plog.Debugln("ValidateJoinChildChain - start")
 
 	if chainId == MainChain {
 		return errors.New("you can't join PChain as a child chain, try use other name instead")
 	}
 
 	// Check if "chainId" has been created/registered
-	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
+	ci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
 	if ci == nil {
 		return errors.New(fmt.Sprintf("Child Chain %s not exist, try use other name instead", chainId))
 	}
 
 	// Check if already joined the chain
 	find := false
-	fromStr := from.Str()
-	for _, joined := range ci.Joined {
-		if fromStr == joined.Str() {
+	for _, joined := range ci.JoinedValidators {
+		if from == joined.Address {
 			find = true
 			break
 		}
@@ -156,27 +149,47 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, chainId
 		return errors.New("deposit amount must be greater than 0")
 	}
 
-	plog.Infoln("ValidateJoinChildChain - end")
+	plog.Debugln("ValidateJoinChildChain - end")
 	return nil
 }
 
 // JoinChildChain Join the Child Chain
 func (cch *CrossChainHelper) JoinChildChain(from common.Address, chainId string, depositAmount *big.Int) error {
-	plog.Infoln("JoinChildChain - start")
+	plog.Debugln("JoinChildChain - start")
 
 	// Load the Child Chain first
-	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
+	ci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
 	if ci == nil {
 		plog.Infof("JoinChildChain - Child Chain %s not exist, you can't join the chain\n", chainId)
 		return errors.New(fmt.Sprintf("Child Chain %s not exist, you can't join the chain", chainId))
 	}
 
-	ci.Joined = append(ci.Joined, from)
-	ci.DepositAmount.Add(ci.DepositAmount, depositAmount)
+	jv := core.JoinedValidator{
+		Address:       from,
+		DepositAmount: depositAmount,
+	}
 
-	core.SaveChainInfo(cch.chainInfoDB, ci)
-	plog.Infoln("JoinChildChain - end")
+	ci.JoinedValidators = append(ci.JoinedValidators, jv)
+
+	core.UpdatePendingChildChainData(cch.chainInfoDB, ci)
+	plog.Debugln("JoinChildChain - end")
 	return nil
+}
+
+func (cch *CrossChainHelper) ReadyForLaunchChildChain(height uint64) {
+	plog.Debugln("ReadyForLaunchChildChain - start")
+
+	readyId := core.GetChildChainForLaunch(cch.chainInfoDB, height)
+	if len(readyId) == 0 {
+		plog.Infof("ReadyForLaunchChildChain - No child chain to be launch in Block %v", height)
+	} else {
+		plog.Infof("ReadyForLaunchChildChain - %v child chain(s) to be launch in Block %v. %v\n", len(readyId), height, readyId)
+		for _, chainId := range readyId {
+			cch.GetTypeMutex().Post(core.CreateChildChainEvent{ChainId: chainId})
+		}
+	}
+
+	plog.Debugln("ReadyForLaunchChildChain - end")
 }
 
 //should return varified transaction
