@@ -8,8 +8,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/tendermint/epoch"
 	tdmTypes "github.com/tendermint/tendermint/types"
@@ -118,7 +120,7 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 }
 
 // ValidateJoinChildChain check the criteria whether it meets the join child chain requirement
-func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, chainId string, depositAmount *big.Int) error {
+func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error {
 	plog.Debugln("ValidateJoinChildChain - start")
 
 	if chainId == MainChain {
@@ -129,6 +131,17 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, chainId
 	ci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
 	if ci == nil {
 		return errors.New(fmt.Sprintf("Child Chain %s not exist, try use other name instead", chainId))
+	}
+
+	// Check PubKey match the Address
+	pubkeySlice := ethcrypto.FromECDSAPub(ethcrypto.ToECDSAPub(common.FromHex(pubkey)))
+	if pubkeySlice == nil {
+		return errors.New("your Public Key is not valid, please provide a valid Public Key")
+	}
+
+	validatorPubkey := crypto.EtherumPubKey(pubkeySlice)
+	if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
+		return errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
 	}
 
 	// Check if already joined the chain
@@ -154,7 +167,7 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, chainId
 }
 
 // JoinChildChain Join the Child Chain
-func (cch *CrossChainHelper) JoinChildChain(from common.Address, chainId string, depositAmount *big.Int) error {
+func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error {
 	plog.Debugln("JoinChildChain - start")
 
 	// Load the Child Chain first
@@ -165,6 +178,7 @@ func (cch *CrossChainHelper) JoinChildChain(from common.Address, chainId string,
 	}
 
 	jv := core.JoinedValidator{
+		PubKey:        crypto.EtherumPubKey(common.FromHex(pubkey)),
 		Address:       from,
 		DepositAmount: depositAmount,
 	}

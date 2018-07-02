@@ -13,11 +13,11 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 
-	abciTypes "github.com/tendermint/abci/types"
+	"fmt"
 	"github.com/pchain/ethermint/ethereum"
 	emtTypes "github.com/pchain/ethermint/types"
+	abciTypes "github.com/tendermint/abci/types"
 	tmTypes "github.com/tendermint/tendermint/types"
-	"fmt"
 	"math/big"
 	"os"
 )
@@ -27,7 +27,7 @@ type EthermintApplication struct {
 	backend      *ethereum.Backend              // backend ethereum struct
 	currentState func() (*state.StateDB, error) // fetch the latest state from the ethereum blockchain
 	rpcClient    *rpc.Client                    // eth rpc cclient
-	strategy     emtTypes.Strategy             // strategy for validator compensation
+	strategy     emtTypes.Strategy              // strategy for validator compensation
 
 }
 
@@ -80,7 +80,6 @@ func (app *EthermintApplication) InitChain(validators []*abciTypes.Validator) {
 	os.Exit(1)
 	//app.SetValidators(validators)
 }
-
 
 func (app *EthermintApplication) PreCheck(tx *ethTypes.Transaction) error {
 	return app.backend.PreCheck(tx)
@@ -195,8 +194,8 @@ func (app *EthermintApplication) GetUpdatedValidators() abciTypes.ResponseEndBlo
 		s := make([]*abciTypes.Validator, len(genValidators))
 		for i, v := range genValidators {
 			s[i] = &abciTypes.Validator{
-				PubKey : v.PubKey.Bytes(),
-				Power : uint64(v.Amount),
+				PubKey: v.PubKey.Bytes(),
+				Power:  v.Amount.Uint64(),
 			}
 		}
 
@@ -249,8 +248,8 @@ func (app *EthermintApplication) validateTx(tx *ethTypes.Transaction) error {
 		// block limit gas.
 		// TODO
 		/*if pool.gasLimit().Cmp(tx.Gas()) < 0 {
-		return core.ErrGasLimit
-	}*/
+			return core.ErrGasLimit
+		}*/
 
 		// Transactions can't be negative. This may never happen
 		// using RLP decoded transactions but may occur if you create

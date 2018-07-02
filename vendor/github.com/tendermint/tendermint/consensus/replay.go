@@ -18,9 +18,9 @@ import (
 	"github.com/tendermint/go-wire"
 
 	"github.com/tendermint/tendermint/proxy"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
-	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 )
 
 // Functionality to replay blocks and messages on recovery from a crash.
@@ -207,7 +207,7 @@ type Handshaker struct {
 
 	nBlocks int // number of blocks applied to the state
 
-	cch    rpcTxHook.CrossChainHelper
+	cch rpcTxHook.CrossChainHelper
 }
 
 func NewHandshaker(config cfg.Config, state *sm.State, store types.BlockStore, cch rpcTxHook.CrossChainHelper) *Handshaker {
@@ -327,7 +327,7 @@ func (h *Handshaker) ReplayBlocks(appHash []byte, appBlockHeight int, proxyApp p
 
 //TODO: Be very careful, here may need to handle Epoch infomation
 func (h *Handshaker) replayBlocks(proxyApp proxy.AppConns, appBlockHeight, storeBlockHeight int,
-				mutateState bool, cch rpcTxHook.CrossChainHelper) ([]byte, error) {
+	mutateState bool, cch rpcTxHook.CrossChainHelper) ([]byte, error) {
 	// App is further behind than it should be, so we need to replay blocks.
 	// We replay all blocks from appBlockHeight+1.
 	// Note that we don't have an old version of the state,
@@ -500,7 +500,7 @@ func readReplayValMessage(msgBytes []byte, preVals *types.ValidatorSet) error {
 				vals,
 				&abci.Validator{
 					PubKey: val.PubKey.Bytes(),
-					Power:  uint64(val.VotingPower),
+					Power:  val.VotingPower.Uint64(),
 				},
 			)
 		}

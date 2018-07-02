@@ -1,13 +1,13 @@
 package core
 
 import (
-	"fmt"
 	"errors"
-	ep "github.com/tendermint/tendermint/epoch"
-	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	tmTypes "github.com/tendermint/tendermint/types"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	ep "github.com/tendermint/tendermint/epoch"
+	tmTypes "github.com/tendermint/tendermint/types"
 	//"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -16,11 +16,11 @@ var (
 )
 
 type svmEntity struct {
-	voMap map[int]*ep.ValidatorOperationSet
+	voMap  map[int]*ep.ValidatorOperationSet
 	loaded bool
 }
 
-var localEntity = svmEntity{voMap:nil, loaded:false}
+var localEntity = svmEntity{voMap: nil, loaded: false}
 
 func init() {
 
@@ -71,7 +71,7 @@ func svmDeliverTxCb(tx *ethTypes.Transaction) error {
 		return err
 	}
 
-	fmt.Printf("svm_DeliverTxCb, pubKey is %x\n", pubKey/*, addr*/)
+	fmt.Printf("svm_DeliverTxCb, pubKey is %x\n", pubKey /*, addr*/)
 	fmt.Printf("svm_DeliverTxCb, params are: %s\n", tx.ExtendTxData().Params.String())
 
 	txhash := tx.Hash().Hex()
@@ -103,17 +103,17 @@ func svmDeliverTxCb(tx *ethTypes.Transaction) error {
 
 		vo = &ep.ValidatorOperation{
 			Validator: fromStr,
-			PubKey: pubKey,
-			TxHash: txhash,
-			Action: action,
-			Amount: power,
-			Epoch: int(epoch),
+			PubKey:    pubKey,
+			TxHash:    txhash,
+			Action:    action,
+			Amount:    power,
+			Epoch:     int(epoch),
 			Confirmed: false,
 		}
 		voSet, _ := localEntity.voMap[epochKey]
 		voSet, err = ep.AddValidatorOperation(voSet, epochKey, vo)
 		if err != nil {
-			return  err
+			return err
 		}
 		localEntity.voMap[epochKey] = voSet
 
@@ -123,7 +123,7 @@ func svmDeliverTxCb(tx *ethTypes.Transaction) error {
 			return errors.New("hash " + hash + " should not exist")
 		}
 
-		if  vo.Confirmed {
+		if vo.Confirmed {
 			epochKey = vo.Epoch
 		}
 
@@ -137,10 +137,10 @@ func svmDeliverTxCb(tx *ethTypes.Transaction) error {
 
 		var found bool = false
 		validatorVO := voSet.Operations[vo.Validator]
-		for i:=0; i<len(validatorVO); i++ {
+		for i := 0; i < len(validatorVO); i++ {
 			if validatorVO[i].TxHash == vo.TxHash {
 
-				for j:=0; j<len(validatorVO[i].VoteSet); j++ {
+				for j := 0; j < len(validatorVO[i].VoteSet); j++ {
 					if validatorVO[i].VoteSet[j] == fromStr {
 						return errors.New("should not re-vote")
 					}
@@ -174,8 +174,8 @@ func svmCommitCb(brCommit BrCommit) error {
 
 	vals := valSet.Validators
 	totalPower := int64(0)
-	for i:=0; i<len(vals); i++ {
-		totalPower += vals[i].VotingPower
+	for i := 0; i < len(vals); i++ {
+		totalPower += vals[i].VotingPower.Int64()
 	}
 	valsMap := toValidatorMap(vals)
 
@@ -183,10 +183,10 @@ func svmCommitCb(brCommit BrCommit) error {
 	unConfirmedVOSet, ok := localEntity.voMap[ep.VA_UNCONFIRMED_EPOCH]
 	if ok {
 		for _, v1 := range unConfirmedVOSet.Operations {
-			for i:=0; i<len(v1); i++ {
+			for i := 0; i < len(v1); i++ {
 				vo := v1[i]
 				total := int64(0)
-				for j:=0; j<len(vo.VoteSet); j++ {
+				for j := 0; j < len(vo.VoteSet); j++ {
 					amount, ok1 := valsMap[vo.VoteSet[j]]
 					if ok1 {
 						total += amount
@@ -201,7 +201,7 @@ func svmCommitCb(brCommit BrCommit) error {
 		}
 	}
 
-	for i:=0; i<len(toConfirmedVOList); i++ {
+	for i := 0; i < len(toConfirmedVOList); i++ {
 		vo := toConfirmedVOList[i]
 		ep.RemoveValidatorOperation(unConfirmedVOSet, vo)
 		voSet := localEntity.voMap[vo.Epoch]
@@ -233,9 +233,9 @@ func toValidatorMap(vals []*tmTypes.Validator) map[string]int64 {
 	}
 
 	result := make(map[string]int64)
-	for i:=0; i<len(vals); i++ {
+	for i := 0; i < len(vals); i++ {
 		val := vals[i]
-		result[common.ToHex(val.Address)] = val.VotingPower
+		result[common.ToHex(val.Address)] = val.VotingPower.Int64()
 	}
 
 	return result

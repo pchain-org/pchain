@@ -39,6 +39,6 @@ func (tm2pb) PartSetHeader(partSetHeader PartSetHeader) *types.PartSetHeader {
 func (tm2pb) Validator(val *Validator) *types.Validator {
 	return &types.Validator{
 		PubKey: val.PubKey.Bytes(),
-		Power:  uint64(val.VotingPower),
+		Power:  val.VotingPower.Uint64(),
 	}
 }

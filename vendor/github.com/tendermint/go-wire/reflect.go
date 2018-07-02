@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math/big"
 	"reflect"
 	"strings"
 	"sync"
@@ -187,6 +188,21 @@ func readReflectBinary(rv reflect.Value, rt reflect.Type, opts Options, r io.Rea
 
 	// Get typeInfo
 	typeInfo := GetTypeInfo(rt)
+
+	// Add support of *big.Int
+	if rt.AssignableTo(reflect.PtrTo(reflect.TypeOf(big.Int{}))) {
+		str := ReadString(r, lmt, n, err)
+
+		i := rv.Interface().(*big.Int)
+		if i == nil {
+			i = new(big.Int)
+			rv.Set(reflect.ValueOf(i))
+		}
+		i.SetString(str, 0)
+
+		rv.Set(reflect.ValueOf(i))
+		return
+	}
 
 	if rt.Kind() == reflect.Interface {
 		if !typeInfo.IsRegisteredInterface {
@@ -420,6 +436,13 @@ func writeReflectBinary(rv reflect.Value, rt reflect.Type, opts Options, w io.Wr
 	// Get typeInfo
 	typeInfo := GetTypeInfo(rt)
 
+	// Add support of *big.Int
+	if rt.AssignableTo(reflect.PtrTo(reflect.TypeOf(big.Int{}))) {
+		value := rv.Interface().(*big.Int).String()
+		WriteString(value, w, n, err)
+		return
+	}
+
 	if rt.Kind() == reflect.Interface {
 		if rv.IsNil() {
 			WriteByte(0x00, w, n, err)
@@ -620,6 +643,20 @@ func readReflectJSON(rv reflect.Value, rt reflect.Type, opts Options, o interfac
 
 	// Get typeInfo
 	typeInfo := GetTypeInfo(rt)
+
+	// Add support for *big.Int
+	if rt.AssignableTo(reflect.PtrTo(reflect.TypeOf(big.Int{}))) {
+		i := rv.Interface().(*big.Int)
+		if i == nil {
+			i = new(big.Int)
+			rv.Set(reflect.ValueOf(i))
+		}
+
+		i.SetString(o.(string), 0)
+
+		rv.Set(reflect.ValueOf(i))
+		return
+	}
 
 	if rt.Kind() == reflect.Interface {
 		if !typeInfo.IsRegisteredInterface {
@@ -845,6 +882,18 @@ func writeReflectJSON(rv reflect.Value, rt reflect.Type, opts Options, w io.Writ
 
 	// Get typeInfo
 	typeInfo := GetTypeInfo(rt)
+
+	// Add support for *big.Int
+	if rt.AssignableTo(reflect.PtrTo(reflect.TypeOf(big.Int{}))) {
+		value := rv.Interface().(*big.Int).String()
+		jsonBytes, err_ := json.Marshal(value)
+		if err_ != nil {
+			*err = err_
+			return
+		}
+		WriteTo(jsonBytes, w, n, err)
+		return
+	}
 
 	if rt.Kind() == reflect.Interface {
 		if rv.IsNil() {

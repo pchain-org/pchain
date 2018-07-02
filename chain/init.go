@@ -206,6 +206,29 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 	genFile := config.GetString("genesis_file")
 	if _, err := os.Stat(genFile); os.IsNotExist(err) {
 
+		var rewardScheme types.RewardSchemeDoc
+		if chainId == MainChain {
+			rewardScheme = types.RewardSchemeDoc{
+				TotalReward:        "210000000000000000000000000",
+				PreAllocated:       "178500000000000000000000000",
+				AddedPerYear:       "0",
+				RewardFirstYear:    "5727300000000000000000000",
+				DescendPerYear:     "572730000000000000000000",
+				Allocated:          "0",
+				EpochNumberPerYear: "12",
+			}
+		} else {
+			rewardScheme = types.RewardSchemeDoc{
+				TotalReward:        "0",
+				PreAllocated:       "0",
+				AddedPerYear:       "0",
+				RewardFirstYear:    "0",
+				DescendPerYear:     "0",
+				Allocated:          "0",
+				EpochNumberPerYear: "12",
+			}
+		}
+
 		var rewardPerBlock string
 		if chainId == MainChain {
 			rewardPerBlock = "184133873456790100"
@@ -214,18 +237,10 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 		}
 
 		genDoc := types.GenesisDoc{
-			ChainID:     chainId, //cmn.Fmt("pchain-%v", cmn.RandStr(6)),
-			Consensus:   types.CONSENSUS_POS,
-			GenesisTime: time.Now(),
-			RewardScheme: types.RewardSchemeDoc{
-				TotalReward:        "210000000000000000000000000",
-				PreAllocated:       "178500000000000000000000000",
-				AddedPerYear:       "0",
-				RewardFirstYear:    "5727300000000000000000000",
-				DescendPerYear:     "572730000000000000000000",
-				Allocated:          "0",
-				EpochNumberPerYear: "12",
-			},
+			ChainID:      chainId,
+			Consensus:    types.CONSENSUS_POS,
+			GenesisTime:  time.Now(),
+			RewardScheme: rewardScheme,
 			CurrentEpoch: types.OneEpochDoc{
 				Number:         "0",
 				RewardPerBlock: rewardPerBlock,
@@ -283,10 +298,10 @@ func createPriValidators(config cfg.Config, num int) []*types.PrivValidator {
 	return validators
 }
 
-func checkAccount(coreGenesis core.Genesis) (common.Address, int64, error) {
+func checkAccount(coreGenesis core.Genesis) (common.Address, *big.Int, error) {
 
 	coinbase := common.HexToAddress(coreGenesis.Coinbase)
-	amount := int64(10)
+	amount := big.NewInt(0)
 	balance := big.NewInt(-1)
 	found := false
 	fmt.Printf("checkAccount(), coinbase is %x\n", coinbase)
@@ -295,20 +310,20 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, int64, error) {
 		fmt.Printf("checkAccount(), address is %x\n", address)
 		if coinbase == address {
 			balance = common.String2Big(account.Balance)
-			amount, _ = strconv.ParseInt(account.Amount, 10, 64)
+			amount = common.String2Big(account.Amount)
 			found = true
 			break
 		}
 	}
 	if !found {
 		fmt.Printf("invalidate eth_account\n")
-		return common.Address{}, int64(0), errors.New("invalidate eth_account")
+		return common.Address{}, amount, errors.New("invalidate eth_account")
 	}
 
-	if balance.Cmp(big.NewInt(amount)) < 0 {
+	if balance.Cmp(amount) < 0 {
 		fmt.Printf("balance is not enough to be support validator's amount, balance is %v, amount is %v\n",
 			balance, amount)
-		return common.Address{}, int64(0), errors.New("no enough balance")
+		return common.Address{}, amount, errors.New("no enough balance")
 	}
 
 	return coinbase, amount, nil
@@ -335,4 +350,77 @@ func getPassPhrase(prompt string, confirmation bool) string {
 		}
 	}
 	return password
+}
+
+func initEthGenesisFromExistValidator(mainKeyStorePath, validatorKeyStorePath string, childConfig cfg.Config, validator types.PrivValidator, depositAmount *big.Int) error {
+
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+
+	// Load Keystore from mainchain
+	mainks := keystore.NewKeyStoreByTenermint(mainKeyStorePath, scryptN, scryptP)
+	validatorAddress := common.BytesToAddress(validator.Address)
+	privKey := validator.PrivKey.(crypto.EtherumPrivKey)
+	pwd := common.ToHex(privKey[0:7])
+	pwd = string([]byte(pwd)[2:])
+	pwd = strings.ToUpper(pwd)
+	newKey, err_getKey := mainks.GetKey(validatorAddress, validatorKeyStorePath, pwd)
+	if err_getKey != nil {
+		return err_getKey
+	}
+
+	// Save KeyStore for child chain
+	ks := keystore.NewKeyStoreByTenermint(childConfig.GetString("keystore"), scryptN, scryptP)
+	a := accounts.Account{Address: validatorAddress, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(validatorAddress))}}
+	if err := ks.StoreKey(a.URL.Path, newKey, pwd); err != nil {
+		utils.Fatalf("store key failed")
+		return nil
+	}
+
+	privValFile := childConfig.GetString("priv_validator_file_root")
+
+	validator.LastHeight = 0
+	validator.LastRound = 0
+	validator.LastStep = 0
+	validator.LastSignature = nil
+	validator.LastSignBytes = nil
+	validator.SetFile(privValFile + ".json")
+	validator.Save()
+
+	var coreGenesis = core.Genesis{
+		Nonce:      "0xdeadbeefdeadbeef",
+		Timestamp:  "0x0",
+		ParentHash: "0x0000000000000000000000000000000000000000000000000000000000000000",
+		ExtraData:  "0x0",
+		GasLimit:   "0x8000000",
+		Difficulty: "0x400",
+		Mixhash:    "0x0000000000000000000000000000000000000000000000000000000000000000",
+		Coinbase:   common.ToHex(validator.Address),
+		Alloc: map[string]struct {
+			Code    string
+			Storage map[string]string
+			Balance string
+			Nonce   string
+			Amount  string
+		}{},
+	}
+	coreGenesis.Alloc[common.ToHex(validator.Address)] = struct {
+		Code    string
+		Storage map[string]string
+		Balance string
+		Nonce   string
+		Amount  string
+	}{Balance: depositAmount.String(), Amount: depositAmount.String()}
+
+	contents, err := json.Marshal(coreGenesis)
+	if err != nil {
+		utils.Fatalf("marshal coreGenesis failed")
+		return err
+	}
+	ethGenesisPath := childConfig.GetString("eth_genesis_file")
+	if err = ioutil.WriteFile(ethGenesisPath, contents, 0654); err != nil {
+		utils.Fatalf("write eth_genesis_file failed")
+		return err
+	}
+	return nil
 }

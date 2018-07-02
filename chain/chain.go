@@ -1,30 +1,31 @@
 package chain
 
 import (
-	"net/http"
-	tdm "github.com/pchain/ethermint/tendermint"
+	"errors"
+	"fmt"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	eth "github.com/ethereum/go-ethereum/node"
 	etmApp "github.com/pchain/ethermint/app"
 	etm "github.com/pchain/ethermint/cmd/ethermint"
-	"gopkg.in/urfave/cli.v1"
-	"fmt"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"os"
-	cfg "github.com/tendermint/go-config"
 	"github.com/pchain/ethermint/ethereum"
-	"github.com/pchain/ethermint/version"
-	"io/ioutil"
-	tdmTypes "github.com/tendermint/tendermint/types"
-	cmn "github.com/tendermint/go-common"
-	"github.com/syndtr/goleveldb/leveldb/errors"
 	validatorsStrategy "github.com/pchain/ethermint/strategies/validators"
+	tdm "github.com/pchain/ethermint/tendermint"
+	"github.com/pchain/ethermint/version"
+	cmn "github.com/tendermint/go-common"
+	cfg "github.com/tendermint/go-config"
+	tdmTypes "github.com/tendermint/tendermint/types"
+	"gopkg.in/urfave/cli.v1"
+	"io/ioutil"
+	"net/http"
+	"os"
 	"time"
 
 	"github.com/pchain/p2p"
 	"github.com/tendermint/go-rpc/server"
 	"github.com/tendermint/tendermint/proxy"
 	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
+	"math/big"
 )
 
 const (
@@ -32,19 +33,19 @@ const (
 	MainChain = "pchain"
 )
 
-type Chain struct{
-	Id string
-	Config cfg.Config
-	EthNode *eth.Node
-	TdmNode *tdm.Node
+type Chain struct {
+	Id         string
+	Config     cfg.Config
+	EthNode    *eth.Node
+	TdmNode    *tdm.Node
 	AbciServer cmn.Service
-	EtmApp  *etmApp.EthermintApplication
+	EtmApp     *etmApp.EthermintApplication
 	RpcHandler http.Handler
 }
 
 func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chain {
 
-	chain := &Chain {Id:chainId}
+	chain := &Chain{Id: chainId}
 	config := etm.GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
@@ -63,14 +64,13 @@ func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chai
 
 	chain.RpcHandler = rpcHandler
 
-
 	consensus, err := getConsensus(config)
-	if(err != nil) {
+	if err != nil {
 		cmn.Exit(cmn.Fmt("Couldn't get consensus with: %v", err))
 	}
 	fmt.Printf("consensus is: %s\n", consensus)
 
-	if (consensus != tdmTypes.CONSENSUS_POS) {
+	if consensus != tdmTypes.CONSENSUS_POS {
 		fmt.Println("consensus is not pos, so not start the pos prototol")
 		return nil
 	}
@@ -90,13 +90,13 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 	fmt.Printf("now load child: %s\n", chainId)
 
 	chainDir := ChainDir(ctx, chainId)
-	empty, err :=cmn.IsDirEmpty(chainDir)
+	empty, err := cmn.IsDirEmpty(chainDir)
 	fmt.Printf("chainDir is : %s, empty is %v\n", chainDir, empty)
-	if empty || err != nil{
+	if empty || err != nil {
 		fmt.Printf("directory %s not exist or with error %v\n", chainDir, err)
 		return nil
 	}
-	chain := &Chain {Id:chainId}
+	chain := &Chain{Id: chainId}
 	config := etm.GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
@@ -118,14 +118,14 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 	chain.RpcHandler = rpcHandler
 
 	consensus, err := getConsensus(config)
-	if(err != nil) {
+	if err != nil {
 		fmt.Printf("Couldn't get consensus with: %v\n", err)
 		stack.Stop()
 		return nil
 	}
 	fmt.Printf("consensus is: %s\n", consensus)
 
-	if (consensus != tdmTypes.CONSENSUS_POS) {
+	if consensus != tdmTypes.CONSENSUS_POS {
 		fmt.Println("consensus is not pos, so not start the pos prototol")
 		return nil
 	}
@@ -148,7 +148,7 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 func StartChain(chain *Chain, quit chan int) error {
 
 	fmt.Printf("start main chain: %s\n", chain.Id)
-	go func(){
+	go func() {
 		fmt.Println("ethermintCmd->utils.StartNode(stack)")
 		utils.StartNode1(chain.EthNode)
 
@@ -205,7 +205,6 @@ func StartChain(chain *Chain, quit chan int) error {
 		quit <- 1
 	}()
 
-
 	return nil
 }
 
@@ -224,7 +223,7 @@ func getConsensus(config cfg.Config) (string, error) {
 
 	genDoc, err = tdmTypes.GenesisDocFromJSON(jsonBlob)
 	if err != nil {
-		return "", errors.New("Genesis doc parse json error: %v")
+		return "", errors.New(fmt.Sprintf("Genesis doc parse json error: %v", err))
 	}
 
 	return genDoc.Consensus, nil
@@ -232,21 +231,21 @@ func getConsensus(config cfg.Config) (string, error) {
 
 func testEthereumApi() {
 	coinbase, err := ethereum.Coinbase()
-	if(err != nil) {
+	if err != nil {
 		fmt.Printf("ethereum.Coinbase err with: %v\n", err)
 		return
 	}
 	fmt.Printf("testEthereumApi: coinbase is: %x\n", coinbase)
 
 	balance, err := ethereum.GetBalance(coinbase)
-	if(err != nil) {
+	if err != nil {
 		fmt.Printf("ethereum.GetBalance err with: %v\n", err)
 	}
 	fmt.Printf("testEthereumApi: balance is: %x\n", balance)
 }
 
 func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P, cl *rpcserver.ChannelListener,
-			cch rpcTxHook.CrossChainHelper) *tdm.Node {
+	cch rpcTxHook.CrossChainHelper) *tdm.Node {
 
 	genDocFile := config.GetString("genesis_file")
 	if !cmn.FileExists(genDocFile) {
@@ -275,16 +274,22 @@ func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P, cl *rpcserver.C
 	return tdm.NewNodeNotStart(config, pNode.Switch(), pNode.AddrBook(), cl, cch)
 }
 
-func CreateChildChain(ctx *cli.Context, chainId string, balStr string) error{
-	//validators: json format, like {[{pubkey: pk1, balance:b1, amount: am1},{pubkey: pk2, balance: b2, amount: am2}]}
+func CreateChildChain(ctx *cli.Context, chainId, mainChainKeyStorePath, validatorKeyStorePath string, validator tdmTypes.PrivValidator, depositAmount *big.Int) error {
 
+	// Get Tendermint config base on chain id
 	config := etm.GetTendermintConfig(chainId, ctx)
-	err := init_eth_genesis(config, balStr)
+
+	// Init the Ethereum Genesis
+	err := initEthGenesisFromExistValidator(mainChainKeyStorePath, validatorKeyStorePath, config, validator, depositAmount)
 	if err != nil {
 		return err
 	}
 
-	init_cmd(ctx, config, chainId, config.GetString("eth_genesis_file"))
+	// Init the Ethereum Blockchain
+	init_eth_blockchain(chainId, config.GetString("eth_genesis_file"), ctx)
+
+	// Init the Tendermint Genesis
+	init_em_files(config, chainId, config.GetString("eth_genesis_file"))
 
 	return nil
 }

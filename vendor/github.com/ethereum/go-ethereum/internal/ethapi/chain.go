@@ -33,6 +33,7 @@ const (
 
 	// Join Child Chain Parameters
 	JCC_ARGS_FROM    = "from"
+	JCC_ARGS_PUBKEY  = "pubkey"
 	JCC_ARGS_CHAINID = "chainId"
 	JCC_ARGS_DEPOSIT = "depositAmount"
 )
@@ -87,7 +88,7 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address, chainId string, depositAmount *big.Int) (common.Hash, error) {
+func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address, pubkey string, chainId string, depositAmount *big.Int) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
@@ -95,6 +96,7 @@ func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address
 
 	params := types.MakeKeyValueSet()
 	params.Set(JCC_ARGS_FROM, from)
+	params.Set(JCC_ARGS_PUBKEY, pubkey)
 	params.Set(JCC_ARGS_CHAINID, chainId)
 	params.Set(JCC_ARGS_DEPOSIT, depositAmount)
 
@@ -446,12 +448,14 @@ func jcc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChai
 
 	fromVar, _ := etd.Params.Get(JCC_ARGS_FROM)
 	from := fromVar.(common.Address)
+	pubkeyVar, _ := etd.Params.Get(JCC_ARGS_PUBKEY)
+	pubkey := pubkeyVar.(string)
 	chainIdVar, _ := etd.Params.Get(JCC_ARGS_CHAINID)
 	chainId := chainIdVar.(string)
 	depositAmountVar, _ := etd.Params.Get(JCC_ARGS_DEPOSIT)
 	depositAmount := depositAmountVar.(*big.Int)
 
-	if err := cch.ValidateJoinChildChain(from, chainId, depositAmount); err != nil {
+	if err := cch.ValidateJoinChildChain(from, pubkey, chainId, depositAmount); err != nil {
 		return err
 	}
 
@@ -464,13 +468,14 @@ func jcc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHe
 
 	fromVar, _ := etd.Params.Get(JCC_ARGS_FROM)
 	from := common.BytesToAddress(fromVar.([]byte))
+	pubkeyVar, _ := etd.Params.Get(JCC_ARGS_PUBKEY)
+	pubkey := string(pubkeyVar.([]byte))
 	chainIdVar, _ := etd.Params.Get(JCC_ARGS_CHAINID)
 	chainId := string(chainIdVar.([]byte))
-
 	depositAmountVar, _ := etd.Params.Get(JCC_ARGS_DEPOSIT)
 	depositAmount := new(big.Int).SetBytes(depositAmountVar.([]byte))
 
-	err := cch.JoinChildChain(from, chainId, depositAmount)
+	err := cch.JoinChildChain(from, pubkey, chainId, depositAmount)
 	if err != nil {
 		return err
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
 	ep "github.com/tendermint/tendermint/epoch"
@@ -44,6 +45,7 @@ type CoreChainInfo struct {
 }
 
 type JoinedValidator struct {
+	PubKey        crypto.PubKey
 	Address       common.Address
 	DepositAmount *big.Int
 }
@@ -361,6 +363,7 @@ func GetChildChainForLaunch(db dbm.DB, height uint64) []string {
 }
 
 func gobBinaryBytes(o interface{}) []byte {
+	gob.Register(&crypto.EtherumPubKey{})
 	b := new(bytes.Buffer)
 	enc := gob.NewEncoder(b)
 	enc.Encode(o)
@@ -368,7 +371,6 @@ func gobBinaryBytes(o interface{}) []byte {
 }
 
 func gobReadBinaryBytes(d []byte, ptr interface{}) error {
-	//bytes.NewBuffer(d)
 	dec := gob.NewDecoder(bytes.NewReader(d))
 	return dec.Decode(ptr)
 }

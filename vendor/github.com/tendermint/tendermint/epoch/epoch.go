@@ -1,22 +1,22 @@
 package epoch
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
-	tmTypes "github.com/tendermint/tendermint/types"
+	"github.com/ethereum/go-ethereum/common"
+	abciTypes "github.com/tendermint/abci/types"
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
-	wire "github.com/tendermint/go-wire"
-	"sync"
-	"bytes"
-	"os"
-	"io/ioutil"
-	"errors"
-	"time"
 	"github.com/tendermint/go-logger"
-	abciTypes "github.com/tendermint/abci/types"
-	"strconv"
-	"github.com/ethereum/go-ethereum/common"
+	wire "github.com/tendermint/go-wire"
+	tmTypes "github.com/tendermint/tendermint/types"
+	"io/ioutil"
 	"math/big"
+	"os"
+	"strconv"
+	"sync"
+	"time"
 )
 
 var log = logger.New("module", "epoch")
@@ -25,30 +25,30 @@ var NextEpochNotExist = errors.New("next epoch parameters do not exist, fatal er
 var NextEpochNotEXPECTED = errors.New("next epoch parameters are not excepted, fatal error")
 
 const (
-	EPOCH_NOT_EXIST = iota	     		// value --> 0
-	EPOCH_PROPOSED_NOT_VOTED = iota	// value --> 1
-	EPOCH_VOTED_NOT_SAVED     		// value --> 2
-	EPOCH_SAVED                		// value --> 3
+	EPOCH_NOT_EXIST          = iota // value --> 0
+	EPOCH_PROPOSED_NOT_VOTED = iota // value --> 1
+	EPOCH_VOTED_NOT_SAVED           // value --> 2
+	EPOCH_SAVED                     // value --> 3
 )
 
 type Epoch struct {
 	mtx sync.Mutex
-	db dbm.DB
+	db  dbm.DB
 
 	RS *RewardScheme
 
-	Number int
+	Number         int
 	RewardPerBlock *big.Int
-	StartBlock int
-	EndBlock int
-	StartTime time.Time
-	EndTime time.Time	//not accurate for current epoch
-	BlockGenerated int      //agreed in which block
-	Status int		//checked if this epoch has been saved
-	Validators *tmTypes.ValidatorSet
+	StartBlock     int
+	EndBlock       int
+	StartTime      time.Time
+	EndTime        time.Time //not accurate for current epoch
+	BlockGenerated int       //agreed in which block
+	Status         int       //checked if this epoch has been saved
+	Validators     *tmTypes.ValidatorSet
 
 	PreviousEpoch *Epoch
-	NextEpoch *Epoch
+	NextEpoch     *Epoch
 }
 
 const epochKey = "EPOCH"
@@ -57,13 +57,10 @@ func calcEpochKeyWithHeight(number int) []byte {
 	return []byte(epochKey + fmt.Sprintf(":%v", number))
 }
 
-
-
 //roughly one epoch one month
 //var rewardPerEpoch = rewardThisYear / 12
 
 //var epoches = []Epoch{}
-
 
 // Load the most recent state from "state" db,
 // or create a new one (and save) from genesis.
@@ -103,11 +100,11 @@ func LoadOneEpoch(db dbm.DB, epochNumber int) *Epoch {
 	rewardscheme := LoadRewardScheme(db)
 	epoch.RS = rewardscheme
 
-	epoch.PreviousEpoch = loadOneEpoch(db, epochNumber - 1)
+	epoch.PreviousEpoch = loadOneEpoch(db, epochNumber-1)
 	if epoch.PreviousEpoch != nil {
 		epoch.PreviousEpoch.RS = rewardscheme
 	}
-	epoch.NextEpoch = loadOneEpoch(db, epochNumber + 1)
+	epoch.NextEpoch = loadOneEpoch(db, epochNumber+1)
 	if epoch.NextEpoch != nil {
 		epoch.NextEpoch.RS = rewardscheme
 	}
@@ -151,13 +148,12 @@ func MakeEpochFromFile(db dbm.DB, genesisFile string) *Epoch {
 	return MakeOneEpoch(db, &genDoc.CurrentEpoch)
 }
 
-
 func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc) *Epoch {
 
 	number, _ := strconv.Atoi(oneEpoch.Number)
-	RewardPerBlock, _ :=  new(big.Int).SetString(oneEpoch.RewardPerBlock, 10)
-	StartBlock, _ :=  strconv.Atoi(oneEpoch.StartBlock)
-	EndBlock, _ :=  strconv.Atoi(oneEpoch.EndBlock)
+	RewardPerBlock, _ := new(big.Int).SetString(oneEpoch.RewardPerBlock, 10)
+	StartBlock, _ := strconv.Atoi(oneEpoch.StartBlock)
+	EndBlock, _ := strconv.Atoi(oneEpoch.EndBlock)
 	StartTime, _ := time.Parse(time.RFC3339Nano, oneEpoch.StartTime)
 	EndTime, _ := time.Parse(time.RFC3339Nano, oneEpoch.EndTime)
 	BlockGenerated, _ := strconv.Atoi(oneEpoch.BlockGenerated)
@@ -176,21 +172,22 @@ func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc) *Epoch {
 			Address:     address,
 			PubKey:      pubKey,
 			VotingPower: val.Amount,
+			Accum:       big.NewInt(0),
 		}
 	}
 
 	te := &Epoch{
-		db : db,
+		db: db,
 
-		Number: number,
-		RewardPerBlock : RewardPerBlock,
-		StartBlock : StartBlock,
-		EndBlock : EndBlock,
-		StartTime : StartTime,
-		EndTime : EndTime,
-		BlockGenerated : BlockGenerated,
-		Status : Status,
-		Validators : tmTypes.NewValidatorSet(validators),
+		Number:         number,
+		RewardPerBlock: RewardPerBlock,
+		StartBlock:     StartBlock,
+		EndBlock:       EndBlock,
+		StartTime:      StartTime,
+		EndTime:        EndTime,
+		BlockGenerated: BlockGenerated,
+		Status:         Status,
+		Validators:     tmTypes.NewValidatorSet(validators),
 	}
 
 	return te
@@ -200,24 +197,24 @@ func (epoch *Epoch) MakeOneEpochDoc() *tmTypes.OneEpochDoc {
 
 	validators := make([]tmTypes.GenesisValidator, len(epoch.Validators.Validators))
 	for i, val := range epoch.Validators.Validators {
-		validators[i] = tmTypes.GenesisValidator {
+		validators[i] = tmTypes.GenesisValidator{
 			EthAccount: common.BytesToAddress(val.Address),
-			PubKey: val.PubKey,
-			Amount: val.VotingPower,
-			Name: "",
+			PubKey:     val.PubKey,
+			Amount:     val.VotingPower,
+			Name:       "",
 		}
 	}
 
 	epochDoc := &tmTypes.OneEpochDoc{
-		Number : fmt.Sprintf("%v", epoch.Number),
-		RewardPerBlock : fmt.Sprintf("%v", epoch.RewardPerBlock),
-		StartBlock : fmt.Sprintf("%v", epoch.StartBlock),
-		EndBlock : fmt.Sprintf("%v", epoch.EndBlock),
-		StartTime : epoch.StartTime.Format(time.RFC3339Nano),
-		EndTime : epoch.EndTime.Format(time.RFC3339Nano),
-		BlockGenerated : fmt.Sprintf("%v", epoch.BlockGenerated),
-		Status : fmt.Sprintf("%v", epoch.Status),
-		Validators: validators,
+		Number:         fmt.Sprintf("%v", epoch.Number),
+		RewardPerBlock: fmt.Sprintf("%v", epoch.RewardPerBlock),
+		StartBlock:     fmt.Sprintf("%v", epoch.StartBlock),
+		EndBlock:       fmt.Sprintf("%v", epoch.EndBlock),
+		StartTime:      epoch.StartTime.Format(time.RFC3339Nano),
+		EndTime:        epoch.EndTime.Format(time.RFC3339Nano),
+		BlockGenerated: fmt.Sprintf("%v", epoch.BlockGenerated),
+		Status:         fmt.Sprintf("%v", epoch.Status),
+		Validators:     validators,
 	}
 
 	return epochDoc
@@ -291,7 +288,7 @@ func (epoch *Epoch) ValidateNextEpoch(next *Epoch, height int) error {
 func (epoch *Epoch) ShouldProposeNextEpoch(curBlockHeight int) bool {
 	// If next epoch already proposed, then no need propose again
 	if epoch.NextEpoch != nil {
-		return false;
+		return false
 	}
 
 	//the epoch's end time is too rough to estimate,
@@ -314,22 +311,22 @@ func (epoch *Epoch) ProposeNextEpoch(curBlockHeight int) *Epoch {
 
 		next := &Epoch{
 			mtx: epoch.mtx,
-			db: epoch.db,
+			db:  epoch.db,
 
 			RS: epoch.RS,
 
-			Number: epoch.Number + 1,
+			Number:         epoch.Number + 1,
 			RewardPerBlock: rewardPerBlock,
-			StartBlock: epoch.EndBlock + 1,
-			EndBlock: epoch.EndBlock + blocks,
+			StartBlock:     epoch.EndBlock + 1,
+			EndBlock:       epoch.EndBlock + blocks,
 			//StartTime *big.Int
 			//EndTime *big.Int	//not accurate for current epoch
 			BlockGenerated: 0,
-			Status: EPOCH_PROPOSED_NOT_VOTED,
-			Validators: epoch.Validators.Copy(),
+			Status:         EPOCH_PROPOSED_NOT_VOTED,
+			Validators:     epoch.Validators.Copy(),
 
 			PreviousEpoch: epoch,
-			NextEpoch: nil,
+			NextEpoch:     nil,
 		}
 
 		return next
@@ -359,7 +356,7 @@ func (epoch *Epoch) GetNextEpochStatus() int {
 
 func (epoch *Epoch) ShouldEnterNewEpoch(height int) (bool, error) {
 
-	if height == epoch.EndBlock + 1 {
+	if height == epoch.EndBlock+1 {
 		if epoch.NextEpoch != nil {
 			return true, nil
 		} else {
@@ -371,20 +368,20 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height int) (bool, error) {
 
 func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, error) {
 
-	if height == epoch.EndBlock + 1 {
+	if height == epoch.EndBlock+1 {
 		if epoch.NextEpoch != nil {
 
 			diffs := make([]*abciTypes.Validator, 0)
-			voSet := LoadValidatorOperationSet( epoch.Number + 1 )
+			voSet := LoadValidatorOperationSet(epoch.Number + 1)
 			if voSet != nil {
 				for _, voArr := range voSet.Operations {
-					for i:=0; i<len(voArr); i++ {
+					for i := 0; i < len(voArr); i++ {
 						vo := voArr[i]
 						if vo.Action == SVM_JOIN {
 
 							val := &abciTypes.Validator{
 								PubKey: vo.PubKey,
-								Power: vo.Amount,
+								Power:  vo.Amount,
 							}
 							diffs = append(diffs, val)
 						}
@@ -425,7 +422,7 @@ func (epoch *Epoch) GetEpochByBlockNumber(blockNumber int) *Epoch {
 		return epoch
 	}
 
-	for number:=epoch.Number-1; number>=0; number-- {
+	for number := epoch.Number - 1; number >= 0; number-- {
 
 		ep := loadOneEpoch(epoch.db, number)
 		if ep == nil {
@@ -447,7 +444,7 @@ func (epoch *Epoch) Copy() *Epoch {
 func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
 
 	var previousEpoch, nextEpoch *Epoch
-	if (copyPrevNext) {
+	if copyPrevNext {
 		if epoch.PreviousEpoch != nil {
 			previousEpoch = epoch.PreviousEpoch.copy(false)
 		}
@@ -457,24 +454,24 @@ func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
 		}
 	}
 
-	return &Epoch {
+	return &Epoch{
 		mtx: epoch.mtx,
-		db: epoch.db,
+		db:  epoch.db,
 
 		RS: epoch.RS,
 
-		Number: epoch.Number,
+		Number:         epoch.Number,
 		RewardPerBlock: epoch.RewardPerBlock,
-		StartBlock: epoch.StartBlock,
-		EndBlock: epoch.EndBlock,
-		StartTime: epoch.StartTime,
-		EndTime: epoch.EndTime,
+		StartBlock:     epoch.StartBlock,
+		EndBlock:       epoch.EndBlock,
+		StartTime:      epoch.StartTime,
+		EndTime:        epoch.EndTime,
 		BlockGenerated: epoch.BlockGenerated,
-		Status: epoch.Status,
-		Validators: epoch.Validators.Copy(),
+		Status:         epoch.Status,
+		Validators:     epoch.Validators.Copy(),
 
 		PreviousEpoch: previousEpoch,
-		NextEpoch: nextEpoch,
+		NextEpoch:     nextEpoch,
 	}
 }
 
@@ -482,11 +479,11 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock *bi
 
 	//var totalReward          = 210000000e+18
 	//var preAllocated         = 100000000e+18
-	var rewardFirstYear      = epoch.RS.rewardFirstYear //20000000e+18 //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
-	var addedPerYear         = epoch.RS.addedPerYear	//0
-	var descendPerYear       = epoch.RS.descendPerYear //2000000e+18
+	var rewardFirstYear = epoch.RS.rewardFirstYear //20000000e+18 //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
+	var addedPerYear = epoch.RS.addedPerYear       //0
+	var descendPerYear = epoch.RS.descendPerYear   //2000000e+18
 	//var allocated            = epoch.RS.allocated //0
-	var epochNumberPerYear	 = epoch.RS.epochNumberPerYear //12
+	var epochNumberPerYear = epoch.RS.epochNumberPerYear //12
 
 	zeroEpoch := loadOneEpoch(epoch.db, 0)
 	initStartTime := zeroEpoch.StartTime
@@ -495,9 +492,9 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock *bi
 	thisYear := (epoch.Number / epochNumberPerYear)
 	nextYear := thisYear + 1
 
-	timePerBlockThisEpoch := time.Now().Sub(epoch.StartTime).Nanoseconds() / int64(curBlockHeight - epoch.StartBlock)
+	timePerBlockThisEpoch := time.Now().Sub(epoch.StartTime).Nanoseconds() / int64(curBlockHeight-epoch.StartBlock)
 
-	epochLeftThisYear := epochNumberPerYear - epoch.Number % epochNumberPerYear - 1
+	epochLeftThisYear := epochNumberPerYear - epoch.Number%epochNumberPerYear - 1
 
 	blocksOfNextEpoch = 0
 
@@ -538,13 +535,13 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock *bi
 /*
 	Abstract function to calculate the reward of each Epoch by year
 	rewardPerEpochNextYear := (rewardFirstYear + (addedPerYear - descendPerYear) * year) / epochNumberPerYear
- */
+*/
 func calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear *big.Int, year, epochNumberPerYear int64) *big.Int {
 	result := new(big.Int).Sub(addedPerYear, descendPerYear)
-	return result.Mul(result,big.NewInt(year)).Add(result, rewardFirstYear).Div(result, big.NewInt(epochNumberPerYear))
+	return result.Mul(result, big.NewInt(year)).Add(result, rewardFirstYear).Div(result, big.NewInt(epochNumberPerYear))
 }
 
-func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool{
+func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool {
 
 	if (epoch == nil && other != nil) || (epoch != nil && other == nil) {
 		return false
@@ -562,7 +559,7 @@ func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool{
 
 	if checkPrevNext {
 		if !epoch.PreviousEpoch.Equals(other.PreviousEpoch, false) ||
-			!epoch.NextEpoch.Equals(other.NextEpoch, false){
+			!epoch.NextEpoch.Equals(other.NextEpoch, false) {
 			return false
 		}
 	}
@@ -572,13 +569,13 @@ func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool{
 
 func (epoch *Epoch) ProposeTransactions(sender string, blockHeight int) (tmTypes.Txs, error) {
 
-	txs := make([]tmTypes.Tx,0)
+	txs := make([]tmTypes.Tx, 0)
 
 	if blockHeight == epoch.EndBlock && epoch.Number > 1 {
-		voSet := LoadValidatorOperationSet( epoch.Number - 2 )
+		voSet := LoadValidatorOperationSet(epoch.Number - 2)
 		if voSet != nil {
 			for validator, voArr := range voSet.Operations {
-				for i:=0; i<len(voArr); i++ {
+				for i := 0; i < len(voArr); i++ {
 					vo := voArr[i]
 					if vo.Action == SVM_WITHDRAW {
 						tx, err := NewUnlockAssetTransaction(sender, validator, vo.Amount)
@@ -596,18 +593,18 @@ func (epoch *Epoch) ProposeTransactions(sender string, blockHeight int) (tmTypes
 }
 
 func (epoch *Epoch) String() string {
-	return fmt.Sprintf("Epoch : {" +
-		"Number : %v,\n" +
-		"RewardPerBlock : %v,\n" +
-		"StartBlock : %v,\n" +
-		"EndBlock : %v,\n" +
-		"StartTime : %v,\n" +
-		"EndTime : %v,\n" +
-		"BlockGenerated : %v,\n" +
-		"Status : %v,\n" +
-		"Next Epoch : %v,\n" +
-		"Prev Epoch : %v,\n" +
-		"Contains RS : %v, \n" +
+	return fmt.Sprintf("Epoch : {"+
+		"Number : %v,\n"+
+		"RewardPerBlock : %v,\n"+
+		"StartBlock : %v,\n"+
+		"EndBlock : %v,\n"+
+		"StartTime : %v,\n"+
+		"EndTime : %v,\n"+
+		"BlockGenerated : %v,\n"+
+		"Status : %v,\n"+
+		"Next Epoch : %v,\n"+
+		"Prev Epoch : %v,\n"+
+		"Contains RS : %v, \n"+
 		"}",
 		epoch.Number,
 		epoch.RewardPerBlock,
@@ -619,6 +616,6 @@ func (epoch *Epoch) String() string {
 		epoch.Status,
 		epoch.NextEpoch,
 		epoch.PreviousEpoch,
-			epoch.RS != nil,
-		)
+		epoch.RS != nil,
+	)
 }

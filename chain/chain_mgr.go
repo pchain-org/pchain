@@ -2,6 +2,7 @@ package chain
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
@@ -12,7 +13,9 @@ import (
 	"github.com/pchain/rpc"
 	"github.com/pkg/errors"
 	dbm "github.com/tendermint/go-db"
+	"github.com/tendermint/tendermint/types"
 	"gopkg.in/urfave/cli.v1"
+	"math/big"
 	"os"
 )
 
@@ -196,21 +199,24 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		return
 	}
 
-	//privValidators := make([]types.GenesisValidator, len(cci.JoinedValidators))
+	validators := make([]types.GenesisValidator, len(cci.JoinedValidators))
 
 	validator := false
 	coinbase, _ := ethereum.Coinbase()
+	self := cm.mainChain.TdmNode.PrivValidator()
+	var selfDeposit *big.Int
 	for _, v := range cci.JoinedValidators {
 		if v.Address == coinbase {
 			validator = true
-			break
+			selfDeposit = v.DepositAmount
 		}
 
-		//privValidator := types.GenesisValidator{
-		//	EthAccount: v.Address,
-		//	PubKey: nil,
-		//	Amount:
-		//}
+		// append the Validator
+		validators = append(validators, types.GenesisValidator{
+			EthAccount: v.Address,
+			PubKey:     v.PubKey,
+			Amount:     v.DepositAmount,
+		})
 	}
 
 	if !validator {
@@ -218,14 +224,20 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		return
 	}
 
-	//cm.p2pObj.Switch().Peers().Get()
-
 	chain := LoadChildChain(cm.ctx, chainId, cm.p2pObj)
 	if chain == nil {
-		//fmt.Printf("child chain load failed, try to create one\n")
-		err := CreateChildChain(cm.ctx, chainId, "{10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}")
+		// Find KeyStore URL for own myself
+		wallet, wallet_err := cm.mainChain.EthNode.AccountManager().Find(accounts.Account{Address: coinbase})
+		if wallet_err != nil {
+			plog.Errorf("Create Child Chain %v failed! %v", chainId, wallet_err)
+			return
+		}
+
+		mainChainKeyStorePath := cm.mainChain.Config.GetString("keystore")
+		err := CreateChildChain(cm.ctx, chainId, mainChainKeyStorePath, wallet.URL().Path, *self, selfDeposit)
 		if err != nil {
-			plog.Errorf("Create Child Chain %v failed!", chainId)
+			plog.Errorf("Create Child Chain %v failed! %v", chainId, err)
+			return
 		} else {
 			// Create success, store the chain info into db
 			core.SaveChainInfo(cm.cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: *cci})

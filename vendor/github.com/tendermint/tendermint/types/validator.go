@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math/big"
 
+	abciTypes "github.com/tendermint/abci/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
-	abciTypes "github.com/tendermint/abci/types"
 )
 
 // Volatile state for each Validator
@@ -17,16 +18,16 @@ import (
 type Validator struct {
 	Address     []byte        `json:"address"`
 	PubKey      crypto.PubKey `json:"pub_key"`
-	VotingPower int64         `json:"voting_power"`
-	Accum       int64         `json:"accum"`
+	VotingPower *big.Int      `json:"voting_power"`
+	Accum       *big.Int      `json:"accum"`
 }
 
-func NewValidator(pubKey crypto.PubKey, votingPower int64) *Validator {
+func NewValidator(pubKey crypto.PubKey, votingPower *big.Int) *Validator {
 	return &Validator{
 		Address:     pubKey.Address(),
 		PubKey:      pubKey,
 		VotingPower: votingPower,
-		Accum:       0,
+		Accum:       big.NewInt(0),
 	}
 }
 
@@ -49,9 +50,9 @@ func (v *Validator) CompareAccum(other *Validator) *Validator {
 	if v == nil {
 		return other
 	}
-	if v.Accum > other.Accum {
+	if v.Accum.Cmp(other.Accum) == 1 {
 		return v
-	} else if v.Accum < other.Accum {
+	} else if v.Accum.Cmp(other.Accum) == -1 {
 		return other
 	} else {
 		if bytes.Compare(v.Address, other.Address) < 0 {
@@ -80,12 +81,11 @@ func (v *Validator) Hash() []byte {
 	return wire.BinaryRipemd160(v)
 }
 
-
 func (v *Validator) ToAbciValidator() *abciTypes.Validator {
 
-	return &abciTypes.Validator {
+	return &abciTypes.Validator{
 		PubKey: v.PubKey.Bytes(),
-		Power: uint64(v.VotingPower),
+		Power:  v.VotingPower.Uint64(),
 	}
 }
 
@@ -119,6 +119,6 @@ func RandValidator(randPower bool, minPower int64) (*Validator, *PrivValidator) 
 	if randPower {
 		votePower += int64(RandUint32())
 	}
-	val := NewValidator(privVal.PubKey, votePower)
+	val := NewValidator(privVal.PubKey, big.NewInt(votePower))
 	return val, privVal
 }

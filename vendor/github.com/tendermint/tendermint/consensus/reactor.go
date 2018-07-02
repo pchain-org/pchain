@@ -4,17 +4,18 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math/big"
 	"reflect"
 	"sync"
 	"time"
 
+	abci "github.com/tendermint/abci/types"
+	"github.com/tendermint/go-clist"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-p2p"
 	"github.com/tendermint/go-wire"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
-	abci "github.com/tendermint/abci/types"
-	"github.com/tendermint/go-clist"
 )
 
 const (
@@ -123,7 +124,7 @@ func (conR *ConsensusReactor) AddPeer(peer *p2p.Peer) {
 
 	// Create peerState for peer
 	peerState := NewPeerState(peer)
-	peer.Data.Set(conR.conS.state.ChainID + "." + types.PeerStateKey, peerState)
+	peer.Data.Set(conR.conS.state.ChainID+"."+types.PeerStateKey, peerState)
 
 	// Begin routines for this peer.
 	go conR.gossipDataRoutine(peer, peerState)
@@ -1301,14 +1302,14 @@ func (m *VoteSetBitsMessage) String() string {
 
 func (conR *ConsensusReactor) NewAcceptVotes(msg *types.ValidatorMsg, key string) *types.AcceptVotes {
 	return &types.AcceptVotes{
-		Epoch: msg.Epoch,
-		Key: key,
+		Epoch:  msg.Epoch,
+		Key:    key,
 		PubKey: msg.PubKey,
-		Power: msg.Power,
+		Power:  msg.Power,
 		Action: msg.Action,
-		Sum:   0,
-		Votes: make([]*types.ValidatorMsg, conR.conS.Validators.Size()),
-		Maj23: false,
+		Sum:    big.NewInt(0),
+		Votes:  make([]*types.ValidatorMsg, conR.conS.Validators.Size()),
+		Maj23:  false,
 	}
 }
 
@@ -1418,18 +1419,22 @@ func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (
 		fmt.Println("duplicate vote!!!")
 		return false, nil
 	}
-	types.AcceptVoteSet[target].Sum += val.VotingPower
+	types.AcceptVoteSet[target].Sum.Add(types.AcceptVoteSet[target].Sum, val.VotingPower)
 	types.AcceptVoteSet[target].Votes[validatorMsg.ValidatorIndex] = validatorMsg
-	if types.AcceptVoteSet[target].Sum > conR.conS.Validators.TotalVotingPower()*2/3 && !types.AcceptVoteSet[target].Maj23 {
+
+	twoThird := new(big.Int).Mul(conR.conS.Validators.TotalVotingPower(), big.NewInt(2))
+	twoThird.Div(twoThird, big.NewInt(3))
+
+	if types.AcceptVoteSet[target].Sum.Cmp(twoThird) == 1 && !types.AcceptVoteSet[target].Maj23 {
 		fmt.Println("update validator set!!!!")
 		types.AcceptVoteSet[target].Maj23 = true
 		//these following values should be filled when join/withdraw, and not modified here
 		/*
-		types.AcceptVoteSet[target].Epoch = validatorMsg.Epoch
-		types.AcceptVoteSet[target].PubKey = validatorMsg.PubKey
-		types.AcceptVoteSet[target].Power = validatorMsg.Power
-		types.AcceptVoteSet[target].Key = target
-		types.AcceptVoteSet[target].Action = validatorMsg.Action
+			types.AcceptVoteSet[target].Epoch = validatorMsg.Epoch
+			types.AcceptVoteSet[target].PubKey = validatorMsg.PubKey
+			types.AcceptVoteSet[target].Power = validatorMsg.Power
+			types.AcceptVoteSet[target].Key = target
+			types.AcceptVoteSet[target].Action = validatorMsg.Action
 		*/
 	}
 	return true, nil

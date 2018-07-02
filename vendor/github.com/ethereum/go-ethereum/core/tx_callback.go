@@ -16,8 +16,8 @@ type CrossChainHelper interface {
 	GetTypeMutex() *event.TypeMux
 	CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64) error
 	CreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64) error
-	ValidateJoinChildChain(from common.Address, chainId string, depositAmount *big.Int) error
-	JoinChildChain(from common.Address, chainId string, depositAmount *big.Int) error
+	ValidateJoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error
+	JoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error
 	ReadyForLaunchChildChain(height uint64)
 	GetChainInfoDB() dbm.DB
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction                  //should return varified transaction

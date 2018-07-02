@@ -25,7 +25,7 @@ func (strategy *ValidatorsStrategy) SetValidators(validators []*tmTypes.GenesisV
 	glog.V(logger.Debug).Infof("(strategy *TxBasedValidatorsStrategy) SetValidators(): %v", strategy.currentValidators)
 }
 
-func (strategy *ValidatorsStrategy) GetValidators()([]*tmTypes.GenesisValidator) {
+func (strategy *ValidatorsStrategy) GetValidators() []*tmTypes.GenesisValidator {
 	return strategy.currentValidators
 }
 
@@ -35,18 +35,18 @@ func (strategy *ValidatorsStrategy) CollectTx(tx *ethTypes.Transaction) {
 		glog.V(logger.Debug).Infof("(strategy *TxBasedValidatorsStrategy) CollectTx(), Adding validator: %v", tx.Data())
 		glog.V(logger.Debug).Infof("(strategy *TxBasedValidatorsStrategy) CollectTx(), do nothing now")
 		/*
-		pubKey, err := crypto.PubKeyFromBytes(tx.Data())
-		if err != nil {
-			strategy.currentValidators = append(
-				strategy.currentValidators,
-				&tmTypes.GenesisValidator{
-					PubKey : pubKey,
-					Amount:  tx.Value().Int64(),
-				},
-			)
-		} else {
-			glog.V(logger.Info).Infof("(strategy *TxBasedValidatorsStrategy) CollectTx(), pubkey err: %v", err)
-		}
+			pubKey, err := crypto.PubKeyFromBytes(tx.Data())
+			if err != nil {
+				strategy.currentValidators = append(
+					strategy.currentValidators,
+					&tmTypes.GenesisValidator{
+						PubKey : pubKey,
+						Amount:  tx.Value().Int64(),
+					},
+				)
+			} else {
+				glog.V(logger.Info).Infof("(strategy *TxBasedValidatorsStrategy) CollectTx(), pubkey err: %v", err)
+			}
 		*/
 	}
 }
@@ -56,23 +56,23 @@ func (strategy *ValidatorsStrategy) GetUpdatedValidators() []*tmTypes.GenesisVal
 	return []*tmTypes.GenesisValidator{}
 }
 
-func (strategy *ValidatorsStrategy)AccumulateRewards(statedb *state.StateDB, header *ethTypes.Header,
-							uncles []*ethTypes.Header, totalUsedMoney *big.Int, rewardPerBlock *big.Int) {
+func (strategy *ValidatorsStrategy) AccumulateRewards(statedb *state.StateDB, header *ethTypes.Header,
+	uncles []*ethTypes.Header, totalUsedMoney *big.Int, rewardPerBlock *big.Int) {
 
 	glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() start, with %v validators\n", len(strategy.currentValidators))
 
 	reward := new(big.Int).Set(rewardPerBlock)
 	glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 0, reward is: %v, gasUsed is: %v, totalUsedMoney is: %v\n",
-			reward, header.GasUsed, totalUsedMoney)
+		reward, header.GasUsed, totalUsedMoney)
 
 	reward.Add(reward, totalUsedMoney)
 
-	totalAmount := int64(0)
+	totalAmount := big.NewInt(0)
 	for _, v := range strategy.currentValidators {
-		totalAmount += abs(v.Amount)
+		totalAmount.Add(totalAmount, v.Amount)
 	}
 
-	if totalAmount == 0 {
+	if totalAmount.Sign() == 0 {
 		glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 1, totalAmount is 0, just return\n")
 		return
 	}
@@ -82,8 +82,8 @@ func (strategy *ValidatorsStrategy)AccumulateRewards(statedb *state.StateDB, hea
 	for _, v := range strategy.currentValidators {
 		balance := statedb.GetBalance(v.EthAccount)
 		glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 3, before the reward, individual (%x) balance is: %v\n", v.EthAccount, balance)
-		indReward := big.NewInt(1).Mul(reward, big.NewInt(v.Amount))
-		indReward.Div(indReward, big.NewInt(totalAmount))
+		indReward := big.NewInt(1).Mul(reward, v.Amount)
+		indReward.Div(indReward, totalAmount)
 		glog.Infof("(strategy *ValidatorsStrategy)AccumulateRewards() 4, individual reward is: %v\n", indReward)
 		statedb.AddBalance(v.EthAccount, indReward)
 		balance = statedb.GetBalance(v.EthAccount)
