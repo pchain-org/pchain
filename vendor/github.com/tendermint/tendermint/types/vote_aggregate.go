@@ -20,7 +20,7 @@ type VotesAggr struct {
 	Round            int              `json:"round"`
 	Type             byte             `json:"type"`
 	VotePartsHeader  PartSetHeader	  `json:"votePartsHeader"`
-        BitArray         *BitArray         // valIndex -> hasVote?
+	BitArray         *BitArray         // valIndex -> hasVote?
 	NumValidators	 int              `json:"numValidators"`
 	Sum              int64            `json:"sum"`     // vote sum
 }
@@ -60,7 +60,7 @@ func (va *VotesAggr) StringIndented(indent string) string {
 // ------------------------------------------------------------------------------
 type Maj23VoteSet struct {
 	BitArray	*BitArray // valIndex -> hasVote?
-        Votes           []*Vote   // valIndex -> *Vote
+	Votes           []*Vote   // valIndex -> *Vote
 }
 
 func MakeMaj23VoteSet(votes []*Vote, partSize int) (*Maj23VoteSet, *PartSet) {
@@ -72,7 +72,7 @@ func MakeMaj23VoteSet(votes []*Vote, partSize int) (*Maj23VoteSet, *PartSet) {
 	}
 
 	voteset.AddVotes(votes)
-	
+
 	return voteset, voteset.MakePartSet(partSize)
 }
 
@@ -96,7 +96,7 @@ func (va *Maj23VoteSet) AddVotes(votes []*Vote) {
 		// Use voting power 0 temproralily
 		va.addVerifiedVote(vote, 0)
 		fmt.Printf("%d votes added\n", i+1)
-        }    
+        }
 }
 
 func (va *Maj23VoteSet) Size() int {

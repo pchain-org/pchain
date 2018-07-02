@@ -84,6 +84,42 @@ func (valSet *ValidatorSet) Copy() *ValidatorSet {
 	}
 }
 
+func (valSet *ValidatorSet) AggrPubKey(bitMap *cmn.BitArray) crypto.PubKey {
+	if bitMap == nil {
+		return nil
+	}
+	if bitMap.Size() != len(valSet.Validators) {
+		return nil
+	}
+	validators := valSet.Validators
+	var pks []*crypto.PubKey
+	for i := 0; i < bitMap.Size(); i++ {
+		if bitMap.GetIndex(i) {
+			pks = append(pks, &(validators[i].PubKey))
+		}
+	}
+	return crypto.BLSPubKeyAggregate(pks)
+}
+
+
+func (valSet *ValidatorSet) TalliedVotingPower(bitMap *cmn.BitArray) (int64, error) {
+	if bitMap == nil {
+		return int64(0),fmt.Errorf("Invalid bitmap(nil)")
+	}
+	validators := valSet.Validators
+	if validators == nil {
+		return int64(0), fmt.Errorf("Invalid validators(nil)")
+	}
+	if valSet.Size() != bitMap.Size() {
+		return int64(0), fmt.Errorf("Size is not equal, validators size:%v, bitmap size:%v", valSet.Size(), bitMap.Size())
+	}
+	var powerSum int64 = 0
+	for i := 0; i < bitMap.Size(); i++ {
+		powerSum += validators[i].VotingPower
+	}
+	return powerSum,nil
+}
+
 func (valSet *ValidatorSet) Equals(other *ValidatorSet) bool {
 
 	if valSet.totalVotingPower != other.totalVotingPower ||
@@ -248,12 +284,45 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height
 	}
 	*/
 	fmt.Printf("(valSet *ValidatorSet) VerifyCommit(), avoid valSet and commit.Precommits size check for validatorset change\n")
-	if height != commit.Height() {
-		return fmt.Errorf("Invalid commit -- wrong height: %v vs %v", height, commit.Height())
+	if commit == nil {
+		return fmt.Errorf("Invalid commit(nil)")
+	}
+	if valSet.Size() != commit.BitArray.Size() {
+		return fmt.Errorf("Invalid commit -- wrong set size: %v vs %v", valSet.Size(), commit.BitArray.Size())
+	}
+	if height != commit.Height {
+		return fmt.Errorf("Invalid commit -- wrong height: %v vs %v", height, commit.Height)
 	}
 
-	talliedVotingPower := int64(0)
-	round := commit.Round()
+	pubKey := valSet.AggrPubKey(commit.BitArray)
+	vote := &Vote{
+
+		BlockID:	commit.BlockID,
+		Height: 	commit.Height,
+		Round: 		commit.Round,
+		Type: 		commit.Type(),
+	}
+	if !pubKey.VerifyBytes(SignBytes(chainID, vote), commit.SignAggr) {
+		return fmt.Errorf("Invalid commit -- wrong Signature:%v or BitArray:%v", commit.SignAggr, commit.BitArray)
+	}
+
+	talliedVotingPower, err := valSet.TalliedVotingPower(commit.BitArray)
+	if err != nil {
+		return err
+	}
+	if talliedVotingPower > valSet.TotalVotingPower()*2/3 {
+		return nil
+	} else {
+		return fmt.Errorf("Invalid commit -- insufficient voting power: got %v, needed %v",
+			talliedVotingPower, (valSet.TotalVotingPower()*2/3 + 1))
+	}
+
+
+	// Need to replace these code to verify BLS signature aggregation
+	// ************************
+	// ************************
+/*
+	round := commit.Round
 
 	for idx, precommit := range commit.Precommits {
 		// may be nil if validator skipped.
@@ -281,13 +350,9 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height
 		// Good precommit!
 		talliedVotingPower += val.VotingPower
 	}
+*/
 
-	if talliedVotingPower > valSet.TotalVotingPower()*2/3 {
-		return nil
-	} else {
-		return fmt.Errorf("Invalid commit -- insufficient voting power: got %v, needed %v",
-			talliedVotingPower, (valSet.TotalVotingPower()*2/3 + 1))
-	}
+
 }
 
 // Verify that +2/3 of this set had signed the given signBytes.

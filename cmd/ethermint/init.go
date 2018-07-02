@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/console"
 	"strings"
 	"strconv"
 	"github.com/tendermint/go-crypto"
@@ -318,27 +317,4 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, int64, error) {
 		return common.Address{}, int64(0), errors.New("no enough balance")
 	}
 	return coinbase, amount, nil
-}
-
-// getPassPhrase retrieves the passwor associated with an account, either fetched
-// from a list of preloaded passphrases, or requested interactively from the user.
-func getPassPhrase(prompt string, confirmation bool) string {
-	//prompt the user for the password
-	if prompt != "" {
-		fmt.Println(prompt)
-	}
-	password, err := console.Stdin.PromptPassword("Passphrase: ")
-	if err != nil {
-		utils.Fatalf("Failed to read passphrase: %v", err)
-	}
-	if confirmation {
-		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
-		if err != nil {
-			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
-		}
-		if password != confirm {
-			utils.Fatalf("Passphrases do not match")
-		}
-	}
-	return password
 }

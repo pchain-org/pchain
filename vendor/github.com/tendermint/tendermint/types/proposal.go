@@ -21,6 +21,7 @@ var (
 type Proposal struct {
 	Height           int              `json:"height"`
 	Round            int              `json:"round"`
+	Hash 			  Hash160         `json:"hash"`
 	BlockPartsHeader PartSetHeader    `json:"block_parts_header"`
 	POLRound         int              `json:"pol_round"`    // -1 if null.
 	POLBlockID       BlockID          `json:"pol_block_id"` // zero if null.
@@ -30,10 +31,11 @@ type Proposal struct {
 }
 
 // polRound: -1 if no polRound.
-func NewProposal(height int, round int, blockPartsHeader PartSetHeader, polRound int, polBlockID BlockID, netAddr string, peerKey string) *Proposal {
+func NewProposal(height int, round int,hash Hash160, blockPartsHeader PartSetHeader, polRound int, polBlockID BlockID, netAddr string, peerKey string) *Proposal {
 	return &Proposal{
 		Height:           height,
 		Round:            round,
+		Hash:			  hash,
 		BlockPartsHeader: blockPartsHeader,
 		POLRound:         polRound,
 		POLBlockID:       polBlockID,
@@ -52,6 +54,22 @@ func (p *Proposal) WriteSignBytes(chainID string, w io.Writer, n *int, err *erro
 		ChainID:  chainID,
 		Proposal: CanonicalProposal(p),
 	}, w, n, err)
+}
+
+func (p *Proposal) BlockHash() Hash160 {
+	if p == nil {
+		return [Length160]byte{}
+	} else {
+		return p.BlockPartsHeader.Hash
+	}
+}
+
+func (p *Proposal) BlockHeaderHash() Hash160 {
+	if p == nil {
+		return [Length160]byte{}
+	} else {
+		return p.Hash
+	}
 }
 
 //-----------------

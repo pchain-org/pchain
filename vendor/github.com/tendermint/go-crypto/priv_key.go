@@ -7,12 +7,10 @@ import (
 	"github.com/tendermint/ed25519"
 	"github.com/tendermint/ed25519/extra25519"
 	. "github.com/tendermint/go-common"
-	data "github.com/tendermint/go-data"
+	"github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	"github.com/Nik-U/pbc"
-	"crypto/sha256"
-	"github.com/ethereum/go-ethereum/common"
+	"bls"
 )
 
 
@@ -286,7 +284,7 @@ func GenPrivKeySecp256k1FromSecret(secret []byte) PrivKeySecp256k1 {
 
 //-------------------------------------
 // Implements PrivKey
-
+/*
 func init() {
 	paramsString := "type a\n"+
 		"q 6810019449936382487924444340676335792486684152989565749316517380074446105713919870191983352817997578314362713972330796409852501768474201988787261287855671\n"+
@@ -347,6 +345,51 @@ func (privKey BLSPrivKey) Sign(msg []byte) Signature {
 func (privKey BLSPrivKey) Equals(other PrivKey) bool {
 	if otherKey,ok := other.(BLSPrivKey); ok {
 		return privKey.getElement().Equals(otherKey.getElement())
+	} else {
+		return false
+	}
+}
+
+func (privKey BLSPrivKey) MarshalJSON() ([]byte, error) {
+	return data.Encoder.Marshal(privKey)
+}
+
+func (privKey *BLSPrivKey) UnmarshalJSON(enc []byte) error {
+	var ref []byte
+	err := data.Encoder.Unmarshal(&ref, enc)
+	copy(*privKey, ref)
+	return err
+}*/
+
+type BLSPrivKey []byte
+func (privKey BLSPrivKey) Bytes() []byte {
+	return privKey
+}
+
+func (privKey BLSPrivKey) getElement() *bls.PrivateKey {
+	sk := &bls.PrivateKey{}
+	err := sk.Unmarshal(privKey)
+	if err != nil {
+		return nil
+	} else {
+		return sk
+	}
+}
+
+func (privKey BLSPrivKey) PubKey() PubKey {
+	pub := privKey.getElement().Public()
+	return BLSPubKey(pub.Marshal())
+}
+
+func (privKey BLSPrivKey) Sign(msg []byte) Signature {
+	sk := privKey.getElement()
+	sign := bls.Sign(sk, msg)
+	return BLSSignature(sign.Marshal())
+}
+
+func (privKey BLSPrivKey) Equals(other PrivKey) bool {
+	if otherSk,ok := other.(BLSPrivKey); ok {
+		return bytes.Equal(privKey, otherSk)
 	} else {
 		return false
 	}

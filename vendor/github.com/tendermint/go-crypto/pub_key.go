@@ -8,11 +8,12 @@ import (
 	"github.com/tendermint/ed25519"
 	"github.com/tendermint/ed25519/extra25519"
 	. "github.com/tendermint/go-common"
-	data "github.com/tendermint/go-data"
+	"github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
 	"golang.org/x/crypto/ripemd160"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	"github.com/Nik-U/pbc"
+	"bls"
+	"os"
 )
 
 // PubKey is part of Account and Validator.
@@ -263,7 +264,7 @@ func (p *EthereumPubKey) UnmarshalJSON(enc []byte) error {
 	return err
 }
 
-
+/*
 //-------------------------------------
 // Implements PubKey.
 type BLSPubKey []byte
@@ -358,6 +359,77 @@ func (pubKey BLSPubKey) Equals(other PubKey) bool {
 
 func (pubKey BLSPubKey) MarshalJSON() ([]byte, error) {
 
+	return data.Encoder.Marshal(pubKey)
+}
+
+func (p *BLSPubKey) UnmarshalJSON(enc []byte) error {
+	var ref []byte
+	err := data.Encoder.Unmarshal(&ref, enc)
+	copy(*p, ref)
+	return err
+}
+*/
+type BLSPubKey []byte
+
+func (pubKey BLSPubKey) getElement() *bls.PublicKey {
+	pb := &bls.PublicKey{}
+	err := pb.Unmarshal(pubKey)
+	if err != nil {
+		return nil
+	} else {
+		return pb
+	}
+}
+
+func (pubKey BLSPubKey) Bytes() []byte {
+	return pubKey
+}
+
+func BLSPubKeyAggregate(pks []*PubKey) BLSPubKey {
+	var _pks []*bls.PublicKey
+	for _, pk := range pks {
+		if _pk, ok := (*pk).(BLSPubKey); ok {
+			_pks = append(_pks, _pk.getElement())
+		} else {
+			return nil
+		}
+	}
+	return  new(bls.PublicKey).AggregateArray(_pks).Marshal()
+}
+
+func (pubKey BLSPubKey) Address() []byte {
+	hasherSHA256 := sha256.New()
+	hasherSHA256.Write(pubKey[:]) // does not error
+	sha := hasherSHA256.Sum(nil)
+
+	hasherRIPEMD160 := ripemd160.New()
+	hasherRIPEMD160.Write(sha) // does not error
+	return hasherRIPEMD160.Sum(nil)
+}
+
+func (pubKey BLSPubKey) Equals(other PubKey) bool {
+	if otherPk, ok := other.(BLSPubKey); ok {
+		return bytes.Equal(pubKey, otherPk)
+	} else {
+		return false
+	}
+}
+
+func (pubKey BLSPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
+	if otherSign, ok := sig_.(BLSSignature); ok {
+		sign := otherSign.getElement()
+		return bls.Verify(sign, msg, pubKey.getElement())
+	} else {
+		os.Exit(0)
+		return false;
+	}
+}
+
+func (pubKey BLSPubKey) KeyString() string {
+	return Fmt("BlsPubKey{%X}", pubKey[:])
+}
+
+func (pubKey BLSPubKey) MarshalJSON() ([]byte, error) {
 	return data.Encoder.Marshal(pubKey)
 }
 

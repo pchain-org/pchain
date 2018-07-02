@@ -468,7 +468,7 @@ func (voteSet *VoteSet) StringShort() string {
 
 //--------------------------------------------------------------------------------
 // Commit
-
+/*
 func (voteSet *VoteSet) MakeCommit() *Commit {
 	if voteSet.type_ != VoteTypePrecommit {
 		PanicSanity("Cannot MakeCommit() unless VoteSet.Type is VoteTypePrecommit")
@@ -489,7 +489,7 @@ func (voteSet *VoteSet) MakeCommit() *Commit {
 		Precommits: votesCopy,
 	}
 }
-
+*/
 //--------------------------------------------------------------------------------
 
 /*

@@ -16,6 +16,7 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"bls"
 )
 
 const (
@@ -100,7 +101,8 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 	}
 	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
 	privKey := crypto.EthereumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
-	blsPrivKey := crypto.CreateBLSPrivKey()
+	keyPair := bls.GenerateKey()
+	blsPrivKey := crypto.BLSPrivKey(keyPair.Private().Marshal())
 	blsPubKey := blsPrivKey.PubKey()
 	fmt.Println("start")
 	fmt.Println(common.ToHex(blsPrivKey.Bytes()))
@@ -235,12 +237,12 @@ func (privVal *PrivValidator) SignVote(chainID string, vote *Vote) error {
 	defer privVal.mtx.Unlock()
 
 	//fmt.Printf("SignVote: %#v\n", SignBytes(chainID, vote)[0:7])
-
 	signature, err := privVal.signBytesHRS(vote.Height, vote.Round, voteToStep(vote), SignBytes(chainID, vote))
 	if err != nil {
 		return errors.New(Fmt("Error signing vote: %v", err))
 	}
 	vote.Signature = signature
+	vote.SignBytes = SignBytes(chainID, vote)
 	return nil
 }
 

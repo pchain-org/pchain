@@ -524,8 +524,7 @@ func newBlockHeader(receiver common.Address, prevBlock *ethTypes.Block) *ethType
 	return &ethTypes.Header{
 		Number:     prevBlock.Number().Add(prevBlock.Number(), big.NewInt(1)),
 		ParentHash: prevBlock.Hash(),
-//		GasLimit:   core.CalcGasLimit(prevBlock),
-		GasLimit:   big.NewInt(471238888),
+		GasLimit:   core.CalcGasLimit(prevBlock),
 		Coinbase:   receiver,
 	}
 }

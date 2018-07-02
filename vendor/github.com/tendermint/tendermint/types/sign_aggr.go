@@ -22,13 +22,14 @@ type SignAggr struct {
 	Round            int              `json:"round"`
 	Type             byte             `json:"type"`
 	NumValidators	 int              `json:"numValidators"`
-	BlockID          BlockID          `json:"block_id"` // zero if vote is nil.
+	BlockID		 BlockID	  `json:"blockid"`
 	Maj23		 BlockID	  `json:"maj23"`
-        BitArray         *BitArray        `json:"BitArray"`
-	Sum		 int64            `json:"Sum"` 
+	BitArray         *BitArray        `json:"bitarray"`
+	Sum		 int64            `json:"sum"`
 
 	// BLS signature aggregation to be added here
 	SignatureAggr	crypto.BLSSignature	`json:"SignatureAggr"`
+	SignBytes 		[]byte 	`json:"sign_bytes"`
 
 }
 
@@ -47,7 +48,7 @@ func (sa *SignAggr) WriteSignBytes(chainID string, w io.Writer, n *int, err *err
 	}, w, n, err)
 }
 
-func MakeSignAggr(height int, round int, mtype byte, numValidators int, blockID BlockID, chainID string, signAggr crypto.BLSSignature) *SignAggr {
+func MakeSignAggr(height int, round int, mtype byte, numValidators int, blockID BlockID, chainID string, bitArray *BitArray, signAggr crypto.BLSSignature) *SignAggr {
         return &SignAggr{
 		Height	: height,
 		Round	: round,
@@ -56,29 +57,57 @@ func MakeSignAggr(height int, round int, mtype byte, numValidators int, blockID 
 		BlockID	: blockID,
 		Maj23	: blockID,
 		ChainID: chainID,
-                BitArray: NewBitArray(numValidators),
+                BitArray: bitArray,
 		SignatureAggr : signAggr,
 		Sum	: 0,
         }
 }
 
 func (sa *SignAggr) SignAggr() crypto.BLSSignature {
-	return sa.SignatureAggr
+	if sa != nil {
+		return sa.SignatureAggr
+	} else {
+		return nil
+	}
 }
 
-func (sa *SignAggr) HasTwoThirdsMajority() bool {
+func (sa *SignAggr) SignRound() int {
 	if sa == nil {
+		return -1
+	} else {
+		return sa.Round
+	}
+}
+
+func (sa *SignAggr) HasTwoThirdsMajority(valSet *ValidatorSet) bool {
+	if valSet == nil {
 		return false
 	}
-	return sa.Maj23.IsZero()
+	talliedVotingPower,err := valSet.TalliedVotingPower(sa.BitArray)
+	if err != nil {
+		return false
+	}
+	quorum := valSet.TotalVotingPower()*2/3 + 1
+	return talliedVotingPower >= quorum
 }
 
 func (sa *SignAggr) SetMaj23(blockID BlockID) {
-	sa.Maj23 = blockID
+	if sa == nil {
+		sa.Maj23 = blockID
+	}
+}
+
+func (sa *SignAggr) Size() int {
+	if sa == nil {
+		return 0
+	}
+	return sa.NumValidators
 }
 
 func (sa *SignAggr) SetBitArray(newBitArray *BitArray) {
-	sa.BitArray.Update(newBitArray)
+	if sa != nil {
+		sa.BitArray.Update(newBitArray)
+	}
 }
 
 func (sa *SignAggr) IsCommit() bool {
@@ -90,6 +119,38 @@ func (sa *SignAggr) IsCommit() bool {
 	}
 	return sa.Maj23.IsZero() != false
 }
+
+func (sa *SignAggr) MakeCommit() *Commit {
+//        if sa.Type != types.VoteTypePrecommit {
+//               PanicSanity("Cannot MakeCommit() unless SignAggr.Type is VoteTypePrecommit")
+//        }
+
+        // Make sure we have a 2/3 majority
+/*        if sa.HasTwoThirdsMajority()== false {
+                PanicSanity("Cannot MakeCommit() unless a blockhash has +2/3")
+        }
+*/
+        return &Commit{
+                BlockID:	sa.Maj23,
+                Height:		sa.Height,
+				Round:		sa.Round,
+				BitArray:	sa.BitArray.Copy(),
+				SignAggr:	sa.SignAggr(),
+        }
+}
+
+func (sa *SignAggr) SignAggrVerify(msg []byte, valSet *ValidatorSet) bool {
+	if msg == nil || valSet == nil {
+		return false
+	}
+	if sa.BitArray.Size() != len(valSet.Validators) {
+		return false
+	}
+	pubKey := valSet.AggrPubKey(sa.BitArray)
+	return pubKey.VerifyBytes(msg, sa.SignatureAggr) && sa.HasTwoThirdsMajority(valSet)
+}
+
+
 
 /*
 func (sa *SignAggr) HasTwoThirdsAny() bool {
@@ -115,6 +176,10 @@ func (sa *SignAggr) TwoThirdsMajority() (blockID BlockID, ok bool) {
 	} else {
 		return sa.Maj23, true
 	}
+}
+
+func (va *SignAggr) StringShort() string {
+	return va.StringIndented("")
 }
 
 func (va *SignAggr) String() string {
