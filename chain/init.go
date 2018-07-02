@@ -191,14 +191,14 @@ func init_em_files(config cfg.Config, chainId string, genesisPath string, valida
 	}
 
 	var privValidator *types.PrivValidator
-	//if validators == nil {
-	privValPath := config.GetString("priv_validator_file")
-	if _, err := os.Stat(privValPath); os.IsNotExist(err) {
-		utils.Fatalf("failed to read privValidator file: %v", err)
-		return err
+	if validators == nil {
+		privValPath := config.GetString("priv_validator_file")
+		if _, err := os.Stat(privValPath); os.IsNotExist(err) {
+			utils.Fatalf("failed to read privValidator file: %v", err)
+			return err
+		}
+		privValidator = types.LoadOrGenPrivValidator(privValPath)
 	}
-	privValidator = types.LoadOrGenPrivValidator(privValPath)
-	//}
 
 	if err := createGenesisDoc(config, chainId, &coreGenesis, privValidator, validators); err != nil {
 		utils.Fatalf("failed to write genesis file: %v", err)
