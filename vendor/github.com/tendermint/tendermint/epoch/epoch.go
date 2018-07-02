@@ -381,7 +381,7 @@ func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, error) {
 
 							val := &abciTypes.Validator{
 								PubKey: vo.PubKey,
-								Power:  vo.Amount,
+								Power:  big.NewInt(int64(vo.Amount)),
 							}
 							diffs = append(diffs, val)
 						}

@@ -85,7 +85,7 @@ func (v *Validator) ToAbciValidator() *abciTypes.Validator {
 
 	return &abciTypes.Validator{
 		PubKey: v.PubKey.Bytes(),
-		Power:  v.VotingPower.Uint64(),
+		Power:  v.VotingPower,
 	}
 }
 

@@ -59,13 +59,13 @@ type ValidatorMsg struct {
 	ValidatorIndex int              `json:"validator_index"`
 	Key            string           `json:"key"`
 	PubKey         crypto.PubKey    `json:"pub_key"`
-	Power          uint64           `json:"power"`
+	Power          *big.Int         `json:"power"`
 	Action         string           `json:"action"`
 	Target         string           `json:"target"`
 	Signature      crypto.Signature `json:"signature"`
 }
 
-func NewValidatorMsg(from string, key string, epoch int, power uint64, action string, target string) *ValidatorMsg {
+func NewValidatorMsg(from string, key string, epoch int, power *big.Int, action string, target string) *ValidatorMsg {
 	return &ValidatorMsg{
 		From:   from,
 		Key:    key,
@@ -92,7 +92,7 @@ type AcceptVotes struct {
 	Epoch  int             `json:"epoch"`
 	Key    string          `json:"key"`
 	PubKey crypto.PubKey   `json:"pub_key"`
-	Power  uint64          `"power"`
+	Power  *big.Int        `"power"`
 	Action string          `"action"`
 	Sum    *big.Int        `"sum"`
 	Votes  []*ValidatorMsg `votes`

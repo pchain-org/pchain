@@ -195,7 +195,7 @@ func (app *EthermintApplication) GetUpdatedValidators() abciTypes.ResponseEndBlo
 		for i, v := range genValidators {
 			s[i] = &abciTypes.Validator{
 				PubKey: v.PubKey.Bytes(),
-				Power:  v.Amount.Uint64(),
+				Power:  v.Amount,
 			}
 		}
 

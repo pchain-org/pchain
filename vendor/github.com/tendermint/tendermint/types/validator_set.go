@@ -333,7 +333,7 @@ func UpdateValidators(validators *ValidatorSet, changedValidators []*abci.Valida
 		}
 
 		address := pubkey.Address()
-		power := big.NewInt(int64(v.Power))
+		power := v.Power
 		// mind the overflow from uint64
 		if power.Sign() == -1 {
 			return errors.New(cmn.Fmt("Power (%d) overflows int64", v.Power))
@@ -346,7 +346,7 @@ func UpdateValidators(validators *ValidatorSet, changedValidators []*abci.Valida
 			if !added {
 				return errors.New(cmn.Fmt("Failed to add new validator %X with voting power %d", address, power))
 			}
-		} else if v.Power == 0 {
+		} else if v.Power.Sign() == 0 {
 			// remove val
 			_, removed := validators.Remove(address)
 			if !removed {

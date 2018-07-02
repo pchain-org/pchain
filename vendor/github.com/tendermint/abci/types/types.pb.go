@@ -44,6 +44,7 @@ package types
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"
 import math "math"
+import "math/big"
 
 import (
 	context "golang.org/x/net/context"
@@ -756,8 +757,8 @@ func (m *RequestQuery) GetProve() bool {
 }
 
 type RequestCommit struct {
-	Validators []*Validator `protobuf:"bytes,1,rep,name=validators" json:"validators,omitempty"`
-	RewardPerBlock string `protobuf:"bytes,2,rep,name=rewardperblock" json:"rewardperblock,omitempty"`
+	Validators     []*Validator `protobuf:"bytes,1,rep,name=validators" json:"validators,omitempty"`
+	RewardPerBlock string       `protobuf:"bytes,2,rep,name=rewardperblock" json:"rewardperblock,omitempty"`
 }
 
 func (m *RequestCommit) Reset()                    { *m = RequestCommit{} }
@@ -1669,8 +1670,8 @@ func (m *PartSetHeader) GetHash() []byte {
 }
 
 type Validator struct {
-	PubKey []byte `protobuf:"bytes,1,opt,name=pubKey,proto3" json:"pubKey,omitempty"`
-	Power  uint64 `protobuf:"varint,2,opt,name=power" json:"power,omitempty"`
+	PubKey []byte   `protobuf:"bytes,1,opt,name=pubKey,proto3" json:"pubKey,omitempty"`
+	Power  *big.Int `protobuf:"varint,2,opt,name=power" json:"power,omitempty"`
 }
 
 func (m *Validator) Reset()                    { *m = Validator{} }
@@ -1685,11 +1686,11 @@ func (m *Validator) GetPubKey() []byte {
 	return nil
 }
 
-func (m *Validator) GetPower() uint64 {
+func (m *Validator) GetPower() *big.Int {
 	if m != nil {
 		return m.Power
 	}
-	return 0
+	return big.NewInt(0)
 }
 
 func init() {

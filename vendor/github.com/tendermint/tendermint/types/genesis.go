@@ -88,7 +88,7 @@ func (gv *GenesisValidator) ToAbciValidator() *abciTypes.Validator {
 
 	return &abciTypes.Validator{
 		PubKey: gv.PubKey.Bytes(),
-		Power:  gv.Amount.Uint64(),
+		Power:  gv.Amount,
 	}
 }
 
@@ -101,7 +101,7 @@ func FromAbciValidator(val *abciTypes.Validator) *GenesisValidator {
 	return &GenesisValidator{
 		EthAccount: common.Address{},
 		PubKey:     pubkey,
-		Amount:     big.NewInt(int64(val.Power)),
+		Amount:     val.Power,
 		Name:       "",
 	}
 }

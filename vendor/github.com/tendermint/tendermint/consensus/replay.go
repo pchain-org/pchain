@@ -500,7 +500,7 @@ func readReplayValMessage(msgBytes []byte, preVals *types.ValidatorSet) error {
 				vals,
 				&abci.Validator{
 					PubKey: val.PubKey.Bytes(),
-					Power:  val.VotingPower.Uint64(),
+					Power:  val.VotingPower,
 				},
 			)
 		}

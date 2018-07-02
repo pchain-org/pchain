@@ -1318,7 +1318,7 @@ var ValidatorMsgList = clist.New() //transfer
 
 var ValidatorMsgMap map[string]*types.ValidatorMsg //request
 
-func SendValidatorMsgToCons(from string, key string, epoch int, power uint64, action string, target string) {
+func SendValidatorMsgToCons(from string, key string, epoch int, power *big.Int, action string, target string) {
 	// fmt.Println("in func SendExMsgToCons(s string)")
 	validatorMsg := types.NewValidatorMsg(from, key, epoch, power, action, target)
 
