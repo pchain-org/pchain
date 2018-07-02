@@ -274,7 +274,8 @@ func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P, cl *rpcserver.C
 	return tdm.NewNodeNotStart(config, pNode.Switch(), pNode.AddrBook(), cl, cch)
 }
 
-func CreateChildChain(ctx *cli.Context, chainId, mainChainKeyStorePath, validatorKeyStorePath string, validator tdmTypes.PrivValidator, depositAmount *big.Int) error {
+func CreateChildChain(ctx *cli.Context, chainId, mainChainKeyStorePath, validatorKeyStorePath string,
+	validator tdmTypes.PrivValidator, depositAmount *big.Int, validators []tdmTypes.GenesisValidator) error {
 
 	// Get Tendermint config base on chain id
 	config := etm.GetTendermintConfig(chainId, ctx)
@@ -289,7 +290,7 @@ func CreateChildChain(ctx *cli.Context, chainId, mainChainKeyStorePath, validato
 	init_eth_blockchain(chainId, config.GetString("eth_genesis_file"), ctx)
 
 	// Init the Tendermint Genesis
-	init_em_files(config, chainId, config.GetString("eth_genesis_file"))
+	init_em_files(config, chainId, config.GetString("eth_genesis_file"), validators)
 
 	return nil
 }

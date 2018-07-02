@@ -12,6 +12,7 @@ import (
 	"github.com/pchain/p2p"
 	"github.com/pchain/rpc"
 	"github.com/pkg/errors"
+	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/tendermint/types"
 	"gopkg.in/urfave/cli.v1"
@@ -199,7 +200,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		return
 	}
 
-	validators := make([]types.GenesisValidator, len(cci.JoinedValidators))
+	validators := make([]types.GenesisValidator, 0, len(cci.JoinedValidators))
 
 	validator := false
 	coinbase, _ := ethereum.Coinbase()
@@ -209,6 +210,11 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		if v.Address == coinbase {
 			validator = true
 			selfDeposit = v.DepositAmount
+		}
+
+		// dereference the PubKey
+		if pubkey, ok := v.PubKey.(*crypto.EtherumPubKey); ok {
+			v.PubKey = *pubkey
 		}
 
 		// append the Validator
@@ -234,7 +240,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		}
 
 		mainChainKeyStorePath := cm.mainChain.Config.GetString("keystore")
-		err := CreateChildChain(cm.ctx, chainId, mainChainKeyStorePath, wallet.URL().Path, *self, selfDeposit)
+		err := CreateChildChain(cm.ctx, chainId, mainChainKeyStorePath, wallet.URL().Path, *self, selfDeposit, validators)
 		if err != nil {
 			plog.Errorf("Create Child Chain %v failed! %v", chainId, err)
 			return
