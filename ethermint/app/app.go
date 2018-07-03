@@ -16,7 +16,7 @@ import (
 	abciTypes "github.com/tendermint/abci/types"
 	"github.com/pchain/ethermint/ethereum"
 	emtTypes "github.com/pchain/ethermint/types"
-	tmTypes "github.com/tendermint/tendermint/types"
+	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"fmt"
 	"math/big"
 	"os"

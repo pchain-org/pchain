@@ -26,7 +26,7 @@ import (
 	abciTypes "github.com/tendermint/abci/types"
 	"github.com/pchain/ethermint/app"
 	"github.com/pchain/ethermint/ethereum"
-	core_types "github.com/tendermint/tendermint/rpc/core/types"
+	core_types "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/types"
 )
 
 // implements backend.Client, used for rpc calls to tendermint

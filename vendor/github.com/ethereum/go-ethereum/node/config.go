@@ -52,6 +52,8 @@ type Config struct {
 	// value is specified, the basename of the current executable is used.
 	Name string `toml:"-"`
 
+	ChainId string `toml:",omitempty"`
+
 	// UserIdent, if set, is used as an additional component in the devp2p node identifier.
 	UserIdent string `toml:",omitempty"`
 

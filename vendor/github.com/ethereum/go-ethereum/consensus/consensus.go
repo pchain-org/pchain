@@ -131,3 +131,14 @@ type Istanbul interface {
 	// Stop stops the engine
 	Stop() error
 }
+
+// Tendermint is a consensus engine to avoid byzantine failure
+type Tendermint interface {
+	Engine
+
+	// Start starts the engine
+	Start(chain ChainReader, currentBlock func() *types.Block, hasBadBlock func(hash common.Hash) bool) error
+
+	// Stop stops the engine
+	Stop() error
+}

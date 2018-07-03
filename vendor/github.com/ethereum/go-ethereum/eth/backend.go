@@ -33,6 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/istanbul"
 	istanbulBackend "github.com/ethereum/go-ethereum/consensus/istanbul/backend"
+	"github.com/ethereum/go-ethereum/consensus/tendermint"
+	tendermintBackend "github.com/ethereum/go-ethereum/consensus/tendermint/trial_backend"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -51,6 +53,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"reflect"
 )
 
 type LesServer interface {
@@ -147,6 +150,11 @@ func New(ctx *node.ServiceContext, config *Config, pending miner.Pending,
 		eth.etherbase = crypto.PubkeyToAddress(ctx.NodeKey().PublicKey)
 	}
 
+	// force to set the tendermint etherbase to node key address
+	if chainConfig.Tendermint != nil {
+		eth.etherbase = crypto.PubkeyToAddress(ctx.NodeKey().PublicKey)
+	}
+
 	log.Info("Initialising Ethereum protocol", "versions", eth.engine.Protocol().Versions, "network", config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
@@ -181,7 +189,7 @@ func New(ctx *node.ServiceContext, config *Config, pending miner.Pending,
 		return nil, err
 	}
 
-	if pending == nil {
+	if reflect.ValueOf(pending).IsNil() {
 		eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
 		eth.miner.SetExtra(makeExtraData(config.ExtraData))
 		pending = eth.miner
@@ -239,6 +247,14 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 		}
 		config.Istanbul.ProposerPolicy = istanbul.ProposerPolicy(chainConfig.Istanbul.ProposerPolicy)
 		return istanbulBackend.New(&config.Istanbul, ctx.NodeKey(), db)
+	}
+	// If Tendermint is requested, set it up
+	if chainConfig.Tendermint != nil {
+		if chainConfig.Tendermint.Epoch != 0 {
+			config.Istanbul.Epoch = chainConfig.Tendermint.Epoch
+		}
+		config.Tendermint.ProposerPolicy = tendermint.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
+		return tendermintBackend.New(&config.Tendermint, ctx.NodeKey(), db)
 	}
 
 	// Otherwise assume proof-of-work

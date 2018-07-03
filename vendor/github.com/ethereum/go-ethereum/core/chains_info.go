@@ -10,7 +10,7 @@ import (
 	"sync"
 	"strings"
 	"math/big"
-	ep "github.com/tendermint/tendermint/epoch"
+	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 )
 
 type CoreChainInfo struct {

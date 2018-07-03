@@ -4,7 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	tmTypes "github.com/tendermint/tendermint/types"
+	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"math/big"
 )
 

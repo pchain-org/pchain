@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	tdmTypes "github.com/tendermint/tendermint/types"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/tendermint/go-wire"
 	"io"
 )

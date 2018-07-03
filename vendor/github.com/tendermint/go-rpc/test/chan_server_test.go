@@ -9,7 +9,7 @@ import (
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-rpc/client"
 	"github.com/tendermint/go-rpc/server"
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
+	ctypes "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/types"
 )
 
 

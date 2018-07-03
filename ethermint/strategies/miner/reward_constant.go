@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	emTypes "github.com/pchain/ethermint/types"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	tmTypes "github.com/tendermint/tendermint/types"
+	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 )
 
 type MinerRewardStrategy struct {

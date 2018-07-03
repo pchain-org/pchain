@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 
 	cmn "github.com/tendermint/go-common"
-	"github.com/tendermint/tendermint/types"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"github.com/pkg/errors"

@@ -12,7 +12,7 @@ import (
 
 	cfg "github.com/tendermint/go-config"
 	tmlog "github.com/tendermint/go-logger"
-	tmcfg "github.com/tendermint/tendermint/config/tendermint"
+	tmcfg "github.com/ethereum/go-ethereum/consensus/tendermint/config/tendermint"
 )
 
 

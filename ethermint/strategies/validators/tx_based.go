@@ -8,7 +8,7 @@ import (
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	tmTypes "github.com/tendermint/tendermint/types"
+	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"math/big"
 )
 

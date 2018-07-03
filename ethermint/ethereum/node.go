@@ -77,7 +77,7 @@ func MakeSystemNode(chainId, version string, cl *rpcserver.ChannelListener, ctx 
 	}
 	*/
 
-	stack, cfg := gethmain.MakeConfigNode(ctx)
+	stack, cfg := gethmain.MakeConfigNode(ctx, chainId)
 	//utils.RegisterEthService(stack, &cfg.Eth)
 	registerEthService(stack, &cfg.Eth, cl, cch)
 

@@ -10,21 +10,21 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"os"
+	//"os"
 	cfg "github.com/tendermint/go-config"
 	"github.com/pchain/ethermint/ethereum"
 	"github.com/pchain/ethermint/version"
 	"io/ioutil"
-	tdmTypes "github.com/tendermint/tendermint/types"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	cmn "github.com/tendermint/go-common"
 	"github.com/syndtr/goleveldb/leveldb/errors"
-	validatorsStrategy "github.com/pchain/ethermint/strategies/validators"
+	//validatorsStrategy "github.com/pchain/ethermint/strategies/validators"
 	"time"
 
 	"github.com/pchain/p2p"
 	"github.com/tendermint/go-rpc/server"
-	"github.com/tendermint/tendermint/proxy"
-	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
+	//"github.com/ethereum/go-ethereum/consensus/tendermint/proxy"
+	rpcTxHook "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/txhook"
 )
 
 const (
@@ -152,6 +152,7 @@ func StartChain(chain *Chain, quit chan int) error {
 		fmt.Println("ethermintCmd->utils.StartNode(stack)")
 		utils.StartNode1(chain.EthNode)
 
+		/*
 		stack := chain.EthNode
 		var backend *ethereum.Backend
 		if err := stack.Service(&backend); err != nil {
@@ -177,7 +178,7 @@ func StartChain(chain *Chain, quit chan int) error {
 
 		// Create ABCI Local Client Creator
 		proxy.SetAppClientCreator(chain.TdmNode.ProxyApp(), proxy.NewLocalClientCreator(etmApp))
-
+		*/
 		/* ABCI Server is no longer required
 		addr := config.GetString("proxy_app")
 		abci := config.GetString("abci")
@@ -188,7 +189,7 @@ func StartChain(chain *Chain, quit chan int) error {
 		}
 		chain.AbciServer = abciServer
 		*/
-
+		/*
 		fmt.Println("tm node")
 		err = chain.TdmNode.OnStart1()
 		if err != nil {
@@ -203,8 +204,8 @@ func StartChain(chain *Chain, quit chan int) error {
 		})
 
 		quit <- 1
+		*/
 	}()
-
 
 	return nil
 }

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"math/big"
-	"github.com/tendermint/tendermint/rpc/core/types"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/types"
 )
 
 var (

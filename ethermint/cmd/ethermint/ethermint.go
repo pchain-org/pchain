@@ -17,9 +17,9 @@ import (
 	validatorsStrategy "github.com/pchain/ethermint/strategies/validators"
 
 	"github.com/tendermint/abci/server"
-	//tendermintNode "github.com/tendermint/tendermint/node"
+	//tendermintNode "github.com/ethereum/go-ethereum/consensus/tendermint/node"
 	"github.com/pchain/ethermint/tendermint"
-	tmTypes "github.com/tendermint/tendermint/types"
+	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	cmn "github.com/tendermint/go-common"
 	"io/ioutil"
 	"github.com/syndtr/goleveldb/leveldb/errors"

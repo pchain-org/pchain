@@ -23,8 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	abciTypes "github.com/tendermint/abci/types"
 	emtTypes "github.com/pchain/ethermint/types"
-	tmTypes "github.com/tendermint/tendermint/types"
-	core_types "github.com/tendermint/tendermint/rpc/core/types"
+	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	core_types "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/types"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -77,8 +77,9 @@ const (
 
 // New creates a new Backend
 func NewBackend(ctx *node.ServiceContext, config *eth.Config, client Client, cch core.CrossChainHelper) (*Backend, error) {
-	p := &pending{commitMutex: &sync.Mutex{}}
 
+	//p := &pending{commitMutex: &sync.Mutex{}}
+	var p *pending = nil
 	ethereum, err := eth.New(ctx, config, p, client, cch)
 	if err != nil {
 		return nil, err

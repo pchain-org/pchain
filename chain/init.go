@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 
 	cmn "github.com/tendermint/go-common"
-	"github.com/tendermint/tendermint/types"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"github.com/pkg/errors"
@@ -31,6 +31,7 @@ import (
 	cfg "github.com/tendermint/go-config"
 	etm "github.com/pchain/ethermint/cmd/ethermint"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/cmd/geth"
 )
 
 type BalaceAmount struct {
@@ -143,7 +144,7 @@ func init_eth_blockchain(chainId string, ethGenesisPath string, ctx *cli.Context
 	dbPath := filepath.Join(utils.MakeDataDir(ctx), chainId, "geth/chaindata")
 	fmt.Printf("init_eth_blockchain 0 with dbPath: %s\n", dbPath)
 
-	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MakeDataDir(ctx), chainId, "geth/chaindata"), 0, 0)
+	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MakeDataDir(ctx), chainId, gethmain.ClientIdentifier, "chaindata"), 0, 0)
 	if err != nil {
 		utils.Fatalf("could not open database: %v", err)
 	}
@@ -278,7 +279,7 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, *big.Int, error) {
 	found := false
 	fmt.Printf("checkAccount(), coinbase is %x\n", coinbase)
 	for address, account := range coreGenesis.Alloc {
-		fmt.Printf("checkAccount(), address is %x\n", address)
+		fmt.Printf("checkAccount(), address is %x, balance is %v, amount is %v\n", address, account.Balance, account.Amount)
 		if coinbase == address {
 			balance = account.Balance
 			amount = account.Amount
@@ -286,6 +287,7 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, *big.Int, error) {
 			break
 		}
 	}
+
 	if !found {
 		fmt.Printf("invalidate eth_account\n")
 		return common.Address{}, nil, errors.New("invalidate eth_account")

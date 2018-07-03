@@ -4,7 +4,7 @@ import (
 	"os"
 	cfg "github.com/tendermint/go-config"
 	"io/ioutil"
-	"github.com/tendermint/tendermint/types"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"fmt"
 )
 

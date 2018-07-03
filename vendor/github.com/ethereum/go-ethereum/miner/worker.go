@@ -210,6 +210,10 @@ func (self *worker) start() {
 		istanbul.Start(self.chain, self.chain.CurrentBlock, self.chain.HasBadBlock)
 	}
 
+	if tendermint, ok := self.engine.(consensus.Tendermint); ok {
+		tendermint.Start(self.chain, self.chain.CurrentBlock, self.chain.HasBadBlock)
+	}
+
 	// spin up agents
 	for agent := range self.agents {
 		agent.Start()
@@ -229,6 +233,10 @@ func (self *worker) stop() {
 
 	if istanbul, ok := self.engine.(consensus.Istanbul); ok {
 		istanbul.Stop()
+	}
+
+	if tendermint, ok := self.engine.(consensus.Tendermint); ok {
+		tendermint.Stop()
 	}
 
 	atomic.StoreInt32(&self.mining, 0)

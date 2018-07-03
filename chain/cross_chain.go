@@ -9,11 +9,11 @@ import (
 	"errors"
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	tdmTypes "github.com/tendermint/tendermint/types"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"bytes"
-	"github.com/tendermint/tendermint/epoch"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 )
 
 type CrossChainHelper struct {

@@ -107,12 +107,12 @@ func defaultNodeConfig() node.Config {
 	return cfg
 }
 
-func MakeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
+func MakeConfigNode(ctx *cli.Context, chainId string) (*node.Node, gethConfig) {
 
-	return makeConfigNode(ctx)
+	return makeConfigNode(ctx, chainId)
 }
 
-func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
+func makeConfigNode(ctx *cli.Context, chainId string) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{
 		Eth:       eth.DefaultConfig,
@@ -129,6 +129,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	}
 
 	// Apply flags.
+	cfg.Node.ChainId = chainId
 	utils.SetNodeConfig(ctx, &cfg.Node)
 	stack, err := node.New(&cfg.Node)
 	if err != nil {
@@ -160,7 +161,7 @@ func enableWhisper(ctx *cli.Context) bool {
 }
 
 func makeFullNode(ctx *cli.Context) *node.Node {
-	stack, cfg := makeConfigNode(ctx)
+	stack, cfg := makeConfigNode(ctx, clientIdentifier)
 
 	utils.RegisterEthService(stack, &cfg.Eth)
 
@@ -189,7 +190,7 @@ func makeFullNode(ctx *cli.Context) *node.Node {
 
 // dumpConfig is the dumpconfig command.
 func dumpConfig(ctx *cli.Context) error {
-	_, cfg := makeConfigNode(ctx)
+	_, cfg := makeConfigNode(ctx, clientIdentifier)
 	comment := ""
 
 	if cfg.Eth.Genesis != nil {

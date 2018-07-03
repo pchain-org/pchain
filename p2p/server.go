@@ -6,12 +6,12 @@ import (
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-p2p"
 	"strings"
-	//"github.com/tendermint/tendermint/state/txindex/null"
+	//"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/null"
 	"github.com/tendermint/go-rpc"
 	"github.com/tendermint/go-wire"
-	"github.com/tendermint/tendermint/consensus"
-	rpccore "github.com/tendermint/tendermint/rpc/core"
-	"github.com/tendermint/tendermint/version"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
+	rpccore "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/version"
 )
 
 type PChainP2P struct {
