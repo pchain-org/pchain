@@ -1275,8 +1275,6 @@ func (cs *ConsensusState) enterPrecommit(height int, round int) {
 		cs.signAddVote(types.VoteTypePrecommit, nil, types.PartSetHeader{})
 		return
 	}
-	logger.Error("get here")
-
 
 	// At this point, +2/3 prevoted for a particular block.
 
@@ -1289,7 +1287,6 @@ func (cs *ConsensusState) enterPrecommit(height int, round int) {
 		return
 	}
 
-	logger.Error("get here")
 	// If +2/3 prevoted for proposal block, stage and precommit it
 	fmt.Println(common.ToHex(cs.ProposalBlock.Hash().Bytes()))
 	fmt.Println(common.ToHex(blockID.Hash.Bytes()))
@@ -1535,41 +1532,34 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 func (cs *ConsensusState) newSetProposal(proposal *types.Proposal) error {
 	// Already have one
 	// TODO: possibly catch double proposals
-	logger.Error("get here")
 
 	if cs.Proposal != nil && proposal != nil{
 		// TODO: if there are two proposals from the same proposer at one height, the propser will lose it's token
-		logger.Error("get here")
 		return nil
 
 	}
 	if cs.Proposal != nil {
-		logger.Error("get here")
 		return nil
 	}
 
 	// Does not apply
 	if proposal.Height != cs.Height || proposal.Round != cs.Round {
-		logger.Error("get here")
 		return nil
 	}
 
 	// We don't care about the proposal if we're already in RoundStepCommit.
 	if RoundStepCommit <= cs.Step {
-		logger.Error("get here")
 		return nil
 	}
 
 	// Verify POLRound, which must be -1 or between 0 and proposal.Round exclusive.
 	if proposal.POLRound != -1 &&
 		(proposal.POLRound < 0 || proposal.Round <= proposal.POLRound) {
-		logger.Error("get here")
 		return ErrInvalidProposalPOLRound
 	}
 
 	// Verify signature
 	if !cs.Validators.GetProposer().PubKey.VerifyBytes(types.SignBytes(cs.state.ChainID, proposal), proposal.Signature) {
-		logger.Error("get here")
 		return ErrInvalidProposalSignature
 	}
 
@@ -1624,7 +1614,6 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 	if cs.Height != height {
 		return false, nil
 	}
-	logger.Error("get here")
 
 	// We're not expecting a block part.
 	if cs.ProposalBlockParts == nil {
@@ -1632,12 +1621,8 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 		return false, nil // TODO: bad peer? Return error?
 	}
 
-	logger.Error("get here")
-
 	added, err = cs.ProposalBlockParts.AddPart(part, verify)
-	logger.Error("get here")
 	if err != nil {
-		logger.Error("get here")
 		return added, err
 	}
 	if added && cs.ProposalBlockParts.IsComplete() {
