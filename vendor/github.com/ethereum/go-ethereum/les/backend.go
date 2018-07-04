@@ -105,7 +105,7 @@ func New(ctx *node.ServiceContext, config *eth.Config, client ethapi.Client, cch
 		peers:            peers,
 		reqDist:          newRequestDistributor(peers, quitSync),
 		accountManager:   ctx.AccountManager,
-		engine:           eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb),
+		engine:           eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb, nil, nil, cch),
 		shutdownChan:     make(chan bool),
 		networkId:        config.NetworkId,
 		bloomRequests:    make(chan chan *bloombits.Retrieval),

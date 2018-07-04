@@ -43,7 +43,7 @@ func ethermintCmd(chainId string, ctx *cli.Context, quit chan int) error {
 
 	//always start ethereum
 	fmt.Println("ethereum.MakeSystemNode")
-	stack := ethereum.MakeSystemNode(chainId, version.Version, nil, ctx, nil)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, nil, nil)
 	//stack := ethereum.MakeSystemNode(chainId, version.Version, config.GetString(RpcLaddrFlag.Name), ctx, nil)
 
 

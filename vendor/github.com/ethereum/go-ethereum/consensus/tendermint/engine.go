@@ -1,4 +1,4 @@
-package trial_backend
+package tendermint
 
 import (
 	"github.com/ethereum/go-ethereum/consensus"
@@ -11,6 +11,24 @@ import (
 	//"time"
 	"github.com/ethereum/go-ethereum/core/state"
 	"fmt"
+	"time"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/hashicorp/golang-lru"
+	"github.com/ethereum/go-ethereum/consensus/istanbul"
+	"github.com/syndtr/goleveldb/leveldb/errors"
+)
+
+var (
+	defaultDifficulty = big.NewInt(1)
+	nilUncleHash      = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
+	emptyNonce        = types.BlockNonce{}
+	now               = time.Now
+
+	nonceAuthVote = hexutil.MustDecode("0xffffffffffffffff") // Magic nonce number to vote on adding a new validator
+	nonceDropVote = hexutil.MustDecode("0x0000000000000000") // Magic nonce number to vote on removing a validator.
+
+	inmemoryAddresses  = 20 // Number of recent addresses from ecrecover
+	recentAddresses, _ = lru.NewARC(inmemoryAddresses)
 )
 
 // APIs returns the RPC APIs this consensus engine provides.
@@ -28,11 +46,10 @@ func (sb *backend) Start(chain consensus.ChainReader, currentBlock func() *types
 
 	fmt.Printf("Tendermint: (sb *backend) Start, add logic here\n")
 
-	/*
 	sb.coreMu.Lock()
 	defer sb.coreMu.Unlock()
 	if sb.coreStarted {
-		return istanbul.ErrStartedEngine
+		return ErrStartedEngine
 	}
 
 	// clear previous data
@@ -46,12 +63,12 @@ func (sb *backend) Start(chain consensus.ChainReader, currentBlock func() *types
 	sb.currentBlock = currentBlock
 	sb.hasBadBlock = hasBadBlock
 
-	if err := sb.core.Start(); err != nil {
+	if _, err := sb.core.Start(); err != nil {
 		return err
 	}
 
 	sb.coreStarted = true
-	*/
+
 	return nil
 }
 
@@ -61,17 +78,16 @@ func (sb *backend) Stop() error {
 
 	fmt.Printf("Tendermint: (sb *backend) Stop, add logic here\n")
 
-	/*
 	sb.coreMu.Lock()
 	defer sb.coreMu.Unlock()
 	if !sb.coreStarted {
 		return istanbul.ErrStoppedEngine
 	}
-	if err := sb.core.Stop(); err != nil {
-		return err
+	if !sb.core.Stop() {
+		return errors.New("tendermint stop error")
 	}
 	sb.coreStarted = false
-	*/
+
 	return nil
 }
 
@@ -173,6 +189,65 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 
 	fmt.Printf("Tendermint: (sb *backend) Prepare, add logic here\n")
 
+	header.Coinbase = common.Address{}
+	header.Nonce = emptyNonce
+	header.MixDigest = types.TendermintDigest
+
+	// copy the parent extra data as the header extra data
+	number := header.Number.Uint64()
+	parent := chain.GetHeader(header.ParentHash, number-1)
+	if parent == nil {
+		return consensus.ErrUnknownAncestor
+	}
+	// use the same difficulty for all blocks
+	header.Difficulty = defaultDifficulty
+
+	/*
+	// Assemble the voting snapshot
+	snap, err := sb.snapshot(chain, number-1, header.ParentHash, nil)
+	if err != nil {
+		return err
+	}
+
+	// get valid candidate list
+	sb.candidatesLock.RLock()
+	var addresses []common.Address
+	var authorizes []bool
+	for address, authorize := range sb.candidates {
+		if snap.checkVote(address, authorize) {
+			addresses = append(addresses, address)
+			authorizes = append(authorizes, authorize)
+		}
+	}
+	sb.candidatesLock.RUnlock()
+
+
+	// pick one of the candidates randomly
+	if len(addresses) > 0 {
+		index := rand.Intn(len(addresses))
+		// add validator voting in coinbase
+		header.Coinbase = addresses[index]
+		if authorizes[index] {
+			copy(header.Nonce[:], nonceAuthVote)
+		} else {
+			copy(header.Nonce[:], nonceDropVote)
+		}
+	}
+	*/
+	// add validators in snapshot to extraData's validators section
+	//extra, err := prepareExtra(header, snap.validators())
+	extra, err := prepareExtra(header, nil)
+	if err != nil {
+		return err
+	}
+	header.Extra = extra
+
+	// set header's timestamp
+	//header.Time = new(big.Int).Add(parent.Time, new(big.Int).SetUint64(sb.config.BlockPeriod))
+	//if header.Time.Int64() < time.Now().Unix() {
+		header.Time = big.NewInt(time.Now().Unix())
+	//}
+
 	return nil
 }
 
@@ -182,11 +257,16 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 // Note, the block header and state database might be updated to reflect any
 // consensus rules that happen at finalization (e.g. block rewards).
 func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+			uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 
 	fmt.Printf("Tendermint: (sb *backend) Finalize, add logic here\n")
 
-	return nil, nil
+	// No block rewards in Istanbul, so the state remains as is and uncles are dropped
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	header.UncleHash = nilUncleHash
+
+	// Assemble and return the final block for sealing
+	return types.NewBlock(header, txs, nil, receipts), nil
 }
 
 // Seal generates a new block for the given input block with the local miner's
@@ -194,6 +274,63 @@ uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error) {
 
 	fmt.Printf("Tendermint: (sb *backend) Seal, add logic here\n")
+	// update the block header timestamp and signature and propose the block to core engine
+	header := block.Header()
+	number := header.Number.Uint64()
+	/*
+	// Bail out if we're unauthorized to sign a block
+	snap, err := sb.snapshot(chain, number-1, header.ParentHash, nil)
+	if err != nil {
+		return nil, err
+	}
+	if _, v := snap.ValSet.GetByAddress(sb.address); v == nil {
+		return nil, errUnauthorized
+	}
+	*/
+	parent := chain.GetHeader(header.ParentHash, number-1)
+	if parent == nil {
+		return nil, consensus.ErrUnknownAncestor
+	}
+	/*
+	block, err = sb.updateBlock(parent, block)
+	if err != nil {
+		return nil, err
+	}
+	*/
+	// wait for the timestamp of header, use this to adjust the block period
+	delay := time.Unix(block.Header().Time.Int64(), 0).Sub(now())
+	select {
+	case <-time.After(delay):
+	case <-stop:
+		return nil, nil
+	}
+
+	// get the proposed block hash and clear it if the seal() is completed.
+	sb.sealMu.Lock()
+	sb.proposedBlockHash = block.Hash()
+	clear := func() {
+		sb.proposedBlockHash = common.Hash{}
+		sb.sealMu.Unlock()
+	}
+	defer clear()
+	/*
+	// post block into Istanbul engine
+	go sb.EventMux().Post(istanbul.RequestEvent{
+		Proposal: block,
+	})
+	*/
+	for {
+		select {
+		case result := <-sb.commitCh:
+		// if the block hash and the hash from channel are the same,
+		// return the result. Otherwise, keep waiting the next hash.
+			if block.Hash() == result.Hash() {
+				return result, nil
+			}
+		case <-stop:
+			return nil, nil
+		}
+	}
 
 	return nil, nil
 }

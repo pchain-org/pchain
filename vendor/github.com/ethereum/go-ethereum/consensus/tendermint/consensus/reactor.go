@@ -13,7 +13,6 @@ import (
 	"github.com/tendermint/go-wire"
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	abci "github.com/tendermint/abci/types"
 	"github.com/tendermint/go-clist"
 )
 
@@ -34,21 +33,21 @@ type ConsensusReactor struct {
 	p2p.BaseReactor // BaseService + p2p.Switch
 
 	conS     *ConsensusState
-	fastSync bool
+	//fastSync bool
 	evsw     types.EventSwitch
 }
 
 func NewConsensusReactor(consensusState *ConsensusState, fastSync bool) *ConsensusReactor {
 	conR := &ConsensusReactor{
 		conS:     consensusState,
-		fastSync: fastSync,
+		//fastSync: fastSync,
 	}
 	conR.BaseReactor = *p2p.NewBaseReactor(log, "ConsensusReactor", conR)
 	return conR
 }
 
 func (conR *ConsensusReactor) OnStart() error {
-	log.Notice("ConsensusReactor ", "fastSync", conR.fastSync)
+	//log.Notice("ConsensusReactor ", "fastSync", conR.fastSync)
 	conR.BaseReactor.OnStart()
 
 	// callbacks for broadcasting new steps and votes to peers
@@ -58,13 +57,13 @@ func (conR *ConsensusReactor) OnStart() error {
 	//liaoyd
 	//go conR.GetDiffValidator()
 
-	if !conR.fastSync {
+	//if !conR.fastSync {
 		// conR.catchupValidator(val, ok)
 		_, err := conR.conS.Start()
 		if err != nil {
 			return err
 		}
-	}
+	//}
 	return nil
 }
 
@@ -81,7 +80,7 @@ func (conR *ConsensusReactor) SwitchToConsensus(state *sm.State) {
 	// NOTE: The line below causes broadcastNewRoundStepRoutine() to
 	// broadcast a NewRoundStepMessage.
 	conR.conS.updateToStateAndEpoch(state, conR.conS.epoch)
-	conR.fastSync = false
+	//conR.fastSync = false
 	conR.conS.Start()
 }
 
@@ -135,9 +134,9 @@ func (conR *ConsensusReactor) AddPeer(peer *p2p.Peer) {
 
 	// Send our state to peer.
 	// If we're fast_syncing, broadcast a RoundStepMessage later upon SwitchToConsensus().
-	if !conR.fastSync {
+	//if !conR.fastSync {
 		conR.sendNewRoundStepMessages(peer)
-	}
+	//}
 }
 
 // Implements Reactor
@@ -232,10 +231,10 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 		}
 
 	case DataChannel:
-		if conR.fastSync {
-			log.Warn("Ignoring message received during fastSync", "msg", msg)
-			return
-		}
+		//if conR.fastSync {
+		//	log.Warn("Ignoring message received during fastSync", "msg", msg)
+		//	return
+		//}
 		switch msg := msg.(type) {
 		case *ProposalMessage:
 			ps.SetHasProposal(msg.Proposal)
@@ -250,10 +249,10 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 		}
 
 	case VoteChannel:
-		if conR.fastSync {
-			log.Warn("Ignoring message received during fastSync", "msg", msg)
-			return
-		}
+		//if conR.fastSync {
+		//	log.Warn("Ignoring message received during fastSync", "msg", msg)
+		//	return
+		//}
 		switch msg := msg.(type) {
 		case *VoteMessage:
 			cs := conR.conS
@@ -272,10 +271,10 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 		}
 
 	case VoteSetBitsChannel:
-		if conR.fastSync {
-			log.Warn("Ignoring message received during fastSync", "msg", msg)
-			return
-		}
+		//if conR.fastSync {
+		//	log.Warn("Ignoring message received during fastSync", "msg", msg)
+		//	return
+		//}
 		switch msg := msg.(type) {
 		case *VoteSetBitsMessage:
 			cs := conR.conS
@@ -1435,6 +1434,7 @@ func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (
 	return true, nil
 }
 
+/*
 func (conR *ConsensusReactor) GetDiffValidator() {
 	types.ValidatorChannel = make(chan int)
 	types.EndChannel = make(chan []*abci.Validator)
@@ -1479,3 +1479,4 @@ func (conR *ConsensusReactor) GetDiffValidator() {
 		types.EndChannel <- diffs
 	}
 }
+*/

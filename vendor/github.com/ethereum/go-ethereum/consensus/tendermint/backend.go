@@ -1,4 +1,4 @@
-package trial_backend
+package tendermint
 
 import (
 	"sync"
@@ -9,16 +9,21 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/consensus/tendermint"
+	"github.com/ethereum/go-ethereum/core"
+	cfg "github.com/tendermint/go-config"
 )
 
 
 // New creates an Ethereum backend for Istanbul core engine.
-func New(config *tendermint.Config, privateKey *ecdsa.PrivateKey, db ethdb.Database) consensus.Tendermint {
+func New(config cfg.Config, privateKey *ecdsa.PrivateKey, db ethdb.Database,
+	pNode PChainP2P, cch core.CrossChainHelper) consensus.Tendermint {
 	// Allocate the snapshot caches and create the engine
 	//recents, _ := lru.NewARC(inmemorySnapshots)
 	//recentMessages, _ := lru.NewARC(inmemoryPeers)
 	//knownMessages, _ := lru.NewARC(inmemoryMessages)
+
+	node := MakeTendermintNode(config, pNode, cch)
+
 	backend := &backend{
 		//config:           config,
 		//istanbulEventMux: new(event.TypeMux),
@@ -32,6 +37,8 @@ func New(config *tendermint.Config, privateKey *ecdsa.PrivateKey, db ethdb.Datab
 		coreStarted:      false,
 		//recentMessages:   recentMessages,
 		//knownMessages:    knownMessages,
+
+		node:		node,
 	}
 	//backend.core = istanbulCore.New(backend, backend.config)
 	return backend
@@ -42,7 +49,7 @@ type backend struct {
 	istanbulEventMux *event.TypeMux
 	privateKey       *ecdsa.PrivateKey
 	address          common.Address
-	//core             istanbulCore.Engine
+	core             *Node
 	//logger           log.Logger
 	db               ethdb.Database
 	chain            consensus.ChainReader
@@ -68,5 +75,7 @@ type backend struct {
 
 	recentMessages *lru.ARCCache // the cache of peer's messages
 	knownMessages  *lru.ARCCache // the cache of self messages
+
+	node		*Node
 }
 

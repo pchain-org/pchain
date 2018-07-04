@@ -97,16 +97,3 @@ func CanonicalVote(vote *Vote) CanonicalJSONVote {
 	}
 }
 
-//liaoyd
-func CanonicalValidatorMsg(msg *ValidatorMsg) CanonicalJSONValidatorMsg {
-	return CanonicalJSONValidatorMsg{
-		From:          msg.From,
-		Epoch:         msg.Epoch,
-		ValidatorIndex: msg.ValidatorIndex,
-		Key:            msg.Key,
-		PubKey:         msg.PubKey,
-		Power:          msg.Power,
-		Action:         msg.Action,
-		Target:         msg.Target,
-	}
-}

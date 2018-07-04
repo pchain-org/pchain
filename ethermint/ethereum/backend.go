@@ -28,6 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/consensus/tendermint"
+	"gopkg.in/urfave/cli.v1"
 )
 
 const TRANSACTION_NUM_LIMIT = 200000
@@ -76,11 +78,12 @@ const (
 )
 
 // New creates a new Backend
-func NewBackend(ctx *node.ServiceContext, config *eth.Config, client Client, cch core.CrossChainHelper) (*Backend, error) {
+func NewBackend(ctx *node.ServiceContext, config *eth.Config, cliCtx *cli.Context,
+                pNode tendermint.PChainP2P, cch core.CrossChainHelper) (*Backend, error) {
 
 	//p := &pending{commitMutex: &sync.Mutex{}}
 	var p *pending = nil
-	ethereum, err := eth.New(ctx, config, p, client, cch)
+	ethereum, err := eth.New(ctx, config, p, cliCtx, pNode, cch)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +91,7 @@ func NewBackend(ctx *node.ServiceContext, config *eth.Config, client Client, cch
 	ethBackend := &Backend{
 		ethereum: ethereum,
 		pending:  p,
-		client:   client,
+		client:   nil,
 		config:   config,
 	}
 

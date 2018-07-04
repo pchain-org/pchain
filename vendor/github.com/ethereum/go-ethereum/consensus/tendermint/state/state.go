@@ -14,8 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/null"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"fmt"
-	//"runtime/debug"
-	//"github.com/pchain/ethermint/strategies/validators"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/pkg/errors"
 )

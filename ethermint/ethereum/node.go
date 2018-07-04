@@ -7,17 +7,17 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"gopkg.in/urfave/cli.v1"
 
-	"github.com/tendermint/go-rpc/client"
-	"github.com/tendermint/go-rpc/server"
 	"github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/les"
+	"github.com/ethereum/go-ethereum/consensus/tendermint"
 )
 
 var clientIdentifier = "geth" // Client identifier to advertise over the network
 
 // MakeSystemNode sets up a local node and configures the services to launch
-func MakeSystemNode(chainId, version string, cl *rpcserver.ChannelListener, ctx *cli.Context, cch core.CrossChainHelper) *node.Node {
+func MakeSystemNode(chainId, version string, ctx *cli.Context,
+                    pNode tendermint.PChainP2P, cch core.CrossChainHelper) *node.Node {
 
 	/*
 
@@ -79,7 +79,7 @@ func MakeSystemNode(chainId, version string, cl *rpcserver.ChannelListener, ctx 
 
 	stack, cfg := gethmain.MakeConfigNode(ctx, chainId)
 	//utils.RegisterEthService(stack, &cfg.Eth)
-	registerEthService(stack, &cfg.Eth, cl, cch)
+	registerEthService(stack, &cfg.Eth, ctx, pNode, cch)
 
 	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
 		utils.RegisterDashboardService(stack, &cfg.Dashboard, ""/*gitCommit*/)
@@ -109,8 +109,8 @@ func MakeSystemNode(chainId, version string, cl *rpcserver.ChannelListener, ctx 
 
 
 // registerEthService adds an Ethereum client to the stack.
-func registerEthService(stack *node.Node, cfg *eth.Config,
-			cl *rpcserver.ChannelListener, cch core.CrossChainHelper) {
+func registerEthService(stack *node.Node, cfg *eth.Config, cliCtx *cli.Context,
+                        pNode tendermint.PChainP2P, cch core.CrossChainHelper) {
 	var err error
 	if cfg.SyncMode == downloader.LightSync {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
@@ -118,7 +118,7 @@ func registerEthService(stack *node.Node, cfg *eth.Config,
 		})
 	} else {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return NewBackend(ctx, cfg, rpcclient.NewChannelClient(cl), cch)
+			return NewBackend(ctx, cfg, cliCtx, pNode, cch)
 			/*
 			fullNode, err := eth.New(ctx, cfg, nil, nil, nil)
 			if fullNode != nil && cfg.LightServ > 0 {

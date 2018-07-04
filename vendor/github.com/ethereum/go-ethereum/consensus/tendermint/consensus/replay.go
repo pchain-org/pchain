@@ -98,6 +98,7 @@ func (cs *ConsensusState) readReplayMessage(msgBytes []byte, newStepCh chan inte
 // timeoutRoutine should run concurrently to read off tickChan
 func (cs *ConsensusState) catchupReplay(csHeight int) error {
 
+	/*
 	// set replayMode
 	cs.replayMode = true
 	defer func() { cs.replayMode = false }()
@@ -167,6 +168,7 @@ func (cs *ConsensusState) catchupReplay(csHeight int) error {
 		}
 	}
 	log.Notice("Replay: Done")
+	*/
 	return nil
 }
 

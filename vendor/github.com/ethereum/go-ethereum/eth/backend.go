@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/istanbul"
 	istanbulBackend "github.com/ethereum/go-ethereum/consensus/istanbul/backend"
 	"github.com/ethereum/go-ethereum/consensus/tendermint"
-	tendermintBackend "github.com/ethereum/go-ethereum/consensus/tendermint/trial_backend"
+	tendermintBackend "github.com/ethereum/go-ethereum/consensus/tendermint"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -54,6 +54,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"reflect"
+	"gopkg.in/urfave/cli.v1"
 )
 
 type LesServer interface {
@@ -108,8 +109,8 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(ctx *node.ServiceContext, config *Config, pending miner.Pending,
-			client ethapi.Client, cch core.CrossChainHelper) (*Ethereum, error) {
+func New(ctx *node.ServiceContext, config *Config, pending miner.Pending, cliCtx *cli.Context,
+          pNode tendermintBackend.PChainP2P, cch core.CrossChainHelper) (*Ethereum, error) {
 
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -134,7 +135,7 @@ func New(ctx *node.ServiceContext, config *Config, pending miner.Pending,
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb),
+		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb, cliCtx, pNode, cch),
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		networkId:      config.NetworkId,
@@ -195,7 +196,7 @@ func New(ctx *node.ServiceContext, config *Config, pending miner.Pending,
 		pending = eth.miner
 	}
 
-	eth.ApiBackend = &EthApiBackend{eth, nil, pending, client, nil, cch}
+	eth.ApiBackend = &EthApiBackend{eth, nil, pending, nil, nil, cch}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.GasPrice
@@ -235,7 +236,8 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 }
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
-func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
+func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig *params.ChainConfig, db ethdb.Database,
+                           cliCtx *cli.Context, pNode tendermintBackend.PChainP2P, cch core.CrossChainHelper) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
@@ -254,7 +256,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 			config.Istanbul.Epoch = chainConfig.Tendermint.Epoch
 		}
 		config.Tendermint.ProposerPolicy = tendermint.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
-		return tendermintBackend.New(&config.Tendermint, ctx.NodeKey(), db)
+		return tendermintBackend.New(tendermintBackend.GetTendermintConfig(chainConfig.PChainId, cliCtx), ctx.NodeKey(), db, pNode, cch)
 	}
 
 	// Otherwise assume proof-of-work

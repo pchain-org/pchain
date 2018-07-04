@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
@@ -15,16 +14,16 @@ import (
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	"github.com/tendermint/go-wire"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/proxy"
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	proxy "github.com/ethereum/go-ethereum/consensus/tendermint/proxy"
 	//ethTypes "github.com/ethereum/go-ethereum/core/types"
 	//"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/txhook"
 	"encoding/json"
 	"golang.org/x/net/context"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"math/big"
 )
 
@@ -258,8 +257,8 @@ type ConsensusState struct {
 
 	evsw types.EventSwitch
 
-	wal        *WAL
-	replayMode bool // so we don't log signing errors during replay
+	//wal        *WAL
+	//replayMode bool // so we don't log signing errors during replay
 
 	nSteps int // used for testing to limit the number of transitions the state makes
 
@@ -362,11 +361,13 @@ func (cs *ConsensusState) LoadCommit(height int) *types.Commit {
 
 func (cs *ConsensusState) OnStart() error {
 
+	/*
 	walFile := cs.config.GetString("cs_wal_file")
 	if err := cs.OpenWAL(walFile); err != nil {
 		log.Error("Error loading ConsensusState wal", "error", err.Error())
 		return err
 	}
+	*/
 
 	// we need the timeoutRoutine for replay so
 	//  we don't block on the tick chan.
@@ -377,11 +378,13 @@ func (cs *ConsensusState) OnStart() error {
 
 	// we may have lost some votes if the process crashed
 	// reload from consensus log to catchup
+	/*
 	if err := cs.catchupReplay(cs.Height); err != nil {
 		log.Error("Error on catchup replay. Proceeding to start ConsensusState anyway", "error", err.Error())
 		// NOTE: if we ever do return an error here,
 		// make sure to stop the timeoutTicker
 	}
+	*/
 
 	// now start the receiveRoutine
 	go cs.receiveRoutine(0)
@@ -406,9 +409,11 @@ func (cs *ConsensusState) OnStop() {
 	cs.timeoutTicker.Stop()
 
 	// Make BaseService.Wait() wait until cs.wal.Wait()
+	/*
 	if cs.wal != nil && cs.IsRunning() {
 		cs.wal.Wait()
 	}
+	*/
 }
 
 // NOTE: be sure to Stop() the event switch and drain
@@ -417,6 +422,7 @@ func (cs *ConsensusState) Wait() {
 	<-cs.done
 }
 
+/*
 // Open file to log all consensus messages and timeouts for deterministic accountability
 func (cs *ConsensusState) OpenWAL(walFile string) (err error) {
 	err = EnsureDir(filepath.Dir(walFile), 0700)
@@ -434,6 +440,7 @@ func (cs *ConsensusState) OpenWAL(walFile string) (err error) {
 	cs.wal = wal
 	return nil
 }
+*/
 
 //------------------------------------------------------------
 // Public interface for passing messages into the consensus state,
@@ -631,7 +638,7 @@ func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 
 func (cs *ConsensusState) newStep() {
 	rs := cs.RoundStateEvent()
-	cs.wal.Save(rs)
+	//cs.wal.Save(rs)
 	cs.nSteps += 1
 	// newStep is called by updateToStep in NewConsensusState before the evsw is set!
 	if cs.evsw != nil {
@@ -660,16 +667,16 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 
 		select {
 		case mi = <-cs.peerMsgQueue:
-			cs.wal.Save(mi)
+			//cs.wal.Save(mi)
 			// handles proposals, block parts, votes
 			// may generate internal events (votes, complete proposals, 2/3 majorities)
 			cs.handleMsg(mi, rs)
 		case mi = <-cs.internalMsgQueue:
-			cs.wal.Save(mi)
+			//cs.wal.Save(mi)
 			// handles proposals, block parts, votes
 			cs.handleMsg(mi, rs)
 		case ti := <-cs.timeoutTicker.Chan(): // tockChan:
-			cs.wal.Save(ti)
+			//cs.wal.Save(ti)
 			// if the timeout is relevant to the rs
 			// go to the next step
 			cs.handleTimeout(ti, rs)
@@ -679,10 +686,12 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 			// priv_val that haven't hit the WAL, but its ok because
 			// priv_val tracks LastSig
 
+			/*
 			// close wal now that we're done writing to it
 			if cs.wal != nil {
 				cs.wal.Stop()
 			}
+			*/
 
 			close(cs.done)
 			return
@@ -776,8 +785,6 @@ func (cs *ConsensusState) enterNewRound(height int, round int) {
 		log.Debug(Fmt("enterNewRound(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
 		return
 	}
-
-
 
 	if now := time.Now(); cs.StartTime.After(now) {
 		log.Warn("Need to set a buffer and log.Warn() here for sanity.", "startTime", cs.StartTime, "now", now)
@@ -902,11 +909,11 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 		}
 		log.Info("Signed proposal", "height", height, "round", round, "proposal", proposal)
 		log.Debug(Fmt("Signed proposal block: %v", block))
-	} else {
+	}/*else {
 		if !cs.replayMode {
 			log.Warn("enterPropose: Error signing proposal", "height", height, "round", round, "error", err)
 		}
-	}
+	}*/
 }
 
 // Returns true if the proposal block is complete &&
@@ -1300,6 +1307,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 
 	fail.Fail() // XXX
 
+	/*
 	// Finish writing to the WAL for this height.
 	// NOTE: If we fail before writing this, we'll never write it,
 	// and just recover by running ApplyBlock in the Handshake.
@@ -1310,6 +1318,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	if cs.wal != nil {
 		cs.wal.writeEndHeight(height)
 	}
+	*/
 
 	fail.Fail() // XXX
 

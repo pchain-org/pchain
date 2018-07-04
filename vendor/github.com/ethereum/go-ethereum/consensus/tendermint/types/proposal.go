@@ -83,7 +83,6 @@ func (e *ValidatorMsg) String() string {
 func (e *ValidatorMsg) WriteSignBytes(chainID string, w io.Writer, n *int, err *error) {
 	wire.WriteJSON(CanonicalJSONOnceValidatorMsg{
 		ChainID: chainID,
-		ValidatorMsg:   CanonicalValidatorMsg(e),
 	}, w, n, err)
 }
 

@@ -2,7 +2,6 @@ package types
 
 import (
 	// for registering TMEventData as events.EventData
-	abci "github.com/tendermint/abci/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-events"
 	"github.com/tendermint/go-wire"
@@ -77,7 +76,6 @@ type EventDataTx struct {
 	Tx     Tx            `json:"tx"`
 	Data   []byte        `json:"data"`
 	Log    string        `json:"log"`
-	Code   abci.CodeType `json:"code"`
 	Error  string        `json:"error"` // this is redundant information for now
 }
 

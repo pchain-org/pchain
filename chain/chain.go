@@ -2,7 +2,7 @@ package chain
 
 import (
 	"net/http"
-	tdm "github.com/pchain/ethermint/tendermint"
+	tdm "github.com/ethereum/go-ethereum/consensus/tendermint"
 	eth "github.com/ethereum/go-ethereum/node"
 	etmApp "github.com/pchain/ethermint/app"
 	etm "github.com/pchain/ethermint/cmd/ethermint"
@@ -10,21 +10,12 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	//"os"
 	cfg "github.com/tendermint/go-config"
 	"github.com/pchain/ethermint/ethereum"
 	"github.com/pchain/ethermint/version"
-	"io/ioutil"
-	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	cmn "github.com/tendermint/go-common"
-	"github.com/syndtr/goleveldb/leveldb/errors"
-	//validatorsStrategy "github.com/pchain/ethermint/strategies/validators"
-	"time"
 
 	"github.com/pchain/p2p"
-	"github.com/tendermint/go-rpc/server"
-	//"github.com/ethereum/go-ethereum/consensus/tendermint/proxy"
-	rpcTxHook "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/txhook"
 )
 
 const (
@@ -48,12 +39,9 @@ func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chai
 	config := etm.GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
-	// Create Tendermint RPC Channel Listener first
-	listener := rpcserver.NewChannelListener()
-
 	//always start ethereum
 	fmt.Println("ethereum.MakeSystemNode")
-	stack := ethereum.MakeSystemNode(chainId, version.Version, listener, ctx, GetCMInstance(ctx).cch)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, pNode, GetCMInstance(ctx).cch)
 	chain.EthNode = stack
 
 	rpcHandler, err := stack.GetRPCHandler()
@@ -62,25 +50,6 @@ func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chai
 	}
 
 	chain.RpcHandler = rpcHandler
-
-
-	consensus, err := getConsensus(config)
-	if(err != nil) {
-		cmn.Exit(cmn.Fmt("Couldn't get consensus with: %v", err))
-	}
-	fmt.Printf("consensus is: %s\n", consensus)
-
-	if (consensus != tdmTypes.CONSENSUS_POS) {
-		fmt.Println("consensus is not pos, so not start the pos prototol")
-		return nil
-	}
-
-	//set verbosity level for go-ethereum
-	glog.SetToStderr(true)
-	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
-
-	fmt.Println("tm node")
-	chain.TdmNode = MakeTendermintNode(config, pNode, listener, GetCMInstance(ctx).cch)
 
 	return chain
 }
@@ -100,13 +69,10 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 	config := etm.GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
-	// Create Tendermint RPC Channel Listener first
-	listener := rpcserver.NewChannelListener()
-
 	//always start ethereum
 	fmt.Printf("chainId: %s, ethereum.MakeSystemNode", chainId)
 	cch := GetCMInstance(ctx).cch
-	stack := ethereum.MakeSystemNode(chainId, version.Version, listener, ctx, cch)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, pNode, cch)
 	chain.EthNode = stack
 
 	rpcHandler, err := stack.GetRPCHandler()
@@ -117,30 +83,9 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 
 	chain.RpcHandler = rpcHandler
 
-	consensus, err := getConsensus(config)
-	if(err != nil) {
-		fmt.Printf("Couldn't get consensus with: %v\n", err)
-		stack.Stop()
-		return nil
-	}
-	fmt.Printf("consensus is: %s\n", consensus)
-
-	if (consensus != tdmTypes.CONSENSUS_POS) {
-		fmt.Println("consensus is not pos, so not start the pos prototol")
-		return nil
-	}
-
 	//set verbosity level for go-ethereum
 	glog.SetToStderr(true)
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
-
-	fmt.Println("tm node")
-	tdmNode := MakeTendermintNode(config, pNode, listener, cch)
-	if tdmNode == nil {
-		fmt.Println("make tendermint node failed")
-		return nil
-	}
-	chain.TdmNode = tdmNode
 
 	return chain
 }
@@ -210,27 +155,6 @@ func StartChain(chain *Chain, quit chan int) error {
 	return nil
 }
 
-func getConsensus(config cfg.Config) (string, error) {
-
-	genDocFile := config.GetString("genesis_file")
-	var genDoc *tdmTypes.GenesisDoc = nil
-	if !cmn.FileExists(genDocFile) {
-		return "", errors.New("Couldn't read GenesisDoc file")
-	}
-
-	jsonBlob, err := ioutil.ReadFile(genDocFile)
-	if err != nil {
-		return "", errors.New("Couldn't read GenesisDoc file")
-	}
-
-	genDoc, err = tdmTypes.GenesisDocFromJSON(jsonBlob)
-	if err != nil {
-		return "", errors.New("Genesis doc parse json error: %v")
-	}
-
-	return genDoc.Consensus, nil
-}
-
 func testEthereumApi() {
 	coinbase, err := ethereum.Coinbase()
 	if(err != nil) {
@@ -244,36 +168,6 @@ func testEthereumApi() {
 		fmt.Printf("ethereum.GetBalance err with: %v\n", err)
 	}
 	fmt.Printf("testEthereumApi: balance is: %x\n", balance)
-}
-
-func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P, cl *rpcserver.ChannelListener,
-			cch rpcTxHook.CrossChainHelper) *tdm.Node {
-
-	genDocFile := config.GetString("genesis_file")
-	if !cmn.FileExists(genDocFile) {
-		//log.Notice(cmn.Fmt("Waiting for genesis file %v...", genDocFile))
-		fmt.Printf(cmn.Fmt("Waiting for genesis file %v...", genDocFile))
-		for {
-			time.Sleep(time.Second)
-			if !cmn.FileExists(genDocFile) {
-				continue
-			}
-			jsonBlob, err := ioutil.ReadFile(genDocFile)
-			if err != nil {
-				cmn.Exit(cmn.Fmt("Couldn't read GenesisDoc file: %v", err))
-			}
-			genDoc, err := tdmTypes.GenesisDocFromJSON(jsonBlob)
-			if err != nil {
-				cmn.PanicSanity(cmn.Fmt("Genesis doc parse json error: %v", err))
-			}
-			if genDoc.ChainID == "" {
-				cmn.PanicSanity(cmn.Fmt("Genesis doc %v must include non-empty chain_id", genDocFile))
-			}
-			config.Set("chain_id", genDoc.ChainID)
-		}
-	}
-
-	return tdm.NewNodeNotStart(config, pNode.Switch(), pNode.AddrBook(), cl, cch)
 }
 
 func CreateChildChain(ctx *cli.Context, chainId string, balStr string) error{

@@ -100,7 +100,7 @@ func BroadcastTxCommit(context *RPCDataContext, tx types.Tx) (*ctypes.ResultBroa
 	case deliverTxRes := <-deliverTxResCh:
 		// The tx was included in a block.
 		deliverTxR := &abci.ResponseDeliverTx{
-			Code: deliverTxRes.Code,
+			//Code: deliverTxRes.Code,
 			Data: deliverTxRes.Data,
 			Log:  deliverTxRes.Log,
 		}

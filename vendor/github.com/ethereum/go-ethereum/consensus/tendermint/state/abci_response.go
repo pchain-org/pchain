@@ -207,7 +207,6 @@ func (a *ABCIResponses) ResCb(req *abci.Request, res *abci.Response) {
 			Height: a.Height,
 			Tx:     types.Tx(req.GetDeliverTx().Tx),
 			Data:   txResult.Data,
-			Code:   txResult.Code,
 			Log:    txResult.Log,
 			Error:  txError,
 		}

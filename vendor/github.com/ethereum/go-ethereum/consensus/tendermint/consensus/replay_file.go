@@ -17,7 +17,7 @@ import (
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	rpcTxHook "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/txhook"
+	"github.com/ethereum/go-ethereum/core"
 )
 
 //--------------------------------------------------------
@@ -37,10 +37,11 @@ func (cs *ConsensusState) ReplayFile(file string, console bool) error {
 	if cs.IsRunning() {
 		return errors.New("cs is already running, cannot replay")
 	}
+	/*
 	if cs.wal != nil {
 		return errors.New("cs wal is open, cannot replay")
 	}
-
+	*/
 	cs.startForReplay()
 
 	// ensure all new step events are regenerated as expected
@@ -238,7 +239,7 @@ func (pb *playback) replayConsoleLoop() int {
 //--------------------------------------------------------------------------------
 
 // convenience for replay mode
-func newConsensusStateForReplay(config cfg.Config, cch rpcTxHook.CrossChainHelper) *ConsensusState {
+func newConsensusStateForReplay(config cfg.Config, cch core.CrossChainHelper) *ConsensusState {
 	// Get BlockStore
 	blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
 	blockStore := bc.NewBlockStore(blockStoreDB)
