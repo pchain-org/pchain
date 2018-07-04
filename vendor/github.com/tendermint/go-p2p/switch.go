@@ -29,24 +29,24 @@ incoming messages are received on the reactor.
 type Switch struct {
 	BaseService
 
-	config       cfg.Config
-	listeners    []Listener
+	config    cfg.Config
+	listeners []Listener
 	//reactors     map[string]Reactor
 	//chDescs      []*ChannelDescriptor
 	//reactorsByCh map[byte]Reactor
 	reactorsByChainId map[string]*ChainRouter
 
-	peers        *PeerSet
-	dialing      *CMap
-	nodeInfo     *NodeInfo             // our node info
-	nodePrivKey  crypto.PrivKeyEd25519 // our node privkey
+	peers       *PeerSet
+	dialing     *CMap
+	nodeInfo    *NodeInfo             // our node info
+	nodePrivKey crypto.PrivKeyEd25519 // our node privkey
 
 	filterConnByAddr   func(net.Addr) error
 	filterConnByPubKey func(crypto.PubKeyEd25519) error
 }
 
 var (
-	ErrSwitchDuplicatePeer      = errors.New("Duplicate peer")
+	ErrSwitchDuplicatePeer = errors.New("Duplicate peer")
 	//ErrSwitchMaxPeersPerIPRange = errors.New("IP range has too many peers")
 )
 
@@ -55,14 +55,14 @@ func NewSwitch(config cfg.Config) *Switch {
 	setConfigDefaults(config)
 
 	sw := &Switch{
-		config:       config,
+		config:            config,
 		reactorsByChainId: make(map[string]*ChainRouter),
 		//reactors:     make(map[string]Reactor),
 		//chDescs:      make([]*ChannelDescriptor, 0),
 		//reactorsByCh: make(map[byte]Reactor),
-		peers:        NewPeerSet(),
-		dialing:      NewCMap(),
-		nodeInfo:     nil,
+		peers:    NewPeerSet(),
+		dialing:  NewCMap(),
+		nodeInfo: nil,
 	}
 	sw.BaseService = *NewBaseService(log, "P2P Switch", sw)
 	return sw
@@ -97,8 +97,14 @@ func (sw *Switch) Reactors(chainID string) map[string]Reactor {
 
 // Reactor returns the reactor with the given name.
 // NOTE: Not goroutine safe.
-func (sw *Switch) Reactor(chainId, name string) Reactor {
-	return sw.reactorsByChainId[chainId].reactors[name]
+func (sw *Switch) Reactor(chainID, name string) Reactor {
+	return sw.reactorsByChainId[chainID].reactors[name]
+}
+
+// ChainRouter returns the Chain Router with the Chain ID.
+// NOTE: Not goroutine safe.
+func (sw *Switch) ChainRouter(chainID string) *ChainRouter {
+	return sw.reactorsByChainId[chainID]
 }
 
 // AddListener adds the given listener to the switch for listening to incoming peer connections.

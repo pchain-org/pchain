@@ -62,20 +62,20 @@ Inbound message bytes are handled with an onReceive callback function.
 type MConnection struct {
 	cmn.BaseService
 
-	conn        net.Conn
-	bufReader   *bufio.Reader
-	bufWriter   *bufio.Writer
-	sendMonitor *flow.Monitor
-	recvMonitor *flow.Monitor
-	send        chan struct{}
-	pong        chan struct{}
+	conn              net.Conn
+	bufReader         *bufio.Reader
+	bufWriter         *bufio.Writer
+	sendMonitor       *flow.Monitor
+	recvMonitor       *flow.Monitor
+	send              chan struct{}
+	pong              chan struct{}
 	channelsByChainId map[string]*ChainChannel
 	//channels    []*Channel
 	//channelsIdx map[byte]*Channel
-	onReceive   receiveCbFunc
-	onError     errorCbFunc
-	errored     uint32
-	config      *MConnConfig
+	onReceive receiveCbFunc
+	onError   errorCbFunc
+	errored   uint32
+	config    *MConnConfig
 
 	quit         chan struct{}
 	flushTimer   *cmn.ThrottleTimer // flush writes as necessary but throttled.
@@ -113,17 +113,17 @@ func NewMConnection(conn net.Conn, reactorsByChainId map[string]*ChainRouter, on
 // NewMConnectionWithConfig wraps net.Conn and creates multiplex connection with a config
 func NewMConnectionWithConfig(conn net.Conn, reactorsByChainId map[string]*ChainRouter, onReceive receiveCbFunc, onError errorCbFunc, config *MConnConfig) *MConnection {
 	mconn := &MConnection{
-		conn:        conn,
-		bufReader:   bufio.NewReaderSize(conn, minReadBufferSize),
-		bufWriter:   bufio.NewWriterSize(conn, minWriteBufferSize),
-		sendMonitor: flow.New(0, 0),
-		recvMonitor: flow.New(0, 0),
-		send:        make(chan struct{}, 1),
-		pong:        make(chan struct{}),
+		conn:              conn,
+		bufReader:         bufio.NewReaderSize(conn, minReadBufferSize),
+		bufWriter:         bufio.NewWriterSize(conn, minWriteBufferSize),
+		sendMonitor:       flow.New(0, 0),
+		recvMonitor:       flow.New(0, 0),
+		send:              make(chan struct{}, 1),
+		pong:              make(chan struct{}),
 		channelsByChainId: make(map[string]*ChainChannel),
-		onReceive:   onReceive,
-		onError:     onError,
-		config:      config,
+		onReceive:         onReceive,
+		onError:           onError,
+		config:            config,
 
 		LocalAddress:  NewNetAddress(conn.LocalAddr()),
 		RemoteAddress: NewNetAddress(conn.RemoteAddr()),
@@ -153,6 +153,30 @@ func NewMConnectionWithConfig(conn net.Conn, reactorsByChainId map[string]*Chain
 	mconn.BaseService = *cmn.NewBaseService(log, "MConnection", mconn)
 
 	return mconn
+}
+
+// AddChainChannelByChainID add the channels by chain id from Chain Router into MConnection
+// after the MConnection already connected
+func (c *MConnection) addChainChannelByChainID(chainID string, chainRouter *ChainRouter) {
+	if _, exist := c.channelsByChainId[chainID]; !exist {
+		// Create channels
+		var channelsIdx = map[byte]*Channel{}
+		var channels = []*Channel{}
+
+		for _, desc := range chainRouter.chDescs {
+			descCopy := *desc // copy the desc else unsafe access across connections
+			channel := newChannel(c, &descCopy)
+			channelsIdx[channel.id] = channel
+			channels = append(channels, channel)
+		}
+
+		// Create Chain Channel
+		chainChannel := &ChainChannel{
+			channels:    channels,
+			channelsIdx: channelsIdx,
+		}
+		c.channelsByChainId[chainID] = chainChannel
+	}
 }
 
 func (c *MConnection) OnStart() error {
@@ -515,8 +539,8 @@ FOR_LOOP:
 }
 
 type ConnectionStatus struct {
-	SendMonitor flow.Status
-	RecvMonitor flow.Status
+	SendMonitor     flow.Status
+	RecvMonitor     flow.Status
 	ChannelsByChain map[string][]ChannelStatus
 	//Channels    []ChannelStatus
 }

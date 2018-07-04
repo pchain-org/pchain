@@ -28,6 +28,9 @@ func StartP2P(p2pconfig cfg.Config) (*PChainP2P, error) {
 	// Make p2p network switch
 	sw := p2p.NewSwitch(p2pconfig.GetConfig("p2p"))
 
+	chainReactor := NewChainReactor()
+	sw.AddReactor("pchain", "CHILDCHAIN", chainReactor)
+
 	// Optionally, start the pex reactor
 	var addrBook *p2p.AddrBook
 	if p2pconfig.GetBool("pex_reactor") {
@@ -114,6 +117,15 @@ func (pNode *PChainP2P) Switch() *p2p.Switch {
 // AddrBook return the P2P Address Book
 func (pNode *PChainP2P) AddrBook() *p2p.AddrBook {
 	return pNode.addrBook
+}
+
+// BroadcastChildChainID broadcast the child chain id to all the peers
+func (pNode *PChainP2P) BroadcastChildChainID(childChainID string) {
+	// Find the right Reactor
+	chainRouter := pNode.sw.Reactor("pchain", "CHILDCHAIN").(*ChainReactor)
+
+	// Then send
+	chainRouter.broadcastNewChainIDRequest(childChainID)
 }
 
 func makeNodeInfo(p2pconfig cfg.Config, privKey crypto.PrivKeyEd25519, sw *p2p.Switch) *p2p.NodeInfo {

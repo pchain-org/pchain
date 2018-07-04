@@ -20,10 +20,10 @@ import (
 type Peer struct {
 	cmn.BaseService
 
-	outbound bool
+	outbound   bool
 	persistent bool
 	config     *PeerConfig
-	conn  net.Conn     // source connection
+	conn       net.Conn // source connection
 
 	mconn *MConnection // multiplex connection
 
@@ -297,6 +297,16 @@ func (p *Peer) GetSameNetwork(nodeNetwork NetworkSet) []string {
 		}
 	}
 	return sameNetwork
+}
+
+// AddChainChannelByChainID Add the Chain Channel into MConn
+// then add the peer to each Child Chain Reactor
+func (p *Peer) AddChainChannelByChainID(chainID string, chainRouter *ChainRouter) {
+	p.mconn.addChainChannelByChainID(chainID, chainRouter)
+
+	for _, reactor := range chainRouter.reactors {
+		reactor.AddPeer(p)
+	}
 }
 
 //------------------------------------------------------------------

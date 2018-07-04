@@ -261,14 +261,18 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	cm.childChains[chainId] = chain
 
 	//StartChildChain to attach p2p and rpc
-	cm.p2pObj.AddNetwork(chain.Id)
-	// Start each Chain
+	cm.p2pObj.AddNetwork(chainId)
+
+	// Start the new Child Chain, and it will start child chain reactors as well
 	quit := make(chan int)
 	cm.childQuits[chain.Id] = quit
 	err := StartChain(chain, quit)
 	if err != nil {
 		return
 	}
+
+	// Broadcast Child ID to all peers
+	cm.p2pObj.BroadcastChildChainID(chainId)
 
 	//hookup rpc
 	rpc.Hookup(chain.Id, chain.RpcHandler)

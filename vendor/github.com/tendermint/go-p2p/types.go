@@ -112,7 +112,16 @@ func MakeNetwork() NetworkSet {
 	}
 }
 
-func (info *NodeInfo) AddNetwork(network string) {
-	info.Networks.NwArr = append(info.Networks.NwArr, network)
-	info.Networks.nwSet[network] = struct{}{}
+func (info *NodeInfo) AddNetwork(network string) bool {
+	if _, exist := info.Networks.nwSet[network]; !exist {
+		info.Networks.nwSet[network] = struct{}{}
+		info.Networks.NwArr = append(info.Networks.NwArr, network)
+		return true
+	}
+	return false
+}
+
+func (info *NodeInfo) ExistNetwork(network string) bool {
+	_, exist := info.Networks.nwSet[network]
+	return exist
 }
