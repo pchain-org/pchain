@@ -48,21 +48,28 @@ func (r *ChainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte) {
 		plog.Warn("Error decoding message", "error", err)
 		return
 	}
-	plog.Debug("Receive", "src", src, "chId", chID, "msg", msg)
+	plog.Debugln("Receive", "src", src, "chId", chID, "msg", msg)
 
 	switch msg := msg.(type) {
 	case *ccRequestMessage:
+		plog.Debugf("Got child id msg from peer %v", src)
+
 		// Check the chain id from request matched the local network
-		update := r.checkAndUpdateNetwork(msg.childChainID, src)
+		update := r.checkAndUpdateNetwork(msg.ChildChainID, src)
 
 		// Send Response Message back to peer
 		if update {
-			r.sendResponse(src, msg.childChainID)
+			plog.Debugf("Update Peer network -- success. %#+v", src.NodeInfo)
+			r.sendResponse(src, msg.ChildChainID)
+		} else {
+			plog.Debugln("Update Peer network -- do nothing")
 		}
 
 	case *ccResponseMessage:
+		plog.Debugf("Got child id response msg from peer %v", src)
+
 		// Check the chain id from request matched the local network
-		r.checkAndUpdateNetwork(msg.childChainID, src)
+		r.checkAndUpdateNetwork(msg.ChildChainID, src)
 
 	default:
 		plog.Warnf("Unknown message type %v", reflect.TypeOf(msg))
@@ -101,7 +108,7 @@ func (r *ChainReactor) broadcastNewChainIDRequest(childChainID string) {
 
 // sendResponse sends chain id back to the peer.
 func (r *ChainReactor) sendResponse(p *p2p.Peer, childChainID string) {
-	p.Send("pchain", ChainChannel, struct{ ChildChainMessage }{&ccResponseMessage{childChainID: childChainID}})
+	p.Send("pchain", ChainChannel, struct{ ChildChainMessage }{&ccResponseMessage{childChainID}})
 }
 
 //-----------------------------------------------------------------------------
@@ -135,20 +142,20 @@ func DecodeMessage(bz []byte) (msgType byte, msg ChildChainMessage, err error) {
 A ccRequestMessage tell other peer that I have joined the new chain
 */
 type ccRequestMessage struct {
-	childChainID string
+	ChildChainID string
 }
 
 func (m *ccRequestMessage) String() string {
-	return fmt.Sprintf("[ccRequest %v]", m.childChainID)
+	return fmt.Sprintf("[ccRequest %v]", m.ChildChainID)
 }
 
 /*
 A ccResponseMessage response the peer that I have added the child chain id to the peer's nodeinfo
 */
 type ccResponseMessage struct {
-	childChainID string
+	ChildChainID string
 }
 
 func (m *ccResponseMessage) String() string {
-	return fmt.Sprintf("[ccResponse %v]", m.childChainID)
+	return fmt.Sprintf("[ccResponse %v]", m.ChildChainID)
 }
