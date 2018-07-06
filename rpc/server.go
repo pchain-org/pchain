@@ -1,13 +1,13 @@
 package rpc
 
 import (
+	"fmt"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/tendermint/go-rpc/server"
+	"gopkg.in/urfave/cli.v1"
 	"net"
 	"net/http"
-	"github.com/tendermint/go-rpc/server"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"fmt"
-	"gopkg.in/urfave/cli.v1"
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"strconv"
 )
 
@@ -15,31 +15,31 @@ var listenAddrs map[string]interface{}
 var listeners map[string]net.Listener
 var muxes map[string]*http.ServeMux
 
-func Hookup(chainId string, handler http.Handler) error{
+func Hookup(chainId string, handler http.Handler) error {
 
 	fmt.Printf("Hookup RPC for (chainId, rpchandler): (%v, %v)\n", chainId, handler)
-	for addr, _ := range listenAddrs {
+	for addr := range listenAddrs {
 
-		listeners[addr].Close()
-		mux := muxes[addr]
+		//listeners[addr].Close()
+		//mux := muxes[addr]
 
 		if handler != nil {
-			muxes[addr].Handle("/" + chainId, handler)
+			muxes[addr].Handle("/"+chainId, handler)
 		} else {
-			muxes[addr].Handle("/" + chainId, defaultHandler())
+			muxes[addr].Handle("/"+chainId, defaultHandler())
 		}
 
-		listener, err := rpcserver.StartHTTPServer(addr, mux)
-		if err != nil {
-			return err
-		}
-		listeners[addr] = listener
+		//listener, err := rpcserver.StartHTTPServer(addr, mux)
+		//if err != nil {
+		//	return err
+		//}
+		//listeners[addr] = listener
 	}
 
 	return nil
 }
 
-func Takeoff(chainId string) error{
+func Takeoff(chainId string) error {
 
 	fmt.Printf("Takeoff RPC for chainId: %v\n", chainId)
 	for addr, _ := range listenAddrs {
@@ -47,7 +47,7 @@ func Takeoff(chainId string) error{
 		listeners[addr].Close()
 		mux := muxes[addr]
 
-		mux.Handle("/" + chainId, defaultHandler())
+		mux.Handle("/"+chainId, defaultHandler())
 
 		listener, err := rpcserver.StartHTTPServer(addr, mux)
 		if err != nil {
@@ -86,6 +86,7 @@ func StartRPC(ctx *cli.Context) error {
 	}
 	return nil
 }
+
 /*
 func StartRPC1(ctx *cli.Context, chainIds []string, handlers []http.Handler) error {
 
