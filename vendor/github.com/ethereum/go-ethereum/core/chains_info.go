@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
@@ -317,7 +318,7 @@ func DeletePendingChildChainData(db dbm.DB, chainId string) {
 }
 
 // GetChildChainForLaunch get the child chain for pending db for launch
-func GetChildChainForLaunch(db dbm.DB, height uint64) []string {
+func GetChildChainForLaunch(db dbm.DB, height uint64, stateDB *state.StateDB) []string {
 	pendingChainMtx.Lock()
 	defer pendingChainMtx.Unlock()
 
@@ -340,12 +341,24 @@ func GetChildChainForLaunch(db dbm.DB, height uint64) []string {
 			// skip it
 			newPendingIdx = append(newPendingIdx, v)
 		} else if v.End < height {
+			// Refund the Lock Balance
+			cci := GetPendingChildChainData(db, v.ChainID)
+			for _, jv := range cci.JoinedValidators {
+				stateDB.SubLockedBalance(jv.Address, jv.DepositAmount)
+				stateDB.AddBalance(jv.Address, jv.DepositAmount)
+			}
 			// remove it
 			DeletePendingChildChainData(db, v.ChainID)
 		} else {
 			// check condition
 			cci := GetPendingChildChainData(db, v.ChainID)
 			if len(cci.JoinedValidators) >= int(cci.MinValidators) && cci.TotalDeposit().Cmp(cci.MinDepositAmount) >= 0 {
+				// Deduct the Deposit
+				for _, jv := range cci.JoinedValidators {
+					// Deposit will move to the Child Chain Account
+					stateDB.SubLockedBalance(jv.Address, jv.DepositAmount)
+				}
+				// Append the Chain ID to Ready Launch List
 				readyForLaunch = append(readyForLaunch, v.ChainID)
 			} else {
 				newPendingIdx = append(newPendingIdx, v)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/state"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -190,10 +191,10 @@ func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, 
 	return nil
 }
 
-func (cch *CrossChainHelper) ReadyForLaunchChildChain(height uint64) {
+func (cch *CrossChainHelper) ReadyForLaunchChildChain(height uint64, stateDB *state.StateDB) {
 	plog.Debugln("ReadyForLaunchChildChain - start")
 
-	readyId := core.GetChildChainForLaunch(cch.chainInfoDB, height)
+	readyId := core.GetChildChainForLaunch(cch.chainInfoDB, height, stateDB)
 	if len(readyId) == 0 {
 		plog.Infof("ReadyForLaunchChildChain - No child chain to be launch in Block %v", height)
 	} else {

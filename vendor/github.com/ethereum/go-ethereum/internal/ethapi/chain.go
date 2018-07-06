@@ -436,9 +436,6 @@ func ccc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHe
 		return err
 	}
 
-	// TODO Move to apply commit callback
-	//cch.GetTypeMutex().Post(core.CreateChildChainEvent{From: from, ChainId: chainId})
-
 	return nil
 }
 
@@ -454,6 +451,11 @@ func jcc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChai
 	chainId := chainIdVar.(string)
 	depositAmountVar, _ := etd.Params.Get(JCC_ARGS_DEPOSIT)
 	depositAmount := depositAmountVar.(*big.Int)
+
+	// Check Balance
+	if state.GetBalance(from).Cmp(depositAmount) == -1 {
+		return core.ErrBalance
+	}
 
 	if err := cch.ValidateJoinChildChain(from, pubkey, chainId, depositAmount); err != nil {
 		return err
@@ -475,9 +477,18 @@ func jcc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHe
 	depositAmountVar, _ := etd.Params.Get(JCC_ARGS_DEPOSIT)
 	depositAmount := new(big.Int).SetBytes(depositAmountVar.([]byte))
 
+	// Check Balance
+	if state.GetBalance(from).Cmp(depositAmount) == -1 {
+		return core.ErrBalance
+	}
+	// Add the validator into Chain DB
 	err := cch.JoinChildChain(from, pubkey, chainId, depositAmount)
 	if err != nil {
 		return err
+	} else {
+		// Everything fine, Lock the Balance for this account
+		state.SubBalance(from, depositAmount)
+		state.AddLockedBalance(from, depositAmount)
 	}
 
 	return nil

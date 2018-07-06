@@ -421,7 +421,7 @@ func initEthGenesisFromExistValidator(mainKeyStorePath, validatorKeyStorePath st
 		Balance string
 		Nonce   string
 		Amount  string
-	}{Balance: depositAmount.String(), Amount: depositAmount.String()}
+	}{Balance: "0", Amount: depositAmount.String()}
 
 	contents, err := json.Marshal(coreGenesis)
 	if err != nil {

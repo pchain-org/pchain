@@ -19,15 +19,15 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/params"
-	abciTypes "github.com/tendermint/abci/types"
-	emtTypes "github.com/pchain/ethermint/types"
-	tmTypes "github.com/tendermint/tendermint/types"
-	core_types "github.com/tendermint/tendermint/rpc/core/types"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
+	emtTypes "github.com/pchain/ethermint/types"
+	"github.com/syndtr/goleveldb/leveldb/errors"
+	abciTypes "github.com/tendermint/abci/types"
+	core_types "github.com/tendermint/tendermint/rpc/core/types"
+	tmTypes "github.com/tendermint/tendermint/types"
 )
 
 const TRANSACTION_NUM_LIMIT = 200000
@@ -41,10 +41,10 @@ type Client interface {
 
 // Intermediate state of a block, updated with each DeliverTx and reset on Commit
 type work struct {
-	header *ethTypes.Header
-	parent *ethTypes.Block
-	state  *state.StateDB
-	config *params.ChainConfig
+	header  *ethTypes.Header
+	parent  *ethTypes.Block
+	state   *state.StateDB
+	config  *params.ChainConfig
 	chainDb ethdb.Database
 
 	txIndex      int
@@ -52,15 +52,15 @@ type work struct {
 	receipts     ethTypes.Receipts
 	allLogs      []*ethTypes.Log
 
-	totalUsedGas *big.Int
+	totalUsedGas   *big.Int
 	totalUsedMoney *big.Int
 	rewardPerBlock *big.Int
-	gp           *core.GasPool
+	gp             *core.GasPool
 
 	//emmark for pre-check
-	pcGp         *core.GasPool
-	pcBalance    map[vm.Account]*big.Int
-	txCount      *big.Int
+	pcGp      *core.GasPool
+	pcBalance map[vm.Account]*big.Int
+	txCount   *big.Int
 }
 
 type pending struct {
@@ -153,12 +153,12 @@ func (s *Backend) APIs() []rpc.API {
 			v.Service = &NetRPCService{networkVersion}
 		}
 		/*
-		if v.Namespace == "miner" {
-			continue
-		}
-		if _, ok := v.Service.(*eth.PublicMinerAPI); ok {
-			continue
-		}
+			if v.Namespace == "miner" {
+				continue
+			}
+			if _, ok := v.Service.(*eth.PublicMinerAPI); ok {
+				continue
+			}
 		*/
 		retApis = append(retApis, v)
 	}
@@ -166,8 +166,8 @@ func (s *Backend) APIs() []rpc.API {
 	go s.txBroadcastLoop()
 
 	/*
-	//add by author@liaoyd
-	go s.validatorTransLoop()
+		//add by author@liaoyd
+		go s.validatorTransLoop()
 	*/
 	apis = retApis
 
@@ -265,7 +265,6 @@ func (s *pending) PendingBlock() *ethTypes.Block {
 	)
 }
 
-
 //emmark----------------------------------------------------------------
 func (b *Backend) SetPreCheckInt(pcInt eth.PreCheckInt) {
 	b.ethereum.SetPreCheckInt(pcInt)
@@ -286,9 +285,9 @@ func (p *pending) preCheck(blockchain *core.BlockChain, config *eth.Config, tx *
 func (w *work) preCheck(blockchain *core.BlockChain, config *eth.Config, blockHash common.Hash, tx *ethTypes.Transaction) error {
 
 	/*
-	if(w.txCount.Cmp(big.NewInt(TRANSACTION_NUM_LIMIT)) > 0) {
-		return fmt.Errorf("transactions are too much for one block round, reached 1000 tx")
-	}
+		if(w.txCount.Cmp(big.NewInt(TRANSACTION_NUM_LIMIT)) > 0) {
+			return fmt.Errorf("transactions are too much for one block round, reached 1000 tx")
+		}
 	*/
 	w.txCount.Add(w.txCount, big.NewInt(1))
 
@@ -322,11 +321,11 @@ func (w *work) preCheck(blockchain *core.BlockChain, config *eth.Config, blockHa
 	if _, exist := w.pcBalance[senderAccount]; !exist {
 		balance := senderAccount.Balance()
 		fmt.Printf("(w *work) preCheck(); balance is %v\n", balance)
-		w.pcBalance[senderAccount] = balance;
+		w.pcBalance[senderAccount] = balance
 		fmt.Printf("(w *work) preCheck(); w.pcBalance[senderAccount] is %v\n", w.pcBalance[senderAccount])
 	}
 
-	fmt.Printf("(w *work) preCheck(); before pre-sub, senderAccount %s has balance %v, gaslimit is now %v\n" +
+	fmt.Printf("(w *work) preCheck(); before pre-sub, senderAccount %s has balance %v, gaslimit is now %v\n"+
 		"gas is %v, spending is %v\n",
 		senderAddress, w.pcBalance[senderAccount], w.pcGp, mgas, mgval)
 
@@ -351,11 +350,11 @@ func (w *work) preCheck(blockchain *core.BlockChain, config *eth.Config, blockHa
 
 func (b *Backend) DeliverTx(tx *ethTypes.Transaction) error {
 	return b.pending.deliverTx(b.ethereum.BlockChain(), b.config,
-				tx, b.Ethereum().ApiBackend.GetCrossChainHelper())
+		tx, b.Ethereum().ApiBackend.GetCrossChainHelper())
 }
 
 func (p *pending) deliverTx(blockchain *core.BlockChain, config *eth.Config,
-				tx *ethTypes.Transaction, cch core.CrossChainHelper) error {
+	tx *ethTypes.Transaction, cch core.CrossChainHelper) error {
 	p.commitMutex.Lock()
 	defer p.commitMutex.Unlock()
 
@@ -364,7 +363,7 @@ func (p *pending) deliverTx(blockchain *core.BlockChain, config *eth.Config,
 }
 
 func (w *work) deliverTx(blockchain *core.BlockChain, config *eth.Config, blockHash common.Hash,
-				tx *ethTypes.Transaction, cch core.CrossChainHelper) error {
+	tx *ethTypes.Transaction, cch core.CrossChainHelper) error {
 	w.state.StartRecord(tx.Hash(), blockHash, w.txIndex)
 	fmt.Printf("(w *work) deliverTx(); before apply transaction, w.gp is %v\n", w.gp)
 	receipt, _, err := core.ApplyTransactionEx(
@@ -394,6 +393,26 @@ func (w *work) deliverTx(blockchain *core.BlockChain, config *eth.Config, blockH
 	w.allLogs = append(w.allLogs, logs...)
 
 	return err
+}
+
+//----------------------------------------------------------------------
+// Check if any Child Chain in DB match the launch criteria
+func (b *Backend) CheckAndProcessChildChain(height uint64) {
+	// Child Chain should not check this
+	if b.config.ChainConfig.PChainId == "pchain" {
+		b.pending.checkAndProcessChildChain(height, b.ethereum.ApiBackend.GetCrossChainHelper())
+	}
+}
+
+func (p *pending) checkAndProcessChildChain(height uint64, cch core.CrossChainHelper) {
+	p.commitMutex.Lock()
+	defer p.commitMutex.Unlock()
+
+	p.work.checkAndProcessChildChain(height, cch)
+}
+
+func (w *work) checkAndProcessChildChain(height uint64, cch core.CrossChainHelper) {
+	cch.ReadyForLaunchChildChain(height, w.state)
 }
 
 //----------------------------------------------------------------------
@@ -447,25 +466,25 @@ func (p *pending) commit(blockchain *core.BlockChain, chainDb ethdb.Database, re
 func (w *work) commit(blockchain *core.BlockChain) (common.Hash, error) {
 	// commit ethereum state and update the header
 	/*
-	hashArray, err := w.state.Commit(false) // XXX: ugh hardforks
-	if err != nil {
-		return common.Hash{}, err
-	}
-	w.header.Root = hashArray
+		hashArray, err := w.state.Commit(false) // XXX: ugh hardforks
+		if err != nil {
+			return common.Hash{}, err
+		}
+		w.header.Root = hashArray
 
-	// tag logs with state root
-	// NOTE: BlockHash ?
-	for _, log := range w.allLogs {
-		log.BlockHash = hashArray
-	}
+		// tag logs with state root
+		// NOTE: BlockHash ?
+		for _, log := range w.allLogs {
+			log.BlockHash = hashArray
+		}
 
-	// save the block to disk
-	glog.V(logger.Debug).Infof("Committing block with state hash %X and root hash %X", hashArray, blockHash)
-	_, err = blockchain.InsertChain([]*ethTypes.Block{block})
-	if err != nil {
-		glog.V(logger.Debug).Infof("Error inserting ethereum block in chain: %v", err)
-		return common.Hash{}, err
-	}
+		// save the block to disk
+		glog.V(logger.Debug).Infof("Committing block with state hash %X and root hash %X", hashArray, blockHash)
+		_, err = blockchain.InsertChain([]*ethTypes.Block{block})
+		if err != nil {
+			glog.V(logger.Debug).Infof("Error inserting ethereum block in chain: %v", err)
+			return common.Hash{}, err
+		}
 	*/
 
 	// create block object and compute final commit hash (hash of the ethereum block)
@@ -551,18 +570,18 @@ func (p *pending) resetWork(blockchain *core.BlockChain, chainDb ethdb.Database,
 	ethHeader := newBlockHeader(receiver, currentBlock)
 
 	return &work{
-		header:       ethHeader,
-		parent:       currentBlock,
-		state:        state,
-		config:	      blockchain.Config(),
-		chainDb:      chainDb,
-		txIndex:      0,
-		totalUsedGas: big.NewInt(0),
+		header:         ethHeader,
+		parent:         currentBlock,
+		state:          state,
+		config:         blockchain.Config(),
+		chainDb:        chainDb,
+		txIndex:        0,
+		totalUsedGas:   big.NewInt(0),
 		totalUsedMoney: big.NewInt(0),
-		gp:           new(core.GasPool).AddGas(ethHeader.GasLimit),
-		pcGp:         new(core.GasPool).AddGas(ethHeader.GasLimit),
-		pcBalance:    make(map[vm.Account]*big.Int),
-		txCount:      big.NewInt(0),
+		gp:             new(core.GasPool).AddGas(ethHeader.GasLimit),
+		pcGp:           new(core.GasPool).AddGas(ethHeader.GasLimit),
+		pcBalance:      make(map[vm.Account]*big.Int),
+		txCount:        big.NewInt(0),
 	}, nil
 }
 

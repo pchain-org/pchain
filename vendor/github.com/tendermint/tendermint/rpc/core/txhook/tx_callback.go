@@ -2,6 +2,7 @@ package core
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
@@ -17,7 +18,7 @@ type CrossChainHelper interface {
 	GetTypeMutex() *event.TypeMux
 	CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64) error
 	CreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64) error
-	ReadyForLaunchChildChain(height uint64)
+	ReadyForLaunchChildChain(height uint64, state *state.StateDB)
 	GetChainInfoDB() dbm.DB
 	GetClient() *ethclient.Client
 	GetTxFromMainChain(txHash common.Hash) *ethTypes.Transaction                  //should return varified transaction

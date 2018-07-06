@@ -128,6 +128,12 @@ func (app *EthermintApplication) BeginBlock(hash []byte, tmHeader *abciTypes.Hea
 
 // EndBlock accumulates rewards for the validators and updates them
 func (app *EthermintApplication) EndBlock(height uint64) abciTypes.ResponseEndBlock {
+
+	// Check the Child Chain Launch criteria
+	app.backend.CheckAndProcessChildChain(height)
+
+	// Accumulate the Reward
+
 	return app.GetUpdatedValidators()
 }
 
