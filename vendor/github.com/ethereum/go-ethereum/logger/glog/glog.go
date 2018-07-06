@@ -455,9 +455,9 @@ func init() {
 	//flag.Var(&logging.traceLocation, "log_backtrace_at", "when logging hits line file:N, emit a stack trace")
 
 	// Default stderrThreshold is ERROR.
-	logging.stderrThreshold = errorLog
-	fmt.Printf("glog init with level: 3\n")
-	logging.setVState(3, nil, false)
+	logging.stderrThreshold = infoLog
+	fmt.Printf("glog init with level: %v\n", infoLog)
+	logging.setVState(1, nil, false)
 	go logging.flushDaemon()
 }
 

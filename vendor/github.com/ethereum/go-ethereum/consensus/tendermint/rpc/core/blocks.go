@@ -48,6 +48,9 @@ func Block(context *RPCDataContext, height int) (*ctypes.ResultBlock, error) {
 //-----------------------------------------------------------------------------
 
 func Commit(context *RPCDataContext, height int) (*ctypes.ResultCommit, error) {
+
+	return nil, nil
+	/*
 	if height == 0 {
 		return nil, fmt.Errorf("Height must be greater than 0")
 	}
@@ -68,4 +71,5 @@ func Commit(context *RPCDataContext, height int) (*ctypes.ResultCommit, error) {
 	// Return the canonical commit (comes from the block at height+1)
 	commit := context.blockStore.LoadBlockCommit(height)
 	return &ctypes.ResultCommit{header, commit, true}, nil
+	*/
 }

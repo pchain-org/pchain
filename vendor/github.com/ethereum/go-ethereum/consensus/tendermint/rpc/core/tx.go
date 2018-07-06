@@ -29,8 +29,8 @@ func Tx(context *RPCDataContext, hash []byte, prove bool) (*ctypes.ResultTx, err
 
 	var proof types.TxProof
 	if prove {
-		block := context.blockStore.LoadBlock(height)
-		proof = block.Data.Txs.Proof(index)
+		//block := context.blockStore.LoadBlock(height)
+		//proof = block.Data.Txs.Proof(index)
 	}
 
 	return &ctypes.ResultTx{

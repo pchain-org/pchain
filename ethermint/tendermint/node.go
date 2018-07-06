@@ -149,7 +149,7 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 	mempoolReactor := mempl.NewMempoolReactor(config, mempool, state.ChainID)
 
 	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch, cch)
+	consensusState := consensus.NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch, nil, cch)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
@@ -344,7 +344,7 @@ func (n *Node) OnStart1() error {
 
 	// Make ConsensusReactor
 	consensusState := consensus.NewConsensusState(n.config, state.Copy(), n.proxyApp.Consensus(),
-						n.blockStore, mempool, epoch, n.cch)
+						n.blockStore, mempool, epoch, nil, n.cch)
 	if n.privValidator != nil {
 		consensusState.SetPrivValidator(n.privValidator)
 	}

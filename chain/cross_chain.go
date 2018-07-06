@@ -12,8 +12,8 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"bytes"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	//"bytes"
+	//"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 )
 
 type CrossChainHelper struct {
@@ -132,6 +132,8 @@ func (cch *CrossChainHelper) GetChildBlockByHash(hash []byte, chainId string) *t
 //verify the signature of validators who voted for the block
 func (cch *CrossChainHelper) VerifyTdmBlock(from common.Address, block string) error {
 
+	return nil
+	/*
 	var intBlock tdmTypes.IntegratedBlock
 	err := json.Unmarshal([]byte(block), &intBlock)
 	if err != nil {
@@ -193,6 +195,7 @@ func (cch *CrossChainHelper) VerifyTdmBlock(from common.Address, block string) e
 	}
 
 	return valSet.VerifyCommit(chainId, blockId, tdmBlock.Height, commit)
+	*/
 }
 
 func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block string) error {
@@ -210,7 +213,7 @@ func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block string) error {
 
 	err = core.WriteTdmBlockWithDetail(chainDb, tdmBlock, blockPartSize, commit)
 	if err != nil { return err }
-
+	/*
 	//here is epoch update; should be a more general mechanism
 	if tdmBlock.BlockExData != nil && len(tdmBlock.BlockExData) != 0 {
 
@@ -224,6 +227,6 @@ func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block string) error {
 			}
 		}
 	}
-
+	*/
 	return nil
 }

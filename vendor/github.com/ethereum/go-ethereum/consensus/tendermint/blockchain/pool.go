@@ -203,7 +203,8 @@ func (pool *BlockPool) AddBlock(peerID string, block *types.Block, blockSize int
 	defer pool.mtx.Unlock()
 
 	log.Info("(pool *BlockPool) AddBlock 0")
-	requester := pool.requesters[block.Height]
+	//requester := pool.requesters[block.Height]
+	requester := pool.requesters[0]
 	if requester == nil {
 		log.Info("(pool *BlockPool) AddBlock 1")
 		return

@@ -67,10 +67,10 @@ func NewABCIResponses(block *types.Block, state *State,
 
 	return &ABCIResponses{
 		State:      state,
-		Height:     block.Height,
-		DeliverTx:  make([]*abci.ResponseDeliverTx, block.NumTxs),
+		//Height:     block.Height,
+		//DeliverTx:  make([]*abci.ResponseDeliverTx, block.NumTxs),
 		EndBlock:   abci.ResponseEndBlock{},
-		txs:        block.Data.Txs,
+		//txs:        block.Data.Txs,
 		eventCache: eventCache,
 		ValidTxs:   0,
 		InvalidTxs: 0,
@@ -93,10 +93,10 @@ func RefreshABCIResponses(block *types.Block, state *State,
 		abciMap[chainID] = instance
 	} else {
 		instance.State = state
-		instance.Height = block.Height
-		instance.DeliverTx = make([]*abci.ResponseDeliverTx, block.NumTxs)
+		//instance.Height = block.Height
+		//instance.DeliverTx = make([]*abci.ResponseDeliverTx, block.NumTxs)
 		instance.EndBlock = abci.ResponseEndBlock{}
-		instance.txs = block.Data.Txs
+		//instance.txs = block.Data.Txs
 		instance.eventCache = eventCache
 		instance.ValidTxs = 0
 		instance.InvalidTxs = 0
@@ -248,7 +248,7 @@ func (a *ABCIResponses) GetCurrentBlock() (*types.Block) {
 
 func (a *ABCIResponses) SaveCurrentBlock2MainChain() {
 
-	a.State.BlockNumberToSave = a.block.Height
+	//a.State.BlockNumberToSave = a.block.Height
 }
 
 func (a *ABCIResponses) GetCrossChainHelper() rpcTxHook.CrossChainHelper {

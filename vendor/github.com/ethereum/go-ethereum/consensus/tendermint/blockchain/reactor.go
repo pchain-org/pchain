@@ -290,6 +290,7 @@ FOR_LOOP:
 					//fmt.Printf("poolRoutine(), trySyncTicker.C, here break\n")
 					break SYNC_LOOP
 				}
+				/*
 				//fmt.Printf("poolRoutine(), first block is: %s\n", first.String())
 				//fmt.Printf("poolRoutine(), second block is: %s\n", second.String())
 				//fmt.Printf("poolRoutine(), Validators are: %v, LastValidators are: \n",
@@ -325,6 +326,7 @@ FOR_LOOP:
 					}
 				}
 				//fmt.Printf("poolRoutine(), trySyncTicker.C, add 2 blocks successfully\n")
+				*/
 			}
 			continue FOR_LOOP
 		case <-bcR.Quit:

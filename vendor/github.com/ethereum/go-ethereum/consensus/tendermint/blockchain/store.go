@@ -145,7 +145,8 @@ func (bs *BlockStore) LoadSeenCommit(height int) *types.Commit {
 //             we need this to reload the precommits to catch-up nodes to the
 //             most recent height.  Otherwise they'd stall at H-1.
 func (bs *BlockStore) SaveBlock(block *types.Block, blockParts *types.PartSet, seenCommit *types.Commit) {
-	height := block.Height
+	//height := block.Height
+	height := 0
 	if height != bs.Height()+1 {
 		PanicSanity(Fmt("BlockStore can only save contiguous blocks. Wanted %v, got %v", bs.Height()+1, height))
 	}
@@ -164,7 +165,8 @@ func (bs *BlockStore) SaveBlock(block *types.Block, blockParts *types.PartSet, s
 	}
 
 	// Save block commit (duplicate and separate from the Block)
-	blockCommitBytes := wire.BinaryBytes(block.LastCommit)
+	//blockCommitBytes := wire.BinaryBytes(block.LastCommit)
+	blockCommitBytes := []byte{}
 	bs.db.Set(calcBlockCommitKey(height-1), blockCommitBytes)
 
 	// Save seen commit (seen +2/3 precommits for block)

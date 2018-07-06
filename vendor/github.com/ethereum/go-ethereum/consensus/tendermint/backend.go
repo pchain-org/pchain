@@ -22,13 +22,12 @@ func New(config cfg.Config, privateKey *ecdsa.PrivateKey, db ethdb.Database,
 	//recentMessages, _ := lru.NewARC(inmemoryPeers)
 	//knownMessages, _ := lru.NewARC(inmemoryMessages)
 
-	node := MakeTendermintNode(config, pNode, cch)
-
 	backend := &backend{
 		//config:           config,
 		//istanbulEventMux: new(event.TypeMux),
 		privateKey:       privateKey,
 		//address:          crypto.PubkeyToAddress(privateKey.PublicKey),
+		//core:             node,
 		//logger:           log.New(),
 		db:               db,
 		commitCh:         make(chan *types.Block, 1),
@@ -37,10 +36,8 @@ func New(config cfg.Config, privateKey *ecdsa.PrivateKey, db ethdb.Database,
 		coreStarted:      false,
 		//recentMessages:   recentMessages,
 		//knownMessages:    knownMessages,
-
-		node:		node,
 	}
-	//backend.core = istanbulCore.New(backend, backend.config)
+	backend.core = MakeTendermintNode(backend, config, pNode, cch)
 	return backend
 }
 
@@ -75,7 +72,5 @@ type backend struct {
 
 	recentMessages *lru.ARCCache // the cache of peer's messages
 	knownMessages  *lru.ARCCache // the cache of self messages
-
-	node		*Node
 }
 

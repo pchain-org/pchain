@@ -105,7 +105,7 @@ func (pb *playback) replayReset(count int, newStepCh chan interface{}) error {
 	pb.cs.Stop()
 	pb.cs.Wait()
 
-	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.proxyAppConn, pb.cs.blockStore, pb.cs.mempool, pb.cs.epoch, pb.cs.cch)
+	newCS := NewConsensusState(pb.cs.config, pb.genesisState.Copy(), pb.cs.proxyAppConn, pb.cs.blockStore, pb.cs.mempool, pb.cs.epoch, pb.cs.backend, pb.cs.cch)
 	newCS.SetEventSwitch(pb.cs.evsw)
 	newCS.startForReplay()
 
@@ -270,7 +270,7 @@ func newConsensusStateForReplay(config cfg.Config, cch core.CrossChainHelper) *C
 
 	mempool := mempl.NewMempool(config, proxyApp.Mempool())
 
-	consensusState := NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch, cch)
+	consensusState := NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch, nil, cch)
 	consensusState.SetEventSwitch(eventSwitch)
 	return consensusState
 }

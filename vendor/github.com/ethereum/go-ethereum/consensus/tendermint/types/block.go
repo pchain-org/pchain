@@ -18,12 +18,12 @@ const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 
 type Block struct {
 	*Header    `json:"header"`
-	*Data      `json:"data"`
+	*Data      `json:"data"` //to save eth.Block
 	*ExData    `json:"exdata"`
 	LastCommit *Commit `json:"last_commit"`
 }
 
-// TODO: version
+
 func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
 	prevBlockID BlockID, valHash, appHash []byte, blkExData []byte, partSize int) (*Block, *PartSet) {
 
@@ -51,28 +51,19 @@ func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
 	}
 	block.FillHeader()
 
-	fmt.Printf("MakeBlock(), block is %v\n", block.String())
-	fmt.Printf("block.LastCommit is %v\n", block.LastCommit)
-
 	return block, block.MakePartSet(partSize)
 }
 
 // Basic validation that doesn't involve state data.
 func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID BlockID,
 	lastBlockTime time.Time, appHash []byte) error {
+	/*
 	if b.ChainID != chainID {
 		return errors.New(Fmt("Wrong Block.Header.ChainID. Expected %v, got %v", chainID, b.ChainID))
 	}
 	if b.Height != lastBlockHeight+1 {
 		return errors.New(Fmt("Wrong Block.Header.Height. Expected %v, got %v", lastBlockHeight+1, b.Height))
 	}
-	/*	TODO: Determine bounds for Time
-		See blockchain/reactor "stopSyncingDurationMinutes"
-
-		if !b.Time.After(lastBlockTime) {
-			return errors.New("Invalid Block.Header.Time")
-		}
-	*/
 	if b.NumTxs != len(b.Data.Txs) {
 		return errors.New(Fmt("Wrong Block.Header.NumTxs. Expected %v, got %v", len(b.Data.Txs), b.NumTxs))
 	}
@@ -119,13 +110,16 @@ func MakeIntegratedBlock(block *Block, commit *Commit, blockPartSize int) (*Inte
 }
 
 func (b *Block) FillHeader() {
+	/*
 	if b.LastCommitHash == nil {
 		b.LastCommitHash = b.LastCommit.Hash()
 	}
 	if b.DataHash == nil {
 		b.DataHash = b.Data.Hash()
 	}
+	*/
 }
+
 
 // Computes and returns the block hash.
 // If the block is incomplete, block hash is nil for safety.
@@ -138,7 +132,9 @@ func (b *Block) Hash() []byte {
 	return b.Header.Hash()
 }
 
+
 func (b *Block) MakePartSet(partSize int) *PartSet {
+
 	return NewPartSetFromData(wire.BinaryBytes(b), partSize)
 }
 
@@ -163,6 +159,7 @@ func (b *Block) StringIndented(indent string) string {
 	if b == nil {
 		return "nil-Block"
 	}
+
 	return fmt.Sprintf(`Block{
 %s  %v
 %s  %v

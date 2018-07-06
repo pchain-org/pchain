@@ -2,10 +2,11 @@ package core
 
 import (
 	ctypes "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/types"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	//"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 )
 
 func Status(context *RPCDataContext) (*ctypes.ResultStatus, error) {
+	/*
 	latestHeight := context.blockStore.Height()
 	var (
 		latestBlockMeta *types.BlockMeta
@@ -27,4 +28,7 @@ func Status(context *RPCDataContext) (*ctypes.ResultStatus, error) {
 		LatestAppHash:     latestAppHash,
 		LatestBlockHeight: latestHeight,
 		LatestBlockTime:   latestBlockTime}, nil
+	*/
+
+	return nil, nil
 }

@@ -5,6 +5,7 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-events"
 	"github.com/tendermint/go-wire"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 // Functions to generate eventId strings
@@ -30,6 +31,10 @@ func EventStringRelock() string           { return "Relock" }
 func EventStringTimeoutWait() string      { return "TimeoutWait" }
 func EventStringVote() string             { return "Vote" }
 
+func EventStringRequest() string          { return "Request" }
+func EventStringMessage() string          { return "Message" }
+func EventStringFinalCommitted() string   { return "FinalCommitted" }
+
 //----------------------------------------
 
 // implements events.EventData
@@ -46,6 +51,10 @@ const (
 
 	EventDataTypeRoundState = byte(0x11)
 	EventDataTypeVote       = byte(0x12)
+
+	EventDataTypeRequest		= byte(0x21)
+	EventDataTypeMessage		= byte(0x22)
+	EventDataTypeFinalCommitted	= byte(0x23)
 )
 
 var _ = wire.RegisterInterface(
@@ -56,7 +65,12 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{EventDataTx{}, EventDataTypeTx},
 	wire.ConcreteType{EventDataRoundState{}, EventDataTypeRoundState},
 	wire.ConcreteType{EventDataVote{}, EventDataTypeVote},
+
+	wire.ConcreteType{EventDataRequest{}, EventDataTypeRequest},
+	wire.ConcreteType{EventDataMessage{}, EventDataTypeMessage},
+	wire.ConcreteType{EventDataFinalCommitted{}, EventDataTypeFinalCommitted},
 )
+
 
 // Most event messages are basic types (a block, a transaction)
 // but some (an input to a call tx or a receive) are more exotic
@@ -93,11 +107,31 @@ type EventDataVote struct {
 	Vote *Vote
 }
 
+
+// EventDataRequest is posted to propose a proposal
+type EventDataRequest struct {
+	Proposal *ethTypes.Block `json:"proposal"`
+}
+
+// EventDataMessage is posted for Istanbul engine communication
+type EventDataMessage struct {
+	Payload []byte `json:"payload"`
+}
+
+// FinalCommittedEvent is posted when a proposal is committed
+type EventDataFinalCommitted struct {
+}
+
+
 func (_ EventDataNewBlock) AssertIsTMEventData()       {}
 func (_ EventDataNewBlockHeader) AssertIsTMEventData() {}
 func (_ EventDataTx) AssertIsTMEventData()             {}
 func (_ EventDataRoundState) AssertIsTMEventData()     {}
 func (_ EventDataVote) AssertIsTMEventData()           {}
+
+func (_ EventDataRequest) AssertIsTMEventData()        {}
+func (_ EventDataMessage) AssertIsTMEventData()        {}
+func (_ EventDataFinalCommitted) AssertIsTMEventData() {}
 
 //----------------------------------------
 // Wrappers for type safety
@@ -195,4 +229,16 @@ func FireEventRelock(fireable events.Fireable, rs EventDataRoundState) {
 
 func FireEventLock(fireable events.Fireable, rs EventDataRoundState) {
 	fireEvent(fireable, EventStringLock(), rs)
+}
+
+func FireEventRequest(fireable events.Fireable, rs EventDataRequest) {
+	fireEvent(fireable, EventStringRequest(), rs)
+}
+
+func FireEventMessage(fireable events.Fireable, rs EventDataMessage) {
+	fireEvent(fireable, EventStringMessage(), rs)
+}
+
+func FireEventFinalCommitted(fireable events.Fireable, rs EventDataFinalCommitted) {
+	fireEvent(fireable, EventStringFinalCommitted(), rs)
 }

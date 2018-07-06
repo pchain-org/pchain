@@ -1,16 +1,16 @@
 package state
 
 import (
-	"errors"
+	//"errors"
 	"fmt"
 
 	fail "github.com/ebuchman/fail-test"
-	abci "github.com/tendermint/abci/types"
+	//abci "github.com/tendermint/abci/types"
 	. "github.com/tendermint/go-common"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/proxy"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	//"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	rpcTxHook "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/txhook"
 )
 
@@ -47,6 +47,7 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 
 	abciResponses := RefreshABCIResponses(block, state, eventCache, proxyAppConn, cch)
 
+	/*
 	// Begin block
 	err := proxyAppConn.BeginBlockSync(block.Hash(), types.TM2PB.Header(block.Header))
 	if err != nil {
@@ -60,12 +61,12 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 		if res.IsErr() {
 			return nil, errors.New(res.Error())
 		}
-		/*
-		proxyAppConn.DeliverTxAsync(tx)
-		if err := proxyAppConn.Error(); err != nil {
-			return nil, err
-		}
-		*/
+
+		//proxyAppConn.DeliverTxAsync(tx)
+		//if err := proxyAppConn.Error(); err != nil {
+		//	return nil, err
+		//}
+
 	}
 
 	// End block
@@ -81,13 +82,14 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 	if len(valDiff) > 0 {
 		log.Info("Update to validator set", "updates", abci.ValidatorsString(valDiff))
 	}
-
+	*/
 	return abciResponses, nil
 }
 
 // return a bit array of validators that signed the last commit
 // NOTE: assumes commits have already been authenticated
 func commitBitArrayFromBlock(block *types.Block) *BitArray {
+	/*
 	signed := NewBitArray(len(block.LastCommit.Precommits))
 	for i, precommit := range block.LastCommit.Precommits {
 		if precommit != nil {
@@ -95,6 +97,8 @@ func commitBitArrayFromBlock(block *types.Block) *BitArray {
 		}
 	}
 	return signed
+	*/
+	return nil
 }
 
 //-----------------------------------------------------
@@ -110,21 +114,13 @@ func (s *State) validateBlock(block *types.Block) error {
 	if err != nil {
 		return err
 	}
-
+	/*
 	// Validate block LastCommit.
 	if block.Height == 1 {
 		if len(block.LastCommit.Precommits) != 0 {
 			return errors.New("Block at height 1 (first block) should have no LastCommit precommits")
 		}
 	} else {
-		/*
-		if len(block.LastCommit.Precommits) != s.LastValidators.Size() {
-			fmt.Printf("validateBlock(), LastCommit.Precommits are: %v, LastValidators are: %v\n",
-				block.LastCommit.Precommits, s.LastValidators)
-			return errors.New(Fmt("Invalid block commit size. Expected %v, got %v",
-				s.LastValidators.Size(), len(block.LastCommit.Precommits)))
-		}
-		*/
 		//fmt.Printf("(s *State) validateBlock(), avoid LastValidators and LastCommit.Precommits size check for validatorset change\n")
 		lastValidators, _, err := s.GetValidators()
 
@@ -137,7 +133,7 @@ func (s *State) validateBlock(block *types.Block) error {
 			return err
 		}
 	}
-
+	*/
 	return nil
 }
 
@@ -161,11 +157,12 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	s.indexTxs(abciResponses)
 
 	// save the results before we commit
-	saveABCIResponses(s.db, block.Height, abciResponses)
+	//saveABCIResponses(s.db, block.Height, abciResponses)
 
 	fail.Fail() // XXX
 
 	//here handles the proposed next epoch
+	/*
 	nextEpochInBlock := epoch.FromBytes(block.ExData.BlockExData)
 	if nextEpochInBlock != nil {
 		s.Epoch.SetNextEpoch(nextEpochInBlock)
@@ -194,9 +191,9 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 			block.Height, s.Epoch, err))
 		return err
 	}
-
+	*/
 	//here handles when enter new epoch
-	s.SetBlockAndEpoch(block.Header, partsHeader)
+	//s.SetBlockAndEpoch(block.Header, partsHeader)
 
 	// lock mempool, commit state, update mempoool
 	err = s.CommitStateUpdateMempool(proxyAppConn, block, mempool)
@@ -235,7 +232,7 @@ func (s *State) CommitStateUpdateMempool(proxyAppConn proxy.AppConnConsensus, bl
 	s.AppHash = res.Data
 
 	// Update mempool.
-	mempool.Update(block.Height, block.Txs)
+	//mempool.Update(block.Height, block.Txs)
 
 	return nil
 }
@@ -262,7 +259,7 @@ func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, state *State, bloc
 	var eventCache types.Fireable // nil
 	_, err := execBlockOnProxyApp(eventCache, appConnConsensus, state, block, cch)
 	if err != nil {
-		log.Warn("Error executing block on proxy app", "height", block.Height, "err", err)
+	//	log.Warn("Error executing block on proxy app", "height", block.Height, "err", err)
 		return nil, err
 	}
 	// Commit block, get hash back

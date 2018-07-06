@@ -1,12 +1,9 @@
 package ethereum
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
-	"os"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -24,7 +21,6 @@ import (
 	abciTypes "github.com/tendermint/abci/types"
 	emtTypes "github.com/pchain/ethermint/types"
 	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	core_types "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/types"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -33,13 +29,6 @@ import (
 )
 
 const TRANSACTION_NUM_LIMIT = 200000
-
-// used by Backend to call tendermint rpc endpoints
-// TODO: replace with HttpClient https://github.com/tendermint/go-rpc/issues/8
-type Client interface {
-	// see tendermint/go-rpc/client/http_client.go:115 func (c *ClientURI) Call(...)
-	Call(method string, params map[string]interface{}, result interface{}) (interface{}, error)
-}
 
 // Intermediate state of a block, updated with each DeliverTx and reset on Commit
 type work struct {
@@ -69,7 +58,6 @@ type pending struct {
 type Backend struct {
 	ethereum *eth.Ethereum
 	pending  *pending
-	client   Client
 	config   *eth.Config
 }
 
@@ -91,28 +79,10 @@ func NewBackend(ctx *node.ServiceContext, config *eth.Config, cliCtx *cli.Contex
 	ethBackend := &Backend{
 		ethereum: ethereum,
 		pending:  p,
-		client:   nil,
 		config:   config,
 	}
 
 	return ethBackend, nil
-}
-
-func waitForServer(s *Backend) error {
-	// wait for Tendermint to open the socket and run http endpoint
-	var result core_types.TMResult
-	retriesCount := 0
-	for result == nil {
-		_, err := s.client.Call("status", map[string]interface{}{}, &result)
-		if err != nil {
-			glog.V(logger.Info).Infof("Waiting for tendermint endpoint to start: %s", err)
-		}
-		if retriesCount += 1; retriesCount >= maxWaitForServerRetries {
-			return abciTypes.ErrInternalError
-		}
-		time.Sleep(time.Second)
-	}
-	return nil
 }
 
 //----------------------------------------------------------------------
@@ -145,29 +115,15 @@ func (s *Backend) APIs() []rpc.API {
 	apis := s.Ethereum().APIs()
 	retApis := []rpc.API{}
 	for _, v := range apis {
-		//emmark
 
 		if v.Namespace == "net" {
 			networkVersion := 1
 			v.Service = &NetRPCService{networkVersion}
 		}
-		/*
-		if v.Namespace == "miner" {
-			continue
-		}
-		if _, ok := v.Service.(*eth.PublicMinerAPI); ok {
-			continue
-		}
-		*/
+
 		retApis = append(retApis, v)
 	}
 
-	go s.txBroadcastLoop()
-
-	/*
-	//add by author@liaoyd
-	go s.validatorTransLoop()
-	*/
 	apis = retApis
 
 	return retApis
@@ -200,42 +156,6 @@ func (s *Backend) Ethereum() *eth.Ethereum {
 // Config returns the eth.Config
 func (s *Backend) Config() *eth.Config {
 	return s.config
-}
-
-//----------------------------------------------------------------------
-// Transactions sent via the go-ethereum rpc need to be routed to tendermint
-
-// listen for txs and forward to tendermint
-// TODO: some way to exit this (it runs in a go-routine)
-func (s *Backend) txBroadcastLoop() {
-	txSub := s.ethereum.EventMux().Subscribe(core.TxPreEvent{})
-
-	if err := waitForServer(s); err != nil {
-		// timeouted when waiting for tendermint communication failed
-		glog.V(logger.Error).Infof("Failed to run tendermint HTTP endpoint, err=%s", err)
-		os.Exit(1)
-	}
-
-	for obj := range txSub.Chan() {
-		event := obj.Data.(core.TxPreEvent)
-		if err := s.BroadcastTx(event.Tx); err != nil {
-			glog.V(logger.Error).Infof("Broadcast, err=%s", err)
-		}
-	}
-}
-
-// BroadcastTx broadcasts a transaction to tendermint core
-func (s *Backend) BroadcastTx(tx *ethTypes.Transaction) error {
-	var result core_types.TMResult
-	buf := new(bytes.Buffer)
-	if err := tx.EncodeRLP(buf); err != nil {
-		return err
-	}
-	params := map[string]interface{}{
-		"tx": buf.Bytes(),
-	}
-	_, err := s.client.Call("broadcast_tx_sync", params, &result)
-	return err
 }
 
 //----------------------------------------------------------------------

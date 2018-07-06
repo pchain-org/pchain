@@ -15,10 +15,10 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/kv"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/null"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/logger"
 
 	_ "net/http/pprof"
 	"fmt"
-	"github.com/tendermint/go-logger"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"io/ioutil"
 	"os"
@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 )
 
-var log = logger.New("module", "node")
 
 type PChainP2P interface {
 	Switch()   *p2p.Switch
@@ -52,6 +51,7 @@ type Node struct {
 	consensusReactor *consensus.ConsensusReactor // for participating in the consensus
 	txIndexer        txindex.TxIndexer
 
+	backend          *backend
 	cch              core.CrossChainHelper
 }
 
@@ -224,7 +224,7 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 }
 */
 
-func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, cch core.CrossChainHelper) *Node {
+func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, cch core.CrossChainHelper) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
 	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
@@ -259,14 +259,17 @@ func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, 
 
 		evsw:          eventSwitch,
 
+		backend:       backend,
 		cch:           cch,
 	}
-	node.BaseService = *cmn.NewBaseService(log, "Node", node)
+	node.BaseService = *cmn.NewBaseService(logger.Log, "Node", node)
 	return node
 }
 
 
-func (n *Node) OnStart1() error {
+func (n *Node) OnStart() error {
+
+	fmt.Printf("(n *Node) OnStart()\n")
 
 	// reload the state (it may have been updated by the handshake)
 	state := sm.LoadState(n.stateDB)
@@ -304,7 +307,7 @@ func (n *Node) OnStart1() error {
 
 	// Make ConsensusReactor
 	consensusState := consensus.NewConsensusState(n.config, state.Copy(), nil,
-						nil, nil, epoch, n.cch)
+						nil, nil, epoch, n.backend, n.cch)
 	if n.privValidator != nil {
 		consensusState.SetPrivValidator(n.privValidator)
 	}
@@ -315,14 +318,14 @@ func (n *Node) OnStart1() error {
 
 	// add the event switch to all services
 	// they should all satisfy events.Eventable
-	SetEventSwitch(n.evsw, nil, nil, consensusReactor)
+	SetEventSwitch(n.evsw, consensusReactor)
 
 	// run the profile server
 	profileHost := n.config.GetString("prof_laddr")
 	if profileHost != "" {
 
 		go func() {
-			log.Warn("Profile server", "error", http.ListenAndServe(profileHost, nil))
+			logger.Log.Warn("Profile server", "error", http.ListenAndServe(profileHost, nil))
 		}()
 	}
 
@@ -337,6 +340,7 @@ func (n *Node) OnStart1() error {
 	return nil
 }
 
+/*
 // Deprecated
 func (n *Node) OnStart() error {
 
@@ -375,6 +379,7 @@ func (n *Node) OnStart() error {
 
 	return nil
 }
+*/
 
 func (n *Node) OnStop() {
 	n.BaseService.OnStop()
@@ -561,7 +566,7 @@ func ProtocolAndAddress(listenAddr string) (string, string) {
 }
 
 
-func MakeTendermintNode(config cfg.Config, pNode PChainP2P, cch core.CrossChainHelper) *Node {
+func MakeTendermintNode(backend *backend, config cfg.Config, pNode PChainP2P, cch core.CrossChainHelper) *Node {
 
 	genDocFile := config.GetString("genesis_file")
 	if !cmn.FileExists(genDocFile) {
@@ -587,6 +592,6 @@ func MakeTendermintNode(config cfg.Config, pNode PChainP2P, cch core.CrossChainH
 		}
 	}
 
-	return NewNodeNotStart(config, pNode.Switch(), pNode.AddrBook(), cch)
+	return NewNodeNotStart(backend, config, pNode.Switch(), pNode.AddrBook(), cch)
 }
 

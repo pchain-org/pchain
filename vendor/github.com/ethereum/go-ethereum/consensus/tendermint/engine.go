@@ -14,7 +14,8 @@ import (
 	"time"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/hashicorp/golang-lru"
-	"github.com/ethereum/go-ethereum/consensus/istanbul"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/logger"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 )
 
@@ -41,7 +42,7 @@ func (sb *backend) APIs(chain consensus.ChainReader) []rpc.API {
 	}}
 }
 
-// Start implements consensus.Istanbul.Start
+// Start implements consensus.Tendermint.Start
 func (sb *backend) Start(chain consensus.ChainReader, currentBlock func() *types.Block, hasBadBlock func(hash common.Hash) bool) error {
 
 	fmt.Printf("Tendermint: (sb *backend) Start, add logic here\n")
@@ -73,7 +74,7 @@ func (sb *backend) Start(chain consensus.ChainReader, currentBlock func() *types
 }
 
 
-// Stop implements consensus.Istanbul.Stop
+// Stop implements consensus.Tendermint.Stop
 func (sb *backend) Stop() error {
 
 	fmt.Printf("Tendermint: (sb *backend) Stop, add logic here\n")
@@ -81,7 +82,7 @@ func (sb *backend) Stop() error {
 	sb.coreMu.Lock()
 	defer sb.coreMu.Unlock()
 	if !sb.coreStarted {
-		return istanbul.ErrStoppedEngine
+		return ErrStoppedEngine
 	}
 	if !sb.core.Stop() {
 		return errors.New("tendermint stop error")
@@ -262,6 +263,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	fmt.Printf("Tendermint: (sb *backend) Finalize, add logic here\n")
 
 	// No block rewards in Istanbul, so the state remains as is and uncles are dropped
+	// TODO: we need consider reward here
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = nilUncleHash
 
@@ -273,7 +275,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 // seal place on top.
 func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error) {
 
-	fmt.Printf("Tendermint: (sb *backend) Seal, add logic here\n")
+	logger.Log.Info("Tendermint: (sb *backend) Seal, add logic here")
 	// update the block header timestamp and signature and propose the block to core engine
 	header := block.Header()
 	number := header.Number.Uint64()
@@ -313,12 +315,14 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 		sb.sealMu.Unlock()
 	}
 	defer clear()
-	/*
+
 	// post block into Istanbul engine
-	go sb.EventMux().Post(istanbul.RequestEvent{
-		Proposal: block,
-	})
-	*/
+	logger.Log.Info("Tendermint: (sb *backend) Seal, before fireevent with ", "block", block)
+	go tdmTypes.FireEventRequest(sb.core.EventSwitch(), tdmTypes.EventDataRequest{Proposal:block})
+	//go sb.EventMux().Post(tdmTypes.RequestEvent{
+	//	Proposal: block,
+	//})
+
 	for {
 		select {
 		case result := <-sb.commitCh:
@@ -343,6 +347,10 @@ func (sb *backend) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 	fmt.Printf("Tendermint: (sb *backend) CalcDifficulty, add logic here\n")
 
 	return new(big.Int).SetUint64(0)
+}
+
+func (sb *backend) GetCommitCh() chan *types.Block {
+	return sb.commitCh
 }
 
 // update timestamp and signature of the block based on its number of transactions

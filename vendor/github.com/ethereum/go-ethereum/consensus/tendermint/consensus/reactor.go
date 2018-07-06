@@ -54,9 +54,6 @@ func (conR *ConsensusReactor) OnStart() error {
 	// upon their respective events (ie. uses evsw)
 	conR.registerEventCallbacks()
 
-	//liaoyd
-	//go conR.GetDiffValidator()
-
 	//if !conR.fastSync {
 		// conR.catchupValidator(val, ok)
 		_, err := conR.conS.Start()
@@ -331,6 +328,12 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 	types.AddListenerForEvent(conR.evsw, "conR", types.EventStringVote(), func(data types.TMEventData) {
 		edv := data.(types.EventDataVote)
 		conR.broadcastHasVoteMessage(edv.Vote)
+	})
+
+	types.AddListenerForEvent(conR.evsw, "conR", types.EventStringRequest(), func(data types.TMEventData) {
+		re := data.(types.EventDataRequest)
+		conR.conS.blockFromMiner = re.Proposal
+		log.Info("registerEventCallbacks received Request Event ", "re.Proposal", re.Proposal)
 	})
 }
 

@@ -18,7 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	proxy "github.com/ethereum/go-ethereum/consensus/tendermint/proxy"
-	//ethTypes "github.com/ethereum/go-ethereum/core/types"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	//"github.com/ethereum/go-ethereum/common"
 	"encoding/json"
 	"golang.org/x/net/context"
@@ -26,6 +26,10 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"math/big"
 )
+
+type Backend interface {
+	GetCommitCh() chan *ethTypes.Block
+}
 
 //-----------------------------------------------------------------------------
 // Timeout Parameters
@@ -268,10 +272,13 @@ type ConsensusState struct {
 	setProposal    func(proposal *types.Proposal) error
 
 	done chan struct{}
+
+	blockFromMiner *ethTypes.Block
+	backend Backend
 }
 
 func NewConsensusState(config cfg.Config, state *sm.State, proxyAppConn proxy.AppConnConsensus,
-	blockStore types.BlockStore, mempool types.Mempool, epoch *ep.Epoch, cch  core.CrossChainHelper) *ConsensusState {
+	blockStore types.BlockStore, mempool types.Mempool, epoch *ep.Epoch, backend Backend, cch  core.CrossChainHelper) *ConsensusState {
 	// fmt.Println("state.Validator in newconsensus:", state.Validators)
 	cs := &ConsensusState{
 		config:           config,
@@ -284,6 +291,8 @@ func NewConsensusState(config cfg.Config, state *sm.State, proxyAppConn proxy.Ap
 		timeoutTicker:    NewTimeoutTicker(),
 		timeoutParams:    InitTimeoutParamsFromConfig(config),
 		done:             make(chan struct{}),
+		blockFromMiner:   nil,
+		backend:          backend,
 	}
 	// set function defaults (may be overwritten before calling Start)
 	cs.decideProposal = cs.defaultDecideProposal
@@ -711,8 +720,10 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 		// will not cause transition.
 		// once proposal is set, we can receive block parts
 		err = cs.setProposal(msg.Proposal)
+		fmt.Printf("(cs *ConsensusState) handleMsg, proposal is %v", msg.Proposal)
 	case *BlockPartMessage:
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
+		fmt.Printf("(cs *ConsensusState) handleMsg, proposal is %v", msg)
 		_, err = cs.addProposalBlockPart(msg.Height, msg.Part, peerKey != "")
 		if err != nil && msg.Round != cs.Round {
 			err = nil
@@ -907,8 +918,7 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 			part := blockParts.GetPart(i)
 			cs.sendInternalMessage(msgInfo{&BlockPartMessage{cs.Height, cs.Round, part}, ""})
 		}
-		log.Info("Signed proposal", "height", height, "round", round, "proposal", proposal)
-		log.Debug(Fmt("Signed proposal block: %v", block))
+		log.Debug(Fmt("Signed proposal block: %v", block.Height))
 	}/*else {
 		if !cs.replayMode {
 			log.Warn("enterPropose: Error signing proposal", "height", height, "round", round, "error", err)
@@ -935,46 +945,65 @@ func (cs *ConsensusState) isProposalComplete() bool {
 // Create the next block to propose and return it.
 // Returns nil block upon error.
 // NOTE: keep it side-effect free for clarity.
-func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts *types.PartSet) {
-	var commit *types.Commit
-	if cs.Height == 1 {
-		// We're creating a proposal for the first block.
-		// The commit is empty, but not nil.
-		commit = &types.Commit{}
-	} else if cs.LastCommit.HasTwoThirdsMajority() {
-		// Make the commit from LastCommit
-		commit = cs.LastCommit.MakeCommit()
-	} else {
-		// This shouldn't happen.
-		log.Error("enterPropose: Cannot propose anything: No commit for the previous block.")
-		return
+func (cs *ConsensusState) createProposalBlock() (*types.Block, *types.PartSet) {
+
+	//here we wait for ethereum block to propose
+	if cs.blockFromMiner != nil {
+
+		ethBlock := cs.blockFromMiner
+		fmt.Printf("block received from miner: %p\n", ethBlock)
+		/*
+		var commit *types.Commit
+		if cs.Height == 1 {
+			// We're creating a proposal for the first block.
+			// The commit is empty, but not nil.
+			commit = &types.Commit{}
+		} else if cs.LastCommit.HasTwoThirdsMajority() {
+			// Make the commit from LastCommit
+			commit = cs.LastCommit.MakeCommit()
+		} else {
+			// This shouldn't happen.
+			log.Error("enterPropose: Cannot propose anything: No commit for the previous block.")
+			return
+		}
+
+		// Mempool validated transactions
+		txs := cs.mempool.Reap(cs.config.GetInt("block_size"))
+
+		epTxs, err := cs.Epoch.ProposeTransactions("proposer", cs.Height)
+		if err != nil {
+			return nil, nil
+		}
+
+		if len(epTxs) != 0 {
+			log.Info("createProposalBlock(), epoch propose", "len(txs)", len(epTxs))
+			txs = append(txs, epTxs...)
+		}
+		*/
+		/*
+		var epochBytes []byte = []byte{}
+		shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
+		if shouldProposeEpoch {
+			cs.Epoch.SetNextEpoch(cs.Epoch.ProposeNextEpoch(cs.Height))
+			epochBytes = cs.Epoch.NextEpoch.Bytes()
+		}
+		*/
+
+		_, val, _ := cs.state.GetValidators()
+
+		blockBytes, err := ethBlock.EncodeRLP1()
+		if err != nil {return nil, nil}
+
+		fmt.Printf("createProposalBlock blockBytes len : %v\n", len(blockBytes))
+
+		cs.blockFromMiner = nil
+
+		return types.MakeBlock(cs.Height, cs.state.ChainID, nil, nil,
+				cs.state.LastBlockID, val.Hash(), cs.state.AppHash,
+				blockBytes, cs.config.GetInt("block_part_size"))
 	}
 
-	// Mempool validated transactions
-	txs := cs.mempool.Reap(cs.config.GetInt("block_size"))
-
-	epTxs, err := cs.Epoch.ProposeTransactions("proposer", cs.Height)
-	if err != nil {
-		return nil, nil
-	}
-
-	if len(epTxs) != 0 {
-		fmt.Printf("createProposalBlock(), epoch propose %v txs\n", len(epTxs))
-		txs = append(txs, epTxs...)
-	}
-
-	var epochBytes []byte = []byte{}
-	shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
-	if shouldProposeEpoch {
-		cs.Epoch.SetNextEpoch(cs.Epoch.ProposeNextEpoch(cs.Height))
-		epochBytes = cs.Epoch.NextEpoch.Bytes()
-	}
-
-	_, val, _ := cs.state.GetValidators()
-
-	return types.MakeBlock(cs.Height, cs.state.ChainID, txs, commit,
-		cs.state.LastBlockID, val.Hash(), cs.state.AppHash,
-		epochBytes, cs.config.GetInt("block_part_size"))
+	return nil, nil
 }
 
 // Enter: `timeoutPropose` after entering Propose.
@@ -1036,6 +1065,7 @@ func (cs *ConsensusState) defaultDoPrevote(height int, round int) {
 	}
 
 	// Valdiate proposal block
+	/*
 	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.ExData.BlockExData)
 	if proposedNextEpoch != nil {
 		err = cs.RoundState.Epoch.ValidateNextEpoch(proposedNextEpoch, height)
@@ -1046,10 +1076,13 @@ func (cs *ConsensusState) defaultDoPrevote(height int, round int) {
 			return
 		}
 	}
+	*/
 
 	// Prevote cs.ProposalBlock
 	// NOTE: the proposal signature is validated when it is received,
 	// and the proposal block parts are validated as they are received (against the merkle hash in the proposal)
+	fmt.Printf("block is %p, header is %p\n", cs.ProposalBlock, cs.ProposalBlock.Header)
+	fmt.Printf("ethblock is %X\n", cs.ProposalBlock.BlockExData)
 	cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header())
 	return
 }
@@ -1203,8 +1236,13 @@ func (cs *ConsensusState) enterCommit(height int, commitRound int) {
 		return
 	}
 	log.Info(Fmt("enterCommit(%v/%v). Current: %v/%v/%v", height, commitRound, cs.Height, cs.Round, cs.Step))
+	fmt.Printf("block is %p, header is %p\n", cs.ProposalBlock, cs.ProposalBlock.Header)
+	fmt.Printf("ethblock is %X\n", cs.ProposalBlock.BlockExData)
 
 	defer func() {
+		fmt.Printf("defer() block is %p, header is %p\n", cs.ProposalBlock, cs.ProposalBlock.Header)
+		fmt.Printf("defer() ethblock is %X\n", cs.ProposalBlock.BlockExData)
+
 		// Done enterCommit:
 		// keep cs.Round the same, commitRound points to the right Precommits set.
 		cs.updateRoundStep(cs.Round, RoundStepCommit)
@@ -1215,7 +1253,7 @@ func (cs *ConsensusState) enterCommit(height int, commitRound int) {
 		// Maybe finalize immediately.
 		cs.tryFinalizeCommit(height)
 	}()
-
+	/*
 	blockID, ok := cs.Votes.Precommits(commitRound).TwoThirdsMajority()
 	if !ok {
 		PanicSanity("RunActionCommit() expects +2/3 precommits")
@@ -1240,10 +1278,22 @@ func (cs *ConsensusState) enterCommit(height int, commitRound int) {
 			// We just need to keep waiting.
 		}
 	}
+	*/
 }
 
 // If we have the block AND +2/3 commits for it, finalize.
 func (cs *ConsensusState) tryFinalizeCommit(height int) {
+
+	fmt.Printf("we force commit currently0, cs.ProposalBlock.is %p\n", cs.ProposalBlock)
+	fmt.Printf("we force commit currently0, cs.ProposalBlock.BlockExData is %x\n", cs.ProposalBlock.BlockExData)
+
+
+	tmpBlock := &ethTypes.Block{}
+	ethBlock, _ := tmpBlock.DecodeRLP1(cs.ProposalBlock.BlockExData)
+	cs.backend.GetCommitCh() <- ethBlock
+
+	fmt.Printf("we force commit currently1\n")
+
 	if cs.Height != height {
 		PanicSanity(Fmt("tryFinalizeCommit() cs.Height: %v vs height: %v", cs.Height, height))
 	}
@@ -1287,13 +1337,14 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 		PanicConsensus(Fmt("+2/3 committed an invalid block: %v", err))
 	}
 
-	log.Notice(Fmt("Finalizing commit of block with %d txs", block.NumTxs),
-		"height", block.Height, "hash", block.Hash(), "root", block.AppHash)
-	log.Info(Fmt("%v", block))
+	//log.Notice(Fmt("Finalizing commit of block with %d txs", block.NumTxs),
+	//	"height", block.Height, "hash", block.Hash(), "root", block.AppHash)
+	//log.Info(Fmt("%v", block))
 
 	fail.Fail() // XXX
 
 	// Save to blockStore.
+	/*
 	if cs.blockStore.Height() < block.Height {
 		// NOTE: the seenCommit is local justification to commit this block,
 		// but may differ from the LastCommit included in the next block
@@ -1304,7 +1355,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 		// Happens during replay if we already saved the block but didn't commit
 		log.Info("Calling finalizeCommit on already stored block", "height", block.Height)
 	}
-
+	*/
 	fail.Fail() // XXX
 
 	/*
@@ -1356,6 +1407,10 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	cs.updateToStateAndEpoch(stateCopy, stateCopy.Epoch)
 
 	fail.Fail() // XXX
+
+	tmpBlock := &ethTypes.Block{}
+	ethBlock, _ := tmpBlock.DecodeRLP1(block.BlockExData)
+	cs.backend.GetCommitCh() <- ethBlock
 
 	// cs.StartTime is already set.
 	// Schedule Round0 to start soon.
@@ -1426,9 +1481,9 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 		var err error
 		cs.ProposalBlock = wire.ReadBinary(&types.Block{}, cs.ProposalBlockParts.GetReader(), types.MaxBlockSize, &n, &err).(*types.Block)
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
-		log.Info("Received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
-		fmt.Printf("Received complete proposal block is %v\n", cs.ProposalBlock.String())
-		fmt.Printf("block.LastCommit is %v\n", cs.ProposalBlock.LastCommit)
+		//log.Info("Received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
+		//fmt.Printf("Received complete proposal block is %v\n", cs.ProposalBlock.String())
+		//fmt.Printf("block.LastCommit is %v\n", cs.ProposalBlock.LastCommit)
 		if cs.Step == RoundStepPropose && cs.isProposalComplete() {
 			// Move onto the next step
 			cs.enterPrevote(height, cs.Round)
@@ -1478,6 +1533,8 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerKey string) error {
 
 func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool, err error) {
 	log.Debug("addVote", "voteHeight", vote.Height, "voteType", vote.Type, "csHeight", cs.Height)
+	fmt.Printf("block is %p, header is %p\n", cs.ProposalBlock, cs.ProposalBlock.Header)
+	fmt.Printf("ethblock is %X\n", cs.ProposalBlock.BlockExData)
 
 	// A precommit for the previous height?
 	// These come in while we wait timeoutCommit
@@ -1521,7 +1578,9 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 				// there.
 				if (cs.LockedBlock != nil) && (cs.LockedRound < vote.Round) && (vote.Round <= cs.Round) {
 					blockID, ok := prevotes.TwoThirdsMajority()
+					fmt.Printf("(cs *ConsensusState) VoteTypePrevote 0\n")
 					if ok && !cs.LockedBlock.HashesTo(blockID.Hash) {
+						fmt.Printf("(cs *ConsensusState) VoteTypePrevote 1\n")
 						log.Notice("Unlocking because of POL.", "lockedRound", cs.LockedRound, "POLRound", vote.Round)
 						cs.LockedRound = 0
 						cs.LockedBlock = nil
@@ -1530,6 +1589,9 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 					}
 				}
 				if cs.Round <= vote.Round && prevotes.HasTwoThirdsAny() {
+
+					blockID, ok := prevotes.TwoThirdsMajority()
+					fmt.Printf("(cs *ConsensusState) VoteTypePrevote 2 with len(blockID.Hash):%v, ok:%v\n", len(blockID.Hash), ok)
 					// Round-skip over to PrevoteWait or goto Precommit.
 					cs.enterNewRound(height, vote.Round) // if the vote is ahead of us
 					if prevotes.HasTwoThirdsMajority() {
@@ -1540,23 +1602,32 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 					}
 				} else if cs.Proposal != nil && 0 <= cs.Proposal.POLRound && cs.Proposal.POLRound == vote.Round {
 					// If the proposal is now complete, enter prevote of cs.Round.
+					fmt.Printf("(cs *ConsensusState) VoteTypePrevote 3\n")
 					if cs.isProposalComplete() {
+						fmt.Printf("(cs *ConsensusState) VoteTypePrevote 4\n")
 						cs.enterPrevote(height, cs.Round)
 					}
 				}
 			case types.VoteTypePrecommit:
 				precommits := cs.Votes.Precommits(vote.Round)
 				log.Info("Added to precommit", "vote", vote, "precommits", precommits.StringShort())
-				blockID, ok := precommits.TwoThirdsMajority()
+
+				//blockID, ok := precommits.TwoThirdsMajority()
+				_, ok := precommits.TwoThirdsMajority()
 				if ok {
-					if len(blockID.Hash) == 0 {
-						cs.enterNewRound(height, vote.Round+1)
-					} else {
+					fmt.Printf("(cs *ConsensusState) VoteTypePrecommit 0\n")
+					//if len(blockID.Hash) == 0 {
+					//	fmt.Printf("(cs *ConsensusState) VoteTypePrecommit 1\n")
+					//	cs.enterNewRound(height, vote.Round+1)
+					//} else
+					{
+						fmt.Printf("(cs *ConsensusState) VoteTypePrecommit 2\n")
 						cs.enterNewRound(height, vote.Round)
 						cs.enterPrecommit(height, vote.Round)
 						cs.enterCommit(height, vote.Round)
 
 						if cs.timeoutParams.SkipTimeoutCommit && precommits.HasAll() {
+							fmt.Printf("(cs *ConsensusState) VoteTypePrecommit 3\n")
 							// if we have all the votes now,
 							// go straight to new round (skip timeout commit)
 							// cs.scheduleTimeout(time.Duration(0), cs.Height, 0, RoundStepNewHeight)
@@ -1565,6 +1636,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 
 					}
 				} else if cs.Round <= vote.Round && precommits.HasTwoThirdsAny() {
+					fmt.Printf("(cs *ConsensusState) VoteTypePrecommit 4\n")
 					cs.enterNewRound(height, vote.Round)
 					cs.enterPrecommit(height, vote.Round)
 					cs.enterPrecommitWait(height, vote.Round)
