@@ -221,10 +221,9 @@ func (epoch *Epoch) MakeOneEpochDoc() *tmTypes.OneEpochDoc {
 }
 
 func (epoch *Epoch) Save() {
-
 	epoch.mtx.Lock()
 	defer epoch.mtx.Unlock()
-	fmt.Printf("(epoch *Epoch) Save(), (EPOCH, ts.Bytes()) are: (%s,%v\n", calcEpochKeyWithHeight(epoch.Number), epoch.Bytes())
+	//fmt.Printf("(epoch *Epoch) Save(), (EPOCH, ts.Bytes()) are: (%s,%v\n", calcEpochKeyWithHeight(epoch.Number), epoch.Bytes())
 	epoch.db.SetSync(calcEpochKeyWithHeight(epoch.Number), epoch.Bytes())
 
 	if epoch.NextEpoch != nil && epoch.NextEpoch.Status == EPOCH_VOTED_NOT_SAVED {
@@ -259,7 +258,7 @@ func (epoch *Epoch) GetDB() dbm.DB {
 
 func (epoch *Epoch) Bytes() []byte {
 	buf, n, err := new(bytes.Buffer), new(int), new(error)
-	fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
+	//fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
 
 	epochDoc := epoch.MakeOneEpochDoc()
 	wire.WriteBinary(epochDoc, buf, n, err)
@@ -267,7 +266,7 @@ func (epoch *Epoch) Bytes() []byte {
 		fmt.Printf("Epoch get bytes error: %v", err)
 		return nil
 	}
-	fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
+	//fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
 	return buf.Bytes()
 }
 
