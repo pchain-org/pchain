@@ -2,20 +2,16 @@ package chain
 
 import (
 	"net/http"
-	tdm "github.com/ethereum/go-ethereum/consensus/tendermint"
 	eth "github.com/ethereum/go-ethereum/node"
-	etmApp "github.com/pchain/ethermint/app"
-	etm "github.com/pchain/ethermint/cmd/ethermint"
 	"gopkg.in/urfave/cli.v1"
 	"fmt"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	cfg "github.com/tendermint/go-config"
-	"github.com/pchain/ethermint/ethereum"
-	"github.com/pchain/ethermint/version"
 	cmn "github.com/tendermint/go-common"
-
 	"github.com/pchain/p2p"
+	"github.com/pchain/ethereum"
+	"github.com/pchain/version"
 )
 
 const (
@@ -27,16 +23,13 @@ type Chain struct{
 	Id string
 	Config cfg.Config
 	EthNode *eth.Node
-	TdmNode *tdm.Node
-	AbciServer cmn.Service
-	EtmApp  *etmApp.EthermintApplication
 	RpcHandler http.Handler
 }
 
 func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chain {
 
 	chain := &Chain {Id:chainId}
-	config := etm.GetTendermintConfig(chainId, ctx)
+	config := GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
 	//always start ethereum
@@ -66,7 +59,7 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 		return nil
 	}
 	chain := &Chain {Id:chainId}
-	config := etm.GetTendermintConfig(chainId, ctx)
+	config := GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
 	//always start ethereum
@@ -94,62 +87,8 @@ func StartChain(chain *Chain, quit chan int) error {
 
 	fmt.Printf("start main chain: %s\n", chain.Id)
 	go func(){
-		fmt.Println("ethermintCmd->utils.StartNode(stack)")
+		fmt.Println("StartChain()->utils.StartNode(stack)")
 		utils.StartNode1(chain.EthNode)
-
-		/*
-		stack := chain.EthNode
-		var backend *ethereum.Backend
-		if err := stack.Service(&backend); err != nil {
-			utils.Fatalf("backend service not running: %v", err)
-		}
-		client, err := stack.Attach()
-		if err != nil {
-			utils.Fatalf("Failed to attach to the inproc geth: %v", err)
-		}
-
-		ethereum.ReloadEthApi(stack, backend)
-
-		testEthereumApi()
-
-		//strategy := &emtTypes.Strategy{new(minerRewardStrategies.RewardConstant),nil}
-		strategy := &validatorsStrategy.ValidatorsStrategy{}
-		etmApp, err := etmApp.NewEthermintApplication(backend, client, strategy)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		chain.EtmApp = etmApp
-
-		// Create ABCI Local Client Creator
-		proxy.SetAppClientCreator(chain.TdmNode.ProxyApp(), proxy.NewLocalClientCreator(etmApp))
-		*/
-		/* ABCI Server is no longer required
-		addr := config.GetString("proxy_app")
-		abci := config.GetString("abci")
-		abciServer, err := server.NewServer(addr, abci, etmApp)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		chain.AbciServer = abciServer
-		*/
-		/*
-		fmt.Println("tm node")
-		err = chain.TdmNode.OnStart1()
-		if err != nil {
-			cmn.Exit(cmn.Fmt("Failed to start node: %v", err))
-		}
-
-		//fmt.Printf("Started node", "nodeInfo", chain.TdmNode.sw.NodeInfo())
-
-		// Sleep forever and then...
-		cmn.TrapSignal(func() {
-			chain.TdmNode.Stop()
-		})
-
-		quit <- 1
-		*/
 	}()
 
 	return nil
@@ -173,7 +112,7 @@ func testEthereumApi() {
 func CreateChildChain(ctx *cli.Context, chainId string, balStr string) error{
 	//validators: json format, like {[{pubkey: pk1, balance:b1, amount: am1},{pubkey: pk2, balance: b2, amount: am2}]}
 
-	config := etm.GetTendermintConfig(chainId, ctx)
+	config := GetTendermintConfig(chainId, ctx)
 	err := init_eth_genesis(config, balStr)
 	if err != nil {
 		return err

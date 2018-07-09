@@ -21,8 +21,7 @@ var (
 	Config cfg.Config
 )
 
-//Deprecated
-func getTendermintConfig(chainId string, ctx *cli.Context) cfg.Config {
+func GetTendermintConfig(chainId string, ctx *cli.Context) cfg.Config {
 	datadir := ctx.GlobalString(DataDirFlag.Name)
 	config := tmcfg.GetConfig(datadir, chainId)
 

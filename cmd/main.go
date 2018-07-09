@@ -2,15 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/pchain/ethermint/version"
+	"github.com/pchain/version"
 	"os"
 	"path/filepath"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"gopkg.in/urfave/cli.v1"
-	etm "github.com/pchain/ethermint/cmd/ethermint"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/pchain/chain"
+	chain "github.com/pchain/chain"
 	"github.com/ethereum/go-ethereum/cmd/geth"
 )
 
@@ -55,7 +54,7 @@ func main() {
 	cliApp.HideVersion = true // we have a command to print the version
 
 	cliApp.Before = func(ctx *cli.Context) error {
-		chain.Config = etm.GetTendermintConfig(chain.MainChain, ctx)
+		chain.Config = chain.GetTendermintConfig(chain.MainChain, ctx)
 		return nil
 	}
 

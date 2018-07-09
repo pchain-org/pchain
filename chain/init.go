@@ -29,7 +29,6 @@ import (
 	"time"
 	"regexp"
 	cfg "github.com/tendermint/go-config"
-	etm "github.com/pchain/ethermint/cmd/ethermint"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/cmd/geth"
 )
@@ -73,7 +72,7 @@ func InitCmd(ctx *cli.Context) error {
 		utils.Fatalf("must supply path to genesis JSON file")
 	}
 
-	return init_cmd(ctx, etm.GetTendermintConfig(MainChain, ctx), MainChain, ethGenesisPath)
+	return init_cmd(ctx, GetTendermintConfig(MainChain, ctx), MainChain, ethGenesisPath)
 }
 
 func init_cmd(ctx *cli.Context, config cfg.Config, chainId string, ethGenesisPath string) error {
@@ -94,7 +93,7 @@ func InitEthGenesis(ctx *cli.Context) error {
 	}
 	bal_str := args[0]
 
-	return init_eth_genesis(etm.GetTendermintConfig(MainChain, ctx), bal_str)
+	return init_eth_genesis(GetTendermintConfig(MainChain, ctx), bal_str)
 }
 
 func init_eth_genesis(config cfg.Config, balStr string) error {

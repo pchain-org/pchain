@@ -5,7 +5,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/pchain/p2p"
 	"github.com/pchain/rpc"
-	etm "github.com/pchain/ethermint/cmd/ethermint"
 	"github.com/ethereum/go-ethereum/core"
 	"fmt"
 	"github.com/ethereum/go-ethereum/event"
@@ -43,7 +42,7 @@ func GetCMInstance(ctx *cli.Context) *ChainManager{
 func (cm *ChainManager)StartP2P() error {
 
 	// Start PChain P2P Node
-	mainChainConfig := etm.GetTendermintConfig(MainChain, cm.ctx)
+	mainChainConfig := GetTendermintConfig(MainChain, cm.ctx)
 	p2pObj, err := p2p.StartP2P(mainChainConfig)
 	if err != nil {
 		return err
@@ -115,7 +114,7 @@ func (cm *ChainManager)StartChains() error{
 	}
 
 	// Dial the Seeds after network has been added into NodeInfo
-	mainChainConfig := etm.GetTendermintConfig(cm.mainChain.Id, cm.ctx)
+	mainChainConfig := GetTendermintConfig(cm.mainChain.Id, cm.ctx)
 	err = cm.p2pObj.DialSeeds(mainChainConfig)
 	if err != nil {
 		return err
