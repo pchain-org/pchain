@@ -2,7 +2,7 @@ package state
 
 import (
 	//"errors"
-	"fmt"
+	//"fmt"
 
 	fail "github.com/ebuchman/fail-test"
 	//abci "github.com/tendermint/abci/types"
@@ -146,6 +146,7 @@ func (s *State) validateBlock(block *types.Block) error {
 func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus,
 	block *types.Block, partsHeader types.PartSetHeader, mempool types.Mempool, cch rpcTxHook.CrossChainHelper) error {
 
+	/*
 	abciResponses, err := s.ValExecBlock(eventCache, proxyAppConn, block, cch)
 	if err != nil {
 		return fmt.Errorf("Exec failed for application: %v", err)
@@ -160,7 +161,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	//saveABCIResponses(s.db, block.Height, abciResponses)
 
 	fail.Fail() // XXX
-
+	*/
 	//here handles the proposed next epoch
 	/*
 	nextEpochInBlock := epoch.FromBytes(block.ExData.BlockExData)
@@ -193,14 +194,15 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	}
 	*/
 	//here handles when enter new epoch
-	//s.SetBlockAndEpoch(block.Header, partsHeader)
+	s.SetBlockAndEpoch(block.Header, partsHeader)
 
+	/*
 	// lock mempool, commit state, update mempoool
 	err = s.CommitStateUpdateMempool(proxyAppConn, block, mempool)
 	if err != nil {
 		return fmt.Errorf("Commit failed for application: %v", err)
 	}
-
+	*/
 	fail.Fail() // XXX
 
 	// save the state

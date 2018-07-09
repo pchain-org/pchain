@@ -28,7 +28,7 @@ import (
 )
 
 type Backend interface {
-	GetCommitCh() chan *ethTypes.Block
+	Commit(proposal *types.Block, seals [][]byte) error
 }
 
 //-----------------------------------------------------------------------------
@@ -1287,28 +1287,23 @@ func (cs *ConsensusState) tryFinalizeCommit(height int) {
 	fmt.Printf("we force commit currently0, cs.ProposalBlock.is %p\n", cs.ProposalBlock)
 	fmt.Printf("we force commit currently0, cs.ProposalBlock.BlockExData is %x\n", cs.ProposalBlock.BlockExData)
 
-
-	tmpBlock := &ethTypes.Block{}
-	ethBlock, _ := tmpBlock.DecodeRLP1(cs.ProposalBlock.BlockExData)
-	cs.backend.GetCommitCh() <- ethBlock
-
 	fmt.Printf("we force commit currently1\n")
 
 	if cs.Height != height {
 		PanicSanity(Fmt("tryFinalizeCommit() cs.Height: %v vs height: %v", cs.Height, height))
 	}
 
-	blockID, ok := cs.Votes.Precommits(cs.CommitRound).TwoThirdsMajority()
-	if !ok || len(blockID.Hash) == 0 {
-		log.Warn("Attempt to finalize failed. There was no +2/3 majority, or +2/3 was for <nil>.", "height", height)
-		return
-	}
-	if !cs.ProposalBlock.HashesTo(blockID.Hash) {
+	//blockID, ok := cs.Votes.Precommits(cs.CommitRound).TwoThirdsMajority()
+	//if !ok || len(blockID.Hash) == 0 {
+	//	log.Warn("Attempt to finalize failed. There was no +2/3 majority, or +2/3 was for <nil>.", "height", height)
+	//	return
+	//}
+	//if !cs.ProposalBlock.HashesTo(blockID.Hash) {
 		// TODO: this happens every time if we're not a validator (ugly logs)
 		// TODO: ^^ wait, why does it matter that we're a validator?
-		log.Warn("Attempt to finalize failed. We don't have the commit block.", "height", height, "proposal-block", cs.ProposalBlock.Hash(), "commit-block", blockID.Hash)
-		return
-	}
+	//	log.Warn("Attempt to finalize failed. We don't have the commit block.", "height", height, "proposal-block", cs.ProposalBlock.Hash(), "commit-block", blockID.Hash)
+	//	return
+	//}
 	//	go
 	cs.finalizeCommit(height)
 }
@@ -1320,29 +1315,30 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 		return
 	}
 
+
 	// fmt.Println("precommits:", cs.Votes.Precommits(cs.CommitRound))
-	blockID, ok := cs.Votes.Precommits(cs.CommitRound).TwoThirdsMajority()
+	//blockID, ok := cs.Votes.Precommits(cs.CommitRound).TwoThirdsMajority()
 	block, blockParts := cs.ProposalBlock, cs.ProposalBlockParts
+	/*
+		if !ok {
+			PanicSanity(Fmt("Cannot finalizeCommit, commit does not have two thirds majority"))
+		}
+		if !blockParts.HasHeader(blockID.PartsHeader) {
+			PanicSanity(Fmt("Expected ProposalBlockParts header to be commit header"))
+		}
+		if !block.HashesTo(blockID.Hash) {
+			PanicSanity(Fmt("Cannot finalizeCommit, ProposalBlock does not hash to commit hash"))
+		}
+		if err := cs.state.ValidateBlock(block); err != nil {
+			PanicConsensus(Fmt("+2/3 committed an invalid block: %v", err))
+		}
 
-	if !ok {
-		PanicSanity(Fmt("Cannot finalizeCommit, commit does not have two thirds majority"))
-	}
-	if !blockParts.HasHeader(blockID.PartsHeader) {
-		PanicSanity(Fmt("Expected ProposalBlockParts header to be commit header"))
-	}
-	if !block.HashesTo(blockID.Hash) {
-		PanicSanity(Fmt("Cannot finalizeCommit, ProposalBlock does not hash to commit hash"))
-	}
-	if err := cs.state.ValidateBlock(block); err != nil {
-		PanicConsensus(Fmt("+2/3 committed an invalid block: %v", err))
-	}
+		//log.Notice(Fmt("Finalizing commit of block with %d txs", block.NumTxs),
+		//	"height", block.Height, "hash", block.Hash(), "root", block.AppHash)
+		//log.Info(Fmt("%v", block))
 
-	//log.Notice(Fmt("Finalizing commit of block with %d txs", block.NumTxs),
-	//	"height", block.Height, "hash", block.Hash(), "root", block.AppHash)
-	//log.Info(Fmt("%v", block))
-
-	fail.Fail() // XXX
-
+		fail.Fail() // XXX
+		*/
 	// Save to blockStore.
 	/*
 	if cs.blockStore.Height() < block.Height {
@@ -1376,13 +1372,14 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	// Create a copy of the state for staging
 	// and an event cache for txs
 	stateCopy := cs.state.Copy()
-	eventCache := types.NewEventCache(cs.evsw)
+	//eventCache := types.NewEventCache(cs.evsw)
 
-	// epochCopy := cs.epoch.Copy()
+	//epochCopy := cs.epoch.Copy()
 	// Execute and commit the block, update and save the state, and update the mempool.
 	// All calls to the proxyAppConn come here.
 	// NOTE: the block.AppHash wont reflect these txs until the next block
-	err := stateCopy.ApplyBlock(eventCache, cs.proxyAppConn, block, blockParts.Header(), cs.mempool, cs.cch)
+	//err := stateCopy.ApplyBlock(eventCache, cs.proxyAppConn, block, blockParts.Header(), cs.mempool, cs.cch)
+	err := stateCopy.ApplyBlock(nil, cs.proxyAppConn, block, blockParts.Header(), cs.mempool, cs.cch)
 	if err != nil {
 		log.Error("Error on ApplyBlock. Did the application crash? Please restart tendermint", "error", err)
 		return
@@ -1399,7 +1396,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	//   Both options mean we may fire more than once. Is that fine ?
 	types.FireEventNewBlock(cs.evsw, types.EventDataNewBlock{block})
 	types.FireEventNewBlockHeader(cs.evsw, types.EventDataNewBlockHeader{block.Header})
-	eventCache.Flush()
+	//eventCache.Flush()
 
 	fail.Fail() // XXX
 
@@ -1408,9 +1405,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 
 	fail.Fail() // XXX
 
-	tmpBlock := &ethTypes.Block{}
-	ethBlock, _ := tmpBlock.DecodeRLP1(block.BlockExData)
-	cs.backend.GetCommitCh() <- ethBlock
+	cs.backend.Commit(block, [][]byte{}/*signatures*/)
 
 	// cs.StartTime is already set.
 	// Schedule Round0 to start soon.
@@ -1533,7 +1528,10 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerKey string) error {
 
 func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool, err error) {
 	log.Debug("addVote", "voteHeight", vote.Height, "voteType", vote.Type, "csHeight", cs.Height)
-	fmt.Printf("block is %p, header is %p\n", cs.ProposalBlock, cs.ProposalBlock.Header)
+	fmt.Printf("block is %p\n", cs.ProposalBlock)
+	if cs.ProposalBlock != nil {
+		fmt.Printf("block header is %p\n", cs.ProposalBlock.Header)
+	}
 	fmt.Printf("ethblock is %X\n", cs.ProposalBlock.BlockExData)
 
 	// A precommit for the previous height?

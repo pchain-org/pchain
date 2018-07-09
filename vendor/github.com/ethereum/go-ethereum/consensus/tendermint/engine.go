@@ -19,6 +19,11 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/errors"
 )
 
+const (
+	// fetcherID is the ID indicates the block is from Tendermint engine
+	fetcherID = "tendermint"
+)
+
 var (
 	defaultDifficulty = big.NewInt(1)
 	nilUncleHash      = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
@@ -349,8 +354,42 @@ func (sb *backend) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 	return new(big.Int).SetUint64(0)
 }
 
-func (sb *backend) GetCommitCh() chan *types.Block {
-	return sb.commitCh
+
+// Commit implements istanbul.Backend.Commit
+func (sb *backend) Commit(proposal *tdmTypes.Block, seals [][]byte) error {
+	// Check if the proposal is a valid block
+	block := &types.Block{}
+	block, err := block.DecodeRLP1(proposal.BlockExData)
+	if err != nil {
+		return err
+	}
+
+	h := block.Header()
+	// Append seals into extra-data
+	err = writeCommittedSeals(h, seals)
+	if err != nil {
+		return err
+	}
+	// update block's header
+	block = block.WithSeal(h)
+
+	logger.Log.Info("Committed", "hash", proposal.Hash(), "number", block.Number().Int64())
+	// - if the proposed and committed blocks are the same, send the proposed hash
+	//   to commit channel, which is being watched inside the engine.Seal() function.
+	// - otherwise, we try to insert the block.
+	// -- if success, the ChainHeadEvent event will be broadcasted, try to build
+	//    the next block and the previous Seal() will be stopped.
+	// -- otherwise, a error will be returned and a round change event will be fired.
+	//if sb.proposedBlockHash == block.Hash() {
+		// feed block hash to Seal() and wait the Seal() result
+		sb.commitCh <- block
+	//	return nil
+	//}
+
+	if sb.broadcaster != nil {
+		sb.broadcaster.Enqueue(fetcherID, block)
+	}
+	return nil
 }
 
 // update timestamp and signature of the block based on its number of transactions
