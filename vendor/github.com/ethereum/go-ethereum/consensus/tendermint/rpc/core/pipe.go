@@ -6,7 +6,6 @@ import (
 	crypto "github.com/tendermint/go-crypto"
 	p2p "github.com/tendermint/go-p2p"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/proxy"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 )
@@ -32,12 +31,10 @@ type P2P interface {
 type RPCDataContext struct {
 	// external, thread safe interfaces
 	eventSwitch   types.EventSwitch
-	proxyAppQuery proxy.AppConnQuery
 	config        cfg.Config
 
 	// interfaces defined in types and above
 	blockStore     types.BlockStore
-	mempool        types.Mempool
 	consensusState Consensus
 	p2pSwitch      P2P
 
@@ -60,10 +57,6 @@ func (r *RPCDataContext) SetBlockStore(bs types.BlockStore) {
 	r.blockStore = bs
 }
 
-func (r *RPCDataContext) SetMempool(mem types.Mempool) {
-	r.mempool = mem
-}
-
 func (r *RPCDataContext) SetConsensusState(cs Consensus) {
 	r.consensusState = cs
 }
@@ -82,10 +75,6 @@ func (r *RPCDataContext) SetGenesisDoc(doc *types.GenesisDoc) {
 
 func (r *RPCDataContext) SetAddrBook(book *p2p.AddrBook) {
 	r.addrBook = book
-}
-
-func (r *RPCDataContext) SetProxyAppQuery(appConn proxy.AppConnQuery) {
-	r.proxyAppQuery = appConn
 }
 
 func (r *RPCDataContext) SetTxIndexer(indexer txindex.TxIndexer) {

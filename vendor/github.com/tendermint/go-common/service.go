@@ -2,7 +2,7 @@ package common
 
 import (
 	"sync/atomic"
-
+	"fmt"
 	"github.com/tendermint/log15"
 )
 
@@ -86,6 +86,7 @@ func NewBaseService(log log15.Logger, name string, impl Service) *BaseService {
 // Implements Servce
 func (bs *BaseService) Start() (bool, error) {
 	if atomic.CompareAndSwapUint32(&bs.started, 0, 1) {
+		/*
 		if atomic.LoadUint32(&bs.stopped) == 1 {
 			if bs.log != nil {
 				bs.log.Warn(Fmt("Not starting %v -- already stopped", bs.name), "impl", bs.impl)
@@ -96,11 +97,15 @@ func (bs *BaseService) Start() (bool, error) {
 				bs.log.Info(Fmt("Starting %v", bs.name), "impl", bs.impl)
 			}
 		}
+		*/
 		err := bs.impl.OnStart()
 		if err != nil {
 			// revert flag
 			atomic.StoreUint32(&bs.started, 0)
 			return false, err
+		}
+		if atomic.LoadUint32(&bs.stopped) == 1 {
+			atomic.StoreUint32(&bs.stopped, 0)
 		}
 		return true, err
 	} else {
@@ -118,12 +123,19 @@ func (bs *BaseService) OnStart() error { return nil }
 
 // Implements Service
 func (bs *BaseService) Stop() bool {
+	fmt.Printf("(bs *BaseService) Stop() called\n")
 	if atomic.CompareAndSwapUint32(&bs.stopped, 0, 1) {
 		if bs.log != nil {
 			bs.log.Info(Fmt("Stopping %v", bs.name), "impl", bs.impl)
 		}
+		fmt.Printf("((bs *BaseService) Stop() called before bs.impl.OnStop()\n")
 		bs.impl.OnStop()
+		fmt.Printf("((bs *BaseService) Stop() called before close(bs.Quit)\n")
 		close(bs.Quit)
+		fmt.Printf("((bs *BaseService) Stop() called after close(bs.Quit)\n")
+		if atomic.LoadUint32(&bs.started) == 1 {
+			atomic.StoreUint32(&bs.started, 0)
+		}
 		return true
 	} else {
 		if bs.log != nil {

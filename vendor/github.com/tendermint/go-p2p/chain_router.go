@@ -2,7 +2,7 @@ package p2p
 
 import (
 	"fmt"
-	cmn "github.com/tendermint/go-common"
+	//cmn "github.com/tendermint/go-common"
 )
 
 // ChainRouter used in P2P Switch for multi-chain Reactor
@@ -19,7 +19,9 @@ func (cr *ChainRouter) AddReactor(name string, reactor Reactor) {
 	for _, chDesc := range reactorChannels {
 		chID := chDesc.ID
 		if cr.reactorsByCh[chID] != nil {
-			cmn.PanicSanity(fmt.Sprintf("Channel %X has multiple reactors %v & %v", chID, cr.reactorsByCh[chID], reactor))
+			//cmn.PanicSanity(fmt.Sprintf("Channel %X has multiple reactors %v & %v", chID, cr.reactorsByCh[chID], reactor))
+			fmt.Printf("£¡£¡Channel %X has multiple reactors %v & %v", chID, cr.reactorsByCh[chID], reactor)
+			fmt.Printf("we overwrite the previous value")
 		}
 		cr.chDescs = append(cr.chDescs, chDesc)
 		cr.reactorsByCh[chID] = reactor

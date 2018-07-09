@@ -17,7 +17,7 @@ import (
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
-	proxy "github.com/ethereum/go-ethereum/consensus/tendermint/proxy"
+	//proxy "github.com/ethereum/go-ethereum/consensus/tendermint/proxy"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	//"github.com/ethereum/go-ethereum/common"
 	"encoding/json"
@@ -242,9 +242,7 @@ type ConsensusState struct {
 	BaseService
 
 	config       cfg.Config
-	proxyAppConn proxy.AppConnConsensus
 	blockStore   types.BlockStore
-	mempool      types.Mempool
 	privValidator PrivValidator // for signing votes
 
 	cch 	core.CrossChainHelper
@@ -261,9 +259,6 @@ type ConsensusState struct {
 
 	evsw types.EventSwitch
 
-	//wal        *WAL
-	//replayMode bool // so we don't log signing errors during replay
-
 	nSteps int // used for testing to limit the number of transitions the state makes
 
 	// allow certain function to be overwritten for testing
@@ -277,14 +272,11 @@ type ConsensusState struct {
 	backend Backend
 }
 
-func NewConsensusState(config cfg.Config, state *sm.State, proxyAppConn proxy.AppConnConsensus,
-	blockStore types.BlockStore, mempool types.Mempool, epoch *ep.Epoch, backend Backend, cch  core.CrossChainHelper) *ConsensusState {
+func NewConsensusState(config cfg.Config, state *sm.State, blockStore types.BlockStore, epoch *ep.Epoch, backend Backend, cch  core.CrossChainHelper) *ConsensusState {
 	// fmt.Println("state.Validator in newconsensus:", state.Validators)
 	cs := &ConsensusState{
 		config:           config,
-		proxyAppConn:     proxyAppConn,
 		blockStore:       blockStore,
-		mempool:          mempool,
 		cch:              cch,
 		peerMsgQueue:     make(chan msgInfo, msgQueueSize),
 		internalMsgQueue: make(chan msgInfo, msgQueueSize),
@@ -545,6 +537,7 @@ func (cs *ConsensusState) sendInternalMessage(mi msgInfo) {
 // Reconstruct LastCommit from SeenCommit, which we saved along with the block,
 // (which happens even before saving the state)
 func (cs *ConsensusState) reconstructLastCommit(state *sm.State) {
+	/*
 	if state.LastBlockHeight == 0 {
 		return
 	}
@@ -568,6 +561,7 @@ func (cs *ConsensusState) reconstructLastCommit(state *sm.State) {
 		PanicSanity("Failed to reconstruct LastCommit: Does not have +2/3 maj")
 	}
 	cs.LastCommit = lastPrecommits
+	*/
 }
 
 // Updates ConsensusState and increments height to match thatRewardScheme of state.
@@ -1379,7 +1373,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	// All calls to the proxyAppConn come here.
 	// NOTE: the block.AppHash wont reflect these txs until the next block
 	//err := stateCopy.ApplyBlock(eventCache, cs.proxyAppConn, block, blockParts.Header(), cs.mempool, cs.cch)
-	err := stateCopy.ApplyBlock(nil, cs.proxyAppConn, block, blockParts.Header(), cs.mempool, cs.cch)
+	err := stateCopy.ApplyBlock(nil, block, blockParts.Header(), cs.cch)
 	if err != nil {
 		log.Error("Error on ApplyBlock. Did the application crash? Please restart tendermint", "error", err)
 		return

@@ -131,11 +131,6 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Service:   NewPrivateAccountAPI(apiBackend, nonceLock),
 			Public:    false,
 		}, {
-			Namespace: "tdm",
-			Version:   "1.0",
-			Service:   NewPublicTendermintAPI(apiBackend),
-			Public:    true,
-		}, {
 			Namespace: "chain",
 			Version:   "1.0",
 			Service:   NewPublicChainAPI(apiBackend),

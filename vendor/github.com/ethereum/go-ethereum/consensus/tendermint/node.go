@@ -11,8 +11,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
+	bc "github.com/ethereum/go-ethereum/consensus/tendermint/blockchain"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/kv"
+	//"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/kv"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/null"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/logger"
@@ -47,6 +48,7 @@ type Node struct {
 
 						     // services
 	evsw             types.EventSwitch           // pub/sub for services
+	blockStore       *bc.BlockStore              // store the blockchain to disk
 	consensusState   *consensus.ConsensusState   // latest consensus state
 	consensusReactor *consensus.ConsensusReactor // for participating in the consensus
 	txIndexer        txindex.TxIndexer
@@ -231,6 +233,11 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 	// ClientCreator will be instantiated later after ethermint proxyapp created
 	// clientCreator := proxy.DefaultClientCreator(config)
 
+	// Get BlockStore
+	blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
+	blockStore := bc.NewBlockStore(blockStoreDB)
+
+
 	ep.VADB = dbm.NewDB("validatoraction", config.GetString("db_backend"), config.GetString("db_dir"))
 
 	// Get State And Epoch
@@ -258,6 +265,7 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 		addrBook:      addrBook,
 
 		evsw:          eventSwitch,
+		blockStore:       blockStore,
 
 		backend:       backend,
 		cch:           cch,
@@ -281,13 +289,13 @@ func (n *Node) OnStart() error {
 
 	// Transaction indexing
 	var txIndexer txindex.TxIndexer
-	switch n.config.GetString("tx_index") {
-	case "kv":
-		store := dbm.NewDB("tx_index", n.config.GetString("db_backend"), n.config.GetString("db_dir"))
-		txIndexer = kv.NewTxIndex(store)
-	default:
+	//switch n.config.GetString("tx_index") {
+	//case "kv":
+	//	store := dbm.NewDB("tx_index", n.config.GetString("db_backend"), n.config.GetString("db_dir"))
+	//	txIndexer = kv.NewTxIndex(store)
+	//default:
 		txIndexer = &null.TxIndex{}
-	}
+	//}
 	state.TxIndexer = txIndexer
 
 	_, err := n.evsw.Start()
@@ -306,10 +314,9 @@ func (n *Node) OnStart() error {
 	}
 
 	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(n.config, state.Copy(), nil,
-						nil, nil, epoch, n.backend, n.cch)
+	consensusState := consensus.NewConsensusState(n.config, state.Copy(), n.blockStore, epoch, n.backend, n.cch)
 	if n.privValidator != nil {
-		consensusState.SetPrivValidator(n.privValidator)
+			consensusState.SetPrivValidator(n.privValidator)
 	}
 	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
 
@@ -320,6 +327,9 @@ func (n *Node) OnStart() error {
 	// they should all satisfy events.Eventable
 	SetEventSwitch(n.evsw, consensusReactor)
 
+	// Start the Reactors for this Chain
+	n.sw.StartChainReactor(state.ChainID)
+
 	// run the profile server
 	profileHost := n.config.GetString("prof_laddr")
 	if profileHost != "" {
@@ -329,13 +339,9 @@ func (n *Node) OnStart() error {
 		}()
 	}
 
-	// Start the Reactors for this Chain
-	n.sw.StartChainReactor(state.ChainID)
-
 	n.consensusState = consensusState
 	n.consensusReactor = consensusReactor
 	n.txIndexer = txIndexer
-
 
 	return nil
 }
@@ -382,7 +388,12 @@ func (n *Node) OnStart() error {
 */
 
 func (n *Node) OnStop() {
+	fmt.Printf("(n *Node) OnStop() called\n")
 	n.BaseService.OnStop()
+
+	n.sw.StopChainReactor(n.consensusState.GetState().ChainID)
+	n.evsw.Stop()
+	n.consensusReactor.Stop()
 }
 
 func (n *Node) RunForever() {

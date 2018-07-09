@@ -208,6 +208,27 @@ func (sw *Switch) StartChainReactor(chainID string) error {
 	return nil
 }
 
+// StartChainReactor starts Reactors from specificed Chain ID
+func (sw *Switch) StopChainReactor(chainID string) error {
+
+	chainRouter, ok := sw.reactorsByChainId[chainID]
+	if ok {
+		// Start reactors
+		for _, reactor := range chainRouter.reactors {
+			ok := reactor.Stop()
+			if !ok {
+				return errors.New("StopChainReactor.reactor Stop failed")
+			}
+		}
+
+		// Start peers for this Chain
+		for _, peer := range sw.peers.List() {
+			sw.removePeer(peer)
+		}
+	}
+	return nil
+}
+
 // addPeer performs the Tendermint P2P handshake with a peer
 // that already has a SecretConnection. If all goes well,
 // it starts the peer and adds it to the switch.
@@ -289,6 +310,17 @@ func (sw *Switch) startInitPeer(peer *Peer) {
 	for _, chainId := range sameNetwork {
 		for _, reactor := range sw.reactorsByChainId[chainId].reactors {
 			reactor.AddPeer(peer)
+		}
+	}
+}
+
+func (sw *Switch) removePeer(peer *Peer) {
+	peer.Start() // spawn send/recv routines
+
+	sameNetwork := peer.GetSameNetwork(sw.nodeInfo.Networks)
+	for _, chainId := range sameNetwork {
+		for _, reactor := range sw.reactorsByChainId[chainId].reactors {
+			reactor.RemovePeer(peer, "(sw *Switch) stopPeer(peer *Peer)")
 		}
 	}
 }
