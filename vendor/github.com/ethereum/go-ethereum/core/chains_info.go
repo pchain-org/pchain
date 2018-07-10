@@ -2,7 +2,6 @@ package core
 
 import (
 	"bytes"
-	"encoding/gob"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -142,18 +141,8 @@ func loadCoreChainInfo(db dbm.DB, chainId string) *CoreChainInfo {
 
 func saveCoreChainInfo(db dbm.DB, cci *CoreChainInfo) error {
 
-	db.SetSync(calcCoreChainInfoKey(cci.ChainId), cci.Bytes())
+	db.SetSync(calcCoreChainInfoKey(cci.ChainId), wire.BinaryBytes(*cci))
 	return nil
-}
-
-func (cci *CoreChainInfo) Bytes() []byte {
-
-	buf, n, err := new(bytes.Buffer), new(int), new(error)
-	wire.WriteBinary(*cci, buf, n, err)
-	if *err != nil {
-		return nil
-	}
-	return buf.Bytes()
 }
 
 func (cci *CoreChainInfo) TotalDeposit() *big.Int {
@@ -272,7 +261,7 @@ func GetPendingChildChainData(db dbm.DB, chainId string) *CoreChainInfo {
 	pendingChainByteSlice := db.Get(calcPendingChainInfoKey(chainId))
 	if pendingChainByteSlice != nil {
 		var cci CoreChainInfo
-		gobReadBinaryBytes(pendingChainByteSlice, &cci)
+		wire.ReadBinaryBytes(pendingChainByteSlice, &cci)
 		return &cci
 	}
 
@@ -295,17 +284,17 @@ func storePendingChildChainData(db dbm.DB, cci *CoreChainInfo, create bool) {
 	defer pendingChainMtx.Unlock()
 
 	// store the data
-	db.SetSync(calcPendingChainInfoKey(cci.ChainId), gobBinaryBytes(*cci))
+	db.SetSync(calcPendingChainInfoKey(cci.ChainId), wire.BinaryBytes(*cci))
 
 	if create {
 		// index the data
 		var idx []pendingIdxData
 		pendingIdxByteSlice := db.Get(pendingChainIndexKey)
 		if pendingIdxByteSlice != nil {
-			gobReadBinaryBytes(pendingIdxByteSlice, &idx)
+			wire.ReadBinaryBytes(pendingIdxByteSlice, &idx)
 		}
 		idx = append(idx, pendingIdxData{cci.ChainId, cci.StartBlock, cci.EndBlock})
-		db.SetSync(pendingChainIndexKey, gobBinaryBytes(idx))
+		db.SetSync(pendingChainIndexKey, wire.BinaryBytes(idx))
 	}
 }
 
@@ -326,7 +315,7 @@ func GetChildChainForLaunch(db dbm.DB, height uint64, stateDB *state.StateDB) []
 	var idx []pendingIdxData
 	pendingIdxByteSlice := db.Get(pendingChainIndexKey)
 	if pendingIdxByteSlice != nil {
-		gobReadBinaryBytes(pendingIdxByteSlice, &idx)
+		wire.ReadBinaryBytes(pendingIdxByteSlice, &idx)
 	}
 
 	if len(idx) == 0 {
@@ -368,22 +357,9 @@ func GetChildChainForLaunch(db dbm.DB, height uint64, stateDB *state.StateDB) []
 
 	if len(newPendingIdx) != len(idx) {
 		// Update the Pending Idx
-		db.SetSync(pendingChainIndexKey, gobBinaryBytes(newPendingIdx))
+		db.SetSync(pendingChainIndexKey, wire.BinaryBytes(newPendingIdx))
 	}
 
 	// Return the ready for launch Child Chain
 	return readyForLaunch
-}
-
-func gobBinaryBytes(o interface{}) []byte {
-	gob.Register(&crypto.EtherumPubKey{})
-	b := new(bytes.Buffer)
-	enc := gob.NewEncoder(b)
-	enc.Encode(o)
-	return b.Bytes()
-}
-
-func gobReadBinaryBytes(d []byte, ptr interface{}) error {
-	dec := gob.NewDecoder(bytes.NewReader(d))
-	return dec.Decode(ptr)
 }
