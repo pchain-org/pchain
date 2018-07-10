@@ -1,7 +1,7 @@
 package state
 
 import (
-	//"errors"
+	"errors"
 	//"fmt"
 
 	fail "github.com/ebuchman/fail-test"
@@ -31,7 +31,7 @@ func (s *State) ValExecBlock(eventCache types.Fireable, block *types.Block, cch 
 // return a bit array of validators that signed the last commit
 // NOTE: assumes commits have already been authenticated
 func commitBitArrayFromBlock(block *types.Block) *BitArray {
-	/*
+
 	signed := NewBitArray(len(block.LastCommit.Precommits))
 	for i, precommit := range block.LastCommit.Precommits {
 		if precommit != nil {
@@ -39,8 +39,6 @@ func commitBitArrayFromBlock(block *types.Block) *BitArray {
 		}
 	}
 	return signed
-	*/
-	return nil
 }
 
 //-----------------------------------------------------
@@ -56,7 +54,7 @@ func (s *State) validateBlock(block *types.Block) error {
 	if err != nil {
 		return err
 	}
-	/*
+
 	// Validate block LastCommit.
 	if block.Height == 1 {
 		if len(block.LastCommit.Precommits) != 0 {
@@ -75,7 +73,7 @@ func (s *State) validateBlock(block *types.Block) error {
 			return err
 		}
 	}
-	*/
+
 	return nil
 }
 

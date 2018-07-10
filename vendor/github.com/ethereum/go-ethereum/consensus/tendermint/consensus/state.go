@@ -537,7 +537,7 @@ func (cs *ConsensusState) sendInternalMessage(mi msgInfo) {
 // Reconstruct LastCommit from SeenCommit, which we saved along with the block,
 // (which happens even before saving the state)
 func (cs *ConsensusState) reconstructLastCommit(state *sm.State) {
-	/*
+
 	if state.LastBlockHeight == 0 {
 		return
 	}
@@ -561,7 +561,6 @@ func (cs *ConsensusState) reconstructLastCommit(state *sm.State) {
 		PanicSanity("Failed to reconstruct LastCommit: Does not have +2/3 maj")
 	}
 	cs.LastCommit = lastPrecommits
-	*/
 }
 
 // Updates ConsensusState and increments height to match thatRewardScheme of state.
@@ -946,7 +945,7 @@ func (cs *ConsensusState) createProposalBlock() (*types.Block, *types.PartSet) {
 
 		ethBlock := cs.blockFromMiner
 		fmt.Printf("block received from miner: %p\n", ethBlock)
-		/*
+
 		var commit *types.Commit
 		if cs.Height == 1 {
 			// We're creating a proposal for the first block.
@@ -958,22 +957,22 @@ func (cs *ConsensusState) createProposalBlock() (*types.Block, *types.PartSet) {
 		} else {
 			// This shouldn't happen.
 			log.Error("enterPropose: Cannot propose anything: No commit for the previous block.")
-			return
-		}
-
-		// Mempool validated transactions
-		txs := cs.mempool.Reap(cs.config.GetInt("block_size"))
-
-		epTxs, err := cs.Epoch.ProposeTransactions("proposer", cs.Height)
-		if err != nil {
 			return nil, nil
 		}
+		/*
+				// Mempool validated transactions
+				txs := cs.mempool.Reap(cs.config.GetInt("block_size"))
 
-		if len(epTxs) != 0 {
-			log.Info("createProposalBlock(), epoch propose", "len(txs)", len(epTxs))
-			txs = append(txs, epTxs...)
-		}
-		*/
+				epTxs, err := cs.Epoch.ProposeTransactions("proposer", cs.Height)
+				if err != nil {
+					return nil, nil
+				}
+
+				if len(epTxs) != 0 {
+					log.Info("createProposalBlock(), epoch propose", "len(txs)", len(epTxs))
+					txs = append(txs, epTxs...)
+				}
+				*/
 		/*
 		var epochBytes []byte = []byte{}
 		shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
@@ -989,10 +988,11 @@ func (cs *ConsensusState) createProposalBlock() (*types.Block, *types.PartSet) {
 		if err != nil {return nil, nil}
 
 		fmt.Printf("createProposalBlock blockBytes len : %v\n", len(blockBytes))
+		fmt.Printf("block.LastCommit is %v\n", commit)
 
 		cs.blockFromMiner = nil
 
-		return types.MakeBlock(cs.Height, cs.state.ChainID, nil, nil,
+		return types.MakeBlock(cs.Height, cs.state.ChainID, commit,
 				cs.state.LastBlockID, val.Hash(), cs.state.AppHash,
 				blockBytes, cs.config.GetInt("block_part_size"))
 	}
@@ -1247,7 +1247,7 @@ func (cs *ConsensusState) enterCommit(height int, commitRound int) {
 		// Maybe finalize immediately.
 		cs.tryFinalizeCommit(height)
 	}()
-	/*
+
 	blockID, ok := cs.Votes.Precommits(commitRound).TwoThirdsMajority()
 	if !ok {
 		PanicSanity("RunActionCommit() expects +2/3 precommits")
@@ -1272,7 +1272,7 @@ func (cs *ConsensusState) enterCommit(height int, commitRound int) {
 			// We just need to keep waiting.
 		}
 	}
-	*/
+
 }
 
 // If we have the block AND +2/3 commits for it, finalize.
@@ -1311,30 +1311,29 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 
 
 	// fmt.Println("precommits:", cs.Votes.Precommits(cs.CommitRound))
-	//blockID, ok := cs.Votes.Precommits(cs.CommitRound).TwoThirdsMajority()
+	blockID, ok := cs.Votes.Precommits(cs.CommitRound).TwoThirdsMajority()
 	block, blockParts := cs.ProposalBlock, cs.ProposalBlockParts
-	/*
-		if !ok {
-			PanicSanity(Fmt("Cannot finalizeCommit, commit does not have two thirds majority"))
-		}
-		if !blockParts.HasHeader(blockID.PartsHeader) {
-			PanicSanity(Fmt("Expected ProposalBlockParts header to be commit header"))
-		}
-		if !block.HashesTo(blockID.Hash) {
-			PanicSanity(Fmt("Cannot finalizeCommit, ProposalBlock does not hash to commit hash"))
-		}
-		if err := cs.state.ValidateBlock(block); err != nil {
-			PanicConsensus(Fmt("+2/3 committed an invalid block: %v", err))
-		}
 
-		//log.Notice(Fmt("Finalizing commit of block with %d txs", block.NumTxs),
-		//	"height", block.Height, "hash", block.Hash(), "root", block.AppHash)
-		//log.Info(Fmt("%v", block))
+	if !ok {
+		PanicSanity(Fmt("Cannot finalizeCommit, commit does not have two thirds majority"))
+	}
+	if !blockParts.HasHeader(blockID.PartsHeader) {
+		PanicSanity(Fmt("Expected ProposalBlockParts header to be commit header"))
+	}
+	if !block.HashesTo(blockID.Hash) {
+		PanicSanity(Fmt("Cannot finalizeCommit, ProposalBlock does not hash to commit hash"))
+	}
+	if err := cs.state.ValidateBlock(block); err != nil {
+		PanicConsensus(Fmt("+2/3 committed an invalid block: %v", err))
+	}
 
-		fail.Fail() // XXX
-		*/
+	//log.Notice(Fmt("Finalizing commit of block with %d txs", block.NumTxs),
+	//	"height", block.Height, "hash", block.Hash(), "root", block.AppHash)
+	//log.Info(Fmt("%v", block))
+
+	fail.Fail() // XXX
+
 	// Save to blockStore.
-	/*
 	if cs.blockStore.Height() < block.Height {
 		// NOTE: the seenCommit is local justification to commit this block,
 		// but may differ from the LastCommit included in the next block
@@ -1345,7 +1344,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 		// Happens during replay if we already saved the block but didn't commit
 		log.Info("Calling finalizeCommit on already stored block", "height", block.Height)
 	}
-	*/
+
 	fail.Fail() // XXX
 
 	/*
@@ -1472,7 +1471,7 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
 		//log.Info("Received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
 		//fmt.Printf("Received complete proposal block is %v\n", cs.ProposalBlock.String())
-		//fmt.Printf("block.LastCommit is %v\n", cs.ProposalBlock.LastCommit)
+		fmt.Printf("(cs *ConsensusState) addProposalBlockPart block.LastCommit is %v\n", cs.ProposalBlock.LastCommit)
 		if cs.Step == RoundStepPropose && cs.isProposalComplete() {
 			// Move onto the next step
 			cs.enterPrevote(height, cs.Round)
@@ -1522,11 +1521,11 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerKey string) error {
 
 func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool, err error) {
 	log.Debug("addVote", "voteHeight", vote.Height, "voteType", vote.Type, "csHeight", cs.Height)
+
 	fmt.Printf("block is %p\n", cs.ProposalBlock)
 	if cs.ProposalBlock != nil {
 		fmt.Printf("block header is %p\n", cs.ProposalBlock.Header)
 	}
-	fmt.Printf("ethblock is %X\n", cs.ProposalBlock.BlockExData)
 
 	// A precommit for the previous height?
 	// These come in while we wait timeoutCommit
@@ -1604,14 +1603,13 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 				precommits := cs.Votes.Precommits(vote.Round)
 				log.Info("Added to precommit", "vote", vote, "precommits", precommits.StringShort())
 
-				//blockID, ok := precommits.TwoThirdsMajority()
-				_, ok := precommits.TwoThirdsMajority()
+				blockID, ok := precommits.TwoThirdsMajority()
 				if ok {
 					fmt.Printf("(cs *ConsensusState) VoteTypePrecommit 0\n")
-					//if len(blockID.Hash) == 0 {
-					//	fmt.Printf("(cs *ConsensusState) VoteTypePrecommit 1\n")
-					//	cs.enterNewRound(height, vote.Round+1)
-					//} else
+					if len(blockID.Hash) == 0 {
+						fmt.Printf("(cs *ConsensusState) VoteTypePrecommit 1\n")
+						cs.enterNewRound(height, vote.Round+1)
+					} else
 					{
 						fmt.Printf("(cs *ConsensusState) VoteTypePrecommit 2\n")
 						cs.enterNewRound(height, vote.Round)
@@ -1625,7 +1623,6 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 							// cs.scheduleTimeout(time.Duration(0), cs.Height, 0, RoundStepNewHeight)
 							cs.enterNewRound(cs.Height, 0)
 						}
-
 					}
 				} else if cs.Round <= vote.Round && precommits.HasTwoThirdsAny() {
 					fmt.Printf("(cs *ConsensusState) VoteTypePrecommit 4\n")

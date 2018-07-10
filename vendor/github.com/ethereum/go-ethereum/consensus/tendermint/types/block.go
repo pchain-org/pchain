@@ -18,18 +18,13 @@ const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 
 type Block struct {
 	*Header    `json:"header"`
-	*Data      `json:"data"` //to save eth.Block
 	*ExData    `json:"exdata"`
 	LastCommit *Commit `json:"last_commit"`
 }
 
 
-func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
+func MakeBlock(height int, chainID string, commit *Commit,
 	prevBlockID BlockID, valHash, appHash []byte, blkExData []byte, partSize int) (*Block, *PartSet) {
-
-	data := &Data{
-		Txs: txs,
-	}
 
 	exData := &ExData{
 		BlockExData: blkExData,
@@ -40,13 +35,10 @@ func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
 			ChainID:        chainID,
 			Height:         height,
 			Time:           time.Now(),
-			NumTxs:         len(txs),
 			LastBlockID:    prevBlockID,
 			ValidatorsHash: valHash,
-			AppHash:        appHash, // state merkle root of txs from the previous block.
 		},
 		LastCommit: commit,
-		Data: data,
 		ExData: exData,
 	}
 	block.FillHeader()
@@ -57,15 +49,12 @@ func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
 // Basic validation that doesn't involve state data.
 func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID BlockID,
 	lastBlockTime time.Time, appHash []byte) error {
-	/*
+
 	if b.ChainID != chainID {
 		return errors.New(Fmt("Wrong Block.Header.ChainID. Expected %v, got %v", chainID, b.ChainID))
 	}
 	if b.Height != lastBlockHeight+1 {
 		return errors.New(Fmt("Wrong Block.Header.Height. Expected %v, got %v", lastBlockHeight+1, b.Height))
-	}
-	if b.NumTxs != len(b.Data.Txs) {
-		return errors.New(Fmt("Wrong Block.Header.NumTxs. Expected %v, got %v", len(b.Data.Txs), b.NumTxs))
 	}
 	if !b.LastBlockID.Equals(lastBlockID) {
 		return errors.New(Fmt("Wrong Block.Header.LastBlockID.  Expected %v, got %v", lastBlockID, b.LastBlockID))
@@ -78,15 +67,6 @@ func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID B
 			return err
 		}
 	}
-	if !bytes.Equal(b.DataHash, b.Data.Hash()) {
-		return errors.New(Fmt("Wrong Block.Header.DataHash.  Expected %X, got %X", b.DataHash, b.Data.Hash()))
-	}
-	/*
-	if !bytes.Equal(b.AppHash, appHash) {
-		return errors.New(Fmt("Wrong Block.Header.AppHash.  Expected %X, got %X", appHash, b.AppHash))
-	}
-	*/
-	// NOTE: the AppHash and ValidatorsHash are validated later.
 	return nil
 }
 
@@ -110,14 +90,9 @@ func MakeIntegratedBlock(block *Block, commit *Commit, blockPartSize int) (*Inte
 }
 
 func (b *Block) FillHeader() {
-	/*
 	if b.LastCommitHash == nil {
 		b.LastCommitHash = b.LastCommit.Hash()
 	}
-	if b.DataHash == nil {
-		b.DataHash = b.Data.Hash()
-	}
-	*/
 }
 
 
@@ -125,7 +100,7 @@ func (b *Block) FillHeader() {
 // If the block is incomplete, block hash is nil for safety.
 func (b *Block) Hash() []byte {
 	// fmt.Println(">>", b.Data)
-	if b == nil || b.Header == nil || b.Data == nil || b.LastCommit == nil {
+	if b == nil || b.Header == nil || b.LastCommit == nil {
 		return nil
 	}
 	b.FillHeader()
@@ -167,7 +142,6 @@ func (b *Block) StringIndented(indent string) string {
 %s  %v
 %s}#%X`,
 		indent, b.Header.StringIndented(indent+"  "),
-		indent, b.Data.StringIndented(indent+"  "),
 		indent, b.ExData.StringIndented(indent+"  "),
 		indent, b.LastCommit.StringIndented(indent+"  "),
 		indent, b.Hash())
@@ -182,17 +156,13 @@ func (b *Block) StringShort() string {
 }
 
 //-----------------------------------------------------------------------------
-
 type Header struct {
 	ChainID        string    `json:"chain_id"`
 	Height         int       `json:"height"`
 	Time           time.Time `json:"time"`
-	NumTxs         int       `json:"num_txs"` // XXX: Can we get rid of this?
 	LastBlockID    BlockID   `json:"last_block_id"`
 	LastCommitHash []byte    `json:"last_commit_hash"` // commit from validators from the last block
-	DataHash       []byte    `json:"data_hash"`        // transactions
 	ValidatorsHash []byte    `json:"validators_hash"`  // validators for the current block
-	AppHash        []byte    `json:"app_hash"`         // state after txs from the previous block
 }
 
 // NOTE: hash is nil if required fields are missing.
@@ -204,12 +174,9 @@ func (h *Header) Hash() []byte {
 		"ChainID":     h.ChainID,
 		"Height":      h.Height,
 		"Time":        h.Time,
-		"NumTxs":      h.NumTxs,
 		"LastBlockID": h.LastBlockID,
 		"LastCommit":  h.LastCommitHash,
-		"Data":        h.DataHash,
 		"Validators":  h.ValidatorsHash,
-		"App":         h.AppHash,
 	})
 }
 
@@ -231,12 +198,9 @@ func (h *Header) StringIndented(indent string) string {
 		indent, h.ChainID,
 		indent, h.Height,
 		indent, h.Time,
-		indent, h.NumTxs,
 		indent, h.LastBlockID,
 		indent, h.LastCommitHash,
-		indent, h.DataHash,
 		indent, h.ValidatorsHash,
-		indent, h.AppHash,
 		indent, h.Hash())
 }
 
@@ -380,19 +344,6 @@ func (commit *Commit) StringIndented(indent string) string {
 		indent, commit.hash)
 }
 
-//-----------------------------------------------------------------------------
-
-type Data struct {
-
-	// Txs that will be applied by state @ block.Height+1.
-	// NOTE: not all txs here are valid.  We're just agreeing on the order first.
-	// This means that block.AppHash does not include these txs.
-	Txs Txs `json:"txs"`
-
-	// Volatile
-	hash []byte
-}
-
 type ExData struct {
 
 	BlockExData []byte `json:"ex_data"`
@@ -411,32 +362,6 @@ func (exData *ExData) StringIndented(indent string) string {
 %s}#%X`,
 		indent, string(exData.BlockExData),
 		indent, exData.hash)
-}
-
-func (data *Data) Hash() []byte {
-	if data.hash == nil {
-		data.hash = data.Txs.Hash() // NOTE: leaves of merkle tree are TxIDs
-	}
-	return data.hash
-}
-
-func (data *Data) StringIndented(indent string) string {
-	if data == nil {
-		return "nil-Data"
-	}
-	txStrings := make([]string, MinInt(len(data.Txs), 21))
-	for i, tx := range data.Txs {
-		if i == 20 {
-			txStrings[i] = fmt.Sprintf("... (%v total)", len(data.Txs))
-			break
-		}
-		txStrings[i] = fmt.Sprintf("Tx:%v", tx)
-	}
-	return fmt.Sprintf(`Data{
-%s  %v
-%s}#%X`,
-		indent, strings.Join(txStrings, "\n"+indent+"  "),
-		indent, data.hash)
 }
 
 //--------------------------------------------------------------------------------

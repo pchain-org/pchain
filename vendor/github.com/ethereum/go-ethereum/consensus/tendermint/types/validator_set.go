@@ -242,11 +242,11 @@ func (valSet *ValidatorSet) Iterate(fn func(index int, val *Validator) bool) {
 
 // Verify that +2/3 of the set had signed the given signBytes
 func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height int, commit *Commit) error {
-	/*
+
 	if valSet.Size() != len(commit.Precommits) {
 		return fmt.Errorf("Invalid commit -- wrong set size: %v vs %v", valSet.Size(), len(commit.Precommits))
 	}
-	*/
+
 	fmt.Printf("(valSet *ValidatorSet) VerifyCommit(), avoid valSet and commit.Precommits size check for validatorset change\n")
 	if height != commit.Height() {
 		return fmt.Errorf("Invalid commit -- wrong height: %v vs %v", height, commit.Height())

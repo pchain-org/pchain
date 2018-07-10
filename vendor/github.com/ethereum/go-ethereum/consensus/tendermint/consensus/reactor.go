@@ -331,9 +331,11 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 	})
 
 	types.AddListenerForEvent(conR.evsw, "conR", types.EventStringRequest(), func(data types.TMEventData) {
-		re := data.(types.EventDataRequest)
-		conR.conS.blockFromMiner = re.Proposal
-		log.Info("registerEventCallbacks received Request Event ", "re.Proposal", re.Proposal)
+		log.Info("registerEventCallbacks received Request Event ", "request", data.(types.EventDataRequest), "conR.conS.Step", conR.conS.Step)
+		if conR.conS.Step < RoundStepPropose {
+			re := data.(types.EventDataRequest)
+			conR.conS.blockFromMiner = re.Proposal
+		}
 	})
 }
 
