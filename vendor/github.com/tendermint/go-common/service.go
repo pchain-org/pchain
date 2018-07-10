@@ -98,6 +98,7 @@ func (bs *BaseService) Start() (bool, error) {
 			}
 		}
 		*/
+		bs.Quit = make(chan struct{})
 		err := bs.impl.OnStart()
 		if err != nil {
 			// revert flag
