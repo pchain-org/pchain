@@ -30,6 +30,11 @@ func EventStringLock() string             { return "Lock" }
 func EventStringRelock() string           { return "Relock" }
 func EventStringTimeoutWait() string      { return "TimeoutWait" }
 func EventStringVote() string             { return "Vote" }
+func EventStringSignAggr() string 		   { return  "SignAggr"}
+func EventStringVote2Proposer() string    { return "Vote2Proposer"}
+func EventStringProposal() string         { return "Proposal"}
+func EventStringBlockPart() string        { return "BlockPart"}
+func EventStringProposalBlockParts() string { return "Proposal_BlockParts"}
 
 //----------------------------------------
 
@@ -47,6 +52,11 @@ const (
 
 	EventDataTypeRoundState = byte(0x11)
 	EventDataTypeVote       = byte(0x12)
+	EventDataTypeSignAggr       = byte(0x13)
+	EventDataTypeVote2Proposer = byte(0x14)
+	EventDataTypeProposal      = byte(0x15)
+	EventDataTypeBlockPart    = byte(0x16)
+	EventDataTypeProposalBlockParts = byte(0x17)
 )
 
 var _ = wire.RegisterInterface(
@@ -57,6 +67,11 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{EventDataTx{}, EventDataTypeTx},
 	wire.ConcreteType{EventDataRoundState{}, EventDataTypeRoundState},
 	wire.ConcreteType{EventDataVote{}, EventDataTypeVote},
+	wire.ConcreteType{EventDataSignAggr{}, EventDataTypeSignAggr},
+	wire.ConcreteType{EventDataVote2Proposer{}, EventDataTypeVote2Proposer},
+	wire.ConcreteType{EventDataProposal{}, EventDataTypeProposal},
+	wire.ConcreteType{EventDataBlockPart{}, EventDataTypeBlockPart},
+	wire.ConcreteType{EventDataProposalBlockParts{}, EventDataTypeProposalBlockParts},
 )
 
 // Most event messages are basic types (a block, a transaction)
@@ -95,12 +110,41 @@ type EventDataVote struct {
 	Vote *Vote
 }
 
+type EventDataSignAggr struct {
+	SignAggr *SignAggr
+}
+
+type EventDataVote2Proposer struct {
+	Vote *Vote
+	ProposerKey string
+}
+
+type EventDataProposal struct {
+	Proposal *Proposal
+}
+
+type EventDataBlockPart struct {
+	Round int
+	Height int
+	Part *Part
+}
+
+type EventDataProposalBlockParts struct {
+	Proposal *Proposal
+	Parts *PartSet
+}
+
+
 func (_ EventDataNewBlock) AssertIsTMEventData()       {}
 func (_ EventDataNewBlockHeader) AssertIsTMEventData() {}
 func (_ EventDataTx) AssertIsTMEventData()             {}
 func (_ EventDataRoundState) AssertIsTMEventData()     {}
 func (_ EventDataVote) AssertIsTMEventData()           {}
-
+func (_ EventDataSignAggr) AssertIsTMEventData()		{}
+func (_ EventDataVote2Proposer) AssertIsTMEventData()	{}
+func (_ EventDataProposal) AssertIsTMEventData()		{}
+func (_ EventDataBlockPart) AssertIsTMEventData() 		{}
+func (_ EventDataProposalBlockParts) AssertIsTMEventData() {}
 //----------------------------------------
 // Wrappers for type safety
 
@@ -159,6 +203,26 @@ func FireEventVote(fireable events.Fireable, vote EventDataVote) {
 
 func FireEventTx(fireable events.Fireable, tx EventDataTx) {
 	fireEvent(fireable, EventStringTx(tx.Tx), tx)
+}
+
+func FireEventSignAggr(fireable events.Fireable, sign EventDataSignAggr) {
+	fireEvent(fireable, EventStringSignAggr(), sign)
+}
+
+func FireEventVote2Proposer(fireable events.Fireable, vote EventDataVote2Proposer) {
+	fireEvent(fireable, EventStringVote2Proposer(), vote)
+}
+
+func FireEventProposal(fireable events.Fireable, proposal EventDataProposal) {
+	fireEvent(fireable, EventStringProposal(), proposal)
+}
+
+func FireEventBlockPart(fireable events.Fireable, blockPart EventDataBlockPart) {
+	fireEvent(fireable, EventStringBlockPart(), blockPart)
+}
+
+func FireEventProposalBlockParts(fireable events.Fireable, propsal_blockParts EventDataProposalBlockParts) {
+	fireEvent(fireable, EventStringProposalBlockParts(), propsal_blockParts)
 }
 
 //--- EventDataRoundState events

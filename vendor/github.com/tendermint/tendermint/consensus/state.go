@@ -21,7 +21,6 @@ import (
 	"github.com/tendermint/tendermint/types"
 	"github.com/tendermint/go-crypto"
 	ep "github.com/tendermint/tendermint/epoch"
-	"os"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -756,8 +755,8 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 
 // state transitions on complete-proposal, 2/3-any, 2/3-one
 func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
-	cs.mtx.Lock()
-	defer cs.mtx.Unlock()
+//	cs.mtx.Lock()
+//	defer cs.mtx.Unlock()
 
 	var err error
 	msg, peerKey := mi.Msg, mi.PeerKey
@@ -766,38 +765,66 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 		// will not cause transition.
 		// once proposal is set, we can receive block parts
 		logger.Debug(Fmt("handleMsg: Received proposal message %+v\n", msg))
+		cs.mtx.Lock()
 		err = cs.setProposal(msg.Proposal)
+		cs.mtx.Unlock()
 		if err == nil {
 			// enterPrevote don't wait for complete block
 			cs.enterPrevote(cs.Height, cs.Round)
 		}
 	case *BlockPartMessage:
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
-		logger.Error(Fmt("handleMsg: Received proposal block part message %+v\n, %v", msg.Part, cs.Proposal.BlockPartsHeader.Total))
+		logger.Error(Fmt("handleMsg: Received proposal block part message %+v\n", msg.Part))
+		cs.mtx.Lock()
 		_, err = cs.addProposalBlockPart(msg.Height, msg.Part, peerKey != "")
+		cs.mtx.Unlock()
 		if err != nil && msg.Round != cs.Round {
 			err = nil
 		}
 		if err != nil {
 			logger.Error(Fmt("add block part err:%v", err))
 		}
-
+		cs.mtx.Lock()
 		if err == nil && cs.isProposalComplete() && cs.Step == RoundStepPrevote {
 			sign_aggr := cs.VoteSignAggr.getSignAggr(cs.Round, types.VoteTypePrevote)
 			if sign_aggr != nil && sign_aggr.HasTwoThirdsMajority(cs.Validators) {
 				cs.enterPrecommit(cs.Height, cs.Round)
 			}
 		}
-    case *Maj23SignAggrMessage:
+		cs.mtx.Unlock()
+	case *Maj23SignAggrMessage:
 		// Msg saying a set of 2/3+ signatures had been received
+
 		logger.Debug(Fmt("handleMsg: Received Maj23SignAggrMessage %#v\n", (msg.Maj23SignAggr)))
-		err = cs.setMaj23SignAggr(msg.Maj23SignAggr)
+		logger.Error(Fmt("handleMsg: type%v\n", msg.Maj23SignAggr.Type))
+		if msg.Maj23SignAggr.Type == types.VoteTypePrecommit {
+			logger.Error("Maj23SignAggrMessage")
+		}
+		cs.mtx.Lock()
+//		enterNext := false
+		err, _ = cs.setMaj23SignAggr(msg.Maj23SignAggr)
+		cs.mtx.Unlock()
+/*
+		if err == nil && enterNext {
+			if msg.Maj23SignAggr.Type == types.VoteTypePrevote {
+				cs.enterPrecommit(cs.Height, cs.Round)
+			} else if msg.Maj23SignAggr.Type == types.VoteTypePrecommit {
+				cs.enterCommit(cs.Height, cs.Round)
+			}
+		}
+*/
 	case *VoteMessage:
 		// attempt to add the vote and dupeout the validator if its a duplicate signature
 		// if the vote gives us a 2/3-any or 2/3-one, we transition
+		cs.mtx.Lock()
 		err := cs.tryAddVote(msg.Vote, peerKey)
+		cs.mtx.Unlock()
 		if err == ErrAddingVote {
 			// TODO: punish peer
+		}
+		if cs.PrecommitMaj23SignAggr != nil {
+                        fmt.Println("Sleeping 100ms waiting for sending sign aggr ")
+                        time.Sleep(sendPrecommitSleepDuration)
 		}
 
 		// NOTE: the vote is broadcast to peers by the reactor listening
@@ -995,6 +1022,12 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 		*/
 
 		// send proposal and block parts on internal msg queue
+		proposal_blockParts := types.EventDataProposalBlockParts{ proposal, blockParts}
+		types.FireEventProposalBlockParts(cs.evsw, proposal_blockParts)
+/*
+		proposalMsg :=  types.EventDataProposal{proposal}
+		types.FireEventProposal(cs.evsw, proposalMsg)
+*/
 		cs.sendInternalMessage(msgInfo{&ProposalMessage{proposal}, ""})
 
 		//logger.Debug(Fmt("defaultDecideProposal: Proposal to send is %#v\n", proposal))
@@ -1002,6 +1035,10 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 
 		for i := 0; i < blockParts.Total(); i++ {
 			part := blockParts.GetPart(i)
+/*
+			partMsg := types.EventDataBlockPart{cs.Round, cs.Height, part}
+			types.FireEventBlockPart(cs.evsw, partMsg)
+*/
 			cs.sendInternalMessage(msgInfo{&BlockPartMessage{cs.Height, cs.Round, part}, ""})
 		}
 		logger.Info("Signed proposal", " height:", height, " round:", round, " proposal:", proposal)
@@ -1304,7 +1341,6 @@ func (cs *ConsensusState) enterPrecommit(height int, round int) {
 		cs.signAddVote(types.VoteTypePrecommit, blockID.Hash.Bytes(), blockID.PartsHeader)
 		return
 	}
-	os.Exit(0)
 
 	// There was a polka in this round for a block we don't have.
 	// Fetch that block, unlock, and precommit nil.
@@ -1569,7 +1605,6 @@ func (cs *ConsensusState) newSetProposal(proposal *types.Proposal) error {
 	cs.ProposerPeerKey = proposal.ProposerPeerKey
 	if cs.ProposalBlockParts == nil {
 		logger.Error("proposal block parts is nil")
-		os.Exit(1)
 	}
 	return nil
 }
@@ -1656,37 +1691,30 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 }
 
 // -----------------------------------------------------------------------------
-func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
+func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, bool) {
 	logger.Debug("enter setMaj23SignAggr()")
 	logger.Debug("Received SignAggr %#v\n", signAggr)
 
 	// Does not apply
 	if signAggr.Height != cs.Height || signAggr.Round != cs.Round {
-		return nil
+		logger.Error("does not apply")
+		return nil, false
 	}
 
 	if signAggr.SignAggr() == nil {
 		logger.Debug("SignAggr() is nil ")
 	}
 	maj23, err := cs.verifyMaj23SignAggr(signAggr)
-	if err != nil {
-		logger.Error(Fmt("verifyMaj23SignAggr: Invalid signature aggregation:%v\n", err))
-		os.Exit(0)
-	}
-	if maj23 == false {
-		logger.Error("not maj23")
-		os.Exit(0)
-	}
 
 	if err != nil || maj23 == false {
 		logger.Info(Fmt("verifyMaj23SignAggr: Invalid signature aggregation for prevotes\n"))
-		return ErrInvalidSignatureAggr
+		return ErrInvalidSignatureAggr, false
 	}
 
 	if signAggr.Type == types.VoteTypePrevote {
 		// How if the signagure aggregation is for another block
 		if cs.PrevoteMaj23SignAggr != nil {
-			return ErrDuplicateSignatureAggr
+			return ErrDuplicateSignatureAggr, false
 		}
 
 		cs.VoteSignAggr.AddSignAggr(signAggr)
@@ -1695,7 +1723,7 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 		logger.Debug("setMaj23SignAggr:prevote aggr %#v\n", cs.PrevoteMaj23SignAggr)
 	} else if signAggr.Type == types.VoteTypePrecommit {
 		if cs.PrecommitMaj23SignAggr != nil {
-			return ErrDuplicateSignatureAggr
+			return ErrDuplicateSignatureAggr, false
 		}
 
 		cs.VoteSignAggr.AddSignAggr(signAggr)
@@ -1704,7 +1732,7 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 		logger.Debug("setMaj23SignAggr:precommit aggr %#v\n", cs.PrecommitMaj23SignAggr)
 	} else {
 		logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
-		return ErrInvalidSignatureAggr
+		return ErrInvalidSignatureAggr, false
 	}
 
 	if signAggr.Type == types.VoteTypePrevote {
@@ -1712,10 +1740,11 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 		if cs.isProposalComplete() {
 			logger.Error("receive block", cs.ProposalBlock)
 			cs.enterPrecommit(cs.Height, cs.Round)
+			return nil, true
 
 		} else {
 			logger.Error("block is not completed")
-			os.Exit(0)
+			return nil, false
 		}
 
 
@@ -1724,16 +1753,21 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) error {
 
 		// TODO : Shall go to this state?
 		// cs.tryFinalizeCommit(height)
-		if !cs.isProposalComplete() {
+		if cs.isProposalComplete() {
 			logger.Error("block is not complete")
-			os.Exit(0)
+
+			cs.enterCommit(cs.Height, cs.Round)
+			return nil, true
+		} else {
+			logger.Error("block is not completed")
+			return nil, false
 		}
-		cs.enterCommit(cs.Height, cs.Round)
 
 	} else {
 		panic("Invalid signAggr type")
+		return nil, false
 	}
-	return nil
+	return nil, false
 }
 
 func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) (bool, error) {
@@ -1997,11 +2031,14 @@ func (cs *ConsensusState) signAddVote(type_ byte, hash []byte, header types.Part
 		pub :=cs.privValidator.GetPubKey()
 		if !pub.VerifyBytes(types.SignBytes(cs.state.ChainID, vote), vote.Signature) {
 			logger.Error("verify signature failed:")
-			os.Exit(1)
 		} else {
 			logger.Error("verify signature succ")
 		}
 		cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
+		if !cs.IsProposer() && cs.ProposerPeerKey != "" {
+			v2pMsg := types.EventDataVote2Proposer{vote, cs.ProposerPeerKey}
+			types.FireEventVote2Proposer(cs.evsw, v2pMsg)
+		}
 		logger.Info("Signed and pushed vote", " height:", cs.Height, " round:", cs.Round, " vote:", vote, " error:", err)
 		return vote
 	} else {
@@ -2035,9 +2072,12 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	numValidators := cs.Validators.Size()
 	signBitArray := NewBitArray(numValidators)
 	var sigs []*crypto.Signature
+	var ss []byte
+	fmt.Println(ss)
 	for index, vote := range votes {
 		if vote != nil {
 			blockID = vote.BlockID
+			ss = vote.SignBytes
 			signBitArray.SetIndex(index, true)
 			sigs = append(sigs, &(vote.Signature))
 		}
@@ -2052,7 +2092,7 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	}
 
 	signAggr := types.MakeSignAggr(cs.Height, cs.Round, voteType, numValidators, blockID, cs.Votes.chainID, signBitArray, signature)
-	signAggr.SignBytes = votes[0].SignBytes
+	signAggr.SignBytes = ss
 
 	// Set sign bitmap
 	//signAggr.SetBitArray(signBitArray)
@@ -2064,8 +2104,10 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 
 	// Set ma23 block ID
 	signAggr.SetMaj23(maj23)
-
 	logger.Debug(Fmt("Generate Maj23SignAggr %#v\n", signAggr))
+
+	signEvent := types.EventDataSignAggr{SignAggr:signAggr}
+	types.FireEventSignAggr(cs.evsw, signEvent)
 
 	// send sign aggregate msg on internal msg queue
 	cs.sendInternalMessage(msgInfo{&Maj23SignAggrMessage{signAggr}, ""})
