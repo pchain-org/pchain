@@ -195,7 +195,7 @@ func svmCommitCb(brCommit BrCommit) error {
 				}
 				if total > totalPower*2/3 {
 					vo.Confirmed = true
-					vo.ConfirmedBlock = int(brCommit.GetCurrentBlock().Height)
+					vo.ConfirmedBlock = int(brCommit.GetCurrentBlock().TdmExtra.Header.Height)
 					toConfirmedVOList = append(toConfirmedVOList, vo)
 				}
 			}

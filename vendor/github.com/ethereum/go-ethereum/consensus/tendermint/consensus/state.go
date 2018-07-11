@@ -911,7 +911,7 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 			part := blockParts.GetPart(i)
 			cs.sendInternalMessage(msgInfo{&BlockPartMessage{cs.Height, cs.Round, part}, ""})
 		}
-		log.Debug(Fmt("Signed proposal block: %v", block.Height))
+		log.Debug(Fmt("Signed proposal block: %v", block.TdmExtra.Header.Height))
 	}/*else {
 		if !cs.replayMode {
 			log.Warn("enterPropose: Error signing proposal", "height", height, "round", round, "error", err)
@@ -1075,8 +1075,8 @@ func (cs *ConsensusState) defaultDoPrevote(height int, round int) {
 	// Prevote cs.ProposalBlock
 	// NOTE: the proposal signature is validated when it is received,
 	// and the proposal block parts are validated as they are received (against the merkle hash in the proposal)
-	fmt.Printf("block is %p, header is %p\n", cs.ProposalBlock, cs.ProposalBlock.Header)
-	fmt.Printf("ethblock is %X\n", cs.ProposalBlock.BlockExData)
+	fmt.Printf("block is %p, header is %p\n", cs.ProposalBlock, cs.ProposalBlock.TdmExtra.Header)
+	fmt.Printf("ethblock is %X\n", cs.ProposalBlock.ExData.BlockExData)
 	cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header())
 	return
 }
@@ -1230,12 +1230,12 @@ func (cs *ConsensusState) enterCommit(height int, commitRound int) {
 		return
 	}
 	log.Info(Fmt("enterCommit(%v/%v). Current: %v/%v/%v", height, commitRound, cs.Height, cs.Round, cs.Step))
-	fmt.Printf("block is %p, header is %p\n", cs.ProposalBlock, cs.ProposalBlock.Header)
-	fmt.Printf("ethblock is %X\n", cs.ProposalBlock.BlockExData)
+	fmt.Printf("block is %p, header is %p\n", cs.ProposalBlock, cs.ProposalBlock.TdmExtra.Header)
+	fmt.Printf("ethblock is %X\n", cs.ProposalBlock.ExData.BlockExData)
 
 	defer func() {
-		fmt.Printf("defer() block is %p, header is %p\n", cs.ProposalBlock, cs.ProposalBlock.Header)
-		fmt.Printf("defer() ethblock is %X\n", cs.ProposalBlock.BlockExData)
+		fmt.Printf("defer() block is %p, header is %p\n", cs.ProposalBlock, cs.ProposalBlock.TdmExtra.Header)
+		fmt.Printf("defer() ethblock is %X\n", cs.ProposalBlock.ExData.BlockExData)
 
 		// Done enterCommit:
 		// keep cs.Round the same, commitRound points to the right Precommits set.
@@ -1279,7 +1279,7 @@ func (cs *ConsensusState) enterCommit(height int, commitRound int) {
 func (cs *ConsensusState) tryFinalizeCommit(height int) {
 
 	fmt.Printf("we force commit currently0, cs.ProposalBlock.is %p\n", cs.ProposalBlock)
-	fmt.Printf("we force commit currently0, cs.ProposalBlock.BlockExData is %x\n", cs.ProposalBlock.BlockExData)
+	fmt.Printf("we force commit currently0, cs.ProposalBlock.BlockExData is %x\n", cs.ProposalBlock.ExData.BlockExData)
 
 	fmt.Printf("we force commit currently1\n")
 
@@ -1287,17 +1287,17 @@ func (cs *ConsensusState) tryFinalizeCommit(height int) {
 		PanicSanity(Fmt("tryFinalizeCommit() cs.Height: %v vs height: %v", cs.Height, height))
 	}
 
-	//blockID, ok := cs.Votes.Precommits(cs.CommitRound).TwoThirdsMajority()
-	//if !ok || len(blockID.Hash) == 0 {
-	//	log.Warn("Attempt to finalize failed. There was no +2/3 majority, or +2/3 was for <nil>.", "height", height)
-	//	return
-	//}
-	//if !cs.ProposalBlock.HashesTo(blockID.Hash) {
+	blockID, ok := cs.Votes.Precommits(cs.CommitRound).TwoThirdsMajority()
+	if !ok || len(blockID.Hash) == 0 {
+		log.Warn("Attempt to finalize failed. There was no +2/3 majority, or +2/3 was for <nil>.", "height", height)
+		return
+	}
+	if !cs.ProposalBlock.HashesTo(blockID.Hash) {
 		// TODO: this happens every time if we're not a validator (ugly logs)
 		// TODO: ^^ wait, why does it matter that we're a validator?
-	//	log.Warn("Attempt to finalize failed. We don't have the commit block.", "height", height, "proposal-block", cs.ProposalBlock.Hash(), "commit-block", blockID.Hash)
-	//	return
-	//}
+		log.Warn("Attempt to finalize failed. We don't have the commit block.", "height", height, "proposal-block", cs.ProposalBlock.Hash(), "commit-block", blockID.Hash)
+		return
+	}
 	//	go
 	cs.finalizeCommit(height)
 }
@@ -1334,7 +1334,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	fail.Fail() // XXX
 
 	// Save to blockStore.
-	if cs.blockStore.Height() < block.Height {
+	if cs.blockStore.Height() < block.TdmExtra.Header.Height {
 		// NOTE: the seenCommit is local justification to commit this block,
 		// but may differ from the LastCommit included in the next block
 		precommits := cs.Votes.Precommits(cs.CommitRound)
@@ -1342,7 +1342,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 		cs.blockStore.SaveBlock(block, blockParts, seenCommit)
 	} else {
 		// Happens during replay if we already saved the block but didn't commit
-		log.Info("Calling finalizeCommit on already stored block", "height", block.Height)
+		log.Info("Calling finalizeCommit on already stored block", "height", block.TdmExtra.Header.Height)
 	}
 
 	fail.Fail() // XXX
@@ -1388,7 +1388,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	//	* Fire on start up if we haven't written any new WAL msgs
 	//   Both options mean we may fire more than once. Is that fine ?
 	types.FireEventNewBlock(cs.evsw, types.EventDataNewBlock{block})
-	types.FireEventNewBlockHeader(cs.evsw, types.EventDataNewBlockHeader{block.Header})
+	types.FireEventNewBlockHeader(cs.evsw, types.EventDataNewBlockHeader{block.TdmExtra.Header})
 	//eventCache.Flush()
 
 	fail.Fail() // XXX
@@ -1471,7 +1471,7 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
 		//log.Info("Received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
 		//fmt.Printf("Received complete proposal block is %v\n", cs.ProposalBlock.String())
-		fmt.Printf("(cs *ConsensusState) addProposalBlockPart block.LastCommit is %v\n", cs.ProposalBlock.LastCommit)
+		fmt.Printf("(cs *ConsensusState) addProposalBlockPart block.LastCommit is %v\n", cs.ProposalBlock.TdmExtra.LastCommit)
 		if cs.Step == RoundStepPropose && cs.isProposalComplete() {
 			// Move onto the next step
 			cs.enterPrevote(height, cs.Round)
@@ -1524,7 +1524,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 
 	fmt.Printf("block is %p\n", cs.ProposalBlock)
 	if cs.ProposalBlock != nil {
-		fmt.Printf("block header is %p\n", cs.ProposalBlock.Header)
+		fmt.Printf("block header is %p\n", cs.ProposalBlock.TdmExtra.Header)
 	}
 
 	// A precommit for the previous height?

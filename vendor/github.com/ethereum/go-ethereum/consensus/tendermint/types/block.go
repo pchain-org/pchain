@@ -17,9 +17,8 @@ import (
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 
 type Block struct {
-	*Header    `json:"header"`
-	*ExData    `json:"exdata"`
-	LastCommit *Commit `json:"last_commit"`
+	ExData   *ExData            `json:"exdata"`
+	TdmExtra *TendermintExtra   `json:"tdmexdata"`
 }
 
 
@@ -30,7 +29,7 @@ func MakeBlock(height int, chainID string, commit *Commit,
 		BlockExData: blkExData,
 	}
 
-	block := &Block{
+	TdmExtra := &TendermintExtra{
 		Header: &Header{
 			ChainID:        chainID,
 			Height:         height,
@@ -39,8 +38,13 @@ func MakeBlock(height int, chainID string, commit *Commit,
 			ValidatorsHash: valHash,
 		},
 		LastCommit: commit,
-		ExData: exData,
 	}
+
+	block := &Block{
+		ExData: exData,
+		TdmExtra: TdmExtra,
+	}
+
 	block.FillHeader()
 
 	return block, block.MakePartSet(partSize)
@@ -50,20 +54,20 @@ func MakeBlock(height int, chainID string, commit *Commit,
 func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID BlockID,
 	lastBlockTime time.Time, appHash []byte) error {
 
-	if b.ChainID != chainID {
-		return errors.New(Fmt("Wrong Block.Header.ChainID. Expected %v, got %v", chainID, b.ChainID))
+	if b.TdmExtra.Header.ChainID != chainID {
+		return errors.New(Fmt("Wrong Block.Header.ChainID. Expected %v, got %v", chainID, b.TdmExtra.Header.ChainID))
 	}
-	if b.Height != lastBlockHeight+1 {
-		return errors.New(Fmt("Wrong Block.Header.Height. Expected %v, got %v", lastBlockHeight+1, b.Height))
+	if b.TdmExtra.Header.Height != lastBlockHeight+1 {
+		return errors.New(Fmt("Wrong Block.Header.Height. Expected %v, got %v", lastBlockHeight+1, b.TdmExtra.Header.Height))
 	}
-	if !b.LastBlockID.Equals(lastBlockID) {
-		return errors.New(Fmt("Wrong Block.Header.LastBlockID.  Expected %v, got %v", lastBlockID, b.LastBlockID))
+	if !b.TdmExtra.Header.LastBlockID.Equals(lastBlockID) {
+		return errors.New(Fmt("Wrong Block.Header.LastBlockID.  Expected %v, got %v", lastBlockID, b.TdmExtra.Header.LastBlockID))
 	}
-	if !bytes.Equal(b.LastCommitHash, b.LastCommit.Hash()) {
-		return errors.New(Fmt("Wrong Block.Header.LastCommitHash.  Expected %X, got %X", b.LastCommitHash, b.LastCommit.Hash()))
+	if !bytes.Equal(b.TdmExtra.Header.LastCommitHash, b.TdmExtra.LastCommit.Hash()) {
+		return errors.New(Fmt("Wrong Block.Header.LastCommitHash.  Expected %X, got %X", b.TdmExtra.Header.LastCommitHash, b.TdmExtra.LastCommit.Hash()))
 	}
-	if b.Header.Height != 1 {
-		if err := b.LastCommit.ValidateBasic(); err != nil {
+	if b.TdmExtra.Header.Height != 1 {
+		if err := b.TdmExtra.LastCommit.ValidateBasic(); err != nil {
 			return err
 		}
 	}
@@ -90,8 +94,8 @@ func MakeIntegratedBlock(block *Block, commit *Commit, blockPartSize int) (*Inte
 }
 
 func (b *Block) FillHeader() {
-	if b.LastCommitHash == nil {
-		b.LastCommitHash = b.LastCommit.Hash()
+	if b.TdmExtra.Header.LastCommitHash == nil {
+		b.TdmExtra.Header.LastCommitHash = b.TdmExtra.LastCommit.Hash()
 	}
 }
 
@@ -100,11 +104,11 @@ func (b *Block) FillHeader() {
 // If the block is incomplete, block hash is nil for safety.
 func (b *Block) Hash() []byte {
 	// fmt.Println(">>", b.Data)
-	if b == nil || b.Header == nil || b.LastCommit == nil {
+	if b == nil || b.TdmExtra.Header == nil || b.TdmExtra.LastCommit == nil {
 		return nil
 	}
 	b.FillHeader()
-	return b.Header.Hash()
+	return b.TdmExtra.Header.Hash()
 }
 
 
@@ -141,9 +145,9 @@ func (b *Block) StringIndented(indent string) string {
 %s  %v
 %s  %v
 %s}#%X`,
-		indent, b.Header.StringIndented(indent+"  "),
 		indent, b.ExData.StringIndented(indent+"  "),
-		indent, b.LastCommit.StringIndented(indent+"  "),
+		indent, b.TdmExtra.Header.StringIndented(indent+"  "),
+		indent, b.TdmExtra.LastCommit.StringIndented(indent+"  "),
 		indent, b.Hash())
 }
 

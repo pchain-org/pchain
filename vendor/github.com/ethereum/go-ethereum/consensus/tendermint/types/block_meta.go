@@ -8,6 +8,6 @@ type BlockMeta struct {
 func NewBlockMeta(block *Block, blockParts *PartSet) *BlockMeta {
 	return &BlockMeta{
 		BlockID: BlockID{block.Hash(), blockParts.Header()},
-		Header:  block.Header,
+		Header:  block.TdmExtra.Header,
 	}
 }

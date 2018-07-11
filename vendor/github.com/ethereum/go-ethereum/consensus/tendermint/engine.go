@@ -359,7 +359,7 @@ func (sb *backend) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 func (sb *backend) Commit(proposal *tdmTypes.Block, seals [][]byte) error {
 	// Check if the proposal is a valid block
 	block := &types.Block{}
-	block, err := block.DecodeRLP1(proposal.BlockExData)
+	block, err := block.DecodeRLP1(proposal.ExData.BlockExData)
 	if err != nil {
 		return err
 	}

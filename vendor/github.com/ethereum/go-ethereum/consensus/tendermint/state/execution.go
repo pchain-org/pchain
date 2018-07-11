@@ -32,8 +32,8 @@ func (s *State) ValExecBlock(eventCache types.Fireable, block *types.Block, cch 
 // NOTE: assumes commits have already been authenticated
 func commitBitArrayFromBlock(block *types.Block) *BitArray {
 
-	signed := NewBitArray(len(block.LastCommit.Precommits))
-	for i, precommit := range block.LastCommit.Precommits {
+	signed := NewBitArray(len(block.TdmExtra.LastCommit.Precommits))
+	for i, precommit := range block.TdmExtra.LastCommit.Precommits {
 		if precommit != nil {
 			signed.SetIndex(i, true) // val_.LastCommitHeight = block.Height - 1
 		}
@@ -56,8 +56,8 @@ func (s *State) validateBlock(block *types.Block) error {
 	}
 
 	// Validate block LastCommit.
-	if block.Height == 1 {
-		if len(block.LastCommit.Precommits) != 0 {
+	if block.TdmExtra.Header.Height == 1 {
+		if len(block.TdmExtra.LastCommit.Precommits) != 0 {
 			return errors.New("Block at height 1 (first block) should have no LastCommit precommits")
 		}
 	} else {
@@ -66,7 +66,7 @@ func (s *State) validateBlock(block *types.Block) error {
 
 		if err != nil && lastValidators != nil {
 			err = lastValidators.VerifyCommit(
-				s.ChainID, s.LastBlockID, block.Height - 1, block.LastCommit)
+				s.ChainID, s.LastBlockID, block.TdmExtra.Header.Height - 1, block.TdmExtra.LastCommit)
 		}
 
 		if err != nil {
@@ -117,7 +117,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, block *types.Block, partsH
 	}
 	*/
 	//here handles when enter new epoch
-	s.SetBlockAndEpoch(block.Header, partsHeader)
+	s.SetBlockAndEpoch(block.TdmExtra.Header, partsHeader)
 
 	fail.Fail() // XXX
 
