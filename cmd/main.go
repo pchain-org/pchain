@@ -2,18 +2,18 @@ package main
 
 import (
 	"fmt"
-	"github.com/pchain/ethermint/version"
 	"os"
 	"path/filepath"
+
+	"github.com/ethereum/go-ethereum/cmd/geth"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"gopkg.in/urfave/cli.v1"
-	etm "github.com/pchain/ethermint/cmd/ethermint"
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/pchain/chain"
-	"github.com/ethereum/go-ethereum/cmd/geth"
+	etm "github.com/pchain/ethermint/cmd/ethermint"
+	"github.com/pchain/ethermint/version"
+	"gopkg.in/urfave/cli.v1"
 )
-
 
 func main() {
 
@@ -31,9 +31,9 @@ func main() {
 		},
 
 		{
-			Action:		chain.InitEthGenesis,
-			Name:		"init_eth_genesis",
-			Usage:		"init_eth_genesis balance:\"10,10,10\"",
+			Action:      chain.InitEthGenesis,
+			Name:        "init_eth_genesis",
+			Usage:       "init_eth_genesis balance:\"10,10,10\"",
 			Description: "Initialize the balance of accounts",
 		},
 
@@ -138,9 +138,7 @@ func newCliApp(version, usage string) *cli.App {
 	return app
 }
 
-func versionCmd() error {
+func versionCmd(ctx *cli.Context) error {
 	fmt.Println(version.Version)
 	return nil
 }
-
-
