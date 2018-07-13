@@ -34,6 +34,10 @@ func StartP2P(p2pconfig cfg.Config) (*PChainP2P, error) {
 		addrBook = p2p.NewAddrBook(p2pconfig.GetString("addrbook_file"), p2pconfig.GetBool("addrbook_strict"))
 		pexReactor := p2p.NewPEXReactor(addrBook)
 		sw.AddReactor("pchain", "PEX", pexReactor)
+	} else { //add base reactor to keep p2p network alive
+		implReactor := &p2p.BaseReactor{}
+		baseReactor := p2p.NewBaseReactor(nil, "BaseReactor", implReactor)
+		sw.AddReactor("pchain", "BaseReactor", baseReactor)
 	}
 
 	// Filter peers by addr or pubkey with an ABCI query.

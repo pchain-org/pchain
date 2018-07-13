@@ -308,7 +308,20 @@ func (sw *Switch) startInitPeer(peer *Peer) {
 
 	sameNetwork := peer.GetSameNetwork(sw.nodeInfo.Networks)
 	for _, chainId := range sameNetwork {
+
+		cr, ok := sw.reactorsByChainId[chainId]
+		if !ok {
+			log.Error("should not happen, no chain router", "chain id", chainId)
+			continue
+		}
+
 		for _, reactor := range sw.reactorsByChainId[chainId].reactors {
+
+			if reactor == nil {
+				log.Error("should not happen, reactor is nil", "chain id", chainId)
+				continue
+			}
+
 			reactor.AddPeer(peer)
 		}
 	}

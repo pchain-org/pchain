@@ -387,11 +387,11 @@ func (sb *backend) Commit(proposal *tdmTypes.Block, seals [][]byte) error {
 	// -- if success, the ChainHeadEvent event will be broadcasted, try to build
 	//    the next block and the previous Seal() will be stopped.
 	// -- otherwise, a error will be returned and a round change event will be fired.
-	//if sb.proposedBlockHash == block.Hash() {
+	if sb.proposedBlockHash == block.Hash() {
 		// feed block hash to Seal() and wait the Seal() result
 		sb.commitCh <- block
 	//	return nil
-	//}
+	}
 	logger.Log.Info("Committed; before sb.broadcaster")
 	if sb.broadcaster != nil {
 		sb.broadcaster.Enqueue(fetcherID, block)
@@ -508,20 +508,18 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 		return err
 	}
 	*/
-	fmt.Printf("Tendermint: (sb *backend) writeCommittedSeals, 0, tdm is %v\n", tdmExtra)
+	//fmt.Printf("Tendermint: (sb *backend) writeCommittedSeals, 0, tdm is %v\n", tdmExtra)
 	payload, err := rlp.EncodeToBytes(tdmExtra)
 	if err != nil {
-		fmt.Printf("Tendermint: (sb *backend) writeCommittedSeals, 1, err is %v\n", err)
 		return err
 	}
 
 	h.Extra = payload
-	fmt.Printf("Tendermint: (sb *backend) writeCommittedSeals, 1, payload is %x\n", h.Extra)
-	tdmExtra1 := &tdmTypes.TendermintExtra{}
-	fmt.Printf("Tendermint: (sb *backend) writeCommittedSeals, 2, try decode h.Extra[:] is %x\n", h.Extra[:])
-	err = rlp.DecodeBytes(h.Extra[:], tdmExtra1)
-	fmt.Printf("Tendermint: (sb *backend) writeCommittedSeals, 3, try decode with %v\n", tdmExtra1)
-
-	fmt.Printf("Tendermint: (sb *backend) writeCommittedSeals, 4, h.Extra is %x\n", h.Extra)
+	//fmt.Printf("Tendermint: (sb *backend) writeCommittedSeals, 1, payload is %x\n", h.Extra)
+	//tdmExtra1 := &tdmTypes.TendermintExtra{}
+	//fmt.Printf("Tendermint: (sb *backend) writeCommittedSeals, 2, try decode h.Extra[:] is %x\n", h.Extra[:])
+	//err = rlp.DecodeBytes(h.Extra[:], tdmExtra1)
+	//fmt.Printf("Tendermint: (sb *backend) writeCommittedSeals, 3, try decode with %v\n", tdmExtra1)
+	//fmt.Printf("Tendermint: (sb *backend) writeCommittedSeals, 4, h.Extra is %x\n", h.Extra)
 	return nil
 }
