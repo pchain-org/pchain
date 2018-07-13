@@ -1,7 +1,7 @@
 package state
 
 import (
-	"errors"
+	//"errors"
 	//"fmt"
 
 	fail "github.com/ebuchman/fail-test"
@@ -32,10 +32,10 @@ func (s *State) ValExecBlock(eventCache types.Fireable, block *types.Block, cch 
 // NOTE: assumes commits have already been authenticated
 func commitBitArrayFromBlock(block *types.Block) *BitArray {
 
-	signed := NewBitArray(len(block.TdmExtra.LastCommit.Precommits))
-	for i, precommit := range block.TdmExtra.LastCommit.Precommits {
+	signed := NewBitArray(uint64(len(block.TdmExtra.SeenCommit.Precommits)))
+	for i, precommit := range block.TdmExtra.SeenCommit.Precommits {
 		if precommit != nil {
-			signed.SetIndex(i, true) // val_.LastCommitHeight = block.Height - 1
+			signed.SetIndex(uint64(i), true) // val_.LastCommitHeight = block.Height - 1
 		}
 	}
 	return signed
@@ -50,14 +50,15 @@ func (s *State) ValidateBlock(block *types.Block) error {
 
 func (s *State) validateBlock(block *types.Block) error {
 	// Basic block validation.
-	err := block.ValidateBasic(s.ChainID, s.LastBlockHeight, s.LastBlockID, s.LastBlockTime, s.AppHash)
+	err := block.ValidateBasic(s.ChainID, s.LastBlockHeight, s.LastBlockID, s.LastBlockTime)
 	if err != nil {
 		return err
 	}
 
-	// Validate block LastCommit.
-	if block.TdmExtra.Header.Height == 1 {
-		if len(block.TdmExtra.LastCommit.Precommits) != 0 {
+	/* We have no last commit any more
+	// Validate block SeenCommit.
+	if block.TdmExtra.Height == 1 {
+		if len(block.TdmExtra.SeenCommit.Precommits) != 0 {
 			return errors.New("Block at height 1 (first block) should have no LastCommit precommits")
 		}
 	} else {
@@ -66,14 +67,14 @@ func (s *State) validateBlock(block *types.Block) error {
 
 		if err != nil && lastValidators != nil {
 			err = lastValidators.VerifyCommit(
-				s.ChainID, s.LastBlockID, block.TdmExtra.Header.Height - 1, block.TdmExtra.LastCommit)
+				s.ChainID, s.LastBlockID, int(block.TdmExtra.Height) - 1, block.TdmExtra.SeenCommit)
 		}
 
 		if err != nil {
 			return err
 		}
 	}
-
+	*/
 	return nil
 }
 
@@ -117,7 +118,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, block *types.Block, partsH
 	}
 	*/
 	//here handles when enter new epoch
-	s.SetBlockAndEpoch(block.TdmExtra.Header, partsHeader)
+	s.SetBlockAndEpoch(block.TdmExtra, partsHeader)
 
 	fail.Fail() // XXX
 

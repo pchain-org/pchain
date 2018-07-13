@@ -96,7 +96,7 @@ func (cm *ChainManager)StartChains() error{
 
 	cm.p2pObj.AddNetwork(cm.mainChain.Id)
 	cm.mainQuit = make(chan int)
-	err := StartChain(cm.mainChain, cm.mainQuit)
+	err := StartChain(cm.ctx, cm.mainChain, cm.mainQuit)
 	if err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (cm *ChainManager)StartChains() error{
 		// Start each Chain
 		quit := make(chan int)
 		cm.childQuits[chain.Id] = quit
-		err = StartChain(chain, quit)
+		err = StartChain(cm.ctx, chain, quit)
 		if err != nil {
 			return err
 		}
@@ -222,7 +222,7 @@ func (cm *ChainManager) LoadChildChainInRT(from common.Address, chainId string) 
 	// Start each Chain
 	quit := make(chan int)
 	cm.childQuits[chain.Id] = quit
-	err := StartChain(chain, quit)
+	err := StartChain(cm.ctx, chain, quit)
 	if err != nil {
 		return
 	}

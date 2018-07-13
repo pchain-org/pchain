@@ -212,7 +212,7 @@ func (privVal *PrivValidator) GetAddress() []byte {
 func (privVal *PrivValidator) SignVote(chainID string, vote *Vote) error {
 	privVal.mtx.Lock()
 	defer privVal.mtx.Unlock()
-	signature, err := privVal.signBytesHRS(vote.Height, vote.Round, voteToStep(vote), SignBytes(chainID, vote))
+	signature, err := privVal.signBytesHRS(int(vote.Height), int(vote.Round), voteToStep(vote), SignBytes(chainID, vote))
 	if err != nil {
 		return errors.New(Fmt("Error signing vote: %v", err))
 	}

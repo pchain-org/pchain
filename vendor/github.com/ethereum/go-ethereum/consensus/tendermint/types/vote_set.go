@@ -70,7 +70,7 @@ func NewVoteSet(chainID string, height int, round int, type_ byte, valSet *Valid
 		round:         round,
 		type_:         type_,
 		valSet:        valSet,
-		votesBitArray: NewBitArray(valSet.Size()),
+		votesBitArray: NewBitArray(uint64(valSet.Size())),
 		votes:         make([]*Vote, valSet.Size()),
 		sum:           0,
 		maj23:         nil,
@@ -145,14 +145,14 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	}
 
 	// Make sure the step matches.
-	if (vote.Height != voteSet.height) ||
-		(vote.Round != voteSet.round) ||
+	if (int(vote.Height) != voteSet.height) ||
+		(int(vote.Round) != voteSet.round) ||
 		(vote.Type != voteSet.type_) {
 		return false, ErrVoteUnexpectedStep
 	}
 
 	// Ensure that signer is a validator.
-	lookupAddr, val := voteSet.valSet.GetByIndex(valIndex)
+	lookupAddr, val := voteSet.valSet.GetByIndex(int(valIndex))
 	if val == nil {
 		return false, ErrVoteInvalidValidatorIndex
 	}
@@ -163,7 +163,7 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	}
 
 	// If we already know of this vote, return false.
-	if existing, ok := voteSet.getVote(valIndex, blockKey); ok {
+	if existing, ok := voteSet.getVote(int(valIndex), blockKey); ok {
 		if existing.Signature.Equals(vote.Signature) {
 			return false, nil // duplicate
 		} else {
@@ -491,7 +491,7 @@ type blockVotes struct {
 func newBlockVotes(peerMaj23 bool, numValidators int) *blockVotes {
 	return &blockVotes{
 		peerMaj23: peerMaj23,
-		bitArray:  NewBitArray(numValidators),
+		bitArray:  NewBitArray(uint64(numValidators)),
 		votes:     make([]*Vote, numValidators),
 		sum:       0,
 	}

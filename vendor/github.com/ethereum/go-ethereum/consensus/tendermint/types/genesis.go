@@ -53,7 +53,7 @@ type RewardSchemeDoc struct {
 }
 
 type GenesisDoc struct {
-	AppHash     []byte              `json:"app_hash"`
+	//AppHash     []byte              `json:"app_hash"`
 	ChainID     string              `json:"chain_id"`
 	Consensus   string              `json:"consensus"` //should be 'pos' or 'pow'
 	GenesisTime time.Time          	`json:"genesis_time"`

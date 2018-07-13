@@ -9,6 +9,7 @@ import (
 	"time"
 
 	. "github.com/tendermint/go-common"
+	//ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
 	//"github.com/tendermint/go-data"
@@ -16,28 +17,26 @@ import (
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 
+
 type Block struct {
 	ExData   *ExData            `json:"exdata"`
 	TdmExtra *TendermintExtra   `json:"tdmexdata"`
 }
 
-
 func MakeBlock(height int, chainID string, commit *Commit,
-	prevBlockID BlockID, valHash, appHash []byte, blkExData []byte, partSize int) (*Block, *PartSet) {
+	prevBlockID BlockID, valHash, blkExData []byte, partSize int) (*Block, *PartSet) {
 
 	exData := &ExData{
 		BlockExData: blkExData,
 	}
 
 	TdmExtra := &TendermintExtra{
-		Header: &Header{
-			ChainID:        chainID,
-			Height:         height,
-			Time:           time.Now(),
-			LastBlockID:    prevBlockID,
-			ValidatorsHash: valHash,
-		},
-		LastCommit: commit,
+		ChainID:        chainID,
+		Height:         uint64(height),
+		Time:           time.Now(),
+		ValidatorsHash: valHash,
+		LastBlockID:    prevBlockID,
+		SeenCommit: commit,
 	}
 
 	block := &Block{
@@ -45,32 +44,33 @@ func MakeBlock(height int, chainID string, commit *Commit,
 		TdmExtra: TdmExtra,
 	}
 
-	block.FillHeader()
-
 	return block, block.MakePartSet(partSize)
 }
 
 // Basic validation that doesn't involve state data.
 func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID BlockID,
-	lastBlockTime time.Time, appHash []byte) error {
+	lastBlockTime time.Time) error {
 
-	if b.TdmExtra.Header.ChainID != chainID {
-		return errors.New(Fmt("Wrong Block.Header.ChainID. Expected %v, got %v", chainID, b.TdmExtra.Header.ChainID))
+	if b.TdmExtra.ChainID != chainID {
+		return errors.New(Fmt("Wrong Block.Header.ChainID. Expected %v, got %v", chainID, b.TdmExtra.ChainID))
 	}
-	if b.TdmExtra.Header.Height != lastBlockHeight+1 {
-		return errors.New(Fmt("Wrong Block.Header.Height. Expected %v, got %v", lastBlockHeight+1, b.TdmExtra.Header.Height))
+	if int(b.TdmExtra.Height) != lastBlockHeight+1 {
+		return errors.New(Fmt("Wrong Block.Header.Height. Expected %v, got %v", lastBlockHeight+1, b.TdmExtra.Height))
 	}
-	if !b.TdmExtra.Header.LastBlockID.Equals(lastBlockID) {
-		return errors.New(Fmt("Wrong Block.Header.LastBlockID.  Expected %v, got %v", lastBlockID, b.TdmExtra.Header.LastBlockID))
+
+	if !b.TdmExtra.LastBlockID.Equals(lastBlockID) {
+		return errors.New(Fmt("Wrong Block.Header.LastBlockID.  Expected %v, got %v", lastBlockID, b.TdmExtra.LastBlockID))
 	}
-	if !bytes.Equal(b.TdmExtra.Header.LastCommitHash, b.TdmExtra.LastCommit.Hash()) {
-		return errors.New(Fmt("Wrong Block.Header.LastCommitHash.  Expected %X, got %X", b.TdmExtra.Header.LastCommitHash, b.TdmExtra.LastCommit.Hash()))
+	if !bytes.Equal(b.TdmExtra.SeenCommitHash, b.TdmExtra.SeenCommit.Hash()) {
+		return errors.New(Fmt("Wrong Block.Header.LastCommitHash.  Expected %X, got %X", b.TdmExtra.SeenCommitHash, b.TdmExtra.SeenCommit.Hash()))
 	}
-	if b.TdmExtra.Header.Height != 1 {
-		if err := b.TdmExtra.LastCommit.ValidateBasic(); err != nil {
+	/*
+	if b.TdmExtra.Height != 1 {
+		if err := b.TdmExtra.SeenCommit.ValidateBasic(); err != nil {
 			return err
 		}
 	}
+	*/
 	return nil
 }
 
@@ -93,9 +93,9 @@ func MakeIntegratedBlock(block *Block, commit *Commit, blockPartSize int) (*Inte
 	}
 }
 
-func (b *Block) FillHeader() {
-	if b.TdmExtra.Header.LastCommitHash == nil {
-		b.TdmExtra.Header.LastCommitHash = b.TdmExtra.LastCommit.Hash()
+func (b *Block) FillSeenCommitHash() {
+	if b.TdmExtra.SeenCommitHash == nil {
+		b.TdmExtra.SeenCommitHash = b.TdmExtra.SeenCommit.Hash()
 	}
 }
 
@@ -104,11 +104,11 @@ func (b *Block) FillHeader() {
 // If the block is incomplete, block hash is nil for safety.
 func (b *Block) Hash() []byte {
 	// fmt.Println(">>", b.Data)
-	if b == nil || b.TdmExtra.Header == nil || b.TdmExtra.LastCommit == nil {
+	if b == nil || b.TdmExtra.SeenCommit == nil {
 		return nil
 	}
-	b.FillHeader()
-	return b.TdmExtra.Header.Hash()
+	b.FillSeenCommitHash()
+	return b.TdmExtra.Hash()
 }
 
 
@@ -146,8 +146,8 @@ func (b *Block) StringIndented(indent string) string {
 %s  %v
 %s}#%X`,
 		indent, b.ExData.StringIndented(indent+"  "),
-		indent, b.TdmExtra.Header.StringIndented(indent+"  "),
-		indent, b.TdmExtra.LastCommit.StringIndented(indent+"  "),
+		indent, "b.TdmExtra.HeaderField"/*b.TdmExtra.Header.StringIndented(indent+"  ")*/,
+		indent, b.TdmExtra.SeenCommit.StringIndented(indent+"  "),
 		indent, b.Hash())
 }
 
@@ -244,14 +244,14 @@ func (commit *Commit) Height() int {
 	if len(commit.Precommits) == 0 {
 		return 0
 	}
-	return commit.FirstPrecommit().Height
+	return int(commit.FirstPrecommit().Height)
 }
 
 func (commit *Commit) Round() int {
 	if len(commit.Precommits) == 0 {
 		return 0
 	}
-	return commit.FirstPrecommit().Round
+	return int(commit.FirstPrecommit().Round)
 }
 
 func (commit *Commit) Type() byte {
@@ -267,9 +267,9 @@ func (commit *Commit) Size() int {
 
 func (commit *Commit) BitArray() *BitArray {
 	if commit.bitArray == nil {
-		commit.bitArray = NewBitArray(len(commit.Precommits))
+		commit.bitArray = NewBitArray(uint64(len(commit.Precommits)))
 		for i, precommit := range commit.Precommits {
-			commit.bitArray.SetIndex(i, precommit != nil)
+			commit.bitArray.SetIndex(uint64(i), precommit != nil)
 		}
 	}
 	return commit.bitArray
@@ -307,12 +307,12 @@ func (commit *Commit) ValidateBasic() error {
 				precommit.Type)
 		}
 		// Ensure that all heights are the same
-		if precommit.Height != height {
+		if int(precommit.Height) != height {
 			return fmt.Errorf("Invalid commit precommit height. Expected %v, got %v",
 				height, precommit.Height)
 		}
 		// Ensure that all rounds are the same
-		if precommit.Round != round {
+		if int(precommit.Round) != round {
 			return fmt.Errorf("Invalid commit precommit round. Expected %v, got %v",
 				round, precommit.Round)
 		}

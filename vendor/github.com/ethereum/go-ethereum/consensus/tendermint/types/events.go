@@ -81,7 +81,7 @@ type EventDataNewBlock struct {
 
 // light weight event for benchmarking
 type EventDataNewBlockHeader struct {
-	Header *Header `json:"header"`
+	Height int `json:"height"`
 }
 
 // All txs fire EventDataTx

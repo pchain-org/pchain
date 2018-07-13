@@ -108,12 +108,12 @@ func (hvs *HeightVoteSet) AddVote(vote *types.Vote, peerKey string) (added bool,
 	if !types.IsVoteTypeValid(vote.Type) {
 		return
 	}
-	voteSet := hvs.getVoteSet(vote.Round, vote.Type)
+	voteSet := hvs.getVoteSet(int(vote.Round), vote.Type)
 	if voteSet == nil {
 		if rndz := hvs.peerCatchupRounds[peerKey]; len(rndz) < 2 {
-			hvs.addRound(vote.Round)
-			voteSet = hvs.getVoteSet(vote.Round, vote.Type)
-			hvs.peerCatchupRounds[peerKey] = append(rndz, vote.Round)
+			hvs.addRound(int(vote.Round))
+			voteSet = hvs.getVoteSet(int(vote.Round), vote.Type)
+			hvs.peerCatchupRounds[peerKey] = append(rndz, int(vote.Round))
 		} else {
 			// Peer has sent a vote that does not match our round,
 			// for more than one round.  Bad peer!

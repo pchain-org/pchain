@@ -11,8 +11,8 @@ type CanonicalJSONBlockID struct {
 }
 
 type CanonicalJSONPartSetHeader struct {
-	Hash  []byte `json:"hash"`
-	Total int    `json:"total"`
+	Hash  []byte    `json:"hash"`
+	Total uint64    `json:"total"`
 }
 
 type CanonicalJSONProposal struct {
@@ -25,8 +25,8 @@ type CanonicalJSONProposal struct {
 
 type CanonicalJSONVote struct {
 	BlockID CanonicalJSONBlockID `json:"block_id"`
-	Height  int                  `json:"height"`
-	Round   int                  `json:"round"`
+	Height  uint64                  `json:"height"`
+	Round   uint64                  `json:"round"`
 	Type    byte                 `json:"type"`
 }
 

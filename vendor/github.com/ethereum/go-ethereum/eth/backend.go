@@ -53,7 +53,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	"reflect"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -109,7 +108,7 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(ctx *node.ServiceContext, config *Config, pending miner.Pending, cliCtx *cli.Context,
+func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
           pNode tendermintBackend.PChainP2P, cch core.CrossChainHelper) (*Ethereum, error) {
 
 	if config.SyncMode == downloader.LightSync {
@@ -189,14 +188,10 @@ func New(ctx *node.ServiceContext, config *Config, pending miner.Pending, cliCtx
 	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
+	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
+	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
-	if reflect.ValueOf(pending).IsNil() {
-		eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
-		eth.miner.SetExtra(makeExtraData(config.ExtraData))
-		pending = eth.miner
-	}
-
-	eth.ApiBackend = &EthApiBackend{eth, nil, pending, nil, nil, cch}
+	eth.ApiBackend = &EthApiBackend{eth, nil, nil, nil, cch}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.GasPrice
@@ -289,13 +284,14 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
 
+	fmt.Printf("(s *Ethereum) APIs() 0\n")
 	apis := ethapi.GetAPIs(s.ApiBackend, s.solcPath)
-
+	fmt.Printf("(s *Ethereum) APIs() 1\n")
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
-
+	fmt.Printf("(s *Ethereum) APIs() 2\n")
 	// Append all the local APIs and return
-	return append(apis, []rpc.API{
+	apis = append(apis, []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
@@ -334,13 +330,15 @@ func (s *Ethereum) APIs() []rpc.API {
 			Namespace: "debug",
 			Version:   "1.0",
 			Service:   NewPrivateDebugAPI(s.chainConfig, s),
-		}, {
+		}, /*{
 			Namespace: "net",
 			Version:   "1.0",
 			Service:   s.netRPCService,
 			Public:    true,
-		},
+		},*/
 	}...)
+	fmt.Printf("(s *Ethereum) APIs() 3\n")
+	return apis
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {

@@ -57,8 +57,8 @@ func (part *Part) StringIndented(indent string) string {
 //-------------------------------------
 
 type PartSetHeader struct {
-	Total int    `json:"total"`
-	Hash  []byte `json:"hash"`
+	Total uint64    `json:"total"`
+	Hash  []byte    `json:"hash"`
 }
 
 func (psh PartSetHeader) String() string {
@@ -96,7 +96,7 @@ func NewPartSetFromData(data []byte, partSize int) *PartSet {
 	total := (len(data) + partSize - 1) / partSize
 	parts := make([]*Part, total)
 	parts_ := make([]merkle.Hashable, total)
-	partsBitArray := NewBitArray(total)
+	partsBitArray := NewBitArray(uint64(total))
 	for i := 0; i < total; i++ {
 		part := &Part{
 			Index: i,
@@ -104,7 +104,7 @@ func NewPartSetFromData(data []byte, partSize int) *PartSet {
 		}
 		parts[i] = part
 		parts_[i] = part
-		partsBitArray.SetIndex(i, true)
+		partsBitArray.SetIndex(uint64(i), true)
 	}
 	// Compute merkle proofs
 	root, proofs := merkle.SimpleProofsFromHashables(parts_)
@@ -123,7 +123,7 @@ func NewPartSetFromData(data []byte, partSize int) *PartSet {
 // Returns an empty PartSet ready to be populated.
 func NewPartSetFromHeader(header PartSetHeader) *PartSet {
 	return &PartSet{
-		total:         header.Total,
+		total:         int(header.Total),
 		hash:          header.Hash,
 		parts:         make([]*Part, header.Total),
 		partsBitArray: NewBitArray(header.Total),
@@ -136,7 +136,7 @@ func (ps *PartSet) Header() PartSetHeader {
 		return PartSetHeader{}
 	} else {
 		return PartSetHeader{
-			Total: ps.total,
+			Total: uint64(ps.total),
 			Hash:  ps.hash,
 		}
 	}
@@ -207,7 +207,7 @@ func (ps *PartSet) AddPart(part *Part, verify bool) (bool, error) {
 
 	// Add part
 	ps.parts[part.Index] = part
-	ps.partsBitArray.SetIndex(part.Index, true)
+	ps.partsBitArray.SetIndex(uint64(part.Index), true)
 	ps.count++
 	return true, nil
 }

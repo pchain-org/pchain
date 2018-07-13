@@ -6,7 +6,7 @@ import (
 	crypto "github.com/tendermint/go-crypto"
 	p2p "github.com/tendermint/go-p2p"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex"
+	//"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 )
 
@@ -42,7 +42,7 @@ type RPCDataContext struct {
 	pubKey    crypto.PubKey
 	genDoc    *types.GenesisDoc // cache the genesis structure
 	addrBook  *p2p.AddrBook
-	txIndexer txindex.TxIndexer
+	//txIndexer txindex.TxIndexer
 }
 
 func (r *RPCDataContext) SetConfig(c cfg.Config) {
@@ -76,7 +76,8 @@ func (r *RPCDataContext) SetGenesisDoc(doc *types.GenesisDoc) {
 func (r *RPCDataContext) SetAddrBook(book *p2p.AddrBook) {
 	r.addrBook = book
 }
-
+/*
 func (r *RPCDataContext) SetTxIndexer(indexer txindex.TxIndexer) {
 	r.txIndexer = indexer
 }
+*/

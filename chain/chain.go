@@ -83,12 +83,12 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 	return chain
 }
 
-func StartChain(chain *Chain, quit chan int) error {
+func StartChain(ctx *cli.Context, chain *Chain, quit chan int) error {
 
 	fmt.Printf("start main chain: %s\n", chain.Id)
 	go func(){
 		fmt.Println("StartChain()->utils.StartNode(stack)")
-		utils.StartNode1(chain.EthNode)
+		utils.StartNodeEx(ctx, chain.EthNode)
 	}()
 
 	return nil

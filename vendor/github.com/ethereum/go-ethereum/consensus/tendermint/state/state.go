@@ -10,8 +10,8 @@ import (
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/null"
+	//"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex"
+	//"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/null"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"fmt"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
@@ -45,9 +45,9 @@ type State struct {
 	//LastValidators  *types.ValidatorSet // block.LastCommit validated against this
 
 	// AppHash is updated after Commit
-	AppHash []byte
+	//AppHash []byte
 
-	TxIndexer txindex.TxIndexer `json:"-"` // Transaction indexer.
+	//TxIndexer txindex.TxIndexer `json:"-"` // Transaction indexer.
 
 	BlockNumberToSave int //record the number of the block which should be saved to main chain
 	// Intermediate results from processing
@@ -61,7 +61,7 @@ func LoadState(stateDB dbm.DB) *State {
 }
 
 func loadState(db dbm.DB, key []byte) *State {
-	s := &State{db: db, TxIndexer: &null.TxIndex{}}
+	s := &State{db: db/*, TxIndexer: &null.TxIndex{}*/}
 	buf := db.Get(key)
 	if len(buf) == 0 {
 		return nil
@@ -93,8 +93,8 @@ func (s *State) Copy() *State {
 		Epoch:           s.Epoch.Copy(),
 		//Validators:      s.Validators.Copy(),
 		//LastValidators:  s.LastValidators.Copy(),
-		AppHash:         s.AppHash,
-		TxIndexer:       s.TxIndexer, // pointer here, not value
+		//AppHash:         s.AppHash,
+		//TxIndexer:       s.TxIndexer, // pointer here, not value
 	}
 }
 
@@ -119,10 +119,9 @@ func (s *State) Bytes() []byte {
 
 // Mutate state variables to match block and validators
 // after running EndBlock
-func (s *State) SetBlockAndEpoch(header *types.Header, blockPartsHeader types.PartSetHeader) {
+func (s *State) SetBlockAndEpoch(tdmExtra *types.TendermintExtra, blockPartsHeader types.PartSetHeader) {
 
-	s.setBlockAndEpoch(header.Height, types.BlockID{header.Hash(), blockPartsHeader},
-				header.Time)
+	s.setBlockAndEpoch(int(tdmExtra.Height), types.BlockID{tdmExtra.Hash(), blockPartsHeader}, tdmExtra.Time)
 }
 
 func (s *State) setBlockAndEpoch(
@@ -234,8 +233,8 @@ func MakeGenesisState(db dbm.DB, genDoc *types.GenesisDoc) *State {
 		BlockNumberToSave: -1,
 		//Validators:      types.NewValidatorSet(validators),
 		//LastValidators:  types.NewValidatorSet(nil),
-		AppHash:         genDoc.AppHash,
-		TxIndexer:       &null.TxIndex{}, // we do not need indexer during replay and in tests
+		//AppHash:         genDoc.AppHash,
+		//TxIndexer:       &null.TxIndex{}, // we do not need indexer during replay and in tests
 	}
 }
 

@@ -14,21 +14,21 @@ import (
 
 type ethApis struct{
 	loaded uint
-	ethBackend *Backend
+	backend *eth.Ethereum
 	//n *node.Node
 	pubEthApi *eth.PublicEthereumAPI
 }
 
 var EthApi = ethApis {
-	ethBackend : nil,
+	backend : nil,
 	pubEthApi : nil,
 }
 
-func ReloadEthApi(n *node.Node, backend *Backend) {
+func ReloadEthApi(n *node.Node, backend *eth.Ethereum) {
 
 	fmt.Printf("ReloadEthApi() 0\n")
 
-	EthApi.ethBackend = backend
+	EthApi.backend = backend
 
 	apis := n.RpcAPIs();
 
@@ -63,11 +63,11 @@ func Coinbase() (common.Address, error) {
 
 func GetBalance(account common.Address) (*big.Int, error) {
 
-	if(EthApi.ethBackend == nil) {
+	if(EthApi.backend == nil) {
 		return nil, errors.New("EthApi not initialized")
 	}
 
-	ethereum := EthApi.ethBackend.Ethereum()
+	ethereum := EthApi.backend
 	bc := ethereum.BlockChain()
 	state, err := bc.State()
 

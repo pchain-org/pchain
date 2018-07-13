@@ -260,10 +260,10 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height
 		if precommit == nil {
 			continue
 		}
-		if precommit.Height != height {
+		if int(precommit.Height) != height {
 			return fmt.Errorf("Invalid commit -- wrong height: %v vs %v", height, precommit.Height)
 		}
-		if precommit.Round != round {
+		if int(precommit.Round) != round {
 			return fmt.Errorf("Invalid commit -- wrong round: %v vs %v", round, precommit.Round)
 		}
 		if precommit.Type != VoteTypePrecommit {

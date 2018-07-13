@@ -455,3 +455,9 @@ func (hc *HeaderChain) Engine() consensus.Engine { return hc.engine }
 func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return nil
 }
+
+// GetBlockByNumber implements consensus.ChainReader, and returns nil for every input as
+// a header chain does not have blocks available for retrieval.
+func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.Block {
+	return nil
+}

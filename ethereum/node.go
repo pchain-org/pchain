@@ -118,15 +118,13 @@ func registerEthService(stack *node.Node, cfg *eth.Config, cliCtx *cli.Context,
 		})
 	} else {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return NewBackend(ctx, cfg, cliCtx, pNode, cch)
-			/*
-			fullNode, err := eth.New(ctx, cfg, nil, nil, nil)
+			//return NewBackend(ctx, cfg, cliCtx, pNode, cch)
+			fullNode, err := eth.New(ctx, cfg, cliCtx, pNode, cch)
 			if fullNode != nil && cfg.LightServ > 0 {
 				ls, _ := les.NewLesServer(fullNode, cfg)
 				fullNode.AddLesServer(ls)
 			}
 			return fullNode, err
-			*/
 		})
 	}
 	if err != nil {
