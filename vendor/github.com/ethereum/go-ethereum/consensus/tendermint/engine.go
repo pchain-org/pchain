@@ -152,6 +152,19 @@ func (sb *backend) VerifyHeaders(chain consensus.ChainReader, headers []*types.H
 
 	fmt.Printf("Tendermint: (sb *backend) VerifyHeaders, add logic here\n")
 
+	go func() {
+		for i, header := range headers {
+			//err := sb.verifyHeader(chain, header, headers[:i])
+			err := errors.New(fmt.Sprintf("try to make an error type %v, %v", i, header.Time))
+			err = nil
+			select {
+			case <-abort:
+				return
+			case results <- err:
+			}
+		}
+	}()
+
 	return abort, results
 }
 
@@ -389,12 +402,16 @@ func (sb *backend) Commit(proposal *tdmTypes.Block, seals [][]byte) error {
 	// -- otherwise, a error will be returned and a round change event will be fired.
 	if sb.proposedBlockHash == block.Hash() {
 		// feed block hash to Seal() and wait the Seal() result
+		logger.Log.Info("Committed; before sb.commitCh <- block")
 		sb.commitCh <- block
-	//	return nil
+		logger.Log.Info("Committed; after sb.commitCh <- block")
+	    return nil
 	}
-	logger.Log.Info("Committed; before sb.broadcaster")
+	logger.Log.Info("Committed; before sb.broadcaster; sb.broadcaster is", "sb.broadcaster", sb.broadcaster)
 	if sb.broadcaster != nil {
+		logger.Log.Info("Committed; before sb.broadcaster.Enqueue", "block", block)
 		sb.broadcaster.Enqueue(fetcherID, block)
+		logger.Log.Info("Committed; after sb.broadcaster.Enqueue", "block", block)
 	}
 	return nil
 }

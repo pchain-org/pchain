@@ -73,10 +73,10 @@ func (conR *ConsensusReactor) OnStop() {
 // reset the state, turn off fast_sync, start the consensus-state-machine
 func (conR *ConsensusReactor) SwitchToConsensus(state *sm.State) {
 	log.Notice("SwitchToConsensus")
-	conR.conS.reconstructLastCommit(state)
+	conR.conS.ReconstructLastCommit(state)
 	// NOTE: The line below causes broadcastNewRoundStepRoutine() to
 	// broadcast a NewRoundStepMessage.
-	conR.conS.updateToStateAndEpoch(state, conR.conS.epoch)
+	conR.conS.UpdateToStateAndEpoch(state, conR.conS.epoch)
 	//conR.fastSync = false
 	conR.conS.Start()
 }
@@ -336,6 +336,10 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 			re := data.(types.EventDataRequest)
 			conR.conS.blockFromMiner = re.Proposal
 		}
+	})
+
+	types.AddListenerForEvent(conR.evsw, "conR", types.EventStringFinalCommitted(), func(data types.TMEventData) {
+		log.Info("registerEventCallbacks received Final Committed Event", "conR.conS.Step", conR.conS.Step)
 	})
 }
 

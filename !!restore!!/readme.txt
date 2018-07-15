@@ -27,10 +27,10 @@ here are the deployment steps:
 	sudo cp ./bin/pchain /usr/local/bin/
 
 	#create 5(you can change it) accounts with specified balance, will generate eth_genesis.json
-	pchain --datadir /home/ubuntu/.pchain init_eth_genesis "{10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}"
+	pchain --datadir ./.pchain init_eth_genesis "{10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}, {10000000000000000000000000000000000, 100}, { 10000000000000000000000000000000000, 100}"
 
 	#generate the pchain genesis.json with epoch/reward scheme parameters
-	pchain --datadir /home/ubuntu/.pchain init /home/ubuntu/.pchain/pchain/eth_genesis.json
+	pchain --datadir ./.pchain init ./.pchain/pchain/eth_genesis.json
 
 	#start ehtermint node, run_debug.sh with more log output
 	./run.sh

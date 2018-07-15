@@ -95,7 +95,7 @@ func (vote *Vote) DecodeRLP(s *rlp.Stream) error {
 	}
 
 	vote.ValidatorAddress = vt.ValidatorAddress
-	vote.ValidatorIndex = vote.ValidatorIndex
+	vote.ValidatorIndex = vt.ValidatorIndex
 	vote.Height = vt.Height
 	vote.Round = vt.Round
 	vote.Type = vt.Type

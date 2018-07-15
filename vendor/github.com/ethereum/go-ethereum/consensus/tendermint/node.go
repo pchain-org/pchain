@@ -230,6 +230,8 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
 	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
+
+
 	// ClientCreator will be instantiated later after ethermint proxyapp created
 	// clientCreator := proxy.DefaultClientCreator(config)
 
@@ -237,21 +239,57 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 	//blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
 	//blockStore := bc.NewBlockStore(blockStoreDB)
 
-
 	ep.VADB = dbm.NewDB("validatoraction", config.GetString("db_backend"), config.GetString("db_dir"))
 
 	// Get State And Epoch
 	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
 	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
-	state, _ := InitStateAndEpoch(config, stateDB, epochDB)
+	state, epoch := InitStateAndEpoch(config, stateDB, epochDB)
+
+	//_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
+	fmt.Println("state.Validators:", state.Epoch.Validators)
 
 	// add the chainid and number of validators to the global config
 	// TODO There is No Global Config, to be removed
 	config.Set("chain_id", state.ChainID)
 	config.Set("num_vals", state.Epoch.Validators.Size())
 
+	// Transaction indexing
+	//var txIndexer txindex.TxIndexer
+	//switch n.config.GetString("tx_index") {
+	//case "kv":
+	//	store := dbm.NewDB("tx_index", n.config.GetString("db_backend"), n.config.GetString("db_dir"))
+	//	txIndexer = kv.NewTxIndex(store)
+	//default:
+	//	txIndexer = &null.TxIndex{}
+	//}
+	//state.TxIndexer = txIndexer
+
+	// Decide whether to fast-sync or not
+	// We don't fast-sync when the only validator is us.
+	fastSync := config.GetBool("fast_sync")
+	if state.Epoch.Validators.Size() == 1 {
+		addr, _ := state.Epoch.Validators.GetByIndex(0)
+		if bytes.Equal(privValidator.Address, addr) {
+			fastSync = false
+		}
+	}
+
+	// Make ConsensusReactor
+	consensusState := consensus.NewConsensusState(config, state.Copy(), epoch, backend, cch)
+	if privValidator != nil {
+		consensusState.SetPrivValidator(privValidator)
+	}
+	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
+
+	// Add Reactor to P2P Switch
+	sw.AddReactor(state.ChainID, "CONSENSUS", consensusReactor)
+
 	// Make event switch
 	eventSwitch := types.NewEventSwitch()
+	// add the event switch to all services
+	// they should all satisfy events.Eventable
+	SetEventSwitch(eventSwitch, consensusReactor)
 
 	node := &Node{
 		config:        config,
@@ -269,6 +307,9 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 
 		backend:       backend,
 		cch:           cch,
+
+		consensusState:		consensusState,
+		consensusReactor:	consensusReactor,
 	}
 	node.BaseService = *cmn.NewBaseService(logger.Log, "Node", node)
 	return node
@@ -284,48 +325,13 @@ func (n *Node) OnStart() error {
 	epoch := ep.LoadOneEpoch(n.epochDB, state.LastEpochNumber)
 	state.Epoch = epoch
 
-	//_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
-	fmt.Println("state.Validators:", state.Epoch.Validators)
-
-	// Transaction indexing
-	//var txIndexer txindex.TxIndexer
-	//switch n.config.GetString("tx_index") {
-	//case "kv":
-	//	store := dbm.NewDB("tx_index", n.config.GetString("db_backend"), n.config.GetString("db_dir"))
-	//	txIndexer = kv.NewTxIndex(store)
-	//default:
-	//	txIndexer = &null.TxIndex{}
-	//}
-	//state.TxIndexer = txIndexer
+	n.consensusState.UpdateToStateAndEpoch(state, epoch)
+	n.consensusState.ReconstructLastCommit(state)
 
 	_, err := n.evsw.Start()
 	if err != nil {
 		cmn.Exit(cmn.Fmt("Failed to start switch: %v", err))
 	}
-
-	// Decide whether to fast-sync or not
-	// We don't fast-sync when the only validator is us.
-	fastSync := n.config.GetBool("fast_sync")
-	if state.Epoch.Validators.Size() == 1 {
-		addr, _ := state.Epoch.Validators.GetByIndex(0)
-		if bytes.Equal(n.privValidator.Address, addr) {
-			fastSync = false
-		}
-	}
-
-	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(n.config, state.Copy(), epoch, n.backend, n.cch)
-	if n.privValidator != nil {
-			consensusState.SetPrivValidator(n.privValidator)
-	}
-	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
-
-	// Add Reactor to P2P Switch
-	n.sw.AddReactor(state.ChainID, "CONSENSUS", consensusReactor)
-
-	// add the event switch to all services
-	// they should all satisfy events.Eventable
-	SetEventSwitch(n.evsw, consensusReactor)
 
 	// Start the Reactors for this Chain
 	n.sw.StartChainReactor(state.ChainID)
@@ -338,10 +344,6 @@ func (n *Node) OnStart() error {
 			logger.Log.Warn("Profile server", "error", http.ListenAndServe(profileHost, nil))
 		}()
 	}
-
-	n.consensusState = consensusState
-	n.consensusReactor = consensusReactor
-	//n.txIndexer = txIndexer
 
 	return nil
 }

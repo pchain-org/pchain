@@ -23,10 +23,11 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/p2p"
 	"fmt"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 )
 
 const (
-	tendemrintMsg = 0x11
+	tendemrintMsg = 0x12
 )
 
 var (
@@ -54,4 +55,21 @@ func (sb *backend) HandleMsg(addr common.Address, msg p2p.Msg) (bool, error) {
 	fmt.Printf("Tendermint: (sb *backend) HandleMsg, add logic here\n")
 
 	return false, nil
+}
+
+// SetBroadcaster implements consensus.Handler.SetBroadcaster
+func (sb *backend) SetBroadcaster(broadcaster consensus.Broadcaster) {
+
+	fmt.Printf("Tendermint: (sb *backend) SetBroadcaster with %v\n", broadcaster)
+	sb.broadcaster = broadcaster
+}
+
+func (sb *backend) NewChainHead() error {
+	sb.coreMu.RLock()
+	defer sb.coreMu.RUnlock()
+	if !sb.coreStarted {
+		return ErrStoppedEngine
+	}
+	go tdmTypes.FireEventFinalCommitted(sb.core.EventSwitch(), tdmTypes.EventDataFinalCommitted{})
+	return nil
 }

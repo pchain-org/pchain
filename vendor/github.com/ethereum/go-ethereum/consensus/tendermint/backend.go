@@ -24,7 +24,7 @@ func New(config cfg.Config, privateKey *ecdsa.PrivateKey, db ethdb.Database,
 
 	backend := &backend{
 		//config:           config,
-		//istanbulEventMux: new(event.TypeMux),
+		tendermintEventMux: new(event.TypeMux),
 		privateKey:       privateKey,
 		//address:          crypto.PubkeyToAddress(privateKey.PublicKey),
 		//core:             node,
@@ -43,7 +43,7 @@ func New(config cfg.Config, privateKey *ecdsa.PrivateKey, db ethdb.Database,
 
 type backend struct {
 	//config           *istanbul.Config
-	istanbulEventMux *event.TypeMux
+	tendermintEventMux *event.TypeMux
 	privateKey       *ecdsa.PrivateKey
 	address          common.Address
 	core             *Node

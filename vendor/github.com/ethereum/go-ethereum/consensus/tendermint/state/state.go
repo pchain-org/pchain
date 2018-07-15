@@ -90,6 +90,7 @@ func (s *State) Copy() *State {
 		LastBlockID:     s.LastBlockID,
 		LastBlockTime:   s.LastBlockTime,
 		LastEpochNumber: s.LastEpochNumber,
+		BlockNumberToSave: s.BlockNumberToSave,
 		Epoch:           s.Epoch.Copy(),
 		//Validators:      s.Validators.Copy(),
 		//LastValidators:  s.LastValidators.Copy(),

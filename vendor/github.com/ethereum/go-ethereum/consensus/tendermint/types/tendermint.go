@@ -75,7 +75,7 @@ func ExtractTendermintExtra(h *ethTypes.Header) (*TendermintExtra, error) {
 	}
 
 	var tdmExtra = TendermintExtra{}
-	fmt.Printf("ExtractTendermintExtra, h.Extra[:] is %x", h.Extra[:])
+	fmt.Printf("ExtractTendermintExtra, h.Extra[:] is %x\n", h.Extra[:])
 	err := rlp.DecodeBytes(h.Extra[:], &tdmExtra)
 	if err != nil {
 		return nil, err

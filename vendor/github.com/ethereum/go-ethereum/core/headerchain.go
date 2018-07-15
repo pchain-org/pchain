@@ -205,6 +205,7 @@ type WhCallback func(*types.Header) error
 
 func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
 	// Do a sanity check that the provided chain is actually ordered and linked
+	log.Info("(hc *HeaderChain) ValidateHeaderChain 0")
 	for i := 1; i < len(chain); i++ {
 		if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 || chain[i].ParentHash != chain[i-1].Hash() {
 			// Chain broke ancestry, log a messge (programming error) and skip insertion
@@ -235,14 +236,17 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 		// If the chain is terminating, stop processing blocks
 		if hc.procInterrupt() {
 			log.Debug("Premature abort during headers verification")
+			log.Info("(hc *HeaderChain) ValidateHeaderChain 1")
 			return 0, errors.New("aborted")
 		}
 		// If the header is a banned one, straight out abort
 		if BadHashes[header.Hash()] {
+			log.Info("(hc *HeaderChain) ValidateHeaderChain 2")
 			return i, ErrBlacklistedHash
 		}
 		// Otherwise wait for headers checks and ensure they pass
 		if err := <-results; err != nil {
+			log.Info("(hc *HeaderChain) ValidateHeaderChain 3")
 			return i, err
 		}
 	}

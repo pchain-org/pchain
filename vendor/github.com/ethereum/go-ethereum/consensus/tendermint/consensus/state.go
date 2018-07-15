@@ -293,11 +293,12 @@ func NewConsensusState(config cfg.Config, state *sm.State, epoch *ep.Epoch, back
 	cs.decideProposal = cs.defaultDecideProposal
 	cs.doPrevote = cs.defaultDoPrevote
 	cs.setProposal = cs.defaultSetProposal
-	cs.updateToStateAndEpoch(state, epoch)
+
+	cs.UpdateToStateAndEpoch(state, epoch)
 
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
-	cs.reconstructLastCommit(state)
+
 	cs.BaseService = *NewBaseService(log, "ConsensusState", cs)
 	return cs
 }
@@ -543,7 +544,7 @@ func (cs *ConsensusState) sendInternalMessage(mi msgInfo) {
 
 // Reconstruct LastCommit from SeenCommit, which we saved along with the block,
 // (which happens even before saving the state)
-func (cs *ConsensusState) reconstructLastCommit(state *sm.State) {
+func (cs *ConsensusState) ReconstructLastCommit(state *sm.State) {
 	if state.LastBlockHeight == 0 {
 		return
 	}
@@ -572,7 +573,7 @@ func (cs *ConsensusState) reconstructLastCommit(state *sm.State) {
 
 // Updates ConsensusState and increments height to match thatRewardScheme of state.
 // The round becomes 0 and cs.Step becomes RoundStepNewHeight.
-func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch) {
+func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch) {
 	if cs.CommitRound > -1 && 0 < cs.Height && cs.Height != state.LastBlockHeight {
 		PanicSanity(Fmt("updateToState() expected state height of %v but found %v",
 			cs.Height, state.LastBlockHeight))
@@ -853,7 +854,7 @@ func (cs *ConsensusState) enterPropose(height int, round int) {
 		// or else after timeoutPropose
 		if cs.isProposalComplete() {
 			var err error = nil
-			if cs.state.BlockNumberToSave >= 0 && cs.state.BlockNumberToSave == height-1 {
+			if cs.state.BlockNumberToSave > 0 && cs.state.BlockNumberToSave == height-1 {
 				//lastBlock := cs.blockStore.LoadBlock(height - 1)
 				lastBlock := cs.LoadBlock(height - 1)
 				intBlock := types.MakeIntegratedBlock(lastBlock, cs.LastCommit.MakeCommit(), cs.config.GetInt("block_part_size"))
@@ -1407,7 +1408,7 @@ func (cs *ConsensusState) finalizeCommit(height int) {
 	fail.Fail() // XXX
 
 	// NewHeightStep!
-	cs.updateToStateAndEpoch(stateCopy, stateCopy.Epoch)
+	cs.UpdateToStateAndEpoch(stateCopy, stateCopy.Epoch)
 
 	fail.Fail() // XXX
 
