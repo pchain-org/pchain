@@ -458,6 +458,10 @@ func (sb *backend) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 	return defaultDifficulty
 }
 
+func (sb *backend) AfterInsertBlock(block *types.Block) {
+	//do nothing
+}
+
 // update timestamp and signature of the block based on its number of transactions
 func (sb *backend) updateBlock(parent *types.Header, block *types.Block) (*types.Block, error) {
 	header := block.Header()

@@ -262,15 +262,15 @@ func (epoch *Epoch) GetDB() dbm.DB {
 
 func (epoch *Epoch) Bytes() []byte {
 	buf, n, err := new(bytes.Buffer), new(int), new(error)
-	fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
+	//fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
 
 	epochDoc := epoch.MakeOneEpochDoc()
 	wire.WriteBinary(epochDoc, buf, n, err)
 	if *err != nil {
-		fmt.Printf("Epoch get bytes error: %v", err)
+		//fmt.Printf("Epoch get bytes error: %v", err)
 		return nil
 	}
-	fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
+	//fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
 	return buf.Bytes()
 }
 

@@ -40,7 +40,7 @@ func voteToStep(vote *Vote) int8 {
 type PrivValidator struct {
 	Address       []byte           `json:"address"`
 	PubKey        crypto.PubKey    `json:"pub_key"`
-	LastHeight    int              `json:"last_height"`
+	LastHeight    uint64              `json:"last_height"`
 	LastRound     int              `json:"last_round"`
 	LastStep      int8             `json:"last_step"`
 	LastSignature crypto.Signature `json:"last_signature"` // so we dont lose signatures
@@ -212,7 +212,7 @@ func (privVal *PrivValidator) GetAddress() []byte {
 func (privVal *PrivValidator) SignVote(chainID string, vote *Vote) error {
 	privVal.mtx.Lock()
 	defer privVal.mtx.Unlock()
-	signature, err := privVal.signBytesHRS(int(vote.Height), int(vote.Round), voteToStep(vote), SignBytes(chainID, vote))
+	signature, err := privVal.signBytesHRS(vote.Height, int(vote.Round), voteToStep(vote), SignBytes(chainID, vote))
 	if err != nil {
 		return errors.New(Fmt("Error signing vote: %v", err))
 	}
@@ -232,7 +232,7 @@ func (privVal *PrivValidator) SignProposal(chainID string, proposal *Proposal) e
 }
 
 // check if there's a regression. Else sign and write the hrs+signature to disk
-func (privVal *PrivValidator) signBytesHRS(height, round int, step int8, signBytes []byte) (crypto.Signature, error) {
+func (privVal *PrivValidator) signBytesHRS(height uint64, round int, step int8, signBytes []byte) (crypto.Signature, error) {
 	// If height regression, err
 	if privVal.LastHeight > height {
 		return nil, errors.New("Height regression")

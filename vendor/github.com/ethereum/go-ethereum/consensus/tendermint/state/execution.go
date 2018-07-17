@@ -50,7 +50,7 @@ func (s *State) ValidateBlock(block *types.Block) error {
 
 func (s *State) validateBlock(block *types.Block) error {
 	// Basic block validation.
-	err := block.ValidateBasic(s.ChainID, s.LastBlockHeight, s.LastBlockID, s.LastBlockTime)
+	err := block.ValidateBasic(s.TdmExtra)
 	if err != nil {
 		return err
 	}
@@ -123,7 +123,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, block *types.Block, partsH
 	fail.Fail() // XXX
 
 	// save the state
-	s.Epoch.Save()
-	s.Save()
+	//s.Epoch.Save()
+	//s.Save()
 	return nil
 }

@@ -66,6 +66,7 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 		Exit("Cannot set 'revision_file' via config.toml. It must match what's in the Makefile")
 	}
 	mapConfig.SetRequired("chain_id") // blows up if you try to use it before setting.
+	mapConfig.SetDefault("chain_id", chainId)
 	mapConfig.SetDefault("genesis_file", filepath.Join(rootDir, chainId, "genesis.json"))
 	mapConfig.SetDefault("eth_genesis_file", filepath.Join(rootDir, chainId, "eth_genesis.json"))
 	mapConfig.SetDefault("keystore", filepath.Join(rootDir, chainId, "keystore"))

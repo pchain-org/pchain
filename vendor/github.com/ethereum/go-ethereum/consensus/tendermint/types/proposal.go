@@ -19,7 +19,7 @@ var (
 )
 
 type Proposal struct {
-	Height           int              `json:"height"`
+	Height           uint64              `json:"height"`
 	Round            int              `json:"round"`
 	BlockPartsHeader PartSetHeader    `json:"block_parts_header"`
 	POLRound         int              `json:"pol_round"`    // -1 if null.
@@ -28,7 +28,7 @@ type Proposal struct {
 }
 
 // polRound: -1 if no polRound.
-func NewProposal(height int, round int, blockPartsHeader PartSetHeader, polRound int, polBlockID BlockID) *Proposal {
+func NewProposal(height uint64, round int, blockPartsHeader PartSetHeader, polRound int, polBlockID BlockID) *Proposal {
 	return &Proposal{
 		Height:           height,
 		Round:            round,

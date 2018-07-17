@@ -663,6 +663,10 @@ func (c *Clique) CalcDifficulty(chain consensus.ChainReader, time uint64, parent
 	return CalcDifficulty(snap, c.signer)
 }
 
+func (c *Clique) AfterInsertBlock(block *types.Block) {
+	//do nothing
+}
+
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.

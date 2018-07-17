@@ -34,7 +34,7 @@ type RPCDataContext struct {
 	config        cfg.Config
 
 	// interfaces defined in types and above
-	blockStore     types.BlockStore
+	//blockStore     types.BlockStore
 	consensusState Consensus
 	p2pSwitch      P2P
 
@@ -52,11 +52,11 @@ func (r *RPCDataContext) SetConfig(c cfg.Config) {
 func (r *RPCDataContext) SetEventSwitch(evsw types.EventSwitch) {
 	r.eventSwitch = evsw
 }
-
+/*
 func (r *RPCDataContext) SetBlockStore(bs types.BlockStore) {
 	r.blockStore = bs
 }
-
+*/
 func (r *RPCDataContext) SetConsensusState(cs Consensus) {
 	r.consensusState = cs
 }

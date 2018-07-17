@@ -3,43 +3,47 @@ package state
 import (
 	"bytes"
 	"io/ioutil"
-	"sync"
+	//"sync"
 	"time"
 
 	. "github.com/tendermint/go-common"
-	cfg "github.com/tendermint/go-config"
-	dbm "github.com/tendermint/go-db"
+	//cfg "github.com/tendermint/go-config"
+	//dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
 	//"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex"
 	//"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/null"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	"fmt"
+	//"fmt"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/pkg/errors"
 )
 
+/*
 var (
 	stateKey         = []byte("stateKey")
 )
-
+*/
 //-----------------------------------------------------------------------------
 
 // NOTE: not goroutine-safe.
 type State struct {
 	// mtx for writing to db
-	mtx sync.Mutex
-	db  dbm.DB
+	//mtx sync.Mutex
+	//db  dbm.DB
 
 	// should not change
 	GenesisDoc *types.GenesisDoc
+
+	/*
 	ChainID    string
+	Height     uint64 // Genesis state has this set to 0.  So, Block(H=0) does not exist.
+	Time       time.Time
+	BlockID    types.BlockID
+	NeedToSave 	bool //record the number of the block which should be saved to main chain
+	EpochNumber	uint64
+	*/
+	TdmExtra *types.TendermintExtra
 
-	// updated at end of SetBlockAndValidators
-	LastBlockHeight int // Genesis state has this set to 0.  So, Block(H=0) does not exist.
-	LastBlockID     types.BlockID
-	LastBlockTime   time.Time
-
-	LastEpochNumber	int
 	Epoch *epoch.Epoch
 	//Validators      *types.ValidatorSet
 	//LastValidators  *types.ValidatorSet // block.LastCommit validated against this
@@ -49,19 +53,18 @@ type State struct {
 
 	//TxIndexer txindex.TxIndexer `json:"-"` // Transaction indexer.
 
-	BlockNumberToSave int //record the number of the block which should be saved to main chain
 	// Intermediate results from processing
 	// Persisted separately from the state
 	//abciResponses *ABCIResponses
 }
-
+/*
 func LoadState(stateDB dbm.DB) *State {
 	state := loadState(stateDB, stateKey)
 	return state
 }
 
 func loadState(db dbm.DB, key []byte) *State {
-	s := &State{db: db/*, TxIndexer: &null.TxIndex{}*/}
+	s := &State{db: db, TxIndexer: &null.TxIndex{}}
 	buf := db.Get(key)
 	if len(buf) == 0 {
 		return nil
@@ -76,21 +79,24 @@ func loadState(db dbm.DB, key []byte) *State {
 	}
 	return s
 }
-
+*/
 
 func (s *State) Copy() *State {
 	//fmt.Printf("State.Copy(), s.LastValidators are %v\n",s.LastValidators)
 	//debug.PrintStack()
 
 	return &State{
-		db:              s.db,
+		//db:              s.db,
 		GenesisDoc:      s.GenesisDoc,
+		/*
 		ChainID:         s.ChainID,
-		LastBlockHeight: s.LastBlockHeight,
-		LastBlockID:     s.LastBlockID,
-		LastBlockTime:   s.LastBlockTime,
-		LastEpochNumber: s.LastEpochNumber,
-		BlockNumberToSave: s.BlockNumberToSave,
+		Height:			 s.Height,
+		BlockID:         s.BlockID,
+		Time: 		     s.Time,
+		EpochNumber:     s.EpochNumber,
+		NeedToSave:      s.NeedToSave,
+		*/
+		TdmExtra:        s.TdmExtra.Copy(),
 		Epoch:           s.Epoch.Copy(),
 		//Validators:      s.Validators.Copy(),
 		//LastValidators:  s.LastValidators.Copy(),
@@ -98,13 +104,13 @@ func (s *State) Copy() *State {
 		//TxIndexer:       s.TxIndexer, // pointer here, not value
 	}
 }
-
+/*
 func (s *State) Save() {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	s.db.SetSync(stateKey, s.Bytes())
 }
-
+*/
 func (s *State) Equals(s2 *State) bool {
 	return bytes.Equal(s.Bytes(), s2.Bytes())
 }
@@ -122,16 +128,16 @@ func (s *State) Bytes() []byte {
 // after running EndBlock
 func (s *State) SetBlockAndEpoch(tdmExtra *types.TendermintExtra, blockPartsHeader types.PartSetHeader) {
 
-	s.setBlockAndEpoch(int(tdmExtra.Height), types.BlockID{tdmExtra.Hash(), blockPartsHeader}, tdmExtra.Time)
+	s.setBlockAndEpoch(tdmExtra.Height, types.BlockID{tdmExtra.Hash(), blockPartsHeader}, tdmExtra.Time)
 }
 
 func (s *State) setBlockAndEpoch(
-	height int, blockID types.BlockID, blockTime time.Time) {
+	height uint64, blockID types.BlockID, blockTime time.Time) {
 
-	s.LastBlockHeight = height
-	s.LastBlockID = blockID
-	s.LastBlockTime = blockTime
-	s.LastEpochNumber = s.Epoch.Number
+	s.TdmExtra.Height = height
+	s.TdmExtra.BlockID = blockID
+	s.TdmExtra.Time = blockTime
+	s.TdmExtra.EpochNumber = uint64(s.Epoch.Number)
 	//s.Validators = nextValSet
 	//s.LastValidators = prevValSet
 }
@@ -142,18 +148,18 @@ func (s *State) GetValidators() (*types.ValidatorSet, *types.ValidatorSet, error
 		return nil, nil, errors.New("epoch does not exist")
 	}
 
-	if s.LastEpochNumber == s.Epoch.Number {
+	if s.TdmExtra.EpochNumber == uint64(s.Epoch.Number) {
 		return s.Epoch.Validators, s.Epoch.Validators, nil
-	} else if s.LastEpochNumber == s.Epoch.Number - 1 {
+	} else if s.TdmExtra.EpochNumber == uint64(s.Epoch.Number - 1) {
 		return s.Epoch.PreviousEpoch.Validators, s.Epoch.Validators, nil
 	}
 
 	return nil, nil, errors.New("epoch information error")
 }
-
+/*
 // Load the most recent state from "state" db,
 // or create a new one (and save) from genesis.
-func GetState(config cfg.Config, stateDB dbm.DB /*, valSetFromGenesis bool*/) *State {
+func GetState(config cfg.Config, stateDB dbm.DB) *State {
 	state := LoadState(stateDB)
 	if state == nil {
 		state = MakeGenesisStateFromFile(stateDB, config.GetString("genesis_file"))
@@ -162,8 +168,7 @@ func GetState(config cfg.Config, stateDB dbm.DB /*, valSetFromGenesis bool*/) *S
 
 		_, val, _ := state.GetValidators()
 		fmt.Printf("GetState() state 0, state.validators are: %v\n", val)
-	}
-	/*else if valSetFromGenesis {
+	} else if valSetFromGenesis {
 		valSet := MakeGenesisValidatorsFromFile(config.GetString("genesis_file"))
 		state.Validators = valSet
 		state.Save()
@@ -174,10 +179,9 @@ func GetState(config cfg.Config, stateDB dbm.DB /*, valSetFromGenesis bool*/) *S
 		_, val, _ := state.GetValidators()
 		fmt.Printf("GetState() state 2, state.validators are: %v\n", val)
 	}
-	*/
 	return state
 }
-
+*/
 
 //-----------------------------------------------------------------------------
 // Genesis
@@ -185,7 +189,7 @@ func GetState(config cfg.Config, stateDB dbm.DB /*, valSetFromGenesis bool*/) *S
 // MakeGenesisStateFromFile reads and unmarshals state from the given file.
 //
 // Used during replay and in tests.
-func MakeGenesisStateFromFile(db dbm.DB, genDocFile string) *State {
+func MakeGenesisStateFromFile(/*db dbm.DB, */genDocFile string) *State {
 	genDocJSON, err := ioutil.ReadFile(genDocFile)
 	if err != nil {
 		Exit(Fmt("Couldn't read GenesisDoc file: %v", err))
@@ -194,13 +198,13 @@ func MakeGenesisStateFromFile(db dbm.DB, genDocFile string) *State {
 	if err != nil {
 		Exit(Fmt("Error reading GenesisDoc: %v", err))
 	}
-	return MakeGenesisState(db, genDoc)
+	return MakeGenesisState(/*db, */genDoc)
 }
 
 // MakeGenesisState creates state from types.GenesisDoc.
 //
 // Used in tests.
-func MakeGenesisState(db dbm.DB, genDoc *types.GenesisDoc) *State {
+func MakeGenesisState(/*db dbm.DB, */genDoc *types.GenesisDoc) *State {
 	if len(genDoc.CurrentEpoch.Validators) == 0 {
 		Exit(Fmt("The genesis file has no validators"))
 	}
@@ -224,14 +228,16 @@ func MakeGenesisState(db dbm.DB, genDoc *types.GenesisDoc) *State {
 	}
 
 	return &State{
-		db:              db,
+		//db:              db,
 		GenesisDoc:      genDoc,
-		ChainID:         genDoc.ChainID,
-		LastBlockHeight: 0,
-		LastBlockID:     types.BlockID{},
-		LastBlockTime:   genDoc.GenesisTime,
-		LastEpochNumber: 0,
-		BlockNumberToSave: -1,
+		TdmExtra:        &types.TendermintExtra{
+			ChainID:     genDoc.ChainID,
+			Height:      0,
+			BlockID:     types.BlockID{},
+			Time:        genDoc.GenesisTime,
+			EpochNumber: 0,
+			NeedToSave:  false,
+		},
 		//Validators:      types.NewValidatorSet(validators),
 		//LastValidators:  types.NewValidatorSet(nil),
 		//AppHash:         genDoc.AppHash,

@@ -16,11 +16,11 @@ func (bs *ConsensusState) GetChainReader() consss.ChainReader {
 
 // The +2/3 and other Precommit-votes for block at `height`.
 // This Commit comes from block.LastCommit for `height+1`.
-func (bs *ConsensusState) LoadBlock(height int) *types.Block {
+func (bs *ConsensusState) LoadBlock(height uint64) *types.Block {
 
 	cr := bs.GetChainReader()
 
-	ethBlock := cr.GetBlock(common.Hash{}, uint64(height))
+	ethBlock := cr.GetBlock(common.Hash{}, height)
 	if ethBlock == nil {
 		return nil
 	}
@@ -48,20 +48,29 @@ func (bs *ConsensusState) LoadBlock(height int) *types.Block {
 	}
 }
 
-// The +2/3 and other Precommit-votes for block at `height`.
-// This Commit comes from block.LastCommit for `height+1`.
-func (bs *ConsensusState) LoadBlockCommit(height int) *types.Commit {
-	return bs.LoadSeenCommit(height)
-}
-
-// NOTE: the Precommit-vote heights are for the block at `height`
-func (bs *ConsensusState) LoadSeenCommit(height int) *types.Commit {
+func (bs *ConsensusState) LoadLastTendermintExtra() (*types.TendermintExtra, uint64) {
 
 	cr := bs.backend.ChainReader()
+
+	curEthBlock := cr.CurrentBlock()
+	curHeight := curEthBlock.NumberU64()
+	fmt.Printf("(cs *ConsensusState) LoadSeenCommit, current block height is %v\n", curHeight)
+	if curHeight == 0 {
+		return nil, 0
+	}
+
+	return bs.LoadTendermintExtra(curHeight)
+}
+
+func (bs *ConsensusState) LoadTendermintExtra(height uint64) (*types.TendermintExtra, uint64) {
+
+	cr := bs.backend.ChainReader()
+
 	fmt.Printf("(cs *ConsensusState) LoadSeenCommit height is %v\n", height)
-	ethBlock := cr.GetBlockByNumber(uint64(height))
+	ethBlock := cr.GetBlockByNumber(height)
 	if ethBlock == nil {
-		return nil
+		fmt.Printf("(cs *ConsensusState) LoadSeenCommit nil block\n")
+		return nil, 0
 	}
 
 	header := cr.GetHeader(ethBlock.Hash(), ethBlock.NumberU64())
@@ -69,10 +78,11 @@ func (bs *ConsensusState) LoadSeenCommit(height int) *types.Commit {
 	tdmExtra, err := types.ExtractTendermintExtra(header)
 	if err != nil {
 		fmt.Printf("(cs *ConsensusState) LoadSeenCommit got error: %v\n", err)
-		return nil
+		return nil, 0
 	}
+	fmt.Printf("(cs *ConsensusState) LoadSeenCommit got error: %v\n", err)
 
-	return tdmExtra.SeenCommit
+	return tdmExtra, tdmExtra.Height
 }
 /*
 func (cs *ConsensusState) LoadBlockMeta(height int) *types.BlockMeta {

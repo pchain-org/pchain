@@ -23,7 +23,7 @@ type Block struct {
 	TdmExtra *TendermintExtra   `json:"tdmexdata"`
 }
 
-func MakeBlock(height int, chainID string, commit *Commit,
+func MakeBlock(height uint64, chainID string, commit *Commit,
 	prevBlockID BlockID, valHash, blkExData []byte, partSize int) (*Block, *PartSet) {
 
 	exData := &ExData{
@@ -35,7 +35,7 @@ func MakeBlock(height int, chainID string, commit *Commit,
 		Height:         uint64(height),
 		Time:           time.Now(),
 		ValidatorsHash: valHash,
-		LastBlockID:    prevBlockID,
+		BlockID:    prevBlockID,
 		SeenCommit: commit,
 	}
 
@@ -48,23 +48,22 @@ func MakeBlock(height int, chainID string, commit *Commit,
 }
 
 // Basic validation that doesn't involve state data.
-func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID BlockID,
-	lastBlockTime time.Time) error {
+func (b *Block) ValidateBasic(tdmExtra *TendermintExtra) error {
 
-	if b.TdmExtra.ChainID != chainID {
-		return errors.New(Fmt("Wrong Block.Header.ChainID. Expected %v, got %v", chainID, b.TdmExtra.ChainID))
+	if b.TdmExtra.ChainID != tdmExtra.ChainID {
+		return errors.New(Fmt("Wrong Block.Header.ChainID. Expected %v, got %v", tdmExtra.ChainID, b.TdmExtra.ChainID))
 	}
-	if int(b.TdmExtra.Height) != lastBlockHeight+1 {
-		return errors.New(Fmt("Wrong Block.Header.Height. Expected %v, got %v", lastBlockHeight+1, b.TdmExtra.Height))
+	if b.TdmExtra.Height != tdmExtra.Height+1 {
+		return errors.New(Fmt("Wrong Block.Header.Height. Expected %v, got %v", tdmExtra.Height+1, b.TdmExtra.Height))
 	}
 
-	if !b.TdmExtra.LastBlockID.Equals(lastBlockID) {
-		return errors.New(Fmt("Wrong Block.Header.LastBlockID.  Expected %v, got %v", lastBlockID, b.TdmExtra.LastBlockID))
+	/*
+	if !b.TdmExtra.BlockID.Equals(blockID) {
+		return errors.New(Fmt("Wrong Block.Header.LastBlockID.  Expected %v, got %v", blockID, b.TdmExtra.BlockID))
 	}
 	if !bytes.Equal(b.TdmExtra.SeenCommitHash, b.TdmExtra.SeenCommit.Hash()) {
 		return errors.New(Fmt("Wrong Block.Header.LastCommitHash.  Expected %X, got %X", b.TdmExtra.SeenCommitHash, b.TdmExtra.SeenCommit.Hash()))
 	}
-	/*
 	if b.TdmExtra.Height != 1 {
 		if err := b.TdmExtra.SeenCommit.ValidateBasic(); err != nil {
 			return err
@@ -240,11 +239,11 @@ func (commit *Commit) FirstPrecommit() *Vote {
 	return nil
 }
 
-func (commit *Commit) Height() int {
+func (commit *Commit) Height() uint64 {
 	if len(commit.Precommits) == 0 {
 		return 0
 	}
-	return int(commit.FirstPrecommit().Height)
+	return commit.FirstPrecommit().Height
 }
 
 func (commit *Commit) Round() int {
@@ -307,7 +306,7 @@ func (commit *Commit) ValidateBasic() error {
 				precommit.Type)
 		}
 		// Ensure that all heights are the same
-		if int(precommit.Height) != height {
+		if precommit.Height != height {
 			return fmt.Errorf("Invalid commit precommit height. Expected %v, got %v",
 				height, precommit.Height)
 		}

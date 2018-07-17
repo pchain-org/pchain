@@ -18,6 +18,7 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/logger"
 	"github.com/syndtr/goleveldb/leveldb/errors"
+	"runtime/debug"
 )
 
 const (
@@ -84,6 +85,8 @@ func (sb *backend) Start(chain consensus.ChainReader, currentBlock func() *types
 func (sb *backend) Stop() error {
 
 	fmt.Printf("Tendermint: (sb *backend) Stop, add logic here\n")
+
+	debug.PrintStack()
 
 	sb.coreMu.Lock()
 	defer sb.coreMu.Unlock()
@@ -308,18 +311,18 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 		return nil, errUnauthorized
 	}
 	*/
-	logger.Log.Info("Tendermint: (sb *backend) Seal, 0")
+	//logger.Log.Info("Tendermint: (sb *backend) Seal, 0")
 	parent := chain.GetHeader(header.ParentHash, number-1)
 	if parent == nil {
-		logger.Log.Info("Tendermint: (sb *backend) Seal, 1")
+		//logger.Log.Info("Tendermint: (sb *backend) Seal, 1")
 		return nil, consensus.ErrUnknownAncestor
 	}
-	logger.Log.Info("Tendermint: (sb *backend) Seal, 2")
+	//logger.Log.Info("Tendermint: (sb *backend) Seal, 2")
 	block, err := sb.updateBlock(parent, block)
 	if err != nil {
 		return nil, err
 	}
-	logger.Log.Info("Tendermint: (sb *backend) Seal, 3")
+	//logger.Log.Info("Tendermint: (sb *backend) Seal, 3")
 	// wait for the timestamp of header, use this to adjust the block period
 	delay := time.Unix(block.Header().Time.Int64(), 0).Sub(now())
 	select {
@@ -327,7 +330,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 	case <-stop:
 		return nil, nil
 	}
-	logger.Log.Info("Tendermint: (sb *backend) Seal, 4")
+	//logger.Log.Info("Tendermint: (sb *backend) Seal, 4")
 	// get the proposed block hash and clear it if the seal() is completed.
 	sb.sealMu.Lock()
 	sb.proposedBlockHash = block.Hash()
@@ -393,7 +396,7 @@ func (sb *backend) Commit(proposal *tdmTypes.Block, seals [][]byte) error {
 	// update block's header
 	block = block.WithSeal(h)
 
-	logger.Log.Info("Committed", "hash", proposal.Hash(), "number", block.Number().Int64())
+	logger.Log.Info("Committed", "hash", block.Hash(), "number", block.Number().Int64())
 	// - if the proposed and committed blocks are the same, send the proposed hash
 	//   to commit channel, which is being watched inside the engine.Seal() function.
 	// - otherwise, we try to insert the block.
@@ -422,6 +425,10 @@ func (sb *backend) ChainReader() consensus.ChainReader {
 	return sb.chain
 }
 
+func (sb *backend) AfterInsertBlock(block *types.Block) {
+
+	sb.core.SaveState(block)
+}
 
 // update timestamp and signature of the block based on its number of transactions
 func (sb *backend) updateBlock(parent *types.Header, block *types.Block) (*types.Block, error) {

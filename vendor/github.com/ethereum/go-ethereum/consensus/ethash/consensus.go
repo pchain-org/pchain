@@ -522,6 +522,12 @@ func (ethash *Ethash) Finalize(chain consensus.ChainReader, header *types.Header
 	return types.NewBlock(header, txs, uncles, receipts), nil
 }
 
+
+func (ethash *Ethash) AfterInsertBlock(block *types.Block) {
+	//do nothing
+}
+
+
 // Some weird constants to avoid constant memory allocs for them.
 var (
 	big8  = big.NewInt(8)

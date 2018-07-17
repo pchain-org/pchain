@@ -51,6 +51,11 @@ type ChainReader interface {
 	// GetBlockByNumber retrieves a block from the database by number, caching it
 	// (associated with its hash) if found.
 	GetBlockByNumber(number uint64) *types.Block
+
+	// CurrentBlock retrieves the current head block of the canonical chain. The
+	// block is retrieved from the blockchain's internal cache.
+	CurrentBlock() *types.Block
+
 }
 
 // Engine is an algorithm agnostic consensus engine.
@@ -97,6 +102,9 @@ type Engine interface {
 	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 	// that a new block should have.
 	CalcDifficulty(chain ChainReader, time uint64, parent *types.Header) *big.Int
+
+	// AfterInsertBlock do some work after blockchain inserted one block
+	AfterInsertBlock(block *types.Block)
 
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainReader) []rpc.API

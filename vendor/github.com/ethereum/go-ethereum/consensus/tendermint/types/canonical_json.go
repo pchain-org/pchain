@@ -17,7 +17,7 @@ type CanonicalJSONPartSetHeader struct {
 
 type CanonicalJSONProposal struct {
 	BlockPartsHeader CanonicalJSONPartSetHeader `json:"block_parts_header"`
-	Height           int                        `json:"height"`
+	Height           uint64                        `json:"height"`
 	POLBlockID       CanonicalJSONBlockID       `json:"pol_block_id"`
 	POLRound         int                        `json:"pol_round"`
 	Round            int                        `json:"round"`

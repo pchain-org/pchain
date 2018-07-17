@@ -1,7 +1,7 @@
 package tendermint
 
 import (
-	"bytes"
+	//"bytes"
 	"net/http"
 	"strings"
 	cmn "github.com/tendermint/go-common"
@@ -9,6 +9,7 @@ import (
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-p2p"
 
+	ethTypes  "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	//bc "github.com/ethereum/go-ethereum/consensus/tendermint/blockchain"
@@ -22,7 +23,7 @@ import (
 	"fmt"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"io/ioutil"
-	"os"
+	//"os"
 	"time"
 	"github.com/ethereum/go-ethereum/core"
 )
@@ -37,7 +38,7 @@ type Node struct {
 	cmn.BaseService
 						     // config
 	config        cfg.Config           // user config
-	genesisDoc    *types.GenesisDoc    // initial validator set
+	//genesisDoc    *types.GenesisDoc    // initial validator set
 	privValidator *types.PrivValidator // local node's validator key
 
 	stateDB       dbm.DB
@@ -241,18 +242,8 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 
 	ep.VADB = dbm.NewDB("validatoraction", config.GetString("db_backend"), config.GetString("db_dir"))
 
-	// Get State And Epoch
-	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
 	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
-	state, epoch := InitStateAndEpoch(config, stateDB, epochDB)
-
-	//_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
-	fmt.Println("state.Validators:", state.Epoch.Validators)
-
-	// add the chainid and number of validators to the global config
-	// TODO There is No Global Config, to be removed
-	config.Set("chain_id", state.ChainID)
-	config.Set("num_vals", state.Epoch.Validators.Size())
+	//stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
 
 	// Transaction indexing
 	//var txIndexer txindex.TxIndexer
@@ -267,6 +258,7 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 
 	// Decide whether to fast-sync or not
 	// We don't fast-sync when the only validator is us.
+	/*
 	fastSync := config.GetBool("fast_sync")
 	if state.Epoch.Validators.Size() == 1 {
 		addr, _ := state.Epoch.Validators.GetByIndex(0)
@@ -274,16 +266,16 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 			fastSync = false
 		}
 	}
-
+	*/
 	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(config, state.Copy(), epoch, backend, cch)
+	consensusState := consensus.NewConsensusState(config, /*state.Copy(), epoch, */backend, cch)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
-	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
+	consensusReactor := consensus.NewConsensusReactor(consensusState/*, fastSync*/)
 
 	// Add Reactor to P2P Switch
-	sw.AddReactor(state.ChainID, "CONSENSUS", consensusReactor)
+	sw.AddReactor(config.GetString("chain_id"), "CONSENSUS", consensusReactor)
 
 	// Make event switch
 	eventSwitch := types.NewEventSwitch()
@@ -293,10 +285,10 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 
 	node := &Node{
 		config:        config,
-		genesisDoc:    state.GenesisDoc,
+		//genesisDoc:    state.GenesisDoc,
 		privValidator: privValidator,
 
-		stateDB:       stateDB,
+		//stateDB:       stateDB,
 		epochDB:       epochDB,
 
 		sw:            sw,
@@ -320,13 +312,16 @@ func (n *Node) OnStart() error {
 
 	fmt.Printf("(n *Node) OnStart()\n")
 
-	// reload the state (it may have been updated by the handshake)
-	state := sm.LoadState(n.stateDB)
-	epoch := ep.LoadOneEpoch(n.epochDB, state.LastEpochNumber)
-	state.Epoch = epoch
+	//_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
+
+	// add the chainid and number of validators to the global config
+	// TODO There is No Global Config, to be removed
+	//config.Set("chain_id", state.TdmExtra.ChainID)
+	//config.Set("num_vals", state.Epoch.Validators.Size())
+	// reload the state (it may have been updated by synchronization)
+	state, epoch := n.InitStateAndEpoch()
 
 	n.consensusState.UpdateToStateAndEpoch(state, epoch)
-	n.consensusState.ReconstructLastCommit(state)
 
 	_, err := n.evsw.Start()
 	if err != nil {
@@ -334,7 +329,7 @@ func (n *Node) OnStart() error {
 	}
 
 	// Start the Reactors for this Chain
-	n.sw.StartChainReactor(state.ChainID)
+	n.sw.StartChainReactor(state.TdmExtra.ChainID)
 
 	// run the profile server
 	profileHost := n.config.GetString("prof_laddr")
@@ -393,9 +388,27 @@ func (n *Node) OnStop() {
 	fmt.Printf("(n *Node) OnStop() called\n")
 	n.BaseService.OnStop()
 
-	n.sw.StopChainReactor(n.consensusState.GetState().ChainID)
+	n.sw.StopChainReactor(n.consensusState.GetState().TdmExtra.ChainID)
 	n.evsw.Stop()
 	n.consensusReactor.Stop()
+}
+
+//update the state with new insert block information
+func (n *Node) SaveState(block *ethTypes.Block) {
+
+	epoch := n.consensusState.Epoch
+	state := n.consensusState.GetState()
+
+	fmt.Printf("(n *Node) SaveState(block *ethTypes.Block) with state.height = %v, block.height = %v",
+		uint64(state.TdmExtra.Height), block.NumberU64())
+
+	if uint64(state.TdmExtra.Height) != block.NumberU64() {
+		fmt.Printf("(n *Node) SaveState(block *ethTypes.Block)， block height not equal")
+		return
+	}
+
+	epoch.Save()
+	//state.Save()
 }
 
 func (n *Node) RunForever() {
@@ -436,16 +449,22 @@ func (n *Node) PrivValidator() *types.PrivValidator {
 	return n.privValidator
 }
 
+/*
 func (n *Node) GenesisDoc() *types.GenesisDoc {
 	return n.genesisDoc
 }
+*/
 
-func InitStateAndEpoch(config cfg.Config, stateDB dbm.DB, epochDB dbm.DB) (state *sm.State, epoch *ep.Epoch) {
+func (n *Node) InitStateAndEpoch() (*sm.State, *ep.Epoch) {
 
-	state = sm.LoadState(stateDB)
-	if state == nil { //first run, generate state and epoch from genesis doc
+	state := &sm.State{}
+	var epoch *ep.Epoch = nil
 
-		genDocFile := config.GetString("genesis_file")
+	state.TdmExtra, _ = n.consensusState.LoadLastTendermintExtra()
+
+	if state.TdmExtra == nil { //means it it the first block
+
+		genDocFile := n.config.GetString("genesis_file")
 		if !cmn.FileExists(genDocFile) {
 			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), Couldn't find GenesisDoc file"))
 		}
@@ -460,36 +479,26 @@ func InitStateAndEpoch(config cfg.Config, stateDB dbm.DB, epochDB dbm.DB) (state
 			cmn.PanicSanity(cmn.Fmt("InitStateAndEpoch(), Genesis doc parse json error: %v", err))
 		}
 
-		state = sm.MakeGenesisState(stateDB, genDoc)
-		state.Save()
+		state = sm.MakeGenesisState(/*stateDB, */genDoc)
+		//state.Save()
 
-		rewardScheme := ep.MakeRewardScheme(epochDB, &genDoc.RewardScheme)
-		epoch = ep.MakeOneEpoch(epochDB, &genDoc.CurrentEpoch)
+		rewardScheme := ep.MakeRewardScheme(n.epochDB, &genDoc.RewardScheme)
+		epoch = ep.MakeOneEpoch(n.epochDB, &genDoc.CurrentEpoch)
 		epoch.RS = rewardScheme
+		fmt.Printf("0 epoch.Validators: %v\n", epoch.Validators)
 
-		if state.LastEpochNumber != epoch.Number {
+		if state.TdmExtra.EpochNumber != uint64(epoch.Number) {
 			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), initial state error"))
 		}
 		state.Epoch = epoch
-
+		fmt.Printf("0 state.Epoch.Validators: %v\n", state.Epoch.Validators)
 		rewardScheme.Save()
 		epoch.Save()
 
 	} else {
-		rewardScheme := ep.LoadRewardScheme(epochDB)
-		if rewardScheme == nil {
-			fmt.Printf("InitStateAndEpoch(), Reward Scheme information emitted\n")
-			os.Exit(1)
-		}
-		epoch = ep.LoadOneEpoch(epochDB, state.LastEpochNumber)
-		if epoch == nil {
-			fmt.Printf("InitStateAndEpoch(), epoch information emitted\n")
-			os.Exit(1)
-		}
-
-		epoch.RS = rewardScheme
-
+		epoch = ep.LoadOneEpoch(n.epochDB, int(state.TdmExtra.EpochNumber))
 		state.Epoch = epoch
+		n.consensusState.ReconstructLastCommit(state)
 	}
 
 	return state, epoch
