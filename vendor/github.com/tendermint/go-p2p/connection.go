@@ -711,9 +711,10 @@ func (ch *Channel) writeMsgPacketTo(w io.Writer, chainID string) (n int, err err
 // Handles incoming msgPackets. Returns a msg bytes if msg is complete.
 // Not goroutine-safe
 func (ch *Channel) recvMsgPacket(packet msgPacket) ([]byte, error) {
-	// log.Debug("Read Msg Packet", "conn", ch.conn, "packet", packet)
-	if ch.desc.RecvMessageCapacity < len(ch.recving)+len(packet.Bytes) {
-		return nil, wire.ErrBinaryReadOverflow
+	log.Debug("Read Msg Packet", "conn", ch.conn, "packet", packet)
+	var recvCap, recvReceived = ch.desc.RecvMessageCapacity, len(ch.recving) + len(packet.Bytes)
+	if recvCap < recvReceived {
+		return nil, fmt.Errorf("Received message exceeds available capacity: %v < %v", recvCap, recvReceived)
 	}
 	ch.recving = append(ch.recving, packet.Bytes...)
 	if packet.EOF == byte(0x01) {
