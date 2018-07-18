@@ -3,15 +3,15 @@ package tendermint
 import (
 	"bytes"
 	"errors"
-	"net"
-	"net/http"
-	"strings"
 	abci "github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-p2p"
+	"net"
+	"net/http"
+	"strings"
 
 	bc "github.com/tendermint/tendermint/blockchain"
 	"github.com/tendermint/tendermint/consensus"
@@ -25,35 +25,35 @@ import (
 	"github.com/tendermint/tendermint/state/txindex/null"
 	"github.com/tendermint/tendermint/types"
 
-	_ "net/http/pprof"
 	"fmt"
 	"github.com/tendermint/go-logger"
+	_ "net/http/pprof"
 	//"github.com/pchain/ethermint/utils"
+	"github.com/pchain/ethermint/app"
+	"github.com/tendermint/go-rpc/server"
 	ep "github.com/tendermint/tendermint/epoch"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 	"io/ioutil"
 	"os"
-	"github.com/pchain/ethermint/app"
 	"time"
-	"github.com/tendermint/go-rpc/server"
-	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 )
 
 var log = logger.New("module", "node")
 
 type Node struct {
 	cmn.BaseService
-						     // config
+	// config
 	config        cfg.Config           // user config
 	genesisDoc    *types.GenesisDoc    // initial validator set
 	privValidator *types.PrivValidator // local node's validator key
 
-	stateDB       dbm.DB
-	epochDB       dbm.DB
+	stateDB dbm.DB
+	epochDB dbm.DB
 
-	sw       *p2p.Switch           // p2p connections
-	addrBook *p2p.AddrBook         // known peers
+	sw       *p2p.Switch   // p2p connections
+	addrBook *p2p.AddrBook // known peers
 
-						     // services
+	// services
 	evsw             types.EventSwitch           // pub/sub for services
 	blockStore       *bc.BlockStore              // store the blockchain to disk
 	bcReactor        *bc.BlockchainReactor       // for fast-syncing
@@ -213,8 +213,8 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 		genesisDoc:    state.GenesisDoc,
 		privValidator: privValidator,
 
-		stateDB:       stateDB,
-		epochDB:       epochDB,
+		stateDB: stateDB,
+		epochDB: epochDB,
 		//privKey:  privKey,
 		//sw:       sw,
 		//addrBook: addrBook,
@@ -228,14 +228,14 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 		proxyApp:         proxyApp,
 		txIndexer:        txIndexer,
 
-		cch:              cch,
+		cch: cch,
 	}
 	node.BaseService = *cmn.NewBaseService(log, "Node", node)
 	return node
 }
 
 func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, cl *rpcserver.ChannelListener,
-		cch rpcTxHook.CrossChainHelper) *Node {
+	cch rpcTxHook.CrossChainHelper) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
 	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
@@ -274,24 +274,23 @@ func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, 
 		genesisDoc:    state.GenesisDoc,
 		privValidator: privValidator,
 
-		stateDB:       stateDB,
-		epochDB:       epochDB,
+		stateDB: stateDB,
+		epochDB: epochDB,
 
-		sw:            sw,
-		addrBook:      addrBook,
+		sw:       sw,
+		addrBook: addrBook,
 
-		evsw:          eventSwitch,
-		blockStore:    blockStore,
-		proxyApp:      proxyApp,
+		evsw:       eventSwitch,
+		blockStore: blockStore,
+		proxyApp:   proxyApp,
 
-		rpcListeners:  rpcListeners,
+		rpcListeners: rpcListeners,
 
-		cch:           cch,
+		cch: cch,
 	}
 	node.BaseService = *cmn.NewBaseService(log, "Node", node)
 	return node
 }
-
 
 func (n *Node) OnStart1() error {
 
@@ -335,15 +334,16 @@ func (n *Node) OnStart1() error {
 
 	// Make BlockchainReactor
 	bcReactor := bc.NewBlockchainReactor(n.config, state.Copy(), n.proxyApp.Consensus(),
-						n.blockStore, fastSync, n.cch)
+		n.blockStore, fastSync, n.cch)
 
 	// Make MempoolReactor
 	mempool := mempl.NewMempool(n.config, n.proxyApp.Mempool())
+	mempool.SetEpoch(epoch)
 	mempoolReactor := mempl.NewMempoolReactor(n.config, mempool, state.ChainID)
 
 	// Make ConsensusReactor
 	consensusState := consensus.NewConsensusState(n.config, state.Copy(), n.proxyApp.Consensus(),
-						n.blockStore, mempool, epoch, n.cch)
+		n.blockStore, mempool, epoch, n.cch)
 	if n.privValidator != nil {
 		consensusState.SetPrivValidator(n.privValidator)
 	}
@@ -378,11 +378,11 @@ func (n *Node) OnStart1() error {
 
 	// Run the RPC server
 	//if n.config.GetString("rpc_laddr") != "" {
-		_, err = n.StartRPC()
-		if err != nil {
-			return err
-		}
-		//n.rpcListeners = listeners
+	_, err = n.StartRPC()
+	if err != nil {
+		return err
+	}
+	//n.rpcListeners = listeners
 	//}
 
 	return nil
@@ -489,21 +489,21 @@ func (n *Node) StartRPC() ([]net.Listener, error) {
 	rpcserver.StartChannelServer(cl, mux)
 
 	/*
-	listenAddrs := strings.Split(n.config.GetString("rpc_laddr"), ",")
+		listenAddrs := strings.Split(n.config.GetString("rpc_laddr"), ",")
 
-	// we may expose the rpc over both a unix and tcp socket
-	listeners := make([]net.Listener, len(listenAddrs))
-	for i, listenAddr := range listenAddrs {
-		mux := http.NewServeMux()
-		wm := rpcserver.NewWebsocketManager(rpccore.Routes, n.evsw)
-		mux.HandleFunc("/websocket", wm.WebsocketHandler)
-		rpcserver.RegisterRPCFuncs(mux, rpccore.Routes)
-		listener, err := rpcserver.StartHTTPServer(listenAddr, mux)
-		if err != nil {
-			return nil, err
+		// we may expose the rpc over both a unix and tcp socket
+		listeners := make([]net.Listener, len(listenAddrs))
+		for i, listenAddr := range listenAddrs {
+			mux := http.NewServeMux()
+			wm := rpcserver.NewWebsocketManager(rpccore.Routes, n.evsw)
+			mux.HandleFunc("/websocket", wm.WebsocketHandler)
+			rpcserver.RegisterRPCFuncs(mux, rpccore.Routes)
+			listener, err := rpcserver.StartHTTPServer(listenAddr, mux)
+			if err != nil {
+				return nil, err
+			}
+			listeners[i] = listener
 		}
-		listeners[i] = listener
-	}
 	*/
 
 	// we expose a simplified api over grpc for convenience to app devs
@@ -588,18 +588,11 @@ func InitStateAndEpoch(config cfg.Config, stateDB dbm.DB, epochDB dbm.DB) (state
 		epoch.Save()
 
 	} else {
-		rewardScheme := ep.LoadRewardScheme(epochDB)
-		if rewardScheme == nil {
-			fmt.Printf("InitStateAndEpoch(), Reward Scheme information emitted\n")
-			os.Exit(1)
-		}
 		epoch = ep.LoadOneEpoch(epochDB, state.LastEpochNumber)
 		if epoch == nil {
 			fmt.Printf("InitStateAndEpoch(), epoch information emitted\n")
 			os.Exit(1)
 		}
-
-		epoch.RS = rewardScheme
 
 		state.Epoch = epoch
 	}
@@ -652,19 +645,19 @@ func RunNode(config cfg.Config, app *app.EthermintApplication) {
 
 	//log.Notice("Started node", "nodeInfo", n.sw.NodeInfo())
 	/*
-	// If seedNode is provided by config, dial out.
-	if config.GetString("seeds") != "" {
-		seeds := strings.Split(config.GetString("seeds"), ",")
-		n.DialSeeds(seeds)
-	}
-
-	// Run the RPC server.
-	if config.GetString("rpc_laddr") != "" {
-		_, err := n.StartRPC()
-		if err != nil {
-			cmn.PanicCrisis(err)
+		// If seedNode is provided by config, dial out.
+		if config.GetString("seeds") != "" {
+			seeds := strings.Split(config.GetString("seeds"), ",")
+			n.DialSeeds(seeds)
 		}
-	}
+
+		// Run the RPC server.
+		if config.GetString("rpc_laddr") != "" {
+			_, err := n.StartRPC()
+			if err != nil {
+				cmn.PanicCrisis(err)
+			}
+		}
 	*/
 	// Sleep forever and then...
 	cmn.TrapSignal(func() {
@@ -689,4 +682,3 @@ func ProtocolAndAddress(listenAddr string) (string, string) {
 	}
 	return protocol, address
 }
-

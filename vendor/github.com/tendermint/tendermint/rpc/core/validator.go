@@ -37,6 +37,15 @@ func Validators(context *RPCDataContext) (*ctypes.ResultValidators, error) {
 	return &ctypes.ResultValidators{blockHeight, validators}, nil
 }
 
+func EpochVotes(context *RPCDataContext) (*ctypes.ResultEpochVotes, error) {
+	ep := context.consensusState.GetRoundState().Epoch
+	if ep.GetNextEpoch() != nil {
+		return &ctypes.ResultEpochVotes{ep.GetNextEpoch().Number, ep.GetNextEpoch().GetEpochValidatorVoteSet().Votes}, nil
+	}
+	return nil, errors.New("next epoch has not been proposed")
+}
+
+// Deprecated
 func ValidatorOperation(context *RPCDataContext, from string, epoch int, power uint64, action string, target string, sig []byte) (*ctypes.ResultValidatorOperation, error) {
 
 	fmt.Println("in func ValidatorOperation(s string) (*ctypes.ResultValidatorOperation, error)")
@@ -204,14 +213,17 @@ func ValidatorEpoch(context *RPCDataContext, address string, epoch int) (*ctypes
 	*/
 }
 
+// Deprecated
 func UnconfirmedValidatorsOperation(context *RPCDataContext) (*ctypes.ResultValidatorsOperation, error) {
 	return getValidatorsOperation(context, ep.VA_UNCONFIRMED_EPOCH)
 }
 
+// Deprecated
 func ConfirmedValidatorsOperation(context *RPCDataContext, epoch int) (*ctypes.ResultValidatorsOperation, error) {
 	return getValidatorsOperation(context, epoch)
 }
 
+// Deprecated
 func getValidatorsOperation(context *RPCDataContext, epoch int) (*ctypes.ResultValidatorsOperation, error) {
 
 	curEpoch := context.consensusState.GetRoundState().Epoch
@@ -230,6 +242,7 @@ func getValidatorsOperation(context *RPCDataContext, epoch int) (*ctypes.ResultV
 	return &ctypes.ResultValidatorsOperation{VOArray: resultVoArr}, nil
 }
 
+// Deprecated
 func signHash(data []byte) []byte {
 	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
 	return crypto.Keccak256([]byte(msg))

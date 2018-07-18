@@ -27,8 +27,9 @@ import (
 // TODO: consider validator Accum overflow
 // TODO: move valset into an iavl tree where key is 'blockbonded|pubkey'
 type ValidatorSet struct {
-	Validators []*Validator // NOTE: persisted via reflect, must be exported.
-	Proposer   *Validator
+	// NOTE: persisted via reflect, must be exported.
+	Validators []*Validator `json:"validators"`
+	Proposer   *Validator   `json:"proposer"`
 
 	// cached (unexported)
 	totalVotingPower *big.Int
@@ -87,7 +88,7 @@ func (valSet *ValidatorSet) Copy() *ValidatorSet {
 
 func (valSet *ValidatorSet) Equals(other *ValidatorSet) bool {
 
-	if valSet.totalVotingPower != other.totalVotingPower ||
+	if valSet.totalVotingPower.Cmp(other.totalVotingPower) != 0 ||
 		!valSet.Proposer.Equals(other.Proposer) ||
 		len(valSet.Validators) != len(other.Validators) {
 		return false

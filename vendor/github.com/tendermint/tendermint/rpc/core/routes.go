@@ -23,6 +23,7 @@ var Routes = map[string]*rpc.RPCFunc{
 	"commit":               rpc.NewRPCFunc(CommitResult, "height"),
 	"tx":                   rpc.NewRPCFunc(TxResult, "hash,prove"),
 	"validators":           rpc.NewRPCFunc(ValidatorsResult, ""),
+	"epoch_votes":          rpc.NewRPCFunc(EpochVotesResult, ""),
 	"dump_consensus_state": rpc.NewRPCFunc(DumpConsensusStateResult, ""),
 	"unconfirmed_txs":      rpc.NewRPCFunc(UnconfirmedTxsResult, ""),
 	"num_unconfirmed_txs":  rpc.NewRPCFunc(NumUnconfirmedTxsResult, ""),
@@ -48,9 +49,9 @@ var Routes = map[string]*rpc.RPCFunc{
 
 	//validator API
 	"validator_operation": rpc.NewRPCFunc(ValidatorOperationResult, "from,epoch,power,action,target,signature"),
-	"validator_epoch": rpc.NewRPCFunc(ValidatorEpochResult, "address,epoch"),
-	"unconfirmed_vo": rpc.NewRPCFunc(UnconfirmedValidatorsOperationResult, ""),
-	"confirmed_vo": rpc.NewRPCFunc(ConfirmedValidatorsOperationResult, "epoch"),
+	"validator_epoch":     rpc.NewRPCFunc(ValidatorEpochResult, "address,epoch"),
+	"unconfirmed_vo":      rpc.NewRPCFunc(UnconfirmedValidatorsOperationResult, ""),
+	"confirmed_vo":        rpc.NewRPCFunc(ConfirmedValidatorsOperationResult, "epoch"),
 }
 
 func SubscribeResult(wsCtx rpctypes.WSRPCContext, event string) (ctypes.TMResult, error) {
@@ -99,6 +100,10 @@ func CommitResult(context *RPCDataContext, height int) (ctypes.TMResult, error) 
 
 func ValidatorsResult(context *RPCDataContext) (ctypes.TMResult, error) {
 	return Validators(context)
+}
+
+func EpochVotesResult(context *RPCDataContext) (ctypes.TMResult, error) {
+	return EpochVotes(context)
 }
 
 func DumpConsensusStateResult(context *RPCDataContext) (ctypes.TMResult, error) {
@@ -159,8 +164,6 @@ func UnsafeStopCPUProfilerResult(context *RPCDataContext) (ctypes.TMResult, erro
 func UnsafeWriteHeapProfileResult(context *RPCDataContext, filename string) (ctypes.TMResult, error) {
 	return UnsafeWriteHeapProfile(context, filename)
 }
-
-
 
 //--------------
 //author@liaoyd

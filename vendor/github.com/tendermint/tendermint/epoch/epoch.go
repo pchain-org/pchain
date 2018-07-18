@@ -5,37 +5,41 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	abciTypes "github.com/tendermint/abci/types"
+	"github.com/pchain/common/plogger"
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
-	"github.com/tendermint/go-logger"
-	wire "github.com/tendermint/go-wire"
+	"github.com/tendermint/go-wire"
 	tmTypes "github.com/tendermint/tendermint/types"
 	"io/ioutil"
 	"math/big"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
 )
 
-var log = logger.New("module", "epoch")
+var plog = plogger.GetLogger("Epoch")
 
 var NextEpochNotExist = errors.New("next epoch parameters do not exist, fatal error")
 var NextEpochNotEXPECTED = errors.New("next epoch parameters are not excepted, fatal error")
 
 const (
 	EPOCH_NOT_EXIST          = iota // value --> 0
-	EPOCH_PROPOSED_NOT_VOTED = iota // value --> 1
+	EPOCH_PROPOSED_NOT_VOTED        // value --> 1
 	EPOCH_VOTED_NOT_SAVED           // value --> 2
 	EPOCH_SAVED                     // value --> 3
+
+	NextEpochProposeStartPercent  = 0.75
+	NextEpochHashVoteEndPercent   = 0.85
+	NextEpochRevealVoteEndPercent = 0.95
+
+	MinimumValidatorsSize = 10
 )
 
 type Epoch struct {
 	mtx sync.Mutex
 	db  dbm.DB
-
-	RS *RewardScheme
 
 	Number         int
 	RewardPerBlock *big.Int
@@ -47,14 +51,16 @@ type Epoch struct {
 	Status         int       //checked if this epoch has been saved
 	Validators     *tmTypes.ValidatorSet
 
-	PreviousEpoch *Epoch
-	NextEpoch     *Epoch
+	//TODO Make it private
+	// The VoteSet will be used just before Epoch Start
+	validatorVoteSet *EpochValidatorVoteSet
+	RS               *RewardScheme
+	PreviousEpoch    *Epoch
+	NextEpoch        *Epoch
 }
 
-const epochKey = "EPOCH"
-
 func calcEpochKeyWithHeight(number int) []byte {
-	return []byte(epochKey + fmt.Sprintf(":%v", number))
+	return []byte(fmt.Sprintf("EPOCH:%v", number))
 }
 
 //roughly one epoch one month
@@ -95,18 +101,23 @@ func GetEpoch(config cfg.Config, epochDB dbm.DB, number int) *Epoch {
 	return epoch
 }
 
+// Load Full Epoch By EpochNumber
 func LoadOneEpoch(db dbm.DB, epochNumber int) *Epoch {
 	epoch := loadOneEpoch(db, epochNumber)
+	// Set Reward Scheme
 	rewardscheme := LoadRewardScheme(db)
 	epoch.RS = rewardscheme
-
+	// Set Previous Epoch
 	epoch.PreviousEpoch = loadOneEpoch(db, epochNumber-1)
 	if epoch.PreviousEpoch != nil {
 		epoch.PreviousEpoch.RS = rewardscheme
 	}
+	// Set Next Epoch
 	epoch.NextEpoch = loadOneEpoch(db, epochNumber+1)
 	if epoch.NextEpoch != nil {
 		epoch.NextEpoch.RS = rewardscheme
+		// Set ValidatorVoteSet
+		epoch.NextEpoch.validatorVoteSet = LoadEpochVoteSet(db, epochNumber+1)
 	}
 
 	return epoch
@@ -148,6 +159,7 @@ func MakeEpochFromFile(db dbm.DB, genesisFile string) *Epoch {
 	return MakeOneEpoch(db, &genDoc.CurrentEpoch)
 }
 
+// Convert from OneEpochDoc (Json) to Epoch
 func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc) *Epoch {
 
 	number, _ := strconv.Atoi(oneEpoch.Number)
@@ -193,6 +205,7 @@ func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc) *Epoch {
 	return te
 }
 
+// Convert the Epoch to OneEpochDoc, for Json Marshal/UnMarshal
 func (epoch *Epoch) MakeOneEpochDoc() *tmTypes.OneEpochDoc {
 
 	validators := make([]tmTypes.GenesisValidator, len(epoch.Validators.Validators))
@@ -220,6 +233,19 @@ func (epoch *Epoch) MakeOneEpochDoc() *tmTypes.OneEpochDoc {
 	return epochDoc
 }
 
+func (epoch *Epoch) GetDB() dbm.DB {
+	return epoch.db
+}
+
+func (epoch *Epoch) GetEpochValidatorVoteSet() *EpochValidatorVoteSet {
+	return epoch.validatorVoteSet
+}
+
+func (epoch *Epoch) SetEpochValidatorVoteSet(voteSet *EpochValidatorVoteSet) {
+	epoch.validatorVoteSet = voteSet
+}
+
+// Save the Epoch to Level DB
 func (epoch *Epoch) Save() {
 	epoch.mtx.Lock()
 	defer epoch.mtx.Unlock()
@@ -227,8 +253,14 @@ func (epoch *Epoch) Save() {
 	epoch.db.SetSync(calcEpochKeyWithHeight(epoch.Number), epoch.Bytes())
 
 	if epoch.NextEpoch != nil && epoch.NextEpoch.Status == EPOCH_VOTED_NOT_SAVED {
-		epoch.db.SetSync(calcEpochKeyWithHeight(epoch.NextEpoch.Number), epoch.NextEpoch.Bytes())
 		epoch.NextEpoch.Status = EPOCH_SAVED
+		// Save the next epoch
+		epoch.db.SetSync(calcEpochKeyWithHeight(epoch.NextEpoch.Number), epoch.NextEpoch.Bytes())
+	}
+
+	if epoch.NextEpoch != nil && epoch.NextEpoch.validatorVoteSet != nil {
+		// Save the next epoch vote set
+		SaveEpochVoteSet(epoch.db, epoch.NextEpoch.Number, epoch.NextEpoch.validatorVoteSet)
 	}
 }
 
@@ -252,11 +284,8 @@ func FromBytes(buf []byte) *Epoch {
 	}
 }
 
-func (epoch *Epoch) GetDB() dbm.DB {
-	return epoch.db
-}
-
 func (epoch *Epoch) Bytes() []byte {
+
 	buf, n, err := new(bytes.Buffer), new(int), new(error)
 	//fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
 
@@ -298,7 +327,7 @@ func (epoch *Epoch) ShouldProposeNextEpoch(curBlockHeight int) bool {
 
 	passRate := (fCurBlockHeight - fStartBlock) / (fEndBlock - fStartBlock)
 
-	shouldPropose := (0.75 <= passRate) && (passRate < 1.0)
+	shouldPropose := (NextEpochProposeStartPercent <= passRate) && (passRate < 1.0)
 	return shouldPropose
 }
 
@@ -320,9 +349,10 @@ func (epoch *Epoch) ProposeNextEpoch(curBlockHeight int) *Epoch {
 			EndBlock:       epoch.EndBlock + blocks,
 			//StartTime *big.Int
 			//EndTime *big.Int	//not accurate for current epoch
-			BlockGenerated: 0,
-			Status:         EPOCH_PROPOSED_NOT_VOTED,
-			Validators:     epoch.Validators.Copy(),
+			BlockGenerated:   0,
+			Status:           EPOCH_PROPOSED_NOT_VOTED,
+			Validators:       epoch.Validators.Copy(),    // Old Validators
+			validatorVoteSet: NewEpochValidatorVoteSet(), // New Validators with vote
 
 			PreviousEpoch: epoch,
 			NextEpoch:     nil,
@@ -331,6 +361,26 @@ func (epoch *Epoch) ProposeNextEpoch(curBlockHeight int) *Epoch {
 		return next
 	}
 	return nil
+}
+
+func (epoch *Epoch) CheckInHashVoteStage(height int) bool {
+	fCurBlockHeight := float64(height)
+	fStartBlock := float64(epoch.StartBlock)
+	fEndBlock := float64(epoch.EndBlock)
+
+	passRate := (fCurBlockHeight - fStartBlock) / (fEndBlock - fStartBlock)
+
+	return (NextEpochProposeStartPercent <= passRate) && (passRate < NextEpochHashVoteEndPercent)
+}
+
+func (epoch *Epoch) CheckInRevealVoteStage(height int) bool {
+	fCurBlockHeight := float64(height)
+	fStartBlock := float64(epoch.StartBlock)
+	fEndBlock := float64(epoch.EndBlock)
+
+	passRate := (fCurBlockHeight - fStartBlock) / (fEndBlock - fStartBlock)
+
+	return (NextEpochHashVoteEndPercent <= passRate) && (passRate < NextEpochRevealVoteEndPercent)
 }
 
 func (epoch *Epoch) GetNextEpoch() *Epoch {
@@ -342,15 +392,6 @@ func (epoch *Epoch) SetNextEpoch(next *Epoch) {
 	if next != nil {
 		epoch.NextEpoch.db = epoch.db
 	}
-}
-
-func (epoch *Epoch) GetNextEpochStatus() int {
-
-	if epoch.NextEpoch == nil {
-		return EPOCH_NOT_EXIST
-	}
-
-	return epoch.Status
 }
 
 func (epoch *Epoch) ShouldEnterNewEpoch(height int) (bool, error) {
@@ -365,47 +406,32 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height int) (bool, error) {
 	return false, nil
 }
 
+// Move to New Epoch
 func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, error) {
 
 	if height == epoch.EndBlock+1 {
 		if epoch.NextEpoch != nil {
 
-			diffs := make([]*abciTypes.Validator, 0)
-			voSet := LoadValidatorOperationSet(epoch.Number + 1)
-			if voSet != nil {
-				for _, voArr := range voSet.Operations {
-					for i := 0; i < len(voArr); i++ {
-						vo := voArr[i]
-						if vo.Action == SVM_JOIN {
-
-							val := &abciTypes.Validator{
-								PubKey: vo.PubKey,
-								Power:  big.NewInt(int64(vo.Amount)),
-							}
-							diffs = append(diffs, val)
-						}
-					}
-				}
-			}
-
 			// Set the End Time for current Epoch and Save it
 			epoch.EndTime = time.Now()
 			epoch.Save()
+			// Old Epoch Ended
+
 			// Now move to Next Epoch
 			epoch = epoch.NextEpoch
 			epoch.StartTime = time.Now()
+
 			// update the validator set with the latest abciResponses
-			err := tmTypes.UpdateValidators(epoch.Validators, diffs)
+			err := updateEpochValidatorSet(epoch.Validators, epoch.validatorVoteSet)
 			if err != nil {
-				log.Warn("Error changing validator set", "error", err)
-				// TODO: err or carry on?
+				plog.Warnln("Error changing validator set", "error", err)
 			}
 			// Update validator accums and set state variables
 			epoch.Validators.IncrementAccum(1)
 
 			epoch.NextEpoch = nil //suppose we will not generate a more epoch after next-epoch
 			epoch.Save()
-			fmt.Printf("Enter into New Epoch %v \n", epoch)
+			plog.Infof("Enter into New Epoch %v", epoch)
 			return epoch, nil
 		} else {
 			return nil, NextEpochNotExist
@@ -413,6 +439,66 @@ func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, error) {
 	}
 
 	return nil, nil
+}
+
+// updateEpochValidatorSet Update the Current Epoch Validator by vote
+func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet) error {
+	if voteSet.IsEmpty() {
+		// No vote, keep the current validator set
+		return nil
+	}
+
+	oldValSize, newValSize := validators.Size(), 0
+	// Process the Votes and merge into the Validator Set
+	for _, v := range voteSet.Votes {
+		// If vote not reveal, bypass this vote
+		if v.Amount == nil || v.Salt == "" || v.PubKey == nil {
+			continue
+		}
+
+		_, validator := validators.GetByAddress(v.Address[:])
+		if validator == nil {
+			// Add the new validator
+			added := validators.Add(tmTypes.NewValidator(v.PubKey, v.Amount))
+			if !added {
+				return errors.New(fmt.Sprintf("Failed to add new validator %x with voting power %d", v.Address, v.Amount))
+			}
+			newValSize++
+		} else if v.Amount.Sign() == 0 {
+			// Remove the Validator
+			_, removed := validators.Remove(validator.Address)
+			if !removed {
+				return errors.New(fmt.Sprintf("Failed to remove validator %x", validator.Address))
+			}
+		} else {
+			// Update the Validator Amount
+			validator.VotingPower = v.Amount
+			updated := validators.Update(validator)
+			if !updated {
+				return errors.New(fmt.Sprintf("Failed to update validator %x with voting power %d", validator.Address, v.Amount))
+			}
+		}
+	}
+
+	// Determine the Validator Size
+	valSize := oldValSize + newValSize/2
+	if valSize < MinimumValidatorsSize {
+		valSize = MinimumValidatorsSize
+	}
+
+	// If actual size of Validators greater than Determine Validator Size
+	// then sort the Validators with VotingPower and return the most top Validators
+	if validators.Size() > valSize {
+		// Sort the Validator Set with Amount
+		sort.Slice(validators.Validators, func(i, j int) bool {
+			return validators.Validators[i].VotingPower.Cmp(validators.Validators[j].VotingPower) == 1
+		})
+		validators.Validators = validators.Validators[:valSize]
+	}
+
+	// TODO Collect the Refund Validator List
+
+	return nil
 }
 
 func (epoch *Epoch) GetEpochByBlockNumber(blockNumber int) *Epoch {
@@ -459,15 +545,16 @@ func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
 
 		RS: epoch.RS,
 
-		Number:         epoch.Number,
-		RewardPerBlock: epoch.RewardPerBlock,
-		StartBlock:     epoch.StartBlock,
-		EndBlock:       epoch.EndBlock,
-		StartTime:      epoch.StartTime,
-		EndTime:        epoch.EndTime,
-		BlockGenerated: epoch.BlockGenerated,
-		Status:         epoch.Status,
-		Validators:     epoch.Validators.Copy(),
+		Number:           epoch.Number,
+		RewardPerBlock:   epoch.RewardPerBlock,
+		StartBlock:       epoch.StartBlock,
+		EndBlock:         epoch.EndBlock,
+		StartTime:        epoch.StartTime,
+		EndTime:          epoch.EndTime,
+		BlockGenerated:   epoch.BlockGenerated,
+		Status:           epoch.Status,
+		Validators:       epoch.Validators.Copy(),
+		validatorVoteSet: epoch.validatorVoteSet.Copy(),
 
 		PreviousEpoch: previousEpoch,
 		NextEpoch:     nextEpoch,

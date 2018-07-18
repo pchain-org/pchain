@@ -1,19 +1,18 @@
 package state
 
 import (
-	"fmt"
 	"bytes"
+	"fmt"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	abci "github.com/tendermint/abci/types"
-	"github.com/tendermint/go-wire"
-	"github.com/tendermint/tendermint/types"
 	. "github.com/tendermint/go-common"
 	dbm "github.com/tendermint/go-db"
-	"github.com/ethereum/go-ethereum/rlp"
-	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
+	"github.com/tendermint/go-wire"
 	"github.com/tendermint/tendermint/proxy"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
+	"github.com/tendermint/tendermint/types"
 )
-
 
 //--------------------------------------------------
 
@@ -27,8 +26,7 @@ func calcABCIResponsesKey(height int) []byte {
 // of the various ABCI calls during block processing.
 // It is persisted to disk for each height before calling Commit.
 type ABCIResponses struct {
-
-	State *State
+	State  *State
 	Height int
 
 	DeliverTx []*abci.ResponseDeliverTx
@@ -38,13 +36,13 @@ type ABCIResponses struct {
 
 	eventCache types.Fireable
 
-	ValidTxs int
+	ValidTxs   int
 	InvalidTxs int
-	TxIndex int
-	Commited bool
+	TxIndex    int
+	Commited   bool
 
-	block	*types.Block
-	cch 	rpcTxHook.CrossChainHelper
+	block *types.Block
+	cch   rpcTxHook.CrossChainHelper
 }
 
 var abciMap map[string]*ABCIResponses = make(map[string]*ABCIResponses)
@@ -63,7 +61,7 @@ var abciMap map[string]*ABCIResponses = make(map[string]*ABCIResponses)
 
 // NewABCIResponses returns a new ABCIResponses
 func NewABCIResponses(block *types.Block, state *State,
-			eventCache types.Fireable, cch 	rpcTxHook.CrossChainHelper) *ABCIResponses {
+	eventCache types.Fireable, cch rpcTxHook.CrossChainHelper) *ABCIResponses {
 
 	return &ABCIResponses{
 		State:      state,
@@ -77,13 +75,13 @@ func NewABCIResponses(block *types.Block, state *State,
 		TxIndex:    0,
 		Commited:   false,
 		block:      block,
-		cch:	    cch,
+		cch:        cch,
 	}
 }
 
 func RefreshABCIResponses(block *types.Block, state *State,
-		eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus,
-		cch rpcTxHook.CrossChainHelper) *ABCIResponses {
+	eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus,
+	cch rpcTxHook.CrossChainHelper) *ABCIResponses {
 
 	chainID := state.ChainID
 
@@ -162,7 +160,6 @@ func saveABCIResponses(db dbm.DB, height int, abciResponses *ABCIResponses) {
 	db.SetSync(calcABCIResponsesKey(height), abciResponses.Bytes())
 }
 
-
 func (a *ABCIResponses) ResCb(req *abci.Request, res *abci.Response) {
 
 	switch r := res.Value.(type) {
@@ -187,7 +184,7 @@ func (a *ABCIResponses) ResCb(req *abci.Request, res *abci.Response) {
 			if etd != nil && etd.FuncName != "" {
 				deliverTxCb := rpcTxHook.GetDeliverTxCb(etd.FuncName)
 				if deliverTxCb != nil {
-					deliverTxCb(ethtx)
+					deliverTxCb(ethtx, a.State.Epoch)
 				}
 			}
 
@@ -243,7 +240,7 @@ func (a *ABCIResponses) GetValidators() (*types.ValidatorSet, *types.ValidatorSe
 	return a.State.GetValidators()
 }
 
-func (a *ABCIResponses) GetCurrentBlock() (*types.Block) {
+func (a *ABCIResponses) GetCurrentBlock() *types.Block {
 	return a.block
 }
 

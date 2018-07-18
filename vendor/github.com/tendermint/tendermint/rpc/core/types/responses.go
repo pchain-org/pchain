@@ -8,8 +8,8 @@ import (
 	"github.com/tendermint/go-p2p"
 	"github.com/tendermint/go-rpc/types"
 	"github.com/tendermint/go-wire"
-	"github.com/tendermint/tendermint/types"
 	ep "github.com/tendermint/tendermint/epoch"
+	"github.com/tendermint/tendermint/types"
 )
 
 type ResultBlockchainInfo struct {
@@ -75,6 +75,11 @@ type ResultValidators struct {
 	Validators  []*types.Validator `json:"validators"`
 }
 
+type ResultEpochVotes struct {
+	EpochNumber int                      `json:"epoch_number"`
+	Votes       []*ep.EpochValidatorVote `json:"votes"`
+}
+
 type ResultDumpConsensusState struct {
 	RoundState      string   `json:"round_state"`
 	PeerRoundStates []string `json:"peer_round_states"`
@@ -134,30 +139,30 @@ type ResultEvent struct {
 }
 
 //author@liaoyd
-type ResultValidatorOperation struct{
-	From string	`json:"from"`
-	Epoch int	`json:"epoch"`
-	Power  uint64   `json:"power"`
-	Action string	`json:"action"`
-	Target string	`json:"target"`
+type ResultValidatorOperation struct {
+	From   string `json:"from"`
+	Epoch  int    `json:"epoch"`
+	Power  uint64 `json:"power"`
+	Action string `json:"action"`
+	Target string `json:"target"`
 }
 
 type ResultValidatorOperationSimple struct {
-	Epoch        int        `json:"epoch"`
-	Operation    string     `json:"operation"`
-	Amount       uint64     `json:"amount"`
+	Epoch     int    `json:"epoch"`
+	Operation string `json:"operation"`
+	Amount    uint64 `json:"amount"`
 }
 
 type ResultValidatorEpochValidator struct {
-	Validator   *types.Validator	`json"validator"`
-	Operation   *ResultValidatorOperationSimple `json:"operation"`
+	Validator *types.Validator                `json"validator"`
+	Operation *ResultValidatorOperationSimple `json:"operation"`
 }
 
 type ResultValidatorsOperation struct {
 	VOArray []*ep.ValidatorOperation
 }
 
-type ResultValidatorEpoch struct{
+type ResultValidatorEpoch struct {
 	//BlockHeight int                `json:"block_height"`
 	//Validators  []*ResultValidatorEpochValidator `json:"validators"`
 	//Epoch	*epoch.Epoch		`json:"epoch"`
@@ -165,8 +170,8 @@ type ResultValidatorEpoch struct{
 	Validator   *types.GenesisValidator
 }
 
-type ResultEpoch struct{
-	Epoch	*types.OneEpochDoc		`json:"epoch"`
+type ResultEpoch struct {
+	Epoch *types.OneEpochDoc `json:"epoch"`
 }
 
 type ResultUint64 struct {
@@ -215,10 +220,11 @@ const (
 	ResultTypeUnsafeFlushMempool     = byte(0xa4)
 
 	// 0xb bytes for extension
-	ResultTypeValidatorOperation = byte(0xb0)
-	ResultTypeValidatorEpoch = byte(0xb1)
-	ResultTypeEpoch = byte(0xb2)
+	ResultTypeValidatorOperation  = byte(0xb0)
+	ResultTypeValidatorEpoch      = byte(0xb1)
+	ResultTypeEpoch               = byte(0xb2)
 	ResultTypeValidatorsOperation = byte(0xb3)
+	ResultTypeEpochVotes          = byte(0xb4)
 
 	//the basic type, from 0xff
 	ResultTypeUint64 = byte(0xff)
@@ -259,6 +265,7 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{&ResultValidatorOperation{}, ResultTypeValidatorOperation},
 	wire.ConcreteType{&ResultValidatorEpoch{}, ResultTypeValidatorEpoch},
 	wire.ConcreteType{&ResultEpoch{}, ResultTypeEpoch},
+	wire.ConcreteType{&ResultEpochVotes{}, ResultTypeEpochVotes},
 	wire.ConcreteType{&ResultValidatorsOperation{}, ResultTypeValidatorsOperation},
 	wire.ConcreteType{&ResultUint64{}, ResultTypeUint64},
 )

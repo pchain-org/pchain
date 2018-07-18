@@ -3,20 +3,20 @@ package core
 import (
 	"errors"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/tendermint/tendermint/epoch"
 )
 
-
 type ReceiveTxCb func() error
-type CheckTxCb func(tx *ethTypes.Transaction) error
-type DeliverTxCb func(tx *ethTypes.Transaction) error
+type CheckTxCb func(height int, tx *ethTypes.Transaction, ep *epoch.Epoch) error
+type DeliverTxCb func(tx *ethTypes.Transaction, ep *epoch.Epoch) error
 type CommitCb func(brCommit BrCommit) error
 type RefreshABCIResponseCb func() error
 
 var receiveTxCbMap map[string]ReceiveTxCb = make(map[string]ReceiveTxCb)
-var checkTxCbMap    map[string]CheckTxCb = make(map[string]CheckTxCb)
-var deliverTxCbMap    map[string]DeliverTxCb = make(map[string]DeliverTxCb)
-var commitCbMap    map[string]CommitCb = make(map[string]CommitCb)
-var refreshABCIResponseCbMap    map[string]RefreshABCIResponseCb = make(map[string]RefreshABCIResponseCb)
+var checkTxCbMap map[string]CheckTxCb = make(map[string]CheckTxCb)
+var deliverTxCbMap map[string]DeliverTxCb = make(map[string]DeliverTxCb)
+var commitCbMap map[string]CommitCb = make(map[string]CommitCb)
+var refreshABCIResponseCbMap map[string]RefreshABCIResponseCb = make(map[string]RefreshABCIResponseCb)
 
 func RegisterReceiveTxCb(etdFuncName string, receiveTxCb ReceiveTxCb) error {
 
@@ -107,7 +107,7 @@ func GetCommitCb(etdFuncName string) CommitCb {
 	return nil
 }
 
-func GetCommitCbMap() map[string]CommitCb{
+func GetCommitCbMap() map[string]CommitCb {
 	return commitCbMap
 }
 
@@ -133,7 +133,6 @@ func GetRefreshABCIResponseCb(etdFuncName string) RefreshABCIResponseCb {
 	return nil
 }
 
-func GetRefreshABCIResponseCbMap() map[string]RefreshABCIResponseCb{
+func GetRefreshABCIResponseCbMap() map[string]RefreshABCIResponseCb {
 	return refreshABCIResponseCbMap
 }
-

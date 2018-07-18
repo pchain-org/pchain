@@ -25,8 +25,8 @@ var localEntity = svmEntity{voMap: nil, loaded: false}
 func init() {
 
 	RegisterReceiveTxCb(etdFuncName, svmReceiveTxCb)
-	RegisterCheckTxCb(etdFuncName, svmCheckTxCb)
-	RegisterDeliverTxCb(etdFuncName, svmDeliverTxCb)
+	//RegisterCheckTxCb(etdFuncName, svmCheckTxCb)
+	//RegisterDeliverTxCb(etdFuncName, svmDeliverTxCb)
 	RegisterCommitCb(etdFuncName, svmCommitCb)
 	RegisterRefreshABCIResponseCbMap(etdFuncName, svmRefreshABCIResponseCb)
 }

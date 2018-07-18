@@ -35,6 +35,8 @@ func NewValidator(pubKey crypto.PubKey, votingPower *big.Int) *Validator {
 // Panics if the validator is nil.
 func (v *Validator) Copy() *Validator {
 	vCopy := *v
+	vCopy.VotingPower = new(big.Int).Set(v.VotingPower)
+	vCopy.Accum = new(big.Int).Set(v.Accum)
 	return &vCopy
 }
 
@@ -42,7 +44,7 @@ func (v *Validator) Equals(other *Validator) bool {
 
 	return bytes.Equal(v.Address, other.Address) &&
 		v.PubKey.Equals(other.PubKey) &&
-		v.VotingPower == other.VotingPower
+		v.VotingPower.Cmp(other.VotingPower) == 0
 }
 
 // Returns the one with higher Accum.
