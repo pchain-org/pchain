@@ -244,11 +244,6 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		if err != nil {
 			plog.Errorf("Create Child Chain %v failed! %v", chainId, err)
 			return
-		} else {
-			// Create success, store the chain info into db
-			core.SaveChainInfo(cm.cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: *cci})
-
-			core.DeletePendingChildChainData(cm.cch.chainInfoDB, chainId)
 		}
 
 		chain = LoadChildChain(cm.ctx, chainId, cm.p2pObj)

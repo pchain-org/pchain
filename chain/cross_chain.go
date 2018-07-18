@@ -203,6 +203,10 @@ func (cch *CrossChainHelper) ReadyForLaunchChildChain(height uint64, stateDB *st
 		plog.Infof("ReadyForLaunchChildChain - %v child chain(s) to be launch in Block %v. %v\n", len(readyId), height, readyId)
 		for _, chainId := range readyId {
 			cch.GetTypeMutex().Post(core.CreateChildChainEvent{ChainId: chainId})
+			// Convert the Chain Info from Pending to Formal
+			cci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
+			core.SaveChainInfo(cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: *cci})
+			core.DeletePendingChildChainData(cch.chainInfoDB, chainId)
 		}
 	}
 
