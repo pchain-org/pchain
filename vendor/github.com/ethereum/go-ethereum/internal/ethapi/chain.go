@@ -36,6 +36,15 @@ const (
 	JCC_ARGS_PUBKEY  = "pubkey"
 	JCC_ARGS_CHAINID = "chainId"
 	JCC_ARGS_DEPOSIT = "depositAmount"
+
+	// Deposit In Main Chain Parameters
+	DIMC_ARGS_FROM    = "from"
+	DIMC_ARGS_CHAINID = "chainId"
+	DIMC_ARGS_AMOUNT  = "amount"
+
+	// Deposit In Child Chain Parameters
+	DICC_ARGS_FROM   = "from"
+	DICC_ARGS_TXHASH = "txHash"
 )
 
 type PublicChainAPI struct {
@@ -135,14 +144,10 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 		return common.Hash{}, errors.New("this api can only be called in main chain - pchain")
 	}
 
-	fromStr := fmt.Sprintf("%X", from.Bytes())
-
 	params := types.MakeKeyValueSet()
-	params.Set("from", fromStr)
-	params.Set("chainId", chainId)
-	params.Set("amount", amount)
-
-	fmt.Printf("params are : %s\n", params.String())
+	params.Set(DIMC_ARGS_FROM, from)
+	params.Set(DIMC_ARGS_CHAINID, chainId)
+	params.Set(DIMC_ARGS_AMOUNT, amount)
 
 	etd := &types.ExtendTxData{
 		FuncName: DIMCFuncName,
@@ -178,27 +183,27 @@ func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Ad
 		return common.Hash{}, errors.New(fmt.Sprintf("tx %x does not exist in main chain", txHash))
 	}
 
+	if !cch.VerifyCrossChainTx(txHash) {
+		return common.Hash{}, errors.New(fmt.Sprintf("tx %x already been used", txHash))
+	}
+
 	mainEtd := mainTx.ExtendTxData()
 	if mainEtd == nil || mainEtd.FuncName != DIMCFuncName {
 		return common.Hash{}, errors.New(fmt.Sprintf("not expected tx %s", mainEtd))
 	}
 
-	mainFromInt, _ := mainEtd.Params.Get("from")
-	mainFrom := common.BytesToAddress(common.FromHex(string(mainFromInt.([]byte))))
-	mainChainIdInt, _ := mainEtd.Params.Get("chainId")
+	mainFromInt, _ := mainEtd.Params.Get(DIMC_ARGS_FROM)
+	mainFrom := common.BytesToAddress(mainFromInt.([]byte))
+	mainChainIdInt, _ := mainEtd.Params.Get(DIMC_ARGS_CHAINID)
 	mainChainId := string(mainChainIdInt.([]byte))
 
-	if mainFromInt != mainFrom || mainChainId != chainId {
+	if mainFrom != from || mainChainId != chainId {
 		return common.Hash{}, errors.New("params are not consistent with tx in main chain")
 	}
 
-	fromStr := fmt.Sprintf("%X", from.Bytes())
-
 	params := types.MakeKeyValueSet()
-	params.Set("from", fromStr)
-	params.Set("txHash", txHash)
-
-	fmt.Printf("params are : %s\n", params.String())
+	params.Set(DICC_ARGS_FROM, from)
+	params.Set(DICC_ARGS_TXHASH, txHash)
 
 	etd := &types.ExtendTxData{
 		FuncName: DICCFuncName,
@@ -377,9 +382,6 @@ func init() {
 }
 
 func ccc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
-
-	fmt.Println("ccc_ValidateCb")
-
 	etd := tx.ExtendTxData()
 	fmt.Printf("params are : %s\n", etd.Params.String())
 
@@ -402,15 +404,10 @@ func ccc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChai
 		return err
 	}
 
-	fmt.Printf("from is %X, childId is %s\n", from.Hex(), chainId)
-
 	return nil
 }
 
 func ccc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
-
-	fmt.Println("ccc_ApplyCb")
-
 	etd := tx.ExtendTxData()
 
 	//tx from ethereum, the params have not been converted to []byte
@@ -440,7 +437,6 @@ func ccc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHe
 }
 
 func jcc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
-
 	etd := tx.ExtendTxData()
 
 	fromVar, _ := etd.Params.Get(JCC_ARGS_FROM)
@@ -465,7 +461,6 @@ func jcc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChai
 }
 
 func jcc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
-
 	etd := tx.ExtendTxData()
 
 	fromVar, _ := etd.Params.Get(JCC_ARGS_FROM)
@@ -495,85 +490,54 @@ func jcc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHe
 }
 
 func dimc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
-
-	fmt.Println("dimc_ValidateCb")
-
 	etd := tx.ExtendTxData()
-	fmt.Printf("params are : %s\n", etd.Params.String())
 
 	//tx from ethereum, the params have not been converted to []byte
-	fromInt, _ := etd.Params.Get("from")
-	from := common.HexToAddress(fromInt.(string))
-	chainIdInt, _ := etd.Params.Get("chainId")
-	chainId := chainIdInt.(string)
-	amountInt, _ := etd.Params.Get("amount")
+	fromInt, _ := etd.Params.Get(DIMC_ARGS_FROM)
+	from := fromInt.(common.Address)
+	amountInt, _ := etd.Params.Get(DIMC_ARGS_AMOUNT)
 	amount := amountInt.(*big.Int)
 
 	if state.GetBalance(from).Cmp(amount) < 0 {
 		return errors.New(fmt.Sprintf("%x has no enough balance for deposit", from))
 	}
 
-	fmt.Printf("from is %X, childId is %s\n", from.Hex(), chainId)
-
 	return nil
 }
 
 func dimc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
-
-	fmt.Println("dimc_ApplyCb")
-
 	etd := tx.ExtendTxData()
-	fmt.Printf("params are : %s\n", etd.Params.String())
 
 	//tx from ethereum, the params have not been converted to []byte
-	fromInt, _ := etd.Params.Get("from")
-	from := common.BytesToAddress(common.FromHex(string(fromInt.([]byte))))
-	chainIdInt, _ := etd.Params.Get("chainId")
+	fromInt, _ := etd.Params.Get(DIMC_ARGS_FROM)
+	from := common.BytesToAddress(fromInt.([]byte))
+	chainIdInt, _ := etd.Params.Get(DIMC_ARGS_CHAINID)
 	chainId := string(chainIdInt.([]byte))
-	amountInt, _ := etd.Params.Get("amount")
-	amount := amountInt.(*big.Int)
+	amountInt, _ := etd.Params.Get(DIMC_ARGS_AMOUNT)
+	amount := new(big.Int).SetBytes(amountInt.([]byte))
 
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), chainId)
 	state.SubBalance(from, amount)
 	state.AddChainBalance(chainInfo.Owner, amount)
 
+	// record this cross chain tx
+	cch.RecordCrossChainTx(from, tx.Hash())
+
 	return nil
 }
 
 func dicc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
-
-	fmt.Println("dicc_ValidateCb")
-
-	etd := tx.ExtendTxData()
-	fmt.Printf("params are : %s\n", etd.Params.String())
-
-	//tx from ethereum, the params have not been converted to []byte
-	fromInt, _ := etd.Params.Get("from")
-	from := common.HexToAddress(fromInt.(string))
-	txHashInt, _ := etd.Params.Get("txHash")
-	txHash := txHashInt.(common.Hash)
-
-	fmt.Printf("from is %X, txHash is %x\n", from.Hex(), txHash)
-
 	//has checked in DepositInChildChain()
-
 	return nil
 }
 
 func dicc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
-
-	fmt.Println("dicc_ApplyCb")
-
 	etd := tx.ExtendTxData()
 	fmt.Printf("params are : %s\n", etd.Params.String())
 
 	//tx from ethereum, the params have not been converted to []byte
-	fromInt, _ := etd.Params.Get("from")
-	from := common.HexToAddress(fromInt.(string))
-	txHashInt, _ := etd.Params.Get("txHash")
-	txHash := txHashInt.(common.Hash)
-
-	fmt.Printf("from is %X, txHash is %s\n", from.Hex(), txHash)
+	txHashInt, _ := etd.Params.Get(DICC_ARGS_TXHASH)
+	txHash := common.BytesToHash(txHashInt.([]byte))
 
 	mainTx := cch.GetTxFromMainChain(txHash)
 	if mainTx == nil {
@@ -585,12 +549,15 @@ func dicc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainH
 		return errors.New(fmt.Sprintf("not expected tx %s", mainEtd))
 	}
 
-	mainFromInt, _ := mainEtd.Params.Get("from")
-	mainFrom := common.BytesToAddress(common.FromHex(string(mainFromInt.([]byte))))
+	mainFromInt, _ := mainEtd.Params.Get(DIMC_ARGS_FROM)
+	mainFrom := common.BytesToAddress(mainFromInt.([]byte))
 	//mainChainIdInt, _ := mainEtd.Params.Get("chainId")
 	//mainChainId := string(mainChainIdInt.([]byte))
-	mainAmountInt, _ := mainEtd.Params.Get("amount")
-	mainAmount := mainAmountInt.(*big.Int)
+	mainAmountInt, _ := mainEtd.Params.Get(DIMC_ARGS_AMOUNT)
+	mainAmount := new(big.Int).SetBytes(mainAmountInt.([]byte))
+
+	// delete this cross chain tx
+	cch.DeleteCrossChainTx(txHash)
 
 	state.AddBalance(mainFrom, mainAmount)
 

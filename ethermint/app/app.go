@@ -237,18 +237,20 @@ func (app *EthermintApplication) validateTx(tx *ethTypes.Transaction) error {
 		return core.ErrInvalidSender
 	}
 
-	// Make sure the account exist. Non existent accounts
-	// haven't got funds and well therefor never pass.
-	if !currentState.Exist(from) {
-		return core.ErrInvalidSender
-	}
-
-	// Last but not least check for nonce errors
-	if currentState.GetNonce(from) > tx.Nonce() {
-		return core.ErrNonce
-	}
-
 	etd := tx.ExtendTxData()
+	if etd == nil || etd.FuncName != "DepositInChildChain" { //TODO: DICCFuncName can't pass the check.
+		// Make sure the account exist. Non existent accounts
+		// haven't got funds and well therefor never pass.
+		if !currentState.Exist(from) {
+			return core.ErrInvalidSender
+		}
+
+		// Last but not least check for nonce errors
+		if currentState.GetNonce(from) > tx.Nonce() {
+			return core.ErrNonce
+		}
+	}
+
 	if etd == nil || etd.FuncName == "" {
 		// Check the transaction doesn't exceed the current
 		// block limit gas.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -12,6 +13,7 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/pchain/ethermint/ethereum"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/tendermint/epoch"
@@ -211,7 +213,13 @@ func (cch *CrossChainHelper) ReadyForLaunchChildChain(height uint64, stateDB *st
 func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *ethTypes.Transaction {
 
 	chainMgr := GetCMInstance(nil)
-	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
+
+	stack := chainMgr.mainChain.EthNode
+	var backend *ethereum.Backend
+	if err := stack.Service(&backend); err != nil {
+		utils.Fatalf("backend service not running: %v", err)
+	}
+	chainDb := backend.Ethereum().ChainDb()
 
 	tx, _, _, _ := core.GetTransaction(chainDb, txHash)
 
@@ -353,4 +361,22 @@ func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block string) error {
 	}
 
 	return nil
+}
+
+func (cch *CrossChainHelper) RecordCrossChainTx(from common.Address, txHash common.Hash) error {
+	plog.Infof("RecordCrossChainTx - from: %s, txHash: %s\n", from.Hex(), txHash.Hex())
+
+	cch.chainInfoDB.SetSync(txHash.Bytes(), from.Bytes())
+	return nil
+}
+
+func (cch *CrossChainHelper) DeleteCrossChainTx(txHash common.Hash) error {
+	plog.Infof("DeleteCrossChainTx - txHash: %s\n", txHash.Hex())
+
+	cch.chainInfoDB.DeleteSync(txHash.Bytes())
+	return nil
+}
+
+func (cch *CrossChainHelper) VerifyCrossChainTx(txHash common.Hash) bool {
+	return cch.chainInfoDB.Get(txHash.Bytes()) != nil
 }

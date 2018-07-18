@@ -24,6 +24,9 @@ type CrossChainHelper interface {
 	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction //should return varified transaction
 	VerifyTdmBlock(from common.Address, block string) error
 	SaveTdmBlock2MainBlock(block string) error
+	RecordCrossChainTx(from common.Address, txHash common.Hash) error
+	DeleteCrossChainTx(txHash common.Hash) error
+	VerifyCrossChainTx(txHash common.Hash) bool
 }
 
 type EtdValidateCb func(tx *types.Transaction, state *st.StateDB, cch CrossChainHelper) error
