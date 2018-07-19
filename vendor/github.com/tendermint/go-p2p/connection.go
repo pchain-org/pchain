@@ -489,6 +489,24 @@ FOR_LOOP:
 			// do nothing
 			log.Debug("Receive Pong")
 		case packetTypeMsg:
+			// Read the Chain ID from connection first
+			n, err := int(0), error(nil)
+			chainID := wire.ReadString(c.bufReader, 0, &n, &err)
+			c.recvMonitor.Update(int(n))
+			if err != nil {
+				if c.IsRunning() {
+					log.Warn("Connection failed @ recvRoutine msg Chain ID", "conn", c, "error", err)
+					c.stopForError(err)
+				}
+				break FOR_LOOP
+			}
+
+			chainChannel, ok := c.channelsByChainId[chainID]
+			if !ok || chainChannel == nil {
+				cmn.PanicQ(cmn.Fmt("Unknown chain %s", chainID))
+			}
+
+			// Now read the Packet from connection
 			pkt, n, err := msgPacket{}, int(0), error(nil)
 			wire.ReadBinaryPtr(&pkt, c.bufReader, maxMsgPacketTotalSize, &n, &err)
 			c.recvMonitor.Update(int(n))
@@ -498,12 +516,6 @@ FOR_LOOP:
 					c.stopForError(err)
 				}
 				break FOR_LOOP
-			}
-
-			chainID := string(pkt.ChainID)
-			chainChannel, ok := c.channelsByChainId[chainID]
-			if !ok || chainChannel == nil {
-				cmn.PanicQ(cmn.Fmt("Unknown chain %s", chainID))
 			}
 
 			channel, ok := chainChannel.channelsIdx[pkt.ChannelID]
@@ -679,9 +691,8 @@ func (ch *Channel) isSendPending() bool {
 
 // Creates a new msgPacket to send.
 // Not goroutine-safe
-func (ch *Channel) nextMsgPacket(chainID string) msgPacket {
+func (ch *Channel) nextMsgPacket() msgPacket {
 	packet := msgPacket{}
-	packet.ChainID = []byte(chainID)
 	packet.ChannelID = byte(ch.id)
 	packet.Bytes = ch.sending[:cmn.MinInt(maxMsgPacketPayloadSize, len(ch.sending))]
 	if len(ch.sending) <= maxMsgPacketPayloadSize {
@@ -698,9 +709,10 @@ func (ch *Channel) nextMsgPacket(chainID string) msgPacket {
 // Writes next msgPacket to w.
 // Not goroutine-safe
 func (ch *Channel) writeMsgPacketTo(w io.Writer, chainID string) (n int, err error) {
-	packet := ch.nextMsgPacket(chainID)
+	packet := ch.nextMsgPacket()
 	log.Debug("Write Msg Packet", "conn", ch.conn, "packet", packet)
 	wire.WriteByte(packetTypeMsg, w, &n, &err)
+	wire.WriteString(chainID, w, &n, &err)
 	wire.WriteBinary(packet, w, &n, &err)
 	if err == nil {
 		ch.recentlySent += int64(n)
@@ -750,12 +762,11 @@ const (
 
 // Messages in channels are chopped into smaller msgPackets for multiplexing.
 type msgPacket struct {
-	ChainID   []byte // Network
 	ChannelID byte
 	EOF       byte // 1 means message ends here.
 	Bytes     []byte
 }
 
 func (p msgPacket) String() string {
-	return fmt.Sprintf("MsgPacket{%s, %X:%X T:%X}", p.ChainID, p.ChannelID, p.Bytes, p.EOF)
+	return fmt.Sprintf("MsgPacket{%X:%X T:%X}", p.ChannelID, p.Bytes, p.EOF)
 }
