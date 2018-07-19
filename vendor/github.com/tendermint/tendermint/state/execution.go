@@ -186,8 +186,8 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 		// now update the block and validators
 		// fmt.Println("Diffs before:", abciResponses.EndBlock.Diffs)
 		// types.ValidatorChannel <- abciResponses.EndBlock.Diffs
-		types.ValidatorChannel <- s.Epoch.Number
-		abciResponses.EndBlock.Diffs = <-types.EndChannel
+		//types.ValidatorChannel <- s.Epoch.Number
+		//abciResponses.EndBlock.Diffs = <-types.EndChannel
 		// fmt.Println("Diffs after:", abciResponses.EndBlock.Diffs)
 
 		s.Epoch, _ = s.Epoch.EnterNewEpoch(block.Height)

@@ -331,8 +331,8 @@ func (s *PublicTendermintAPI) Sign(ctx context.Context, from common.Address, dat
 */
 
 func init() {
-	core.RegisterValidateCb(VNEFuncName, revealVote_ValidateCb)
-	core.RegisterApplyCb(VNEFuncName, revealVote_ApplyCb)
+	core.RegisterValidateCb(REVFuncName, revealVote_ValidateCb)
+	core.RegisterApplyCb(REVFuncName, revealVote_ApplyCb)
 	//core.RegisterValidateCb(SvmFuncName, svm_ValidateCb)
 	//core.RegisterApplyCb(SvmFuncName, svm_ApplyCb)
 }
