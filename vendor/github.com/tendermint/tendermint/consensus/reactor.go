@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	abci "github.com/tendermint/abci/types"
+	//abci "github.com/tendermint/abci/types"
 	"github.com/tendermint/go-clist"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-p2p"
@@ -1440,47 +1440,47 @@ func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (
 	return true, nil
 }
 
-func (conR *ConsensusReactor) GetDiffValidator() {
-	types.ValidatorChannel = make(chan int)
-	types.EndChannel = make(chan []*abci.Validator)
-	val, err := OpenVAL(conR.conS.config.GetString("cs_val_file"))
-	// AcceptVoteSet := types.AcceptVoteSet
-	if err != nil {
-		fmt.Println("ERROR IN OPENVAL", err)
-	}
-	for {
-		var diffs []*abci.Validator
-		init := 0
-		epochNumber := <-types.ValidatorChannel
-		for k, v := range types.AcceptVoteSet {
-			if v.Epoch == epochNumber {
-				fmt.Println("k:", k, "v:", v)
-				if v.Maj23 {
-					diffs = append(
-						diffs,
-						&abci.Validator{
-							PubKey: v.PubKey.Bytes(),
-							Power:  v.Power,
-						},
-					)
-					if init == 0 {
-						val.writeEpoch(v.Epoch)
-						val.Save(&types.PreVal{ValidatorSet: conR.conS.Validators})
-						init = 1
-					}
-					val.Save(v)
-
-					types.ValChangedEpoch[v.Epoch] = append(
-						types.ValChangedEpoch[v.Epoch],
-						v,
-					)
-				}
-				//delete(ValidatorMsgMap, v.Key)
-				//delete(types.AcceptVoteSet, v.Key)
-				delete(ValidatorMsgMap, k)
-				delete(types.AcceptVoteSet, k)
-			}
-		}
-		types.EndChannel <- diffs
-	}
-}
+//func (conR *ConsensusReactor) GetDiffValidator() {
+//	types.ValidatorChannel = make(chan int)
+//	types.EndChannel = make(chan []*abci.Validator)
+//	val, err := OpenVAL(conR.conS.config.GetString("cs_val_file"))
+//	// AcceptVoteSet := types.AcceptVoteSet
+//	if err != nil {
+//		fmt.Println("ERROR IN OPENVAL", err)
+//	}
+//	for {
+//		var diffs []*abci.Validator
+//		init := 0
+//		epochNumber := <-types.ValidatorChannel
+//		for k, v := range types.AcceptVoteSet {
+//			if v.Epoch == epochNumber {
+//				fmt.Println("k:", k, "v:", v)
+//				if v.Maj23 {
+//					diffs = append(
+//						diffs,
+//						&abci.Validator{
+//							PubKey: v.PubKey.Bytes(),
+//							Power:  v.Power,
+//						},
+//					)
+//					if init == 0 {
+//						val.writeEpoch(v.Epoch)
+//						val.Save(&types.PreVal{ValidatorSet: conR.conS.Validators})
+//						init = 1
+//					}
+//					val.Save(v)
+//
+//					types.ValChangedEpoch[v.Epoch] = append(
+//						types.ValChangedEpoch[v.Epoch],
+//						v,
+//					)
+//				}
+//				//delete(ValidatorMsgMap, v.Key)
+//				//delete(types.AcceptVoteSet, v.Key)
+//				delete(ValidatorMsgMap, k)
+//				delete(types.AcceptVoteSet, k)
+//			}
+//		}
+//		types.EndChannel <- diffs
+//	}
+//}

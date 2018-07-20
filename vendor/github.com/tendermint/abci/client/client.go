@@ -38,7 +38,7 @@ type Client interface {
 	DeliverTxSync(tx []byte) (res types.Result)
 	CheckTxSync(tx []byte) (res types.Result)
 	QuerySync(reqQuery types.RequestQuery) (resQuery types.ResponseQuery, err error)
-	CommitSync(validators []*types.Validator, rewardPerBlock string) (res types.Result)
+	CommitSync(validators []*types.Validator, rewardPerBlock string, refund []*types.RefundValidatorAmount) (res types.Result)
 	InitChainSync(validators []*types.Validator) (err error)
 	BeginBlockSync(hash []byte, header *types.Header) (err error)
 	EndBlockSync(height uint64) (resEndBlock types.ResponseEndBlock, err error)

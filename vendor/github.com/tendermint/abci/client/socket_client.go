@@ -347,7 +347,7 @@ func (cli *socketClient) QuerySync(reqQuery types.RequestQuery) (resQuery types.
 	return resQuery, nil
 }
 
-func (cli *socketClient) CommitSync(validators []*types.Validator, rewardPerBlock string) (res types.Result) {
+func (cli *socketClient) CommitSync(validators []*types.Validator, rewardPerBlock string, refund []*types.RefundValidatorAmount) (res types.Result) {
 	reqres := cli.queueRequest(types.ToRequestCommit(validators, rewardPerBlock), nil)
 	cli.FlushSync()
 	if err := cli.Error(); err != nil {

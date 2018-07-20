@@ -1,10 +1,10 @@
 package dummy
 
 import (
-	"strings"
 	"github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/go-common"
 	"github.com/tendermint/go-merkle"
+	"strings"
 )
 
 type DummyApplication struct {
@@ -37,7 +37,7 @@ func (app *DummyApplication) CheckTx(tx []byte) types.Result {
 	return types.OK
 }
 
-func (app *DummyApplication) Commit(validators []*types.Validator, rewardPerBlock string) types.Result {
+func (app *DummyApplication) Commit(validators []*types.Validator, rewardPerBlock string, refund []*types.RefundValidatorAmount) types.Result {
 	hash := app.state.Hash()
 	return types.NewResultOK(hash, "")
 }

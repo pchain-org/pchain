@@ -26,7 +26,7 @@ import (
 	emtTypes "github.com/pchain/ethermint/types"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	abciTypes "github.com/tendermint/abci/types"
-	core_types "github.com/tendermint/tendermint/rpc/core/types"
+	"github.com/tendermint/tendermint/rpc/core/types"
 	tmTypes "github.com/tendermint/tendermint/types"
 )
 
@@ -413,6 +413,26 @@ func (p *pending) checkAndProcessChildChain(height uint64, cch core.CrossChainHe
 
 func (w *work) checkAndProcessChildChain(height uint64, cch core.CrossChainHelper) {
 	cch.ReadyForLaunchChildChain(height, w.state)
+}
+
+//----------------------------------------------------------------------
+// Refund the Validator Locked Balance
+func (b *Backend) RefundValidatorLockedBalance(refund []*abciTypes.RefundValidatorAmount) {
+	b.pending.refundValidatorLockedBalance(refund)
+}
+
+func (p *pending) refundValidatorLockedBalance(refund []*abciTypes.RefundValidatorAmount) {
+	p.commitMutex.Lock()
+	defer p.commitMutex.Unlock()
+
+	p.work.refundValidatorLockedBalance(refund)
+}
+
+func (w *work) refundValidatorLockedBalance(refund []*abciTypes.RefundValidatorAmount) {
+	for _, r := range refund {
+		w.state.SubLockedBalance(r.Address, r.Amount)
+		w.state.AddBalance(r.Address, r.Amount)
+	}
 }
 
 //----------------------------------------------------------------------

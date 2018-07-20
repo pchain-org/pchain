@@ -9,8 +9,6 @@ import (
 	//. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
-
-	abci "github.com/tendermint/abci/types"
 	// crypto "github.com/tendermint/go-crypto"
 )
 
@@ -107,7 +105,8 @@ var AcceptVoteSet map[string]*AcceptVotes //votes, using address as the key
 
 // var ValidatorChannel chan []*abci.Validator
 var ValidatorChannel chan int
-var EndChannel chan []*abci.Validator
+
+//var EndChannel chan []*abci.Validator
 
 var ValChangedEpoch map[int][]*AcceptVotes
 

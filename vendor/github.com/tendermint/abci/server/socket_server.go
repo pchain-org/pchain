@@ -44,7 +44,6 @@ func NewSocketServer(protoAddr string, app types.Application) (cmn.Service, erro
 	return s, err
 }
 
-
 func NewSocketServerNotStart(protoAddr string, app types.Application) (cmn.Service, error) {
 	parts := strings.SplitN(protoAddr, "://", 2)
 	proto, addr := parts[0], parts[1]
@@ -196,7 +195,7 @@ func (s *SocketServer) handleRequest(req *types.Request, responses chan<- *types
 		res := s.app.CheckTx(r.CheckTx.Tx)
 		responses <- types.ToResponseCheckTx(res.Code, res.Data, res.Log)
 	case *types.Request_Commit:
-		res := s.app.Commit(r.Commit.Validators, r.Commit.RewardPerBlock)
+		res := s.app.Commit(r.Commit.Validators, r.Commit.RewardPerBlock, nil)
 		responses <- types.ToResponseCommit(res.Code, res.Data, res.Log)
 	case *types.Request_Query:
 		resQuery := s.app.Query(*r.Query)

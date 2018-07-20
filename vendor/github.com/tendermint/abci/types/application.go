@@ -18,11 +18,11 @@ type Application interface {
 	CheckTx(tx []byte) Result // Validate a tx for the mempool
 
 	// Consensus Connection
-	InitChain(validators []*Validator)       // Initialize blockchain with validators from TendermintCore
-	BeginBlock(hash []byte, header *Header)  // Signals the beginning of a block
-	DeliverTx(tx []byte) Result              // Deliver a tx for full processing
-	EndBlock(height uint64) ResponseEndBlock // Signals the end of a block, returns changes to the validator set
-	Commit(validators []*Validator, rewardPerBlock string) Result                          // Commit the state and return the application Merkle root hash
+	InitChain(validators []*Validator)                                                             // Initialize blockchain with validators from TendermintCore
+	BeginBlock(hash []byte, header *Header)                                                        // Signals the beginning of a block
+	DeliverTx(tx []byte) Result                                                                    // Deliver a tx for full processing
+	EndBlock(height uint64) ResponseEndBlock                                                       // Signals the end of a block, returns changes to the validator set
+	Commit(validators []*Validator, rewardPerBlock string, refund []*RefundValidatorAmount) Result // Commit the state and return the application Merkle root hash
 }
 
 //------------------------------------
@@ -69,7 +69,7 @@ func (app *GRPCApplication) Query(ctx context.Context, req *RequestQuery) (*Resp
 }
 
 func (app *GRPCApplication) Commit(ctx context.Context, req *RequestCommit) (*ResponseCommit, error) {
-	r := app.app.Commit(req.Validators, req.RewardPerBlock)
+	r := app.app.Commit(req.Validators, req.RewardPerBlock, nil)
 	return &ResponseCommit{r.Code, r.Data, r.Log}, nil
 }
 

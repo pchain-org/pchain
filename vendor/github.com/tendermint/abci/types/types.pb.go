@@ -47,6 +47,7 @@ import math "math"
 import "math/big"
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	context "golang.org/x/net/context"
 	grpc "google.golang.org/grpc"
 )
@@ -1691,6 +1692,11 @@ func (m *Validator) GetPower() *big.Int {
 		return m.Power
 	}
 	return big.NewInt(0)
+}
+
+type RefundValidatorAmount struct {
+	Address common.Address
+	Amount  *big.Int
 }
 
 func init() {

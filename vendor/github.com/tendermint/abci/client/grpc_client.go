@@ -311,7 +311,7 @@ func (cli *grpcClient) QuerySync(reqQuery types.RequestQuery) (resQuery types.Re
 	return resQuery, nil
 }
 
-func (cli *grpcClient) CommitSync(validators []*types.Validator, rewardPerBlock string) (res types.Result) {
+func (cli *grpcClient) CommitSync(validators []*types.Validator, rewardPerBlock string, refund []*types.RefundValidatorAmount) (res types.Result) {
 	reqres := cli.CommitAsync(validators)
 	if res := cli.checkErrGetResult(); res.IsErr() {
 		return res

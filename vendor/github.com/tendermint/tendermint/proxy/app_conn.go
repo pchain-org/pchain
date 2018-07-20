@@ -18,7 +18,7 @@ type AppConnConsensus interface {
 	DeliverTxAsync(tx []byte) *abcicli.ReqRes
 	DeliverTxSync(tx []byte) (res types.Result)
 	EndBlockSync(height uint64) (types.ResponseEndBlock, error)
-	CommitSync(validators []*types.Validator, rewardPerBlock string) (res types.Result)
+	CommitSync(validators []*types.Validator, rewardPerBlock string, refund []*types.RefundValidatorAmount) (res types.Result)
 }
 
 type AppConnMempool interface {
@@ -82,8 +82,8 @@ func (app *appConnConsensus) EndBlockSync(height uint64) (types.ResponseEndBlock
 	return app.appConn.EndBlockSync(height)
 }
 
-func (app *appConnConsensus) CommitSync(validators []*types.Validator, rewardPerBlock string) (res types.Result) {
-	return app.appConn.CommitSync(validators, rewardPerBlock)
+func (app *appConnConsensus) CommitSync(validators []*types.Validator, rewardPerBlock string, refund []*types.RefundValidatorAmount) (res types.Result) {
+	return app.appConn.CommitSync(validators, rewardPerBlock, refund)
 }
 
 //------------------------------------------------

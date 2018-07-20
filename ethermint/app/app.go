@@ -132,13 +132,18 @@ func (app *EthermintApplication) EndBlock(height uint64) abciTypes.ResponseEndBl
 	// Check the Child Chain Launch criteria
 	app.backend.CheckAndProcessChildChain(height)
 
-	// Accumulate the Reward
-
 	return app.GetUpdatedValidators()
 }
 
 // Commit commits the block and returns a hash of the current state
-func (app *EthermintApplication) Commit(validators []*abciTypes.Validator, rewardPerBlock string) abciTypes.Result {
+func (app *EthermintApplication) Commit(validators []*abciTypes.Validator, rewardPerBlock string, refund []*abciTypes.RefundValidatorAmount) abciTypes.Result {
+	// Before commit the block to Ethereum, refund the balance for quit Validator
+	if len(refund) == 0 {
+		app.backend.RefundValidatorLockedBalance(refund)
+	}
+
+	// TODO Accumulate the Reward
+
 	blockHash, err := app.backend.Commit(app.Receiver())
 	if err != nil {
 		glog.V(logger.Debug).Infof("Error getting latest ethereum state: %v", err)

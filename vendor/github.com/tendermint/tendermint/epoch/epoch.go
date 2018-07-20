@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pchain/common/plogger"
+	abciTypes "github.com/tendermint/abci/types"
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
@@ -407,7 +408,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height int) (bool, error) {
 }
 
 // Move to New Epoch
-func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, error) {
+func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, []*abciTypes.RefundValidatorAmount, error) {
 
 	if height == epoch.EndBlock+1 {
 		if epoch.NextEpoch != nil {
@@ -422,9 +423,10 @@ func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, error) {
 			epoch.StartTime = time.Now()
 
 			// update the validator set with the latest abciResponses
-			err := updateEpochValidatorSet(epoch.Validators, epoch.validatorVoteSet)
+			refund, err := updateEpochValidatorSet(epoch.Validators, epoch.validatorVoteSet)
 			if err != nil {
 				plog.Warnln("Error changing validator set", "error", err)
+				return nil, nil, err
 			}
 			// Update validator accums and set state variables
 			epoch.Validators.IncrementAccum(1)
@@ -432,22 +434,25 @@ func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, error) {
 			epoch.NextEpoch = nil //suppose we will not generate a more epoch after next-epoch
 			epoch.Save()
 			plog.Infof("Enter into New Epoch %v", epoch)
-			return epoch, nil
+			return epoch, refund, nil
 		} else {
-			return nil, NextEpochNotExist
+			return nil, nil, NextEpochNotExist
 		}
 	}
 
-	return nil, nil
+	return nil, nil, nil
 }
 
 // updateEpochValidatorSet Update the Current Epoch Validator by vote
-func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet) error {
+//
+func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet) ([]*abciTypes.RefundValidatorAmount, error) {
 	if voteSet.IsEmpty() {
 		// No vote, keep the current validator set
-		return nil
+		return nil, nil
 	}
 
+	// Refund List will be vaildators contain from Vote (exit validator or less amount than previous amount) and Knockout after sort by amount
+	var refund []*abciTypes.RefundValidatorAmount
 	oldValSize, newValSize := validators.Size(), 0
 	// Process the Votes and merge into the Validator Set
 	for _, v := range voteSet.Votes {
@@ -461,21 +466,28 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 			// Add the new validator
 			added := validators.Add(tmTypes.NewValidator(v.PubKey, v.Amount))
 			if !added {
-				return errors.New(fmt.Sprintf("Failed to add new validator %x with voting power %d", v.Address, v.Amount))
+				return nil, errors.New(fmt.Sprintf("Failed to add new validator %x with voting power %d", v.Address, v.Amount))
 			}
 			newValSize++
 		} else if v.Amount.Sign() == 0 {
+			refund = append(refund, &abciTypes.RefundValidatorAmount{Address: v.Address, Amount: validator.VotingPower})
 			// Remove the Validator
 			_, removed := validators.Remove(validator.Address)
 			if !removed {
-				return errors.New(fmt.Sprintf("Failed to remove validator %x", validator.Address))
+				return nil, errors.New(fmt.Sprintf("Failed to remove validator %x", validator.Address))
 			}
 		} else {
+			//refund if new amount less than the voting power
+			if v.Amount.Cmp(validator.VotingPower) == -1 {
+				refundAmount := new(big.Int).Sub(validator.VotingPower, v.Amount)
+				refund = append(refund, &abciTypes.RefundValidatorAmount{Address: v.Address, Amount: refundAmount})
+			}
+
 			// Update the Validator Amount
 			validator.VotingPower = v.Amount
 			updated := validators.Update(validator)
 			if !updated {
-				return errors.New(fmt.Sprintf("Failed to update validator %x with voting power %d", validator.Address, v.Amount))
+				return nil, errors.New(fmt.Sprintf("Failed to update validator %x with voting power %d", validator.Address, v.Amount))
 			}
 		}
 	}
@@ -493,12 +505,16 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 		sort.Slice(validators.Validators, func(i, j int) bool {
 			return validators.Validators[i].VotingPower.Cmp(validators.Validators[j].VotingPower) == 1
 		})
+		// Add knockout validator to refund list
+		knockout := validators.Validators[valSize:]
+		for _, k := range knockout {
+			refund = append(refund, &abciTypes.RefundValidatorAmount{Address: common.BytesToAddress(k.Address), Amount: k.VotingPower})
+		}
+
 		validators.Validators = validators.Validators[:valSize]
 	}
 
-	// TODO Collect the Refund Validator List
-
-	return nil
+	return refund, nil
 }
 
 func (epoch *Epoch) GetEpochByBlockNumber(blockNumber int) *Epoch {
