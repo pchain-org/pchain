@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"math/big"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
@@ -28,10 +29,6 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 	etd := tx.ExtendTxData()
 	if  etd == nil || etd.FuncName == "" {
 
-		msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
-		if err != nil {
-			return nil, 0, err
-		}
 		// Create a new context to be used in the EVM environment
 		context := NewEVMContext(msg, header, bc, author)
 		// Create a new environment which holds all relevant information
@@ -45,8 +42,10 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		// Update the state with pending changes
 		var root []byte
 		if config.IsByzantium(header.Number) {
+			fmt.Printf("ApplyTransactionEx(), is byzantium\n")
 			statedb.Finalise(true)
 		} else {
+			fmt.Printf("ApplyTransactionEx(), is not byzantium\n")
 			root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 		}
 		*usedGas += gas
@@ -55,15 +54,20 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
 		// based on the eip phase, we're passing wether the root touch-delete accounts.
 		receipt := types.NewReceipt(root, failed, *usedGas)
+		fmt.Printf("ApplyTransactionEx，new receipt with (root,failed,*usedGas) = (%v,%v,%v)\n", root, failed, *usedGas)
 		receipt.TxHash = tx.Hash()
+		fmt.Printf("ApplyTransactionEx，new receipt with txhash %v\n", receipt.TxHash)
 		receipt.GasUsed = gas
+		fmt.Printf("ApplyTransactionEx，new receipt with gas %v\n", receipt.GasUsed)
 		// if the transaction created a contract, store the creation address in the receipt.
 		if msg.To() == nil {
 			receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
 		}
 		// Set the receipt logs and create a bloom for filtering
 		receipt.Logs = statedb.GetLogs(tx.Hash())
+		fmt.Printf("ApplyTransactionEx，new receipt with receipt.Logs %v\n", receipt.Logs)
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		fmt.Printf("ApplyTransactionEx，new receipt with receipt.Bloom %v\n", receipt.Bloom)
 
 		return receipt, gas, err
 

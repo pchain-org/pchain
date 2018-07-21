@@ -125,6 +125,8 @@ type worker struct {
 	// atomic status counters
 	mining int32
 	atWork int32
+
+	totalUsedMoney *big.Int
 }
 
 func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux) *worker {
@@ -144,6 +146,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		coinbase:       coinbase,
 		agents:         make(map[Agent]struct{}),
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
+		totalUsedMoney: big.NewInt(0),
 	}
 	// Subscribe TxPreEvent for tx pool
 	worker.txSub = eth.TxPool().SubscribeTxPreEvent(worker.txCh)
@@ -287,7 +290,7 @@ func (self *worker) update() {
 				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
 				txset := types.NewTransactionsByPriceAndNonce(self.current.signer, txs)
 
-				self.current.commitTransactions(self.mux, txset, self.chain, self.coinbase)
+				self.current.commitTransactionsEx(self.mux, txset, self.chain, self.coinbase, self.totalUsedMoney, nil)
 				self.currentMu.Unlock()
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
@@ -474,7 +477,11 @@ func (self *worker) commitNewWork() {
 		return
 	}
 	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
-	work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
+
+	fmt.Printf("before commitTransactionsEx, root hash is %x\n", parent.Root())
+
+	//work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
+	work.commitTransactionsEx(self.mux, txs, self.chain, self.coinbase, self.totalUsedMoney, nil)
 
 	// compute uncles for the new block.
 	var (
@@ -613,6 +620,124 @@ func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, c
 	snap := env.state.Snapshot()
 
 	receipt, _, err := core.ApplyTransaction(env.config, bc, &coinbase, gp, env.state, env.header, tx, &env.header.GasUsed, vm.Config{})
+	if err != nil {
+		env.state.RevertToSnapshot(snap)
+		return err, nil
+	}
+	env.txs = append(env.txs, tx)
+	env.receipts = append(env.receipts, receipt)
+
+	return nil, receipt.Logs
+}
+
+
+func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.TransactionsByPriceAndNonce, bc *core.BlockChain,
+	coinbase common.Address, totalUsedMoney *big.Int, cch core.CrossChainHelper) {
+
+	gp := new(core.GasPool).AddGas(env.header.GasLimit)
+
+	var coalescedLogs []*types.Log
+
+	hash0 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
+	fmt.Printf("commitTransactionsEx 0, root hash is %x\n", hash0)
+
+	for {
+		// If we don't have enough gas for any further transactions then we're done
+		if gp.Gas() < params.TxGas {
+			log.Trace("Not enough gas for further transactions", "gp", gp)
+			break
+		}
+		// Retrieve the next transaction and abort if all done
+		tx := txs.Peek()
+		if tx == nil {
+			break
+		}
+		// Error may be ignored here. The error has already been checked
+		// during transaction acceptance is the transaction pool.
+		//
+		// We use the eip155 signer regardless of the current hf.
+		from, _ := types.Sender(env.signer, tx)
+		// Check whether the tx is replay protected. If we're not in the EIP155 hf
+		// phase, start ignoring the sender until we do.
+		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
+			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
+
+			txs.Pop()
+			continue
+		}
+
+		hash1 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
+		fmt.Printf("commitTransactionsEx loop:1, root hash is %x\n", hash1)
+
+		// Start executing the transaction
+		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
+
+
+		hash2 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
+		fmt.Printf("commitTransactionsEx loop:2, root hash is %x\n", hash2)
+
+		err, logs := env.commitTransactionEx(tx, bc, coinbase, gp, totalUsedMoney, cch)
+
+		hash3 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
+		fmt.Printf("commitTransactionsEx loop:3, root hash is %x\n", hash3)
+
+		switch err {
+		case core.ErrGasLimitReached:
+			// Pop the current out-of-gas transaction without shifting in the next from the account
+			log.Trace("Gas limit exceeded for current block", "sender", from)
+			txs.Pop()
+
+		case core.ErrNonceTooLow:
+			// New head notification data race between the transaction pool and miner, shift
+			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			txs.Shift()
+
+		case core.ErrNonceTooHigh:
+			// Reorg notification data race between the transaction pool and miner, skip account =
+			log.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			txs.Pop()
+
+		case nil:
+			// Everything ok, collect the logs and shift in the next transaction from the same account
+			coalescedLogs = append(coalescedLogs, logs...)
+			env.tcount++
+			txs.Shift()
+
+		default:
+			// Strange error, discard the transaction and get the next in line (note, the
+			// nonce-too-high clause will prevent us from executing in vain).
+			log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			txs.Shift()
+		}
+	}
+
+	hash4 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
+	fmt.Printf("commitTransactionsEx 4, root hash is %x\n", hash4)
+
+	if len(coalescedLogs) > 0 || env.tcount > 0 {
+		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
+		// logs by filling in the block hash when the block was mined by the local miner. This can
+		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
+		cpy := make([]*types.Log, len(coalescedLogs))
+		for i, l := range coalescedLogs {
+			cpy[i] = new(types.Log)
+			*cpy[i] = *l
+		}
+		go func(logs []*types.Log, tcount int) {
+			if len(logs) > 0 {
+				mux.Post(core.PendingLogsEvent{Logs: logs})
+			}
+			if tcount > 0 {
+				mux.Post(core.PendingStateEvent{})
+			}
+		}(cpy, env.tcount)
+	}
+}
+
+func (env *Work) commitTransactionEx(tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool, totalUsedMoney *big.Int, cch core.CrossChainHelper) (error, []*types.Log) {
+	snap := env.state.Snapshot()
+
+	receipt, _, err := core.ApplyTransactionEx(env.config, bc, &coinbase, gp, env.state, env.header, tx, &env.header.GasUsed, totalUsedMoney, vm.Config{}, cch)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return err, nil

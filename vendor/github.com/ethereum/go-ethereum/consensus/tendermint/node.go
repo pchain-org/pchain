@@ -268,7 +268,7 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 	}
 	*/
 	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(config, /*state.Copy(), epoch, */backend, cch)
+	consensusState := consensus.NewConsensusState(config, backend, cch)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
@@ -304,6 +304,9 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 		consensusReactor:	consensusReactor,
 	}
 	node.BaseService = *cmn.NewBaseService(logger.Log, "Node", node)
+
+	consensusState.SetNode(node)
+
 	return node
 }
 
@@ -319,8 +322,10 @@ func (n *Node) OnStart() error {
 	//config.Set("chain_id", state.TdmExtra.ChainID)
 	//config.Set("num_vals", state.Epoch.Validators.Size())
 	// reload the state (it may have been updated by synchronization)
-	state, epoch := n.InitStateAndEpoch()
 
+
+	state, epoch := n.InitStateAndEpoch()
+	n.consensusState.Initialize()
 	n.consensusState.UpdateToStateAndEpoch(state, epoch)
 
 	_, err := n.evsw.Start()
@@ -399,16 +404,17 @@ func (n *Node) SaveState(block *ethTypes.Block) {
 	epoch := n.consensusState.Epoch
 	state := n.consensusState.GetState()
 
-	fmt.Printf("(n *Node) SaveState(block *ethTypes.Block) with state.height = %v, block.height = %v",
+	fmt.Printf("(n *Node) SaveState(block *ethTypes.Block) with state.height = %v, block.height = %v\n",
 		uint64(state.TdmExtra.Height), block.NumberU64())
 
 	if uint64(state.TdmExtra.Height) != block.NumberU64() {
-		fmt.Printf("(n *Node) SaveState(block *ethTypes.Block)， block height not equal")
-		return
+		fmt.Printf("(n *Node) SaveState(block *ethTypes.Block)， block height not equal\n")
 	}
 
 	epoch.Save()
 	//state.Save()
+
+	n.consensusState.StartNewHeight()
 }
 
 func (n *Node) RunForever() {

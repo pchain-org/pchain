@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
+	"fmt"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -75,6 +76,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		totalUsedMoney := big.NewInt(0)
 		receipt, _, err := ApplyTransactionEx(p.config, p.bc, nil, gp, statedb, header, tx,
 							usedGas, totalUsedMoney, cfg, p.cch)
+		fmt.Printf("(p *StateProcessor) Process()，after ApplyTransactionEx, receipt is %v\n", receipt)
 		if err != nil {
 			return nil, nil, 0, err
 		}

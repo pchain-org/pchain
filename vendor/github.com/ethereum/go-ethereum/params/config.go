@@ -41,7 +41,8 @@ var (
 		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
 		EIP155Block:         big.NewInt(2675000),
 		EIP158Block:         big.NewInt(2675000),
-		ByzantiumBlock:      big.NewInt(4370000),
+		//ByzantiumBlock:      big.NewInt(4370000),
+		ByzantiumBlock:      big.NewInt(0), //let's start from 1 block
 		ConstantinopleBlock: nil,
 		Tendermint:	     &TendermintConfig{
 			Epoch:          30000,

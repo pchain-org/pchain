@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/big"
 	"sort"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -477,6 +478,9 @@ func (l *txPricedList) Underpriced(tx *types.Transaction, local *accountSet) boo
 		return false
 	}
 	cheapest := []*types.Transaction(*l.items)[0]
+
+	fmt.Printf("(l *txPricedList) Underpriced, cheapest.GasPrice() is %v, tx.GasPrice() is %v\n", cheapest.GasPrice().Uint64(), tx.GasPrice().Uint64())
+
 	return cheapest.GasPrice().Cmp(tx.GasPrice()) >= 0
 }
 

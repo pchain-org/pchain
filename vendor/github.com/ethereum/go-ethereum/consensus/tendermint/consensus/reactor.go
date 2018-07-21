@@ -11,7 +11,7 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-p2p"
 	"github.com/tendermint/go-wire"
-	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
+	//sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/tendermint/go-clist"
 )
@@ -69,6 +69,7 @@ func (conR *ConsensusReactor) OnStop() {
 	conR.conS.Stop()
 }
 
+/*
 // Switch from the fast_sync to the consensus:
 // reset the state, turn off fast_sync, start the consensus-state-machine
 func (conR *ConsensusReactor) SwitchToConsensus(state *sm.State) {
@@ -80,6 +81,7 @@ func (conR *ConsensusReactor) SwitchToConsensus(state *sm.State) {
 	//conR.fastSync = false
 	conR.conS.Start()
 }
+*/
 
 // Implements Reactor
 func (conR *ConsensusReactor) GetChannels() []*p2p.ChannelDescriptor {
@@ -332,10 +334,11 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 
 	types.AddListenerForEvent(conR.evsw, "conR", types.EventStringRequest(), func(data types.TMEventData) {
 		log.Info("registerEventCallbacks received Request Event ", "request", data.(types.EventDataRequest), "conR.conS.Step", conR.conS.Step)
-		if conR.conS.Step < RoundStepPropose {
+		//if conR.conS.Step < RoundStepPropose {
 			re := data.(types.EventDataRequest)
 			conR.conS.blockFromMiner = re.Proposal
-		}
+			log.Info("registerEventCallbacks received Request Event conR.conS.blockFromMiner has been set")
+		//}
 	})
 
 	types.AddListenerForEvent(conR.evsw, "conR", types.EventStringFinalCommitted(), func(data types.TMEventData) {
@@ -439,11 +442,17 @@ OUTER_LOOP:
 			}
 		}
 
-		//we comment the following part, because we catch up using ethereum's p2p now
-		// If the peer is on a previous height, help catch up.
+		// If the peer is on a previous height, help catch up. we catch up by using ethereum's p2p now
 		if (0 < prs.Height) && (prs.Height < rs.Height) {
+
+			log.Info("Data catchup", "height", rs.Height, "peerHeight", prs.Height, "peerProposalBlockParts", prs.ProposalBlockParts)
+			//we send the last block to increase prs.Height
+			block := conR.conS.GetChainReader().GetBlockByNumber(prs.Height)
+			if block != nil {
+				log.Info("Data catchup", "readed block height", block.Number().Uint64())
+				conR.conS.backend.GetBroadcaster().BroadcastBlock(block, true)
+			}/*
 			//log.Info("Data catchup", "height", rs.Height, "peerHeight", prs.Height, "peerProposalBlockParts", prs.ProposalBlockParts)
-			/*
 			if index, ok := prs.ProposalBlockParts.Not().PickRandom(); ok {
 				// Ensure that the peer's PartSetHeader is correct
 				blockMeta := conR.conS.blockStore.LoadBlockMeta(prs.Height)
@@ -474,6 +483,7 @@ OUTER_LOOP:
 				if peer.Send(conR.conS.state.ChainID, DataChannel, struct{ ConsensusMessage }{msg}) {
 					ps.SetHasProposalBlockPart(prs.Height, prs.Round, index)
 				}
+
 				continue OUTER_LOOP
 			} else {
 			*/
@@ -481,6 +491,7 @@ OUTER_LOOP:
 				time.Sleep(peerGossipSleepDuration)
 				continue OUTER_LOOP
 			/*}*/
+
 		}
 
 		// If height and round don't match, sleep.

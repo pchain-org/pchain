@@ -123,6 +123,9 @@ type Handler interface {
 
 	// SetBroadcaster sets the broadcaster to send message to peers
 	SetBroadcaster(Broadcaster)
+
+	// GetBroadcaster gets the broadcaster to send message to peers
+	GetBroadcaster() Broadcaster
 }
 
 // PoW is a consensus engine based on proof-of-work.

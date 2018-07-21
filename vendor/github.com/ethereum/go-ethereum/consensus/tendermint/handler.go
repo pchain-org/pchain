@@ -60,8 +60,14 @@ func (sb *backend) HandleMsg(addr common.Address, msg p2p.Msg) (bool, error) {
 // SetBroadcaster implements consensus.Handler.SetBroadcaster
 func (sb *backend) SetBroadcaster(broadcaster consensus.Broadcaster) {
 
-	fmt.Printf("Tendermint: (sb *backend) SetBroadcaster with %v\n", broadcaster)
+	fmt.Printf("Tendermint: (sb *backend) SetBroadcaster with %p\n", broadcaster)
 	sb.broadcaster = broadcaster
+}
+
+func (sb *backend) GetBroadcaster() consensus.Broadcaster {
+
+	fmt.Printf("Tendermint: (sb *backend) GetBroadcaster with %p\n", sb.broadcaster)
+	return sb.broadcaster
 }
 
 func (sb *backend) NewChainHead() error {

@@ -109,7 +109,8 @@ func (sb *backend) Author(header *types.Header) (common.Address, error) {
 
 	fmt.Printf("Tendermint: (sb *backend) Author, add logic here\n")
 
-	return common.Address{}, nil
+	return common.HexToAddress("0x136c0e42f4e1b4efd930d2d88a3f3aa4996b6e2e"), nil
+	//return common.Address{}, nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules of a
@@ -288,7 +289,8 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	// TODO: we need consider reward here
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = nilUncleHash
-
+	fmt.Printf("Tendermint: (sb *backend) Finalize, header.Number is %v, root are: %x\n", header.Number, header.Root)
+	fmt.Printf("Tendermint: (sb *backend) Finalize, receipts are: %v\n", receipts)
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts), nil
 }
@@ -349,15 +351,21 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 
 	for {
 		select {
-		case result := <-sb.commitCh:
-			logger.Log.Info("Tendermint: (sb *backend) Seal, got result with", "block.Hash", block.Hash(), "result.Hash", result.Hash())
-			// if the block hash and the hash from channel are the same,
-		// return the result. Otherwise, keep waiting the next hash.
-			if block.Hash() == result.Hash() {
-				logger.Log.Info("Tendermint: (sb *backend) Seal, hash are the same")
-				return result, nil
+		case result, ok := <-sb.commitCh:
+
+			if ok {
+				logger.Log.Info("Tendermint: (sb *backend) Seal, got result with", "block.Hash", block.Hash(), "result.Hash", result.Hash())
+				// if the block hash and the hash from channel are the same,
+				// return the result. Otherwise, keep waiting the next hash.
+				if block.Hash() == result.Hash() {
+					logger.Log.Info("Tendermint: (sb *backend) Seal, hash are the same")
+					return result, nil
+				}
+				logger.Log.Info("Tendermint: (sb *backend) Seal, hash are different")
+			} else {
+				logger.Log.Info("Tendermint: (sb *backend) Seal, has been restart, just return")
+				return nil, nil
 			}
-			logger.Log.Info("Tendermint: (sb *backend) Seal, hash are different")
 
 		case <-stop:
 			return nil, nil
@@ -397,6 +405,8 @@ func (sb *backend) Commit(proposal *tdmTypes.Block, seals [][]byte) error {
 	block = block.WithSeal(h)
 
 	logger.Log.Info("Committed", "hash", block.Hash(), "number", block.Number().Int64())
+
+	fmt.Printf("Committed block : %s", block.String())
 	// - if the proposed and committed blocks are the same, send the proposed hash
 	//   to commit channel, which is being watched inside the engine.Seal() function.
 	// - otherwise, we try to insert the block.

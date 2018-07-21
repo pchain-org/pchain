@@ -1054,7 +1054,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		seals[i] = true
 	}
 
-	log.Error("block insert 0")
+	fmt.Printf("block insert 0\n")
 
 	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
 	defer close(abort)
@@ -1073,14 +1073,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		}
 		// Wait for the block's verification to complete
 		bstart := time.Now()
-		log.Error("block insert 1")
+		fmt.Printf("block insert 1\n")
 		err := <-results
 		if err == nil {
-			log.Error("block insert 2")
+			fmt.Printf("block insert 2\n")
 			err = bc.Validator().ValidateBody(block)
-			log.Error("block insert 3", "err", err)
+			fmt.Printf("block insert 3 with error: %v\n", err)
 		}
-		log.Error("block insert 4", "err", err)
+		fmt.Printf("block insert 4 with error: %v\n", err)
 		switch {
 		case err == ErrKnownBlock:
 			// Block and state both already known. However if the current block is below
@@ -1152,20 +1152,20 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			parent = chain[i-1]
 		}
 		state, err := state.New(parent.Root(), bc.stateCache)
-		log.Error("block insert 5", "err", err)
+		fmt.Printf("block insert 5 with root %x, error: %v\n", parent.Root(), err)
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}
 		// Process block using the parent state as reference point.
 		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
-		log.Error("block insert 6", "err", err)
+		fmt.Printf("block insert 6 with error: %v\n", err)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return i, events, coalescedLogs, err
 		}
 		// Validate the state using the default validator
 		err = bc.Validator().ValidateState(block, parent, state, receipts, usedGas)
-		log.Error("block insert 7", "err", err)
+		fmt.Printf("block insert 7 with error: %v\n", err)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return i, events, coalescedLogs, err
@@ -1174,7 +1174,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 
 		// Write the block to the chain and get the status.
 		status, err := bc.WriteBlockWithState(block, receipts, state)
-		log.Error("block insert 8", "err", err)
+		fmt.Printf("block insert 8 with error: %v\n", err)
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}

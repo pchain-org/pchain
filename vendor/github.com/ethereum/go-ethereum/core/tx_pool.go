@@ -573,6 +573,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Drop non-local transactions under our own minimal accepted gas price
 	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
+	fmt.Printf("(pool *TxPool) validateTx, pool.gasPrice is %v, tx.GasPrice() is %v\n", pool.gasPrice.Uint64(), tx.GasPrice().Uint64())
 	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
 		return ErrUnderpriced
 	}
@@ -797,6 +798,7 @@ func (pool *TxPool) AddLocals(txs []*types.Transaction) []error {
 // If the senders are not among the locally tracked ones, full pricing constraints
 // will apply.
 func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error {
+	fmt.Printf("(pool *TxPool) AddRemotes\n")
 	return pool.addTxs(txs, false)
 }
 
@@ -822,7 +824,7 @@ func (pool *TxPool) addTx(tx *types.Transaction, local bool) error {
 func (pool *TxPool) addTxs(txs []*types.Transaction, local bool) []error {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
-
+	fmt.Printf("(pool *TxPool) addTxs\n")
 	return pool.addTxsLocked(txs, local)
 }
 
@@ -832,24 +834,31 @@ func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) []error {
 	// Add the batch of transaction, tracking the accepted ones
 	dirty := make(map[common.Address]struct{})
 	errs := make([]error, len(txs))
-
+	fmt.Printf("(pool *TxPool) addTxsLocked 0\n")
 	for i, tx := range txs {
 		var replace bool
+		fmt.Printf("(pool *TxPool) addTxsLocked 1\n")
 		if replace, errs[i] = pool.add(tx, local); errs[i] == nil {
+			fmt.Printf("(pool *TxPool) addTxsLocked 2\n")
 			if !replace {
 				from, _ := types.Sender(pool.signer, tx) // already validated
+				fmt.Printf("(pool *TxPool) addTxsLocked 3 with sender: %s\n", from.String())
 				dirty[from] = struct{}{}
 			}
 		}
 	}
 	// Only reprocess the internal state if something was actually added
 	if len(dirty) > 0 {
+		fmt.Printf("(pool *TxPool) addTxsLocked 4 with len(dirty) - %v\n", len(dirty))
 		addrs := make([]common.Address, 0, len(dirty))
 		for addr := range dirty {
 			addrs = append(addrs, addr)
 		}
+		fmt.Printf("(pool *TxPool) addTxsLocked 5 with %v\n", addrs)
 		pool.promoteExecutables(addrs)
 	}
+
+	fmt.Printf("(pool *TxPool) addTxsLocked 5 with errors: %v\n", errs)
 	return errs
 }
 
@@ -928,6 +937,7 @@ func (pool *TxPool) removeTx(hash common.Hash) {
 // future queue to the set of pending transactions. During this process, all
 // invalidated transactions (low nonce, low balance) are deleted.
 func (pool *TxPool) promoteExecutables(accounts []common.Address) {
+	fmt.Printf("(pool *TxPool) promoteExecutables with %v\n", accounts)
 	// Gather all the accounts potentially needing updates
 	if accounts == nil {
 		accounts = make([]common.Address, 0, len(pool.queue))
