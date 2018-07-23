@@ -18,18 +18,44 @@ func CurrentEpochNumber(context *RPCDataContext) (*ctypes.ResultUint64, error) {
 
 func Epoch(context *RPCDataContext, number int) (*ctypes.ResultEpoch, error) {
 
+	var resultEpoch *ep.Epoch
 	curEpoch := context.consensusState.GetRoundState().Epoch
 	if number < 0 || number > curEpoch.Number {
 		return nil, errors.New("epoch number out of range")
 	}
 
 	if number == curEpoch.Number {
-		return &ctypes.ResultEpoch{Epoch: curEpoch.MakeOneEpochDoc()}, nil
+		resultEpoch = curEpoch
+		//return &ctypes.ResultEpoch{Epoch: curEpoch.MakeOneEpochDoc()}, nil
+	} else {
+		resultEpoch = ep.LoadOneEpoch(curEpoch.GetDB(), number)
 	}
 
-	spEpoch := ep.LoadOneEpoch(curEpoch.GetDB(), number)
+	validators := make([]types.GenesisValidator, len(resultEpoch.Validators.Validators))
+	for i, val := range resultEpoch.Validators.Validators {
+		validators[i] = types.GenesisValidator{
+			EthAccount: common.BytesToAddress(val.Address),
+			PubKey:     val.PubKey,
+			Amount:     val.VotingPower,
+			Name:       "",
+		}
+	}
 
-	return &ctypes.ResultEpoch{Epoch: spEpoch.MakeOneEpochDoc()}, nil
+	return &ctypes.ResultEpoch{
+		resultEpoch.Number,
+		resultEpoch.RewardPerBlock,
+		resultEpoch.StartBlock,
+		resultEpoch.EndBlock,
+		resultEpoch.StartTime,
+		resultEpoch.EndTime,
+		resultEpoch.GetVoteStartHeight(),
+		resultEpoch.GetVoteEndHeight(),
+		resultEpoch.GetRevealVoteStartHeight(),
+		resultEpoch.GetRevealVoteEndHeight(),
+		resultEpoch.BlockGenerated,
+		resultEpoch.Status,
+		validators,
+	}, nil
 }
 
 func Validators(context *RPCDataContext) (*ctypes.ResultValidators, error) {
@@ -40,7 +66,12 @@ func Validators(context *RPCDataContext) (*ctypes.ResultValidators, error) {
 func EpochVotes(context *RPCDataContext) (*ctypes.ResultEpochVotes, error) {
 	ep := context.consensusState.GetRoundState().Epoch
 	if ep.GetNextEpoch() != nil {
-		return &ctypes.ResultEpochVotes{ep.GetNextEpoch().Number, ep.GetNextEpoch().GetEpochValidatorVoteSet().Votes}, nil
+		return &ctypes.ResultEpochVotes{
+			ep.GetNextEpoch().Number,
+			ep.GetNextEpoch().StartBlock,
+			ep.GetNextEpoch().EndBlock,
+			ep.GetNextEpoch().GetEpochValidatorVoteSet().Votes,
+		}, nil
 	}
 	return nil, errors.New("next epoch has not been proposed")
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	fail "github.com/ebuchman/fail-test"
+	"github.com/pchain/common/plogger"
 	abci "github.com/tendermint/abci/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/tendermint/epoch"
@@ -14,6 +15,8 @@ import (
 	"github.com/tendermint/tendermint/state/txindex"
 	"github.com/tendermint/tendermint/types"
 )
+
+var plog = plogger.GetLogger("tendermint/execution")
 
 //--------------------------------------------------
 // Execute the block
@@ -179,23 +182,24 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 
 	fail.Fail() // XXX
 
-	//here handles if need to enter next epoch
+	plog.Infof("Apply Block height %d, Epoch No %d", block.Height, s.Epoch.Number)
+	// Check if need to enter next epoch
 	ok, err := s.Epoch.ShouldEnterNewEpoch(block.Height)
 	if err != nil {
 		log.Warn(Fmt("ApplyBlock(%v): Check Enter new Epoch Failed. Current epoch: %v, error: %v", block.Height, s.Epoch, err))
 		return err
 	}
 	var refund []*abci.RefundValidatorAmount
+	var nextEpoch *epoch.Epoch
 	if ok {
-		s.Epoch, refund, err = s.Epoch.EnterNewEpoch(block.Height)
+		// Yes, let create the next epoch and calculate the new validator set and refund list
+		nextEpoch, refund, err = s.Epoch.EnterNewEpoch(block.Height)
 		if err != nil {
 			log.Warn(Fmt("ApplyBlock(%v): Enter New Epoch Failed. Current epoch: %v, error: %v", block.Height, s.Epoch, err))
 			return err
 		}
 	}
-
-	//here handles when enter new epoch
-	s.SetBlockAndEpoch(block.Header, partsHeader)
+	plog.Infof("Apply Block after switch epoch. height %d, Epoch No %d", block.Height, s.Epoch.Number)
 
 	// lock mempool, commit state, update mempoool
 	err = s.CommitStateUpdateMempool(proxyAppConn, block, mempool, refund)
@@ -204,6 +208,14 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	}
 
 	fail.Fail() // XXX
+
+	//here handles when enter new epoch
+	s.SetBlockAndEpoch(block.Header, partsHeader)
+
+	// if next Epoch is not nil, let's move to the next Epoch
+	if nextEpoch != nil {
+		s.Epoch = nextEpoch
+	}
 
 	// save the state
 	s.Epoch.Save()

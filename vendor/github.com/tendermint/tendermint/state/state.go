@@ -138,7 +138,8 @@ func (s *State) setBlockAndEpoch(
 	//s.LastValidators = prevValSet
 }
 
-func (s *State) GetValidators() (*types.ValidatorSet, *types.ValidatorSet, error) {
+// GetValidators returns the last and current validator sets.
+func (s *State) GetValidators() (last *types.ValidatorSet, current *types.ValidatorSet, err error) {
 
 	if s.Epoch == nil {
 		return nil, nil, errors.New("epoch does not exist")

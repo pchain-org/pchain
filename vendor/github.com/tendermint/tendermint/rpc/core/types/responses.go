@@ -1,7 +1,9 @@
 package core_types
 
 import (
+	"math/big"
 	"strings"
+	"time"
 
 	abci "github.com/tendermint/abci/types"
 	"github.com/tendermint/go-crypto"
@@ -76,7 +78,9 @@ type ResultValidators struct {
 }
 
 type ResultEpochVotes struct {
-	EpochNumber int                      `json:"epoch_number"`
+	EpochNumber int                      `json:"vote_for_epoch"`
+	StartBlock  int                      `json:"start_block"`
+	EndBlock    int                      `json:"end_block"`
 	Votes       []*ep.EpochValidatorVote `json:"votes"`
 }
 
@@ -171,7 +175,19 @@ type ResultValidatorEpoch struct {
 }
 
 type ResultEpoch struct {
-	Epoch *types.OneEpochDoc `json:"epoch"`
+	Number           int                      `json:"number"`
+	RewardPerBlock   *big.Int                 `json:"reward_per_block"`
+	StartBlock       int                      `json:"start_block"`
+	EndBlock         int                      `json:"end_block"`
+	StartTime        time.Time                `json:"start_time"`
+	EndTime          time.Time                `json:"end_time"`
+	VoteStartBlock   int                      `json:"vote_start_block"`
+	VoteEndBlock     int                      `json:"vote_end_block"`
+	RevealStartBlock int                      `json:"reveal_start_block"`
+	RevealEndBlock   int                      `json:"reveal_end_block"`
+	BlockGenerated   int                      `json:"block_generated"`
+	Status           int                      `json:"status"`
+	Validators       []types.GenesisValidator `json:"validators"`
 }
 
 type ResultUint64 struct {

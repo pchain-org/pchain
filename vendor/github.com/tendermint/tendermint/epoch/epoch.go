@@ -12,6 +12,7 @@ import (
 	"github.com/tendermint/go-wire"
 	tmTypes "github.com/tendermint/tendermint/types"
 	"io/ioutil"
+	"math"
 	"math/big"
 	"os"
 	"sort"
@@ -364,6 +365,30 @@ func (epoch *Epoch) ProposeNextEpoch(curBlockHeight int) *Epoch {
 	return nil
 }
 
+func (epoch *Epoch) GetVoteStartHeight() int {
+	percent := float64(epoch.EndBlock-epoch.StartBlock) * NextEpochProposeStartPercent
+	return int(math.Ceil(percent)) + epoch.StartBlock
+}
+
+func (epoch *Epoch) GetVoteEndHeight() int {
+	percent := float64(epoch.EndBlock-epoch.StartBlock) * NextEpochHashVoteEndPercent
+	if _, frac := math.Modf(percent); frac == 0 {
+		return int(percent) - 1 + epoch.StartBlock
+	} else {
+		return int(math.Floor(percent)) + epoch.StartBlock
+	}
+}
+
+func (epoch *Epoch) GetRevealVoteStartHeight() int {
+	percent := float64(epoch.EndBlock-epoch.StartBlock) * NextEpochHashVoteEndPercent
+	return int(math.Ceil(percent)) + epoch.StartBlock
+}
+
+func (epoch *Epoch) GetRevealVoteEndHeight() int {
+	percent := float64(epoch.EndBlock-epoch.StartBlock) * NextEpochRevealVoteEndPercent
+	return int(math.Floor(percent)) + epoch.StartBlock
+}
+
 func (epoch *Epoch) CheckInHashVoteStage(height int) bool {
 	fCurBlockHeight := float64(height)
 	fStartBlock := float64(epoch.StartBlock)
@@ -397,7 +422,7 @@ func (epoch *Epoch) SetNextEpoch(next *Epoch) {
 
 func (epoch *Epoch) ShouldEnterNewEpoch(height int) (bool, error) {
 
-	if height == epoch.EndBlock+1 {
+	if height == epoch.EndBlock {
 		if epoch.NextEpoch != nil {
 			return true, nil
 		} else {
@@ -410,7 +435,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height int) (bool, error) {
 // Move to New Epoch
 func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, []*abciTypes.RefundValidatorAmount, error) {
 
-	if height == epoch.EndBlock+1 {
+	if height == epoch.EndBlock {
 		if epoch.NextEpoch != nil {
 
 			// Set the End Time for current Epoch and Save it
@@ -419,22 +444,23 @@ func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, []*abciTypes.RefundValida
 			// Old Epoch Ended
 
 			// Now move to Next Epoch
-			epoch = epoch.NextEpoch
-			epoch.StartTime = time.Now()
+			nextEpoch := epoch.NextEpoch
+			// Store the Previous Epoch Validators only
+			nextEpoch.PreviousEpoch = &Epoch{Validators: epoch.Validators}
+			nextEpoch.StartTime = time.Now()
 
 			// update the validator set with the latest abciResponses
-			refund, err := updateEpochValidatorSet(epoch.Validators, epoch.validatorVoteSet)
+			refund, err := updateEpochValidatorSet(nextEpoch.Validators, nextEpoch.validatorVoteSet)
 			if err != nil {
 				plog.Warnln("Error changing validator set", "error", err)
 				return nil, nil, err
 			}
 			// Update validator accums and set state variables
-			epoch.Validators.IncrementAccum(1)
+			nextEpoch.Validators.IncrementAccum(1)
 
-			epoch.NextEpoch = nil //suppose we will not generate a more epoch after next-epoch
-			epoch.Save()
-			plog.Infof("Enter into New Epoch %v", epoch)
-			return epoch, refund, nil
+			nextEpoch.NextEpoch = nil //suppose we will not generate a more epoch after next-epoch
+			plog.Infof("Enter into New Epoch %v", nextEpoch)
+			return nextEpoch, refund, nil
 		} else {
 			return nil, nil, NextEpochNotExist
 		}
@@ -611,6 +637,9 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock *bi
 		epochTimePerEpochLeftNextYear := timeLeftNextYear.Nanoseconds() / int64(epochLeftNextYear)
 
 		blocksOfNextEpoch = int(epochTimePerEpochLeftNextYear / timePerBlockThisEpoch)
+		if blocksOfNextEpoch == 0 {
+			plog.Panicln("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
+		}
 
 		rewardPerEpochNextYear := calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear, int64(nextYear), int64(epochNumberPerYear))
 
@@ -625,6 +654,9 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock *bi
 		epochTimePerEpochLeftThisYear := timeLeftThisYear.Nanoseconds() / int64(epochLeftThisYear)
 
 		blocksOfNextEpoch = int(epochTimePerEpochLeftThisYear / timePerBlockThisEpoch)
+		if blocksOfNextEpoch == 0 {
+			plog.Panicln("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
+		}
 
 		rewardPerEpochThisYear := calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear, int64(thisYear), int64(epochNumberPerYear))
 
