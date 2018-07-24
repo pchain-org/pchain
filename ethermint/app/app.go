@@ -138,7 +138,7 @@ func (app *EthermintApplication) EndBlock(height uint64) abciTypes.ResponseEndBl
 // Commit commits the block and returns a hash of the current state
 func (app *EthermintApplication) Commit(validators []*abciTypes.Validator, rewardPerBlock string, refund []*abciTypes.RefundValidatorAmount) abciTypes.Result {
 	// Before commit the block to Ethereum, refund the balance for quit Validator
-	if len(refund) == 0 {
+	if len(refund) != 0 {
 		app.backend.RefundValidatorLockedBalance(refund)
 	}
 
