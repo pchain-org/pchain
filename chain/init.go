@@ -363,30 +363,7 @@ func getPassPhrase(prompt string, confirmation bool) string {
 	return password
 }
 
-func initEthGenesisFromExistValidator(mainKeyStorePath, validatorKeyStorePath string, childConfig cfg.Config, validator types.PrivValidator, depositAmount *big.Int) error {
-
-	scryptN := keystore.StandardScryptN
-	scryptP := keystore.StandardScryptP
-
-	// Load Keystore from mainchain
-	mainks := keystore.NewKeyStoreByTenermint(mainKeyStorePath, scryptN, scryptP)
-	validatorAddress := common.BytesToAddress(validator.Address)
-	privKey := validator.PrivKey.(crypto.EtherumPrivKey)
-	pwd := common.ToHex(privKey[0:7])
-	pwd = string([]byte(pwd)[2:])
-	pwd = strings.ToUpper(pwd)
-	newKey, err_getKey := mainks.GetKey(validatorAddress, validatorKeyStorePath, pwd)
-	if err_getKey != nil {
-		return err_getKey
-	}
-
-	// Save KeyStore for child chain
-	ks := keystore.NewKeyStoreByTenermint(childConfig.GetString("keystore"), scryptN, scryptP)
-	a := accounts.Account{Address: validatorAddress, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(validatorAddress))}}
-	if err := ks.StoreKey(a.URL.Path, newKey, pwd); err != nil {
-		utils.Fatalf("store key failed")
-		return nil
-	}
+func initEthGenesisFromExistValidator(childConfig cfg.Config, validator types.PrivValidator, depositAmount *big.Int) error {
 
 	privValFile := childConfig.GetString("priv_validator_file_root")
 

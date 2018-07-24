@@ -274,14 +274,13 @@ func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P, cl *rpcserver.C
 	return tdm.NewNodeNotStart(config, pNode.Switch(), pNode.AddrBook(), cl, cch)
 }
 
-func CreateChildChain(ctx *cli.Context, chainId, mainChainKeyStorePath, validatorKeyStorePath string,
-	validator tdmTypes.PrivValidator, depositAmount *big.Int, validators []tdmTypes.GenesisValidator) error {
+func CreateChildChain(ctx *cli.Context, chainId string, validator tdmTypes.PrivValidator, depositAmount *big.Int, validators []tdmTypes.GenesisValidator) error {
 
 	// Get Tendermint config base on chain id
 	config := etm.GetTendermintConfig(chainId, ctx)
 
 	// Init the Ethereum Genesis
-	err := initEthGenesisFromExistValidator(mainChainKeyStorePath, validatorKeyStorePath, config, validator, depositAmount)
+	err := initEthGenesisFromExistValidator(config, validator, depositAmount)
 	if err != nil {
 		return err
 	}

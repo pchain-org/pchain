@@ -2,7 +2,6 @@ package chain
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
@@ -232,15 +231,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 	chain := LoadChildChain(cm.ctx, chainId, cm.p2pObj)
 	if chain == nil {
-		// Find KeyStore URL for own myself
-		wallet, wallet_err := cm.mainChain.EthNode.AccountManager().Find(accounts.Account{Address: coinbase})
-		if wallet_err != nil {
-			plog.Errorf("Create Child Chain %v failed! %v", chainId, wallet_err)
-			return
-		}
-
-		mainChainKeyStorePath := cm.mainChain.Config.GetString("keystore")
-		err := CreateChildChain(cm.ctx, chainId, mainChainKeyStorePath, wallet.URL().Path, *self, selfDeposit, validators)
+		err := CreateChildChain(cm.ctx, chainId, *self, selfDeposit, validators)
 		if err != nil {
 			plog.Errorf("Create Child Chain %v failed! %v", chainId, err)
 			return
