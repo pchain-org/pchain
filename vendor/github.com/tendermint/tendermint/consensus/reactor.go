@@ -31,6 +31,11 @@ const (
 )
 
 //-----------------------------------------------------------------------------
+type BlockchainReactor interface {
+	ReStartPool() error
+}
+
+//-----------------------------------------------------------------------------
 
 type ConsensusReactor struct {
 	p2p.BaseReactor // BaseService + p2p.Switch
@@ -378,6 +383,10 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 		edv := data.(types.EventDataProposalBlockParts)
 		conR.broadcastProposalBlockParts(edv.Proposal, edv.Parts)
 	})
+
+	types.AddListenerForEvent(conR.evsw, "conR", types.EventStringSwitchToFastSync(), func(data types.TMEventData) {
+		conR.SwitchToFastSync()
+	})
 }
 
 func (conR *ConsensusReactor) broadcastNewRoundStep(rs *RoundState) {
@@ -534,6 +543,14 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 			}
 		}
 	*/
+}
+
+func (conR *ConsensusReactor) SwitchToFastSync() {
+	logger.Info("SwitchToFastSync")
+	conR.conS.Stop()
+	conR.fastSync = true
+	bcR := conR.Switch.Reactor("BLOCKCHAIN").(BlockchainReactor)
+	bcR.ReStartPool()
 }
 
 func makeRoundStepMessages(rs *RoundState) (nrsMsg *NewRoundStepMessage, csMsg *CommitStepMessage) {

@@ -35,6 +35,7 @@ func EventStringVote2Proposer() string    { return "Vote2Proposer"}
 func EventStringProposal() string         { return "Proposal"}
 func EventStringBlockPart() string        { return "BlockPart"}
 func EventStringProposalBlockParts() string { return "Proposal_BlockParts"}
+func EventStringSwitchToFastSync() string  { return "Switch_FastSync"}
 
 //----------------------------------------
 
@@ -57,6 +58,7 @@ const (
 	EventDataTypeProposal      = byte(0x15)
 	EventDataTypeBlockPart    = byte(0x16)
 	EventDataTypeProposalBlockParts = byte(0x17)
+	EventDataTypeSwitchToFastSync = byte(0x18)
 )
 
 var _ = wire.RegisterInterface(
@@ -72,6 +74,7 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{EventDataProposal{}, EventDataTypeProposal},
 	wire.ConcreteType{EventDataBlockPart{}, EventDataTypeBlockPart},
 	wire.ConcreteType{EventDataProposalBlockParts{}, EventDataTypeProposalBlockParts},
+	wire.ConcreteType{EventDataSwitchToFastSync{}, EventDataTypeSwitchToFastSync},
 )
 
 // Most event messages are basic types (a block, a transaction)
@@ -134,6 +137,7 @@ type EventDataProposalBlockParts struct {
 	Parts *PartSet
 }
 
+type EventDataSwitchToFastSync struct {}
 
 func (_ EventDataNewBlock) AssertIsTMEventData()       {}
 func (_ EventDataNewBlockHeader) AssertIsTMEventData() {}
@@ -145,6 +149,7 @@ func (_ EventDataVote2Proposer) AssertIsTMEventData()	{}
 func (_ EventDataProposal) AssertIsTMEventData()		{}
 func (_ EventDataBlockPart) AssertIsTMEventData() 		{}
 func (_ EventDataProposalBlockParts) AssertIsTMEventData() {}
+func (_ EventDataSwitchToFastSync) AssertIsTMEventData() {}
 //----------------------------------------
 // Wrappers for type safety
 
@@ -261,4 +266,9 @@ func FireEventRelock(fireable events.Fireable, rs EventDataRoundState) {
 
 func FireEventLock(fireable events.Fireable, rs EventDataRoundState) {
 	fireEvent(fireable, EventStringLock(), rs)
+}
+
+//--- EventSwitch events
+func FireEventSwitchToFastSync(fireable events.Fireable, switch2sync EventDataSwitchToFastSync) {
+	fireEvent(fireable, EventStringSwitchToFastSync(), switch2sync)
 }

@@ -96,6 +96,7 @@ func FromAbciValidator (val *abciTypes.Validator) *GenesisValidator {
 	pubkey, err := crypto.PubKeyFromBytes(val.PubKey)
 	if err != nil {
 		fmt.Printf("\n\n\n!!!FromAbciValidator(), pubkey convert failed!!!\n\n\n")
+		fmt.Println(err)
 	}
 	return &GenesisValidator{
 		EthAccount: common.Address{},

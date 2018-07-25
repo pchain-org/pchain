@@ -101,6 +101,26 @@ func (bcR *BlockchainReactor) OnStart() error {
 	return nil
 }
 
+func (bcR *BlockchainReactor) ReStartPool() error {
+	bcR.BaseReactor.IsRunning()
+	bcR.pool.IsRunning()
+	if bcR.fastSync {
+		pool := NewBlockPool(
+			bcR.store.Height()+1,
+			bcR.requestsCh,
+			bcR.timeoutsCh,
+		)
+		bcR.pool = pool
+		_, err := bcR.pool.Start()
+		if err != nil {
+			return err
+		}
+		go bcR.BroadcastStatusRequest()
+		go bcR.poolRoutine()
+	}
+	return nil
+}
+
 // OnStop implements BaseService
 func (bcR *BlockchainReactor) OnStop() {
 	bcR.BaseReactor.OnStop()

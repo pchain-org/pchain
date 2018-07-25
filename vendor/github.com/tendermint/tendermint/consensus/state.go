@@ -1826,15 +1826,13 @@ func (cs *ConsensusState) handleSignAggr(signAggr *types.SignAggr) (error) {
 	} else {
 		logger.Error(Fmt("signAggr is higher, height:%v, round:%v, type:%v", signAggr.Height, signAggr.Round, signAggr.Type))
 		logger.Error(Fmt("height:%v, round:%v, type:%v", cs.Height, cs.Round, cs.Step))
-
 		// switch to fast_sync
-		/*
 		if signAggr.Height >= cs.Height+2 && signAggr.Type == types.VoteTypePrecommit {
 			if ok, err := cs.blsVerifySignAggr(signAggr); ok && err != nil {
 				msg := types.EventDataSwitchToFastSync{}
 				types.FireEventSwitchToFastSync(cs.evsw, msg)
 			}
-		}*/
+		}
 	}
 	return nil
 }
