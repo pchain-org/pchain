@@ -333,12 +333,25 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 	})
 
 	types.AddListenerForEvent(conR.evsw, "conR", types.EventStringRequest(), func(data types.TMEventData) {
-		log.Info("registerEventCallbacks received Request Event ", "request", data.(types.EventDataRequest), "conR.conS.Step", conR.conS.Step)
+		log.Info("registerEventCallbacks received Request Event ", "request", data.(types.EventDataRequest))
 		//if conR.conS.Step < RoundStepPropose {
-			re := data.(types.EventDataRequest)
+		re := data.(types.EventDataRequest)
+		block := re.Proposal
+		log.Info("with heighs","block.NumberU64()", block.NumberU64(), "conR.conS.Height", conR.conS.Height, "conR.conS.Step", conR.conS.Step )
+		//wait block in new height or new block has been inserted to start a new height
+		if block.NumberU64() == conR.conS.Height || block.NumberU64() == conR.conS.Height + 1 {
+
+			//meas a block has been inserted into blockchain, let's start a new height
+			if block.NumberU64() == conR.conS.Height + 1 {
+				conR.conS.StartNewHeight()
+			}
+
+			//set block here
 			conR.conS.blockFromMiner = re.Proposal
 			log.Info("registerEventCallbacks received Request Event conR.conS.blockFromMiner has been set")
-		//}
+		} else {
+			log.Info("registerEventCallbacks received Request Event", "conR.conS.Height", conR.conS.Height, "conR.conS.Step", conR.conS.Step )
+		}
 	})
 
 	types.AddListenerForEvent(conR.evsw, "conR", types.EventStringFinalCommitted(), func(data types.TMEventData) {
@@ -423,7 +436,16 @@ OUTER_LOOP:
 			return
 		}
 		rs := conR.conS.GetRoundState()
-		prs := ps.GetRoundState()
+
+		ps1 := peer.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+		prs := ps1.GetRoundState()
+		//prs := ps.GetRoundState()
+
+		/*
+		log.Info("gossipDataRoutine ",
+			"prs1.Height", prs1.Height, "prs1.Round", prs1.Round, "prs1.Step", prs1.Step,
+			"ps.Height", prs.Height, "ps.Round", prs.Round, "ps.Step", prs.Step)
+		*/
 
 		// Send proposal Block parts?
 		if rs.ProposalBlockParts.HasHeader(prs.ProposalBlockPartsHeader) {
@@ -550,7 +572,10 @@ OUTER_LOOP:
 			return
 		}
 		rs := conR.conS.GetRoundState()
-		prs := ps.GetRoundState()
+
+		ps1 := peer.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+		prs := ps1.GetRoundState()
+		//prs := ps.GetRoundState()
 
 		switch sleeping {
 		case 1: // First sleep
@@ -652,7 +677,10 @@ OUTER_LOOP:
 		// Maybe send Height/Round/Prevotes
 		{
 			rs := conR.conS.GetRoundState()
-			prs := ps.GetRoundState()
+			ps1 := peer.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+			prs := ps1.GetRoundState()
+			//prs := ps.GetRoundState()
+
 			if rs.Height == prs.Height {
 				if maj23, ok := rs.Votes.Prevotes(prs.Round).TwoThirdsMajority(); ok {
 					peer.TrySend(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{&VoteSetMaj23Message{
@@ -669,7 +697,9 @@ OUTER_LOOP:
 		// Maybe send Height/Round/Precommits
 		{
 			rs := conR.conS.GetRoundState()
-			prs := ps.GetRoundState()
+			ps1 := peer.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+			prs := ps1.GetRoundState()
+			//prs := ps.GetRoundState()
 			if rs.Height == prs.Height {
 				if maj23, ok := rs.Votes.Precommits(prs.Round).TwoThirdsMajority(); ok {
 					peer.TrySend(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{&VoteSetMaj23Message{
@@ -686,7 +716,9 @@ OUTER_LOOP:
 		// Maybe send Height/Round/ProposalPOL
 		{
 			rs := conR.conS.GetRoundState()
-			prs := ps.GetRoundState()
+			ps1 := peer.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+			prs := ps1.GetRoundState()
+			//prs := ps.GetRoundState()
 			if rs.Height == prs.Height && prs.ProposalPOLRound >= 0 {
 				if maj23, ok := rs.Votes.Prevotes(prs.ProposalPOLRound).TwoThirdsMajority(); ok {
 					peer.TrySend(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{&VoteSetMaj23Message{
@@ -705,7 +737,9 @@ OUTER_LOOP:
 
 		// Maybe send Height/CatchupCommitRound/CatchupCommit.
 		{
-			prs := ps.GetRoundState()
+			ps1 := peer.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+			prs := ps1.GetRoundState()
+			//prs := ps.GetRoundState()
 			if prs.CatchupCommitRound != -1 && 0 < prs.Height && int64(prs.Height) <= conR.conS.GetChainReader().CurrentHeader().Number.Int64() {
 				commit := conR.conS.LoadCommit(prs.Height)
 				peer.TrySend(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{&VoteSetMaj23Message{

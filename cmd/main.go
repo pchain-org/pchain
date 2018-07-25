@@ -11,8 +11,22 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	chain "github.com/pchain/chain"
 	"github.com/ethereum/go-ethereum/cmd/geth"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/log/term"
+	"io"
+	"github.com/mattn/go-colorable"
 )
 
+var glogger *log.GlogHandler
+
+func init() {
+	usecolor := term.IsTty(os.Stderr.Fd()) && os.Getenv("TERM") != "dumb"
+	output := io.Writer(os.Stdout)
+	if usecolor {
+		output = colorable.NewColorableStderr()
+	}
+	glogger = log.NewGlogHandler(log.StreamHandler(output, log.TerminalFormat(usecolor)))
+}
 
 func main() {
 
@@ -55,6 +69,13 @@ func main() {
 
 	cliApp.Before = func(ctx *cli.Context) error {
 		chain.Config = chain.GetTendermintConfig(chain.MainChain, ctx)
+
+		log.PrintOrigins(ctx.GlobalBool(chain.DebugFlag.Name))
+		glogger.Verbosity(log.Lvl(ctx.GlobalInt(chain.VerbosityFlag.Name)))
+		glogger.Vmodule(ctx.GlobalString(chain.VmoduleFlag.Name))
+		glogger.BacktraceAt(ctx.GlobalString(chain.BacktraceAtFlag.Name))
+		log.Root().SetHandler(glogger)
+
 		return nil
 	}
 

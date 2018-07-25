@@ -219,7 +219,7 @@ func (bc *BlockChain) loadLastState() error {
 	// Make sure the state associated with the block is available
 	if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
 		// Dangling block without a state associated, init from scratch
-		log.Warn("Head state missing, repairing chain", "number", currentBlock.Number(), "hash", currentBlock.Hash())
+		log.Warn("Head state missing, repairing chain", "number", currentBlock.Number(), "hash", currentBlock.Hash(), "err", err)
 		if err := bc.repair(&currentBlock); err != nil {
 			return err
 		}
@@ -499,7 +499,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 	fmt.Printf("(bc *BlockChain) insert(block *types.Block) before AfterInsertBlock with blockNumber %v\n", block.NumberU64())
 	debug.PrintStack()
 	fmt.Printf("(bc *BlockChain) insert(block *types.Block) after AfterInsertBlock with blockNumber %v\n", block.NumberU64())
-	bc.Engine().AfterInsertBlock(block)
+	//bc.Engine().AfterInsertBlock(block)
 }
 
 // Genesis retrieves the chain's genesis block.
@@ -1206,6 +1206,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 		events = append(events, ChainHeadEvent{lastCanon})
 	}
+
+	fmt.Printf("block insert done\n")
+
 	return 0, events, coalescedLogs, nil
 }
 

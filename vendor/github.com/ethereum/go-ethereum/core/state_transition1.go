@@ -4,6 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"math/big"
 	"github.com/ethereum/go-ethereum/log"
+	"fmt"
 )
 
 // ApplyMessage computes the new state by applying the given message
@@ -46,13 +47,24 @@ func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMon
 		// error.
 		vmerr error
 	)
+
+	fmt.Printf("TransitionDbEx 0\n")
+
 	if contractCreation {
 		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
+		fmt.Printf("TransitionDbEx 1, sender is %x, nonce is \n", sender.Address(), st.state.GetNonce(sender.Address())+1)
+
 		st.state.SetNonce(sender.Address(), st.state.GetNonce(sender.Address())+1)
 		ret, st.gas, vmerr = evm.Call(sender, st.to().Address(), st.data, st.gas, st.value)
+
+		fmt.Printf("TransitionDbEx 2\n")
+
 	}
+
+	fmt.Printf("TransitionDbEx 3\n")
+
 	if vmerr != nil {
 		log.Debug("VM returned with error", "err", vmerr)
 		// The only possible consensus-error would be if there wasn't
@@ -62,9 +74,20 @@ func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMon
 			return nil, 0, nil, false, vmerr
 		}
 	}
+
 	st.refundGas()
+
+	fmt.Printf("TransitionDbEx 4, coinbase is %x, balance is %v\n",
+		st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+
 	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 	usedMoney = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
+
+	fmt.Printf("TransitionDbEx 5\n")
+
+	fmt.Printf("TransitionDbEx, send.balance is %v\n", st.state.GetBalance(sender.Address()))
+	fmt.Printf("TransitionDbEx, return ret-%v, st.gasUsed()-%v, usedMoney-%v, vmerr-%v, err-%v\n",
+		ret, st.gasUsed(), usedMoney, vmerr, err)
 
 	return ret, st.gasUsed(), usedMoney, vmerr != nil, err
 }

@@ -22,6 +22,8 @@ func (bs *ConsensusState) GetChainReader() consss.ChainReader {
 //anyway, we start/restart a new height with the latest block update
 func (cs *ConsensusState) StartNewHeight() {
 
+	//start locking
+	//cs.mtx.Lock()
 	//cs.timeoutTicker.Stop()
 
 	//reload the block
@@ -38,6 +40,9 @@ func (cs *ConsensusState) StartNewHeight() {
 	}
 
 	cs.newStep()
+
+	//do unlock here
+	//cs.mtx.Unlock()
 
 	//cs.timeoutTicker.Start()
 

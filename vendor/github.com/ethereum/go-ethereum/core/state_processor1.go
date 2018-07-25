@@ -20,6 +20,7 @@ import (
 func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB,
 			header *types.Header, tx *types.Transaction, usedGas *uint64, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper) (*types.Receipt, uint64, error) {
 
+	fmt.Printf("ApplyTransactionEx 0\n")
 
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
 	if err != nil {
@@ -29,8 +30,13 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 	etd := tx.ExtendTxData()
 	if  etd == nil || etd.FuncName == "" {
 
+		fmt.Printf("ApplyTransactionEx 1\n")
+
 		// Create a new context to be used in the EVM environment
 		context := NewEVMContext(msg, header, bc, author)
+
+		fmt.Printf("ApplyTransactionEx 2\n")
+
 		// Create a new environment which holds all relevant information
 		// about the transaction and calling mechanisms.
 		vmenv := vm.NewEVM(context, statedb, config, cfg)
@@ -39,6 +45,8 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		if err != nil {
 			return nil, 0, err
 		}
+		
+		fmt.Printf("ApplyTransactionEx 3\n")
 		// Update the state with pending changes
 		var root []byte
 		if config.IsByzantium(header.Number) {
@@ -46,7 +54,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 			statedb.Finalise(true)
 		} else {
 			fmt.Printf("ApplyTransactionEx(), is not byzantium\n")
-			root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
+			root = statedb.IntermediateRoot(false).Bytes()
 		}
 		*usedGas += gas
 		totalUsedMoney.Add(totalUsedMoney, money)
@@ -68,7 +76,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		fmt.Printf("ApplyTransactionEx，new receipt with receipt.Logs %v\n", receipt.Logs)
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 		fmt.Printf("ApplyTransactionEx，new receipt with receipt.Bloom %v\n", receipt.Bloom)
-
+		fmt.Printf("ApplyTransactionEx 4\n")
 		return receipt, gas, err
 
 	} else {

@@ -26,10 +26,10 @@ func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, 
 		return nil, err
 	}
 
-	return SetupGenesisBlock1(chainDb, &genesis)
+	return SetupGenesisBlockEx(chainDb, &genesis)
 }
 
-func SetupGenesisBlock1(db ethdb.Database, genesis *Genesis) (*types.Block, error) {
+func SetupGenesisBlockEx(db ethdb.Database, genesis *Genesis) (*types.Block, error) {
 
 	if genesis != nil && genesis.Config == nil {
 		return nil, errGenesisNoConfig

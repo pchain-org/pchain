@@ -478,7 +478,7 @@ func (self *worker) commitNewWork() {
 	}
 	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
 
-	fmt.Printf("before commitTransactionsEx, root hash is %x\n", parent.Root())
+	fmt.Printf("before commitTransactionsEx\n")
 
 	//work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
 	work.commitTransactionsEx(self.mux, txs, self.chain, self.coinbase, self.totalUsedMoney, nil)
@@ -638,8 +638,8 @@ func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.Transaction
 
 	var coalescedLogs []*types.Log
 
-	hash0 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
-	fmt.Printf("commitTransactionsEx 0, root hash is %x\n", hash0)
+	//hash0 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
+	fmt.Printf("commitTransactionsEx 0\n")
 
 	for {
 		// If we don't have enough gas for any further transactions then we're done
@@ -666,20 +666,20 @@ func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.Transaction
 			continue
 		}
 
-		hash1 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
-		fmt.Printf("commitTransactionsEx loop:1, root hash is %x\n", hash1)
+		//hash1 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
+		fmt.Printf("commitTransactionsEx loop:1\n")
 
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
 
 
-		hash2 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
-		fmt.Printf("commitTransactionsEx loop:2, root hash is %x\n", hash2)
+		//hash2 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
+		fmt.Printf("commitTransactionsEx loop:2\n")
 
 		err, logs := env.commitTransactionEx(tx, bc, coinbase, gp, totalUsedMoney, cch)
 
-		hash3 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
-		fmt.Printf("commitTransactionsEx loop:3, root hash is %x\n", hash3)
+		//hash3 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
+		fmt.Printf("commitTransactionsEx loop:3\n")
 
 		switch err {
 		case core.ErrGasLimitReached:
@@ -711,8 +711,8 @@ func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.Transaction
 		}
 	}
 
-	hash4 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
-	fmt.Printf("commitTransactionsEx 4, root hash is %x\n", hash4)
+	//hash4 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
+	fmt.Printf("commitTransactionsEx 4\n")
 
 	if len(coalescedLogs) > 0 || env.tcount > 0 {
 		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
@@ -737,13 +737,22 @@ func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.Transaction
 func (env *Work) commitTransactionEx(tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool, totalUsedMoney *big.Int, cch core.CrossChainHelper) (error, []*types.Log) {
 	snap := env.state.Snapshot()
 
-	receipt, _, err := core.ApplyTransactionEx(env.config, bc, &coinbase, gp, env.state, env.header, tx, &env.header.GasUsed, totalUsedMoney, vm.Config{}, cch)
+	fmt.Printf("commitTransactionEx 0\n")
+
+	receipt, _, err := core.ApplyTransactionEx(env.config, bc, nil, gp, env.state, env.header, tx, &env.header.GasUsed, totalUsedMoney, vm.Config{}, cch)
 	if err != nil {
+		fmt.Printf("commitTransactionEx return with err", err)
 		env.state.RevertToSnapshot(snap)
 		return err, nil
 	}
+
+	fmt.Printf("commitTransactionEx 1\n")
+
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
+
+	fmt.Printf("commitTransactionEx 2\n")
+
 
 	return nil, receipt.Logs
 }

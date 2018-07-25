@@ -225,6 +225,7 @@ func (privVal *PrivValidator) SignProposal(chainID string, proposal *Proposal) e
 	defer privVal.mtx.Unlock()
 	signature, err := privVal.signBytesHRS(proposal.Height, proposal.Round, stepPropose, SignBytes(chainID, proposal))
 	if err != nil {
+		fmt.Printf("Error signing proposal: %v\n", err)
 		return errors.New(Fmt("Error signing proposal: %v", err))
 	}
 	proposal.Signature = signature
@@ -232,7 +233,9 @@ func (privVal *PrivValidator) SignProposal(chainID string, proposal *Proposal) e
 }
 
 // check if there's a regression. Else sign and write the hrs+signature to disk
+// lhj, we sign and not save
 func (privVal *PrivValidator) signBytesHRS(height uint64, round int, step int8, signBytes []byte) (crypto.Signature, error) {
+	/*
 	// If height regression, err
 	if privVal.LastHeight > height {
 		return nil, errors.New("Height regression")
@@ -264,7 +267,7 @@ func (privVal *PrivValidator) signBytesHRS(height uint64, round int, step int8, 
 			}
 		}
 	}
-
+	*/
 	// Sign
 	signature := privVal.Sign(signBytes)
 
@@ -274,7 +277,7 @@ func (privVal *PrivValidator) signBytesHRS(height uint64, round int, step int8, 
 	privVal.LastStep = step
 	privVal.LastSignature = signature
 	privVal.LastSignBytes = signBytes
-	privVal.save()
+	//privVal.save()
 
 	return signature, nil
 
