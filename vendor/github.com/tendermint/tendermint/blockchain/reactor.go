@@ -89,13 +89,15 @@ func NewBlockchainReactor(config cfg.Config, state *sm.State, proxyAppConn proxy
 // OnStart implements BaseService
 func (bcR *BlockchainReactor) OnStart() error {
 	bcR.BaseReactor.OnStart()
-	if bcR.fastSync {
+	conR := bcR.Switch.Reactor("CONSENSUS").(consensusReactor)
+	conR.SwitchToConsensus(bcR.state)
+	/*if bcR.fastSync {
 		_, err := bcR.pool.Start()
 		if err != nil {
 			return err
 		}
 		go bcR.poolRoutine()
-	}
+	}*/
 	return nil
 }
 

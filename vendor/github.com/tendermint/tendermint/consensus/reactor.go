@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"os"
 	"bytes"
 	"errors"
 	"fmt"
@@ -80,12 +81,20 @@ func (conR *ConsensusReactor) OnStop() {
 // reset the state, turn off fast_sync, start the consensus-state-machine
 func (conR *ConsensusReactor) SwitchToConsensus(state *sm.State) {
 	logger.Info("SwitchToConsensus")
-	conR.conS.reconstructLastCommit(state)
-	// NOTE: The line below causes broadcastNewRoundStepRoutine() to
-	// broadcast a NewRoundStepMessage.
-	conR.conS.updateToStateAndEpoch(state, conR.conS.epoch)
+	conS := NewConsensusState(conR.conS.config, conR.conS.state, conR.conS.proxyAppConn, conR.conS.blockStore,
+		conR.conS.mempool, conR.conS.epoch)
+	conS.nodeInfo = conR.conS.nodeInfo
+	conS.privValidator = conR.conS.privValidator
+	conS.evsw = conR.conS.evsw
+	conS.wal = conR.conS.wal
+	conS.reconstructLastCommit(state)
+	conS.updateToStateAndEpochFromFastSync(state, conR.conS.epoch)
+	conR.conS = conS
 	conR.fastSync = false
 	conR.conS.Start()
+	if 2< 1{
+		os.Exit(0)
+	}
 }
 
 // Implements Reactor

@@ -395,10 +395,12 @@ func (cs *ConsensusState) OnStart() error {
 		panic("cs.nodeInfo is nil\n")
 	}
 
-	walFile := cs.config.GetString("cs_wal_file")
-	if err := cs.OpenWAL(walFile); err != nil {
-		logger.Error("Error loading ConsensusState wal", " error:", err.Error())
-		return err
+	if cs.wal == nil {
+		walFile := cs.config.GetString("cs_wal_file")
+		if err := cs.OpenWAL(walFile); err != nil {
+			logger.Error("Error loading ConsensusState wal", " error:", err.Error())
+			return err
+		}
 	}
 
 	// we need the timeoutRoutine for replay so
@@ -611,6 +613,54 @@ func (cs *ConsensusState) reconstructLastCommit(state *sm.State) {
 
 // Updates ConsensusState and increments height to match thatRewardScheme of state.
 // The round becomes 0 and cs.Step becomes RoundStepNewHeight.
+func (cs *ConsensusState) updateToStateAndEpochFromFastSync(state *sm.State, epoch *ep.Epoch) {
+	var lastPrecommits *types.SignAggr = nil
+
+	// Reset fields based on state.
+	_, validators, _ := state.GetValidators()
+
+	// Next desired block height
+	height := state.LastBlockHeight + 1
+
+	// RoundState fields
+	cs.updateHeight(height)
+	cs.updateRoundStep(0, RoundStepNewHeight)
+	if cs.CommitTime.IsZero() {
+		// "Now" makes it easier to sync up dev nodes.
+		// We add timeoutCommit to allow transactions
+		// to be gathered for the first block.
+		// And alternative solution that relies on clocks:
+		//  cs.StartTime = state.LastBlockTime.Add(timeoutCommit)
+		cs.StartTime = cs.timeoutParams.Commit(time.Now())
+	} else {
+		cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
+	}
+	cs.Validators = validators
+	cs.Proposal = nil
+	cs.ProposalBlock = nil
+	cs.ProposalBlockParts = nil
+	cs.PrevoteMaj23SignAggr = nil
+	cs.PrecommitMaj23SignAggr = nil
+	cs.LockedRound = 0
+	cs.LockedBlock = nil
+	cs.LockedBlockParts = nil
+	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators)
+	cs.VoteSignAggr = NewHeightVoteSignAggr(cs.config.GetString("chain_id"), height, validators)
+	cs.CommitRound = -1
+	cs.LastCommit = lastPrecommits
+	cs.Epoch = epoch
+
+	//fmt.Printf("State.Copy(), cs.LastValidators are: %v, state.LastValidators are: %v\n",
+	//	cs.LastValidators, state.LastValidators)
+	//debug.PrintStack()
+	cs.LastValidators, _, _ = state.GetValidators()
+	cs.state = state
+	cs.epoch = epoch
+	cs.newStep()
+}
+
+// Updates ConsensusState and increments height to match thatRewardScheme of state.
+// The round becomes 0 and cs.Step becomes RoundStepNewHeight.
 func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch) {
 	var lastPrecommits *types.SignAggr = nil
 
@@ -767,11 +817,11 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 		logger.Debug(Fmt("handleMsg: Received proposal message %+v\n", msg))
 		cs.mtx.Lock()
 		err = cs.setProposal(msg.Proposal)
-		cs.mtx.Unlock()
 		if err == nil {
 			// enterPrevote don't wait for complete block
 			cs.enterPrevote(cs.Height, cs.Round)
 		}
+		cs.mtx.Unlock()
 	case *BlockPartMessage:
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
 		logger.Error(Fmt("handleMsg: Received proposal block part message %+v\n", msg.Part))
@@ -794,15 +844,11 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 		cs.mtx.Unlock()
 	case *Maj23SignAggrMessage:
 		// Msg saying a set of 2/3+ signatures had been received
-
-		logger.Debug(Fmt("handleMsg: Received Maj23SignAggrMessage %#v\n", (msg.Maj23SignAggr)))
-		logger.Error(Fmt("handleMsg: type%v\n", msg.Maj23SignAggr.Type))
 		if msg.Maj23SignAggr.Type == types.VoteTypePrecommit {
 			logger.Error("Maj23SignAggrMessage")
 		}
 		cs.mtx.Lock()
-//		enterNext := false
-		err, _ = cs.setMaj23SignAggr(msg.Maj23SignAggr)
+		err = cs.handleSignAggr(msg.Maj23SignAggr)
 		cs.mtx.Unlock()
 /*
 		if err == nil && enterNext {
@@ -1770,6 +1816,29 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, boo
 	return nil, false
 }
 
+func (cs *ConsensusState) handleSignAggr(signAggr *types.SignAggr) (error) {
+	if signAggr == nil {
+		return fmt.Errorf("SignAggr is nil")
+	}
+	if signAggr.Height == cs.Height  && signAggr.Round == cs.Round {
+		err, _ := cs.setMaj23SignAggr(signAggr)
+		return err
+	} else {
+		logger.Error(Fmt("signAggr is higher, height:%v, round:%v, type:%v", signAggr.Height, signAggr.Round, signAggr.Type))
+		logger.Error(Fmt("height:%v, round:%v, type:%v", cs.Height, cs.Round, cs.Step))
+
+		// switch to fast_sync
+		/*
+		if signAggr.Height >= cs.Height+2 && signAggr.Type == types.VoteTypePrecommit {
+			if ok, err := cs.blsVerifySignAggr(signAggr); ok && err != nil {
+				msg := types.EventDataSwitchToFastSync{}
+				types.FireEventSwitchToFastSync(cs.evsw, msg)
+			}
+		}*/
+	}
+	return nil
+}
+
 func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) (bool, error) {
 	logger.Info("enter verifyMaj23SignAggr()\n")
 
@@ -1778,7 +1847,7 @@ func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) (bool, e
 	// 2. Verify signature aggrefation is correct
 	// 3. Verify +2/3 voting power exceeded
 
-	maj23, err := cs.BLSVerifySignAggr(signAggr)
+	maj23, err := cs.blsVerifySignAggr(signAggr)
 
 	if err != nil {
 		logger.Debug("verifyMaj23SignAggr return with error \n")
@@ -1787,8 +1856,13 @@ func (cs *ConsensusState) verifyMaj23SignAggr(signAggr *types.SignAggr) (bool, e
 
 	return maj23, err
 }
-
 func (cs *ConsensusState) BLSVerifySignAggr(signAggr *types.SignAggr) (bool, error) {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+	return cs.blsVerifySignAggr(signAggr)
+}
+
+func (cs *ConsensusState) blsVerifySignAggr(signAggr *types.SignAggr) (bool, error) {
 	logger.Debug("enter BLSVerifySignAggr()\n")
 	if signAggr == nil {
 		return false, fmt.Errorf("Invalid SignAggr(nil)")
