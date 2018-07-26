@@ -151,7 +151,6 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator,
 		}
 	}
 
-	fastSync = true
 	// Make BlockchainReactor
 	bcReactor := bc.NewBlockchainReactor(config, state.Copy(), proxyApp.Consensus(), blockStore, fastSync)
 

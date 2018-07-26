@@ -89,15 +89,13 @@ func NewBlockchainReactor(config cfg.Config, state *sm.State, proxyAppConn proxy
 // OnStart implements BaseService
 func (bcR *BlockchainReactor) OnStart() error {
 	bcR.BaseReactor.OnStart()
-	conR := bcR.Switch.Reactor("CONSENSUS").(consensusReactor)
-	conR.SwitchToConsensus(bcR.state)
-	/*if bcR.fastSync {
+	if bcR.fastSync {
 		_, err := bcR.pool.Start()
 		if err != nil {
 			return err
 		}
 		go bcR.poolRoutine()
-	}*/
+	}
 	return nil
 }
 
@@ -337,6 +335,7 @@ FOR_LOOP:
 					// NOTE: we could improve performance if we
 					// didn't make the app commit to disk every block
 					// ... but we would need a way to get the hash without it persisting
+					logger.Info(fmt.Sprintf("ApplyBlock:%+v", first))
 					err := bcR.state.ApplyBlock(bcR.evsw, bcR.proxyAppConn, first, firstPartsHeader, types.MockMempool{})
 					if err != nil {
 						// TODO This is bad, are we zombie?

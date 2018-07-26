@@ -827,14 +827,12 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 		logger.Error(Fmt("handleMsg: Received proposal block part message %+v\n", msg.Part))
 		cs.mtx.Lock()
 		_, err = cs.addProposalBlockPart(msg.Height, msg.Part, peerKey != "")
-		cs.mtx.Unlock()
 		if err != nil && msg.Round != cs.Round {
 			err = nil
 		}
 		if err != nil {
 			logger.Error(Fmt("add block part err:%v", err))
 		}
-		cs.mtx.Lock()
 		if err == nil && cs.isProposalComplete() && cs.Step == RoundStepPrevote {
 			sign_aggr := cs.VoteSignAggr.getSignAggr(cs.Round, types.VoteTypePrevote)
 			if sign_aggr != nil && sign_aggr.HasTwoThirdsMajority(cs.Validators) {
@@ -1828,10 +1826,12 @@ func (cs *ConsensusState) handleSignAggr(signAggr *types.SignAggr) (error) {
 		logger.Error(Fmt("height:%v, round:%v, type:%v", cs.Height, cs.Round, cs.Step))
 		// switch to fast_sync
 		if signAggr.Height >= cs.Height+2 && signAggr.Type == types.VoteTypePrecommit {
-			if ok, err := cs.blsVerifySignAggr(signAggr); ok && err != nil {
+			if ok, err := cs.blsVerifySignAggr(signAggr); ok && err == nil {
 				msg := types.EventDataSwitchToFastSync{}
 				types.FireEventSwitchToFastSync(cs.evsw, msg)
 			}
+		} else {
+			logger.Error(Fmt("signAggr type:%+v", signAggr.Type))
 		}
 	}
 	return nil
