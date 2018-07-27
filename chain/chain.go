@@ -25,7 +25,6 @@ import (
 	"github.com/tendermint/go-rpc/server"
 	"github.com/tendermint/tendermint/proxy"
 	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
-	"math/big"
 )
 
 const (
@@ -274,13 +273,23 @@ func MakeTendermintNode(config cfg.Config, pNode *p2p.PChainP2P, cl *rpcserver.C
 	return tdm.NewNodeNotStart(config, pNode.Switch(), pNode.AddrBook(), cl, cch)
 }
 
-func CreateChildChain(ctx *cli.Context, chainId string, validator tdmTypes.PrivValidator, depositAmount *big.Int, validators []tdmTypes.GenesisValidator) error {
+func CreateChildChain(ctx *cli.Context, chainId string, validator tdmTypes.PrivValidator, validators []tdmTypes.GenesisValidator) error {
 
 	// Get Tendermint config base on chain id
 	config := etm.GetTendermintConfig(chainId, ctx)
 
+	// Save the Validator Json File
+	privValFile := config.GetString("priv_validator_file_root")
+	validator.LastHeight = 0
+	validator.LastRound = 0
+	validator.LastStep = 0
+	validator.LastSignature = nil
+	validator.LastSignBytes = nil
+	validator.SetFile(privValFile + ".json")
+	validator.Save()
+
 	// Init the Ethereum Genesis
-	err := initEthGenesisFromExistValidator(config, validator, depositAmount)
+	err := initEthGenesisFromExistValidator(config, validators)
 	if err != nil {
 		return err
 	}

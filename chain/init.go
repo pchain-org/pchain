@@ -365,17 +365,7 @@ func getPassPhrase(prompt string, confirmation bool) string {
 	return password
 }
 
-func initEthGenesisFromExistValidator(childConfig cfg.Config, validator types.PrivValidator, depositAmount *big.Int) error {
-
-	privValFile := childConfig.GetString("priv_validator_file_root")
-
-	validator.LastHeight = 0
-	validator.LastRound = 0
-	validator.LastStep = 0
-	validator.LastSignature = nil
-	validator.LastSignBytes = nil
-	validator.SetFile(privValFile + ".json")
-	validator.Save()
+func initEthGenesisFromExistValidator(childConfig cfg.Config, validators []types.GenesisValidator) error {
 
 	var coreGenesis = core.Genesis{
 		Nonce:      "0xdeadbeefdeadbeef",
@@ -385,7 +375,7 @@ func initEthGenesisFromExistValidator(childConfig cfg.Config, validator types.Pr
 		GasLimit:   "0x8000000",
 		Difficulty: "0x400",
 		Mixhash:    "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Coinbase:   common.ToHex(validator.Address),
+		Coinbase:   common.ToHex(validators[0].EthAccount[:]),
 		Alloc: map[string]struct {
 			Code    string
 			Storage map[string]string
@@ -394,13 +384,15 @@ func initEthGenesisFromExistValidator(childConfig cfg.Config, validator types.Pr
 			Amount  string
 		}{},
 	}
-	coreGenesis.Alloc[common.ToHex(validator.Address)] = struct {
-		Code    string
-		Storage map[string]string
-		Balance string
-		Nonce   string
-		Amount  string
-	}{Balance: "0", Amount: depositAmount.String()}
+	for _, validator := range validators {
+		coreGenesis.Alloc[common.ToHex(validator.EthAccount[:])] = struct {
+			Code    string
+			Storage map[string]string
+			Balance string
+			Nonce   string
+			Amount  string
+		}{Balance: "0", Amount: validator.Amount.String()}
+	}
 
 	contents, err := json.Marshal(coreGenesis)
 	if err != nil {

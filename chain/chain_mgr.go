@@ -15,7 +15,6 @@ import (
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/tendermint/types"
 	"gopkg.in/urfave/cli.v1"
-	"math/big"
 	"os"
 )
 
@@ -204,11 +203,9 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	validator := false
 	coinbase, _ := ethereum.Coinbase()
 	self := cm.mainChain.TdmNode.PrivValidator()
-	var selfDeposit *big.Int
 	for _, v := range cci.JoinedValidators {
 		if v.Address == coinbase {
 			validator = true
-			selfDeposit = v.DepositAmount
 		}
 
 		// dereference the PubKey
@@ -231,7 +228,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 	chain := LoadChildChain(cm.ctx, chainId, cm.p2pObj)
 	if chain == nil {
-		err := CreateChildChain(cm.ctx, chainId, *self, selfDeposit, validators)
+		err := CreateChildChain(cm.ctx, chainId, *self, validators)
 		if err != nil {
 			plog.Errorf("Create Child Chain %v failed! %v", chainId, err)
 			return
