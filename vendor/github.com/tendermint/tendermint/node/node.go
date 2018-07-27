@@ -64,7 +64,8 @@ type Node struct {
 func NewNodeDefault(config cfg.Config) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
-	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
+	keydir := config.GetString("keystore")
+	privValidator := types.LoadOrGenPrivValidator(privValidatorFile, keydir)
 	return NewNode(config, privValidator, proxy.DefaultClientCreator(config))
 }
 

@@ -112,17 +112,17 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 }
 
 // Generates a new validator with private key.
-func GenPrivValidator() *PrivValidator {
+func GenPrivValidator(keydir string) *PrivValidator {
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP
 	//password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
-	ks := keystore.NewKeyStoreByTenermint("", scryptN, scryptP)
+	ks := keystore.NewKeyStoreByTenermint(keydir, scryptN, scryptP)
 	newKey, err := keystore.NewKey(crand.Reader)
 	if err != nil {
 		return nil
 	}
 	a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
-	if err := ks.StoreKey(a.URL.Path, newKey, ""); err != nil {
+	if err := ks.StoreKey(a.URL.Path, newKey, "pchain"); err != nil {
 		return nil
 	}
 	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
@@ -156,14 +156,14 @@ func LoadPrivValidator(filePath string) *PrivValidator {
 	return privVal
 }
 
-func LoadOrGenPrivValidator(filePath string) *PrivValidator {
+func LoadOrGenPrivValidator(filePath, keydir string) *PrivValidator {
 	var privValidator *PrivValidator
 	if _, err := os.Stat(filePath); err == nil {
 		privValidator = LoadPrivValidator(filePath)
 		log.Notice("Loaded PrivValidator",
 			"file", filePath, "privValidator", privValidator)
 	} else {
-		privValidator = GenPrivValidator()
+		privValidator = GenPrivValidator(keydir)
 		privValidator.SetFile(filePath)
 		privValidator.Save()
 		log.Notice("Generated PrivValidator", "file", filePath)

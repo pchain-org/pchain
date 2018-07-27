@@ -71,7 +71,8 @@ type Node struct {
 func NewNodeDefault(config cfg.Config, cch rpcTxHook.CrossChainHelper) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
-	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
+	keydir := config.GetString("keystore")
+	privValidator := types.LoadOrGenPrivValidator(privValidatorFile, keydir)
 	return NewNode(config, privValidator, proxy.DefaultClientCreator(config), cch)
 }
 
@@ -238,7 +239,8 @@ func NewNodeNotStart(config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, 
 	cch rpcTxHook.CrossChainHelper) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
-	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
+	keydir := config.GetString("keystore")
+	privValidator := types.LoadOrGenPrivValidator(privValidatorFile, keydir)
 	// ClientCreator will be instantiated later after ethermint proxyapp created
 	// clientCreator := proxy.DefaultClientCreator(config)
 

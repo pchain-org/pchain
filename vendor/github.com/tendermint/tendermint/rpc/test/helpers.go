@@ -110,7 +110,8 @@ func NewTendermint(app abci.Application) *nm.Node {
 	// Create & start node
 	config := GetConfig()
 	privValidatorFile := config.GetString("priv_validator_file")
-	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
+	keydir := config.GetString("keystore")
+	privValidator := types.LoadOrGenPrivValidator(privValidatorFile, keydir)
 	papp := proxy.NewLocalClientCreator(app)
 	node := nm.NewNode(config, privValidator, papp)
 	return node

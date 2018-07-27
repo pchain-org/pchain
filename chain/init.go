@@ -193,11 +193,12 @@ func init_em_files(config cfg.Config, chainId string, genesisPath string, valida
 	var privValidator *types.PrivValidator
 	if validators == nil {
 		privValPath := config.GetString("priv_validator_file")
+		keydir := config.GetString("keystore")
 		if _, err := os.Stat(privValPath); os.IsNotExist(err) {
 			utils.Fatalf("failed to read privValidator file: %v", err)
 			return err
 		}
-		privValidator = types.LoadOrGenPrivValidator(privValPath)
+		privValidator = types.LoadOrGenPrivValidator(privValPath, keydir)
 	}
 
 	if err := createGenesisDoc(config, chainId, &coreGenesis, privValidator, validators); err != nil {
@@ -293,6 +294,7 @@ func createPriValidators(config cfg.Config, num int) []*types.PrivValidator {
 		pwd := common.ToHex(privKey[0:7])
 		pwd = string([]byte(pwd)[2:])
 		pwd = strings.ToUpper(pwd)
+		pwd = "pchain"
 		fmt.Println("account:", common.ToHex(validators[i].Address), "pwd:", pwd)
 		a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
 		if err := ks.StoreKey(a.URL.Path, newKey, pwd); err != nil {

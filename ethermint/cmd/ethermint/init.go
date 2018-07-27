@@ -176,11 +176,12 @@ func init_em_files(genesisPath string) error {
 		return err
 	}
 	privValPath := config.GetString("priv_validator_file")
+	keydir := config.GetString("keystore")
 	if _, err := os.Stat(privValPath); os.IsNotExist(err) {
 		utils.Fatalf("failed to read privValidator file: %v", err)
 		return err
 	}
-	privValidator := types.LoadOrGenPrivValidator(privValPath)
+	privValidator := types.LoadOrGenPrivValidator(privValPath, keydir)
 	if err := createGenesisDoc(&coreGenesis, privValidator); err != nil {
 		utils.Fatalf("failed to write genesis file: %v", err)
 		return err

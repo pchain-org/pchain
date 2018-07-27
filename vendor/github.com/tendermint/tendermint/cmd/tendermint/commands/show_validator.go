@@ -21,6 +21,7 @@ func init() {
 
 func showValidator(cmd *cobra.Command, args []string) {
 	privValidatorFile := config.GetString("priv_validator_file")
-	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
+	keydir := config.GetString("keystore")
+	privValidator := types.LoadOrGenPrivValidator(privValidatorFile, keydir)
 	fmt.Println(string(wire.JSONBytesPretty(privValidator.PubKey)))
 }

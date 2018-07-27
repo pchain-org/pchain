@@ -115,7 +115,7 @@ func (vc validatorCodec) Compare(o1 interface{}, o2 interface{}) int {
 // For testing...
 
 func RandValidator(randPower bool, minPower int64) (*Validator, *PrivValidator) {
-	privVal := GenPrivValidator()
+	privVal := GenPrivValidator("")
 	_, tempFilePath := Tempfile("priv_validator_")
 	privVal.SetFile(tempFilePath)
 	votePower := minPower
