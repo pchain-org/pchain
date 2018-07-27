@@ -201,10 +201,14 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	validators := make([]types.GenesisValidator, 0, len(cci.JoinedValidators))
 
 	validator := false
-	coinbase, _ := ethereum.Coinbase()
+
+	var backend *ethereum.Backend
+	cm.mainChain.EthNode.Service(&backend)
+	localEtherbase, _ := backend.Ethereum().Etherbase()
+
 	self := cm.mainChain.TdmNode.PrivValidator()
 	for _, v := range cci.JoinedValidators {
-		if v.Address == coinbase {
+		if v.Address == localEtherbase {
 			validator = true
 		}
 
