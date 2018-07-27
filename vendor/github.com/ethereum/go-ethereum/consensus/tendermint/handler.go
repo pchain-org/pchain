@@ -41,9 +41,9 @@ func (sb *backend) Protocol() consensus.Protocol {
 	fmt.Printf("Tendermint: (sb *backend) Protocol, add logic here\n")
 
 	return consensus.Protocol{
-		Name:     "tendermint",
+		Name:     "pchain" + sb.chainConfig.PChainId,
 		Versions: []uint{9},
-		Lengths:  []uint64{18},
+		Lengths:  []uint64{64},
 	}
 }
 

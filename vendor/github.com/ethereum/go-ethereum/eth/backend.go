@@ -251,7 +251,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 			config.Istanbul.Epoch = chainConfig.Tendermint.Epoch
 		}
 		config.Tendermint.ProposerPolicy = tendermint.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
-		return tendermintBackend.New(tendermintBackend.GetTendermintConfig(chainConfig.PChainId, cliCtx), ctx.NodeKey(), db, pNode, cch)
+		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), db, pNode, cch)
 	}
 
 	// Otherwise assume proof-of-work

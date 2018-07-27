@@ -23,6 +23,7 @@ type ChainManager struct {
 	mainQuit    chan int
 	childQuits  map[string]chan int
 	p2pObj	*p2p.PChainP2P
+	ethP2P  *p2p.EthP2PServer
 	cch 	*CrossChainHelper
 }
 
@@ -123,6 +124,23 @@ func (cm *ChainManager)StartChains() error{
 	return nil
 }
 
+func (cm *ChainManager) StartEthP2P() error {
+
+	//Start Eth P2p
+	p2pServer, err := p2p.StartEthP2PServer(cm.mainChain.EthNode)
+	if err != nil {
+		return err
+	}
+
+	cm.ethP2P = p2pServer
+
+	for _, chain := range cm.childChains {
+		cm.ethP2P.Hookup(chain.Id, chain.EthNode)
+	}
+
+	return nil
+}
+
 func (cm *ChainManager) StartRPC() error {
 
 	// Start PChain RPC
@@ -138,29 +156,6 @@ func (cm *ChainManager) StartRPC() error {
 
 	return nil
 }
-/*
-func (cm *ChainManager) StartRPC1() error {
-
-	ids := make([]string, 0)
-	handlers := make([]http.Handler, 0)
-
-	ids = append(ids, cm.mainChain.Id)
-	handlers = append(handlers, cm.mainChain.RpcHandler)
-
-	for _, chain := range cm.childChains {
-		ids = append(ids, chain.Id)
-		handlers = append(handlers, chain.RpcHandler)
-	}
-
-	// Start PChain RPC
-	err := rpc.StartRPC1(cm.ctx, ids, handlers)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-*/
 
 func (cm *ChainManager) StartInspectEvent() {
 
@@ -244,5 +239,6 @@ func (cm *ChainManager) WaitChainsStop() {
 func (cm *ChainManager) Stop() {
 	rpc.StopRPC()
 	cm.p2pObj.StopP2P()
+	cm.ethP2P.Stop()
 }
 

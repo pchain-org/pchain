@@ -37,6 +37,12 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
+type EthP2PServer interface {
+	Hookup(chainId string, node *Node) error
+	Takeoff(chainId string) error
+	Server() *p2p.Server
+}
+
 // Node is a container on which services can be registered.
 type Node struct {
 	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
@@ -48,6 +54,7 @@ type Node struct {
 
 	serverConfig p2p.Config
 	server       *p2p.Server // Currently running P2P networking layer
+	p2pServer    EthP2PServer
 
 	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
 	services     map[reflect.Type]Service // Currently running services
@@ -653,6 +660,10 @@ func (n *Node) OpenDatabase(name string, cache, handles int) (ethdb.Database, er
 // ResolvePath returns the absolute path of a resource in the instance directory.
 func (n *Node) ResolvePath(x string) string {
 	return n.config.resolvePath(x)
+}
+
+func (n *Node) SetP2PServer(p2pServer EthP2PServer) {
+	n.p2pServer = p2pServer
 }
 
 // apis returns the collection of RPC descriptors this node offers.

@@ -20,26 +20,32 @@ func pchainCmd(ctx *cli.Context) error {
 	err := chainMgr.StartP2P()
 	if err != nil {
 		fmt.Printf("start p2p failed\n")
-		return nil
+		return err
 	}
 
 	// Load PChain Node
 	err = chainMgr.LoadChains()
 	if err != nil {
 		fmt.Printf("load chains failed\n")
-		return nil
+		return err
+	}
+
+	err = chainMgr.StartEthP2P()
+	if err != nil {
+		fmt.Printf("start eth p2p failed\n")
+		return err
 	}
 
 	err = chainMgr.StartChains()
 	if err != nil {
 		fmt.Printf("start chains failed\n")
-		return nil
+		return err
 	}
 
 	err = chainMgr.StartRPC()
 	if err != nil {
 		fmt.Printf("start rpc failed\n")
-		return nil
+		return err
 	}
 
 	chainMgr.StartInspectEvent()
