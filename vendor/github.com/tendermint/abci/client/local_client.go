@@ -1,10 +1,10 @@
 package abcicli
 
 import (
-	"sync"
-
 	"github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/go-common"
+	"math/big"
+	"sync"
 )
 
 var _ Client = (*localClient)(nil)
@@ -109,10 +109,10 @@ func (app *localClient) QueryAsync(reqQuery types.RequestQuery) *ReqRes {
 
 func (app *localClient) CommitAsync(validators []*types.Validator) *ReqRes {
 	app.mtx.Lock()
-	res := app.Application.Commit(validators, "", nil)
+	res := app.Application.Commit(validators, nil, nil)
 	app.mtx.Unlock()
 	return app.callback(
-		types.ToRequestCommit(validators, ""),
+		types.ToRequestCommit(validators, nil),
 		types.ToResponseCommit(res.Code, res.Data, res.Log),
 	)
 }
@@ -201,7 +201,7 @@ func (app *localClient) QuerySync(reqQuery types.RequestQuery) (resQuery types.R
 	return resQuery, nil
 }
 
-func (app *localClient) CommitSync(validators []*types.Validator, rewardPerBlock string, refund []*types.RefundValidatorAmount) (res types.Result) {
+func (app *localClient) CommitSync(validators []*types.Validator, rewardPerBlock *big.Int, refund []*types.RefundValidatorAmount) (res types.Result) {
 	app.mtx.Lock()
 	res = app.Application.Commit(validators, rewardPerBlock, refund)
 	app.mtx.Unlock()

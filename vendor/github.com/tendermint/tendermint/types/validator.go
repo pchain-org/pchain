@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	abciTypes "github.com/tendermint/abci/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
@@ -84,10 +85,10 @@ func (v *Validator) Hash() []byte {
 }
 
 func (v *Validator) ToAbciValidator() *abciTypes.Validator {
-
 	return &abciTypes.Validator{
-		PubKey: v.PubKey.Bytes(),
-		Power:  v.VotingPower,
+		Address: common.BytesToAddress(v.Address),
+		PubKey:  v.PubKey.Bytes(),
+		Power:   v.VotingPower,
 	}
 }
 

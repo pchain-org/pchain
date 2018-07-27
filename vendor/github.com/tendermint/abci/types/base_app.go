@@ -1,5 +1,7 @@
 package types
 
+import "math/big"
+
 type BaseApplication struct {
 }
 
@@ -23,7 +25,7 @@ func (app *BaseApplication) CheckTx(tx []byte) Result {
 	return NewResultOK(nil, "")
 }
 
-func (app *BaseApplication) Commit(validators []*Validator, rewardPerBlock string, refund []*RefundValidatorAmount) Result {
+func (app *BaseApplication) Commit(validators []*Validator, rewardPerBlock *big.Int, refund []*RefundValidatorAmount) Result {
 	return NewResultOK([]byte("nil"), "")
 }
 

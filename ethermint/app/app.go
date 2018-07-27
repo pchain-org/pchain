@@ -17,7 +17,6 @@ import (
 	"github.com/pchain/ethermint/ethereum"
 	emtTypes "github.com/pchain/ethermint/types"
 	abciTypes "github.com/tendermint/abci/types"
-	tmTypes "github.com/tendermint/tendermint/types"
 	"math/big"
 	"os"
 )
@@ -136,24 +135,21 @@ func (app *EthermintApplication) EndBlock(height uint64) abciTypes.ResponseEndBl
 }
 
 // Commit commits the block and returns a hash of the current state
-func (app *EthermintApplication) Commit(validators []*abciTypes.Validator, rewardPerBlock string, refund []*abciTypes.RefundValidatorAmount) abciTypes.Result {
+func (app *EthermintApplication) Commit(validators []*abciTypes.Validator, rewardPerBlock *big.Int, refund []*abciTypes.RefundValidatorAmount) abciTypes.Result {
 	// Before commit the block to Ethereum, refund the balance for quit Validator
 	if len(refund) != 0 {
 		app.backend.RefundValidatorLockedBalance(refund)
 	}
 
-	// TODO Accumulate the Reward
+	// Accumulate the Reward
+	app.strategy.SetValidators(validators)
+	app.backend.AccumulateRewards(app.strategy, rewardPerBlock)
 
 	blockHash, err := app.backend.Commit(app.Receiver())
 	if err != nil {
 		glog.V(logger.Debug).Infof("Error getting latest ethereum state: %v", err)
 		return abciTypes.ErrInternalError
 	}
-
-	app.strategy.SetValidators(tmTypes.FromAbciValidators(validators))
-	// Convert to big.Int back from String
-	rewardPerBlockInt, _ := new(big.Int).SetString(rewardPerBlock, 0)
-	app.backend.AccumulateRewards(app.strategy, rewardPerBlockInt)
 
 	return abciTypes.NewResultOK(blockHash[:], "")
 }
@@ -192,7 +188,7 @@ func (app *EthermintApplication) Receiver() common.Address {
 	return common.Address{}
 }
 
-func (app *EthermintApplication) SetValidators(validators []*tmTypes.GenesisValidator) {
+func (app *EthermintApplication) SetValidators(validators []*abciTypes.Validator) {
 	if app.strategy != nil {
 		app.strategy.SetValidators(validators)
 	}
@@ -200,17 +196,7 @@ func (app *EthermintApplication) SetValidators(validators []*tmTypes.GenesisVali
 
 func (app *EthermintApplication) GetUpdatedValidators() abciTypes.ResponseEndBlock {
 	if app.strategy != nil {
-
-		genValidators := app.strategy.GetUpdatedValidators()
-		s := make([]*abciTypes.Validator, len(genValidators))
-		for i, v := range genValidators {
-			s[i] = &abciTypes.Validator{
-				PubKey: v.PubKey.Bytes(),
-				Power:  v.Amount,
-			}
-		}
-
-		return abciTypes.ResponseEndBlock{Diffs: s}
+		return abciTypes.ResponseEndBlock{Diffs: app.strategy.GetUpdatedValidators()}
 	}
 	return abciTypes.ResponseEndBlock{}
 }

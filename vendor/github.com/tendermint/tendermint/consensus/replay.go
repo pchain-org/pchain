@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"path"
 	"reflect"
 	"strconv"
@@ -421,7 +422,7 @@ func (mock *mockProxyApp) EndBlock(height uint64) abci.ResponseEndBlock {
 	return mock.abciResponses.EndBlock
 }
 
-func (mock *mockProxyApp) Commit(validators []*abci.Validator, rewardPerBlock string, refund []*abci.RefundValidatorAmount) abci.Result {
+func (mock *mockProxyApp) Commit(validators []*abci.Validator, rewardPerBlock *big.Int, refund []*abci.RefundValidatorAmount) abci.Result {
 	return abci.NewResultOK(mock.appHash, "")
 }
 

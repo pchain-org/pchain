@@ -215,6 +215,10 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	// if next Epoch is not nil, let's move to the next Epoch
 	if nextEpoch != nil {
 		s.Epoch = nextEpoch
+		// Update the Epoch in Mempool
+		if mem, ok := mempool.(*tdmMempool.Mempool); ok {
+			mem.SetEpoch(nextEpoch)
+		}
 	}
 
 	// save the state
@@ -233,7 +237,7 @@ func (s *State) CommitStateUpdateMempool(proxyAppConn proxy.AppConnConsensus, bl
 
 	// Commit block, get hash back
 	lastValidators, _, _ := s.GetValidators()
-	res := proxyAppConn.CommitSync(lastValidators.ToAbciValidators(), s.Epoch.RewardPerBlock.String(), refundList)
+	res := proxyAppConn.CommitSync(lastValidators.ToAbciValidators(), s.Epoch.RewardPerBlock, refundList)
 	if res.IsErr() {
 		log.Warn("Error in proxyAppConn.CommitSync", "error", res)
 		return res
@@ -248,10 +252,6 @@ func (s *State) CommitStateUpdateMempool(proxyAppConn proxy.AppConnConsensus, bl
 
 	// Update mempool.
 	mempool.Update(block.Height, block.Txs)
-	// Update the Epoch in Mempool
-	if mem, ok := mempool.(*tdmMempool.Mempool); ok {
-		mem.SetEpoch(s.Epoch)
-	}
 
 	return nil
 }
@@ -285,7 +285,7 @@ func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, state *State, bloc
 
 	// Commit block, get hash back
 	lastValidators, _, _ := state.GetValidators()
-	res := appConnConsensus.CommitSync(lastValidators.ToAbciValidators(), state.Epoch.RewardPerBlock.String(), nil)
+	res := appConnConsensus.CommitSync(lastValidators.ToAbciValidators(), state.Epoch.RewardPerBlock, nil)
 	if res.IsErr() {
 		log.Warn("Error in proxyAppConn.CommitSync", "error", res)
 		return nil, res

@@ -27,7 +27,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	abciTypes "github.com/tendermint/abci/types"
 	"github.com/tendermint/tendermint/rpc/core/types"
-	tmTypes "github.com/tendermint/tendermint/types"
 )
 
 const TRANSACTION_NUM_LIMIT = 200000
@@ -450,13 +449,11 @@ func (p *pending) accumulateRewards(strategy emtTypes.Strategy, rewardPerBlock *
 }
 
 func (w *work) accumulateRewards(strategy emtTypes.Strategy) {
+	if !(w.totalUsedMoney.Sign() == 0 && w.rewardPerBlock.Sign() == 0) {
+		strategy.AccumulateRewards(w.state, w.header, []*ethTypes.Header{}, w.totalUsedMoney, w.rewardPerBlock)
+	}
 
-	glog.V(logger.Debug).Infof("(w *work) accumulateRewards(), w.header.GasUsed is %v, w.totalUsedGas is %v, w.totalUsedMoney is %v, validators are: %v",
-		w.header.GasUsed, w.totalUsedGas, w.totalUsedMoney, tmTypes.GenesisValidatorsString(strategy.GetUpdatedValidators()))
 	w.header.GasUsed = w.totalUsedGas
-	strategy.AccumulateRewards(w.state, w.header, []*ethTypes.Header{}, w.totalUsedMoney, w.rewardPerBlock)
-	//core.AccumulateRewards(w.state, w.header, []*ethTypes.Header{})
-	glog.V(logger.Debug).Infof("(w *work) accumulateRewards() end")
 }
 
 //----------------------------------------------------------------------

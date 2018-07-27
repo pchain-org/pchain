@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/go-common"
 	dbm "github.com/tendermint/go-db"
@@ -76,7 +77,7 @@ func (app *PersistentDummyApplication) CheckTx(tx []byte) types.Result {
 	return app.app.CheckTx(tx)
 }
 
-func (app *PersistentDummyApplication) Commit(validators []*types.Validator, rewardPerBlock string, refund []*types.RefundValidatorAmount) types.Result {
+func (app *PersistentDummyApplication) Commit(validators []*types.Validator, rewardPerBlock *big.Int, refund []*types.RefundValidatorAmount) types.Result {
 	// Save
 	appHash := app.app.state.Save()
 	log.Info("Saved state", "root", appHash)
@@ -201,7 +202,7 @@ func (app *PersistentDummyApplication) execValidatorTx(tx []byte) types.Result {
 	}
 
 	// update
-	return app.updateValidator(&types.Validator{pubkey, power})
+	return app.updateValidator(&types.Validator{common.Address{}, pubkey, power})
 }
 
 // add, update, or remove a validator

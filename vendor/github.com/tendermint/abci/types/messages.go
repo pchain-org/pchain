@@ -1,9 +1,10 @@
 package types
 
 import (
-	"io"
 	"github.com/golang/protobuf/proto"
 	"github.com/tendermint/go-wire"
+	"io"
+	"math/big"
 )
 
 func ToRequestEcho(message string) *Request {
@@ -42,7 +43,7 @@ func ToRequestCheckTx(txBytes []byte) *Request {
 	}
 }
 
-func ToRequestCommit(validators []*Validator, rewardPerBlock string) *Request {
+func ToRequestCommit(validators []*Validator, rewardPerBlock *big.Int) *Request {
 	return &Request{
 		Value: &Request_Commit{&RequestCommit{Validators: validators, RewardPerBlock: rewardPerBlock}},
 	}

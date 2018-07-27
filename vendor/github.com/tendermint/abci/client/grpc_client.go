@@ -2,6 +2,7 @@ package abcicli
 
 import (
 	"fmt"
+	"math/big"
 	"net"
 	"sync"
 	"time"
@@ -183,7 +184,7 @@ func (cli *grpcClient) QueryAsync(reqQuery types.RequestQuery) *ReqRes {
 }
 
 func (cli *grpcClient) CommitAsync(validators []*types.Validator) *ReqRes {
-	req := types.ToRequestCommit(validators, "")
+	req := types.ToRequestCommit(validators, nil)
 	res, err := cli.client.Commit(context.Background(), req.GetCommit(), grpc.FailFast(true))
 	if err != nil {
 		cli.StopForError(err)
@@ -311,7 +312,7 @@ func (cli *grpcClient) QuerySync(reqQuery types.RequestQuery) (resQuery types.Re
 	return resQuery, nil
 }
 
-func (cli *grpcClient) CommitSync(validators []*types.Validator, rewardPerBlock string, refund []*types.RefundValidatorAmount) (res types.Result) {
+func (cli *grpcClient) CommitSync(validators []*types.Validator, rewardPerBlock *big.Int, refund []*types.RefundValidatorAmount) (res types.Result) {
 	reqres := cli.CommitAsync(validators)
 	if res := cli.checkErrGetResult(); res.IsErr() {
 		return res
