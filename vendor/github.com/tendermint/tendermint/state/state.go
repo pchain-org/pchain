@@ -95,8 +95,9 @@ func (s *State) Copy() *State {
 		Epoch:           s.Epoch.Copy(),
 		//Validators:      s.Validators.Copy(),
 		//LastValidators:  s.LastValidators.Copy(),
-		AppHash:   s.AppHash,
-		TxIndexer: s.TxIndexer, // pointer here, not value
+		AppHash:           s.AppHash,
+		TxIndexer:         s.TxIndexer, // pointer here, not value
+		BlockNumberToSave: s.BlockNumberToSave,
 	}
 }
 
@@ -234,7 +235,7 @@ func MakeGenesisState(db dbm.DB, genDoc *types.GenesisDoc) *State {
 		LastBlockID:       types.BlockID{},
 		LastBlockTime:     genDoc.GenesisTime,
 		LastEpochNumber:   0,
-		BlockNumberToSave: -1,
+		BlockNumberToSave: 1,
 		//Validators:      types.NewValidatorSet(validators),
 		//LastValidators:  types.NewValidatorSet(nil),
 		AppHash:   genDoc.AppHash,

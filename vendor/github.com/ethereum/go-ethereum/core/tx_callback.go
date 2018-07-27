@@ -22,8 +22,8 @@ type CrossChainHelper interface {
 	GetChainInfoDB() dbm.DB
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction                  //should return varified transaction
 	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction //should return varified transaction
-	VerifyTdmBlock(from common.Address, block string) error
-	SaveTdmBlock2MainBlock(block string) error
+	VerifyTdmBlock(from common.Address, block []byte) error
+	SaveTdmBlock2MainBlock(block []byte) error
 	RecordCrossChainTx(from common.Address, txHash common.Hash) error
 	DeleteCrossChainTx(txHash common.Hash) error
 	VerifyCrossChainTx(txHash common.Hash) bool

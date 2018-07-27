@@ -170,7 +170,7 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 
 	//here handles the proposed next epoch
 	nextEpochInBlock := epoch.FromBytes(block.ExData.BlockExData)
-	if nextEpochInBlock != nil {
+	if nextEpochInBlock != nil && nextEpochInBlock.Number != 0 {
 
 		nextEpochInBlock.RS = s.Epoch.RS
 		nextEpochInBlock.SetEpochValidatorVoteSet(epoch.NewEpochValidatorVoteSet())

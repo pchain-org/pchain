@@ -1,18 +1,18 @@
 package ethereum
 
 import (
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/tendermint/go-rpc/client"
-	"path/filepath"
 	"github.com/tendermint/go-rpc/server"
+	"path/filepath"
 )
 
 var clientIdentifier = "geth" // Client identifier to advertise over the network
@@ -37,7 +37,7 @@ func MakeSystemNode(chainId, version string, cl *rpcserver.ChannelListener, ctx 
 		WSOrigins:   ctx.GlobalString(utils.WSAllowedOriginsFlag.Name),
 		WSModules:   utils.MakeRPCModules(ctx.GlobalString(utils.WSApiFlag.Name)),
 		NoDiscovery: true,
-		MaxPeers: 0,
+		MaxPeers:    0,
 	}
 	// Assemble and return the protocol stack
 	stack, err := node.New(stackConf)
@@ -66,7 +66,7 @@ func MakeSystemNode(chainId, version string, cl *rpcserver.ChannelListener, ctx 
 		GpobaseStepUp:           ctx.GlobalInt(utils.GpobaseStepUpFlag.Name),
 		GpobaseCorrectionFactor: ctx.GlobalInt(utils.GpobaseCorrectionFactorFlag.Name),
 		SolcPath:                ctx.GlobalString(utils.SolcPathFlag.Name),
-		PowFake:		 true,
+		PowFake:                 true,
 	}
 
 	if err := stack.Register(func(nsc *node.ServiceContext) (node.Service, error) {
