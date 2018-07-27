@@ -25,18 +25,18 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	tdmTypes "github.com/tendermint/tendermint/types"
 	"github.com/tendermint/go-wire"
+	tdmTypes "github.com/tendermint/tendermint/types"
 	"io"
 )
 
 var (
 	//the prefix must not conflict with variables in database_util.go
-	blockPrefix = []byte("cc-block") //child-chain block
-	txPrefix  = []byte("cc-tx")	//child-chain tx
-	extraDataPrefix   = []byte("cc-ex") //child-chain extra data
-	blockPartSizePrefix = []byte("cc-bps") //child-chain blockPartSize
-	commitPrefix = []byte("cc-cm") //child-chain commits
+	blockPrefix         = []byte("cc-block") //child-chain block
+	txPrefix            = []byte("cc-tx")    //child-chain tx
+	extraDataPrefix     = []byte("cc-ex")    //child-chain extra data
+	blockPartSizePrefix = []byte("cc-bps")   //child-chain blockPartSize
+	commitPrefix        = []byte("cc-cm")    //child-chain commits
 
 	NotFoundErr = errors.New("not found") // general not found error
 )
@@ -86,43 +86,47 @@ func GetChildTransactionByHash(db ethdb.Database, txHash common.Hash, chainId st
 
 	key := calTxKey(txHash, chainId)
 
-	r := getReader(db, key)
-	if r == nil {
-		return nil, nil
+	bs, err := db.Get(key)
+	if bs == nil || err != nil {
+		return nil, NotFoundErr
 	}
 
-	var n int
-	var err error
-
-	tx := wire.ReadBinary(&types.Transaction{}, r, 0, &n, &err).(*types.Transaction)
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error reading block : %v", err))
-	}
-
-	return tx, nil
+	return decodeTx(bs)
 }
 
 func DeleteTdmBlockWithDetail(db ethdb.Database, number int64, chainId string) error {
 
 	tdmBlock, err := GetChildTdmBlockByNumber(db, number, chainId)
-	if err != nil {return err}
+	if err != nil {
+		return err
+	}
 
 	DeleteTdmBlock(db, number, chainId)
-	if err != nil {return err}
+	if err != nil {
+		return err
+	}
 
 	for _, txBytes := range tdmBlock.Txs {
 
 		tx, err := decodeTx(txBytes)
-		if err != nil {return err}
+		if err != nil {
+			return err
+		}
 		err = DeleteTdmTransactions(db, tx.Hash(), chainId)
-		if err != nil {return err}
+		if err != nil {
+			return err
+		}
 	}
 
 	err = DeleteTdmExtraData(db, number, chainId)
-	if err != nil {return err}
+	if err != nil {
+		return err
+	}
 
 	err = DeleteTdmBlockPartSize(db, number, chainId)
-	if err != nil {return err}
+	if err != nil {
+		return err
+	}
 
 	return DeleteTdmCommits(db, number, chainId)
 }
@@ -151,7 +155,6 @@ func DeleteTdmCommits(db ethdb.Database, number int64, chainId string) error {
 
 	return db.Delete(calCommitKey(number, chainId))
 }
-
 
 func WriteTdmBlockWithDetail(db ethdb.Database, tdmBlock *tdmTypes.Block, blockPartSize int, commit *tdmTypes.Commit) error {
 
@@ -262,7 +265,7 @@ func calCommitKey(number int64, chainId string) []byte {
 
 func getReader(db ethdb.Database, key []byte) io.Reader {
 	bytez, err := db.Get(key)
-	if bytez == nil || err != nil{
+	if bytez == nil || err != nil {
 		return nil
 	}
 	return bytes.NewReader(bytez)

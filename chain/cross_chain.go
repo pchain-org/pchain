@@ -2,7 +2,6 @@ package chain
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -16,6 +15,7 @@ import (
 	"github.com/pchain/ethermint/ethereum"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
+	"github.com/tendermint/go-wire"
 	"github.com/tendermint/tendermint/epoch"
 	tdmTypes "github.com/tendermint/tendermint/types"
 	"math/big"
@@ -234,7 +234,13 @@ func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *ethTypes.Tr
 func (cch *CrossChainHelper) GetTxFromChildChain(txHash common.Hash, chainId string) *ethTypes.Transaction {
 
 	chainMgr := GetCMInstance(nil)
-	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
+
+	stack := chainMgr.mainChain.EthNode
+	var backend *ethereum.Backend
+	if err := stack.Service(&backend); err != nil {
+		utils.Fatalf("backend service not running: %v", err)
+	}
+	chainDb := backend.Ethereum().ChainDb()
 
 	tx, _ := core.GetChildTransactionByHash(chainDb, txHash, chainId)
 
@@ -265,10 +271,10 @@ func (cch *CrossChainHelper) GetChildBlockByHash(hash []byte, chainId string) *t
 }
 
 //verify the signature of validators who voted for the block
-func (cch *CrossChainHelper) VerifyTdmBlock(from common.Address, block string) error {
+func (cch *CrossChainHelper) VerifyTdmBlock(from common.Address, block []byte) error {
 
 	var intBlock tdmTypes.IntegratedBlock
-	err := json.Unmarshal([]byte(block), &intBlock)
+	err := wire.ReadBinaryBytes(block, &intBlock)
 	if err != nil {
 		return err
 	}
@@ -277,9 +283,44 @@ func (cch *CrossChainHelper) VerifyTdmBlock(from common.Address, block string) e
 	commit := intBlock.Commit
 	blockPartSize := intBlock.BlockPartSize
 
-	chainId := tdmBlock.ChainID
-	//1, check from is the validator of child chain
+	//1, data hash & num(tx)
+	if !bytes.Equal(tdmBlock.Data.Hash(), tdmBlock.DataHash) {
+		return errors.New("data hash gets wrong")
+	}
+
+	if tdmBlock.NumTxs != len(tdmBlock.Data.Txs) {
+		return errors.New("transaction number gets wrong")
+	}
+
+	//2, last commit
+	if !bytes.Equal(tdmBlock.LastCommitHash, tdmBlock.LastCommit.Hash()) {
+		return errors.New("last commit gets wrong")
+	}
+
+	//3, block header check
+	// TODO: ensure 'commit.BlockID' is for the current block.
+	firstParts := tdmBlock.MakePartSet(blockPartSize)
+	firstPartsHeader := firstParts.Header()
+	blockId := tdmTypes.BlockID{
+		tdmBlock.Hash(),
+		firstPartsHeader,
+	}
+	if !blockId.Equals(commit.BlockID) {
+		return errors.New("block id gets wrong")
+	}
+
+	// special case: epoch 0 update
+	// TODO: how to verify this block which includes epoch 0?
+	if tdmBlock.BlockExData != nil && len(tdmBlock.BlockExData) != 0 {
+		ep := epoch.FromBytes(tdmBlock.BlockExData)
+		if ep != nil && ep.Number == 0 {
+			return nil
+		}
+	}
+
+	//4, check from is the validator of child chain
 	//   and check the validator hash
+	chainId := tdmBlock.ChainID
 	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
 	if ci == nil {
 		return errors.New(fmt.Sprintf("chain %s not exist", chainId))
@@ -300,40 +341,13 @@ func (cch *CrossChainHelper) VerifyTdmBlock(from common.Address, block string) e
 		return errors.New("validator set gets wrong")
 	}
 
-	//2, block header check:
-	//   *block hash
-	// must fail here, because the blockid is for the current block
-	firstParts := tdmBlock.MakePartSet(blockPartSize)
-	firstPartsHeader := firstParts.Header()
-	blockId := tdmTypes.BlockID{
-		tdmBlock.Hash(),
-		firstPartsHeader,
-	}
-	if !blockId.Equals(tdmBlock.LastBlockID) {
-		return errors.New("block id gets wrong")
-	}
-
-	//3��*data hash & num(tx)
-	if !bytes.Equal(tdmBlock.Data.Hash(), tdmBlock.DataHash) {
-		return errors.New("data hash gets wrong")
-	}
-
-	if tdmBlock.NumTxs != len(tdmBlock.Data.Txs) {
-		return errors.New("transaction number gets wrong")
-	}
-
-	//4, commit and vote check
-	if !bytes.Equal(tdmBlock.LastCommitHash, tdmBlock.LastCommit.Hash()) {
-		return errors.New("transaction number gets wrong")
-	}
-
 	return valSet.VerifyCommit(chainId, blockId, tdmBlock.Height, commit)
 }
 
-func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block string) error {
+func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block []byte) error {
 
 	var intBlock tdmTypes.IntegratedBlock
-	err := json.Unmarshal([]byte(block), &intBlock)
+	err := wire.ReadBinaryBytes(block, &intBlock)
 	if err != nil {
 		return err
 	}
@@ -343,7 +357,12 @@ func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block string) error {
 	commit := intBlock.Commit
 
 	chainMgr := GetCMInstance(nil)
-	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
+	stack := chainMgr.mainChain.EthNode
+	var backend *ethereum.Backend
+	if err := stack.Service(&backend); err != nil {
+		utils.Fatalf("backend service not running: %v", err)
+	}
+	chainDb := backend.Ethereum().ChainDb()
 
 	err = core.WriteTdmBlockWithDetail(chainDb, tdmBlock, blockPartSize, commit)
 	if err != nil {
@@ -352,11 +371,10 @@ func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block string) error {
 
 	//here is epoch update; should be a more general mechanism
 	if tdmBlock.BlockExData != nil && len(tdmBlock.BlockExData) != 0 {
-
 		ep := epoch.FromBytes(tdmBlock.BlockExData)
 		if ep != nil {
 			ci := core.GetChainInfo(cch.chainInfoDB, tdmBlock.ChainID)
-			if ep.Number > ci.EpochNumber {
+			if ep.Number == 0 || ep.Number > ci.EpochNumber {
 				ci.EpochNumber = ep.Number
 				ci.Epoch = ep
 				core.SaveChainInfo(cch.chainInfoDB, ci)

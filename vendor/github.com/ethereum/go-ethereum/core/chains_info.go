@@ -85,11 +85,8 @@ func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
 		CoreChainInfo: *cci,
 	}
 
-	if cci.EpochNumber != 0 {
-		epoch := loadEpoch(db, cci.EpochNumber, chainId)
-		if epoch == nil {
-			return nil
-		}
+	epoch := loadEpoch(db, cci.EpochNumber, chainId)
+	if epoch != nil {
 		ci.Epoch = epoch
 	}
 

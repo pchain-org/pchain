@@ -1,8 +1,8 @@
 package ethclient
 
 import (
-	"golang.org/x/net/context"
 	"github.com/ethereum/go-ethereum/common"
+	"golang.org/x/net/context"
 )
 
 /****************
@@ -10,19 +10,14 @@ import (
 // SaveBlockToMainChain save a block to main chain
 //
 // be careful, this method just work for main chain
-func (ec *Client) SaveBlockToMainChain(ctx context.Context, from common.Address, block string) (common.Hash, error) {
+func (ec *Client) SaveBlockToMainChain(ctx context.Context, from common.Address, data []byte) (common.Hash, error) {
 
-	type result struct {
-		hash common.Hash
-		err  error
-	}
+	var res common.Hash
 
-	var res result
-
-	err := ec.c.CallContext(ctx, &res, "pchain_saveBlockToMainChain", from, block)
+	err := ec.c.CallContext(ctx, &res, "chain_saveBlockToMainChain", from, data)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	return res.hash, res.err
+	return res, nil
 }

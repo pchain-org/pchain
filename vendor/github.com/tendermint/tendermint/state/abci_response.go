@@ -245,7 +245,7 @@ func (a *ABCIResponses) GetCurrentBlock() *types.Block {
 }
 
 func (a *ABCIResponses) SaveCurrentBlock2MainChain() {
-
+	fmt.Printf("SaveCurrentBlock2MainChain is %v\n", a.block.Height)
 	a.State.BlockNumberToSave = a.block.Height
 }
 
