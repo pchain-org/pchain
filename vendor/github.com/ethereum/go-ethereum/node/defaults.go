@@ -35,6 +35,7 @@ const (
 
 // DefaultConfig contains reasonable default settings.
 var DefaultConfig = Config{
+	GeneralDataDir:	  DefaultDataDir(),
 	DataDir:          DefaultDataDir(),
 	HTTPPort:         DefaultHTTPPort,
 	HTTPModules:      []string{"net", "web3"},

@@ -61,6 +61,9 @@ type Config struct {
 	// in the devp2p node identifier.
 	Version string `toml:"-"`
 
+	// GeneralDataDir is the file system folder for general information
+	GeneralDataDir string
+
 	// DataDir is the file system folder the node should use for any data storage
 	// requirements. The configured data directory will not be directly shared with
 	// registered services, instead those can use utility methods to create/access
@@ -264,6 +267,13 @@ var isOldGethResource = map[string]bool{
 	"trusted-nodes.json": true,
 }
 
+var isGeneralResource = map[string]bool{
+	"nodes":              true,
+	"nodekey":            true,
+	"static-nodes.json":  true,
+	"trusted-nodes.json": true,
+}
+
 // resolvePath resolves path in the instance directory.
 func (c *Config) resolvePath(path string) string {
 	if filepath.IsAbs(path) {
@@ -284,6 +294,11 @@ func (c *Config) resolvePath(path string) string {
 			return oldpath
 		}
 	}
+
+	if isGeneralResource[path] {
+		return filepath.Join(c.GeneralDataDir, path)
+	}
+
 	return filepath.Join(c.instanceDir(), path)
 }
 
@@ -320,12 +335,20 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	if err != nil {
 		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
 	}
+	/*
 	instanceDir := filepath.Join(c.DataDir, c.name())
 	if err := os.MkdirAll(instanceDir, 0700); err != nil {
 		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 		return key
 	}
 	keyfile = filepath.Join(instanceDir, datadirPrivateKey)
+	*/
+	if err := os.MkdirAll(c.GeneralDataDir, 0700); err != nil {
+		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
+		return key
+	}
+	keyfile = c.resolvePath(datadirPrivateKey)
+
 	if err := crypto.SaveECDSA(keyfile, key); err != nil {
 		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
 	}

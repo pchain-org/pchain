@@ -127,18 +127,16 @@ func (cm *ChainManager)StartChains() error{
 func (cm *ChainManager) StartEthP2P() error {
 
 	//Start Eth P2p
-	p2pServer, err := p2p.StartEthP2PServer(cm.mainChain.EthNode)
-	if err != nil {
-		return err
+	cm.ethP2P = p2p.NewEthP2PServer(cm.mainChain.EthNode)
+	if cm.ethP2P == nil {
+		return errors.New("p2p server is empty after creation")
 	}
-
-	cm.ethP2P = p2pServer
 
 	for _, chain := range cm.childChains {
-		cm.ethP2P.Hookup(chain.Id, chain.EthNode)
+		cm.ethP2P.AddNodeConfig(chain.Id, chain.EthNode)
 	}
 
-	return nil
+	return cm.ethP2P.Start()
 }
 
 func (cm *ChainManager) StartRPC() error {
@@ -214,6 +212,9 @@ func (cm *ChainManager) LoadChildChainInRT(from common.Address, chainId string) 
 
 	//StartChildChain to attach p2p and rpc
 	cm.p2pObj.AddNetwork(chain.Id)
+
+	cm.ethP2P.Hookup(chain.Id, chain.EthNode)
+
 	// Start each Chain
 	quit := make(chan int)
 	cm.childQuits[chain.Id] = quit

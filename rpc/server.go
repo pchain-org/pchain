@@ -86,38 +86,7 @@ func StartRPC(ctx *cli.Context) error {
 	}
 	return nil
 }
-/*
-func StartRPC1(ctx *cli.Context, chainIds []string, handlers []http.Handler) error {
 
-	host := utils.MakeHTTPRpcHost(ctx)
-	port := ctx.GlobalInt(utils.RPCPortFlag.Name)
-
-	listenAddrs := []string{"tcp://" + host + ":" + strconv.Itoa(port)}
-
-	// we may expose the rpc over both a unix and tcp socket
-	listeners = make(map[string]net.Listener, len(listenAddrs))
-	for _, listenAddr := range listenAddrs {
-
-		mux := http.NewServeMux()
-
-		for j, chainId := range chainIds {
-			handler := handlers[j]
-			fmt.Printf("pchain StartRPC for (chainId, rpchandler): (%v, %v)\n", chainId, handler)
-			if  handler != nil {
-				mux.Handle("/" + chainId, handler)
-			} else {
-				mux.Handle("/" + chainId, handler)
-			}
-		}
-		listener, err := rpcserver.StartHTTPServer(listenAddr, mux)
-		if err != nil {
-			return err
-		}
-		listeners[listenAddr] = listener
-	}
-	return nil
-}
-*/
 func StopRPC() {
 	for _, l := range listeners {
 		glog.Info("Closing rpc listener", "listener", l)

@@ -9,11 +9,20 @@ type EthP2PServer struct {
 	server *ethp2p.Server
 	mainConfig ethp2p.Config
 	mainProtocol []ethp2p.Protocol
+	//we should put child chain's static-nodes, trusted-nodes to main chain's config
+	//here just remember all child chain's config, and only main chain's config is applied
+	//should remove this configs map later
 	configs map[string]ethp2p.Config
 	protocols map[string][]ethp2p.Protocol
 }
 
-func newEthP2PServer(config ethp2p.Config, protocols []ethp2p.Protocol) *EthP2PServer {
+//this function should be called with main chain's configuration
+func NewEthP2PServer(mainNode *eth.Node) *EthP2PServer {
+
+	config, protocols, err := mainNode.GatherP2PConfigAndProtocols()
+	if err != nil {
+		return nil
+	}
 
 	server := &ethp2p.Server{Config: config}
 	server.Protocols = append(server.Protocols, protocols...)
@@ -26,24 +35,25 @@ func newEthP2PServer(config ethp2p.Config, protocols []ethp2p.Protocol) *EthP2PS
 		protocols: make(map[string][]ethp2p.Protocol),
 	}
 
+	mainNode.SetP2PServer(p2pSrv)
+
 	return p2pSrv
 }
 
-func StartEthP2PServer(node *eth.Node) (*EthP2PServer, error) {
+func (srv *EthP2PServer) AddNodeConfig(chainId string, node *eth.Node) error {
 
 	config, protocols, err := node.GatherP2PConfigAndProtocols()
 	if err != nil {
-		return nil, err
-	}
-	p2pSrv := newEthP2PServer(config, protocols)
-	node.SetP2PServer(p2pSrv)
-
-	err = p2pSrv.Start()
-	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return p2pSrv, nil
+	srv.configs[chainId] = config
+	srv.protocols[chainId] = protocols
+	srv.server.Protocols = append(srv.server.Protocols, protocols...)
+
+	node.SetP2PServer(srv)
+
+	return nil
 }
 
 func (srv *EthP2PServer) Start() error {
@@ -54,18 +64,15 @@ func (srv *EthP2PServer) Stop() {
 	srv.server.Stop()
 }
 
+
+//this function will restart the p2p server, it should only be called when add a node dynamically
+//at the initial stage of pchain system, all config/procotols should be gathered and applied together
 func (srv *EthP2PServer) Hookup(chainId string, node *eth.Node) error {
 
-	config, protocols, err := node.GatherP2PConfigAndProtocols()
-	if err != nil {
-		return err
-	}
-	srv.configs[chainId] = config
-	srv.protocols[chainId] = protocols
+	srv.AddNodeConfig(chainId, node)
 
-	srv.server.Protocols = append(srv.server.Protocols, protocols...)
-
-	node.SetP2PServer(srv)
+	srv.Stop()
+	srv.Start()
 
 	return nil
 }

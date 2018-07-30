@@ -906,6 +906,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	switch {
 	case ctx.GlobalIsSet(DataDirFlag.Name):
 		//cfg.DataDir = ctx.GlobalString(DataDirFlag.Name)
+		cfg.GeneralDataDir = MakeDataDir(ctx)
 		cfg.DataDir = filepath.Join(MakeDataDir(ctx), cfg.ChainId)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
