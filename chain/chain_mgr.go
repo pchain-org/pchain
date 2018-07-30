@@ -2,6 +2,7 @@ package chain
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
@@ -15,7 +16,9 @@ import (
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/tendermint/types"
 	"gopkg.in/urfave/cli.v1"
+	"net"
 	"os"
+	"strconv"
 )
 
 var plog = plogger.GetLogger("ChainManager")
@@ -85,16 +88,24 @@ func (cm *ChainManager) LoadChains() error {
 
 func (cm *ChainManager) InitCrossChainHelper(typeMut *event.TypeMux) {
 	cm.cch.typeMut = typeMut
+
 	cm.cch.chainInfoDB = dbm.NewDB("chaininfo",
 		cm.mainChain.Config.GetString("db_backend"),
 		cm.ctx.GlobalString(DataDirFlag.Name))
-	client, err := ethclient.Dial("http://localhost:6969/pchain")
-	if err != nil {
-		fmt.Printf("can't connect to localhost:6969/pchain, exit")
-		os.Exit(0)
-	}
 
-	cm.cch.client = client
+	if cm.ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
+		host := cm.ctx.GlobalString(utils.RPCListenAddrFlag.Name)
+		port := cm.ctx.GlobalInt(utils.RPCPortFlag.Name)
+		url := net.JoinHostPort(host, strconv.Itoa(port))
+		url = "http://" + url + "/pchain"
+		client, err := ethclient.Dial(url)
+		if err != nil {
+			fmt.Printf("can't connect to %s, err: %v, exit", url, err)
+			os.Exit(0)
+		}
+
+		cm.cch.client = client
+	}
 }
 
 func (cm *ChainManager) StartChains() error {
