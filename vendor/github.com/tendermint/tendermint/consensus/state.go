@@ -824,7 +824,7 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 		cs.mtx.Unlock()
 	case *BlockPartMessage:
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
-		logger.Error(Fmt("handleMsg: Received proposal block part message %+v\n", msg.Part))
+		logger.Debug(Fmt("handleMsg: Received proposal block part message %+v\n", msg.Part))
 		cs.mtx.Lock()
 		_, err = cs.addProposalBlockPart(msg.Height, msg.Part, peerKey != "")
 		if err != nil && msg.Round != cs.Round {
@@ -1097,7 +1097,6 @@ func (cs *ConsensusState) defaultDecideProposal(height, round int) {
 // (if POLRound was proposed, we have +2/3 prevotes from there).
 func (cs *ConsensusState) isProposalComplete() bool {
 	if cs.Proposal == nil || cs.ProposalBlock == nil {
-		logger.Error("first step")
 		return false
 	}
 	// we have the proposal. if there's a POLRound,
@@ -1105,7 +1104,6 @@ func (cs *ConsensusState) isProposalComplete() bool {
 	if cs.Proposal.POLRound < 0 {
 		return true
 	} else {
-		logger.Error("second step")
 		// if this is false the proposer is lying or we haven't received the POL yet
 		return cs.VoteSignAggr.Prevotes(cs.Proposal.POLRound).HasTwoThirdsMajority(cs.Validators)
 	}
@@ -1222,9 +1220,6 @@ func (cs *ConsensusState) newDoPrevote(height int, round int) {
 	// NOTE: the proposal signature is validated when it is received,
 	// and the proposal block parts are validated as they are received (against the merkle hash in the proposal)
 	//cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash().Bytes(), cs.ProposalBlockParts.Header())
-	logger.Error(cs.Proposal.BlockHeaderHash())
-	logger.Error(cs.Proposal.Hash)
-	logger.Error(cs.Proposal.BlockPartsHeader)
 	cs.signAddVote(types.VoteTypePrevote, cs.Proposal.BlockHeaderHash().Bytes(), cs.Proposal.BlockPartsHeader)
 	return
 }
@@ -1303,7 +1298,6 @@ func (cs *ConsensusState) enterPrevoteWait(height int, round int) {
 // else, unlock an existing lock and precommit nil if +2/3 of prevotes were nil,
 // else, precommit nil otherwise.
 func (cs *ConsensusState) enterPrecommit(height int, round int) {
-	logger.Error("enter precommit")
 	if cs.Height != height || round < cs.Round || (cs.Round == round && RoundStepPrecommit <= cs.Step) {
 		logger.Debug(Fmt("enterPrecommit(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
 		return
@@ -1710,7 +1704,6 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 		var err error
 
 		cs.ProposalBlock = wire.ReadBinary(&types.Block{}, cs.ProposalBlockParts.GetReader(), types.MaxBlockSize, &n, &err).(*types.Block)
-		logger.Error("completed block:%v", cs.ProposalBlock)
 		if !cs.isProposalComplete() {
 			logger.Error("proposal is not completed")
 		}
@@ -1822,8 +1815,8 @@ func (cs *ConsensusState) handleSignAggr(signAggr *types.SignAggr) (error) {
 		err, _ := cs.setMaj23SignAggr(signAggr)
 		return err
 	} else {
-		logger.Error(Fmt("signAggr is higher, height:%v, round:%v, type:%v", signAggr.Height, signAggr.Round, signAggr.Type))
-		logger.Error(Fmt("height:%v, round:%v, type:%v", cs.Height, cs.Round, cs.Step))
+		logger.Debug(Fmt("signAggr is higher, height:%v, round:%v, type:%v", signAggr.Height, signAggr.Round, signAggr.Type))
+		logger.Debug(Fmt("height:%v, round:%v, type:%v", cs.Height, cs.Round, cs.Step))
 		// switch to fast_sync
 		if signAggr.Height >= cs.Height+2 && signAggr.Type == types.VoteTypePrecommit {
 			if ok, err := cs.blsVerifySignAggr(signAggr); ok && err == nil {
@@ -2098,8 +2091,6 @@ func (cs *ConsensusState) signAddVote(type_ byte, hash []byte, header types.Part
 	}
 	vote, err := cs.signVote(type_, hash, header)
 	if err == nil {
-		logger.Error(Fmt("vote:%v",common.ToHex(vote.Signature.Bytes())))
-		logger.Error("chainID:", vote.BlockID)
 		pub :=cs.privValidator.GetPubKey()
 		if !pub.VerifyBytes(types.SignBytes(cs.state.ChainID, vote), vote.Signature) {
 			logger.Error("verify signature failed:")

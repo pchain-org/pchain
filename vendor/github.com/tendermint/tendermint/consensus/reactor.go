@@ -1,7 +1,6 @@
 package consensus
 
 import (
-	"os"
 	"bytes"
 	"errors"
 	"fmt"
@@ -97,9 +96,6 @@ func (conR *ConsensusReactor) SwitchToConsensus(state *sm.State) {
 	conR.conS = conS
 	conR.fastSync = false
 	conR.conS.Start()
-	if 2< 1{
-		os.Exit(0)
-	}
 }
 
 // Implements Reactor
@@ -718,7 +714,7 @@ OUTER_LOOP:
 
 		// Send prevote 2/3+ BLS signature aggregation
 	 if rs.PrevoteMaj23SignAggr != nil && !prs.PrevoteMaj23SignAggr {
-			logger.Error(Fmt("gossipDataRoutine: Validator (addr %v proposr %v) send prevoteAggr (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round))
+			logger.Debug(Fmt("gossipDataRoutine: Validator (addr %v proposr %v) send prevoteAggr (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round))
 
 			//fmt.Printf("The prevote Maj23SignAggr so send : %#v\n", rs.PrevoteMaj23SignAggr)
 
@@ -734,7 +730,7 @@ OUTER_LOOP:
 
 		// Send precommit 2/3+ BLS signature aggregation
 		if rs.PrecommitMaj23SignAggr != nil && !prs.PrecommitMaj23SignAggr {
-			logger.Error(Fmt("gossipDataRoutine: Validator (addr %v proposr %v) send precommitAggr (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round))
+			logger.Debug(Fmt("gossipDataRoutine: Validator (addr %v proposr %v) send precommitAggr (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round))
 
 			//fmt.Printf("The precommit Maj23SignAggr to send : %#v\n", rs.PrecommitMaj23SignAggr)
 

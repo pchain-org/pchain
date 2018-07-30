@@ -134,7 +134,7 @@ func GenPrivValidator() *PrivValidator {
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP
 	//password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
-	ks := keystore.NewKeyStoreByTenermint("", scryptN, scryptP)
+	ks := keystore.NewKeyStoreByTenermint("pchain", scryptN, scryptP)
 	newKey, err := keystore.NewKey(crand.Reader)
 	if err != nil {
 		return nil

@@ -273,6 +273,7 @@ func createPriValidators(num int) []*types.PrivValidator {
 		pwd := common.ToHex(privKey[0:7])
 		pwd = string([]byte(pwd)[2:])
 		pwd = strings.ToUpper(pwd)
+		pwd = "pchain"
 		fmt.Println("account:",common.ToHex(validators[i].Address), "pwd:", pwd)
 		a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
 		if err := ks.StoreKey(a.URL.Path, newKey, pwd); err != nil {
