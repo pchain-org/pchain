@@ -48,6 +48,9 @@ import (
 
 const defaultGas = 90000
 
+const defaultMCGas = 100000
+const defaultMCGasPrice = 20000000000
+
 // TXs sending limit
 const TRANSACTION_NUM_LIMIT = 200000
 
@@ -1138,6 +1141,14 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 		}
 		if args.Value == nil {
 			args.Value = new(hexutil.Big)
+		}
+	} else {
+		// TODO: adjust the gas/gasPrice for multi-chain tx
+		if args.Gas == nil {
+			args.Gas = (*hexutil.Big)(big.NewInt(defaultMCGas))
+		}
+		if args.GasPrice == nil {
+			args.GasPrice = (*hexutil.Big)(big.NewInt(defaultMCGasPrice))
 		}
 	}
 

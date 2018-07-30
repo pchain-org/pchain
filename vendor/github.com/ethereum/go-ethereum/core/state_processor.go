@@ -19,6 +19,7 @@ package core
 import (
 	"math/big"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -83,7 +84,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		//receipt, _, err := ApplyTransaction(p.config, p.bc, gp, statedb, header, tx, totalUsedGas, cfg)
 		totalUsedMoney := big.NewInt(0)
 		receipt, _, err := ApplyTransactionEx(p.config, p.bc, gp, statedb, header, tx,
-							totalUsedGas, totalUsedMoney, cfg, p.cch)
+			totalUsedGas, totalUsedMoney, cfg, p.cch)
 		glog.Infof("Process() 1, totalUsedGas is %v\n", totalUsedGas)
 		if err != nil {
 			return nil, nil, nil, err
@@ -150,8 +151,7 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, gp *GasPool, s
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool, statedb *state.StateDB, header *types.Header,
-			tx *types.Transaction, usedGas *big.Int, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper) (*types.Receipt, *big.Int, error) {
-
+	tx *types.Transaction, usedGas *big.Int, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper) (*types.Receipt, *big.Int, error) {
 
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
 	if err != nil {
@@ -159,7 +159,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool,
 	}
 
 	etd := tx.ExtendTxData()
-	if  etd == nil || etd.FuncName == "" {
+	if etd == nil || etd.FuncName == "" {
 
 		// Create a new context to be used in the EVM environment
 		context := NewEVMContext(msg, header, bc)
@@ -204,6 +204,17 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool,
 
 		glog.Infof("ApplyTransactionEx() 0, etd.FuncName is %v\n", etd.FuncName)
 
+		// Pre-pay gas for extended tx.
+		gas := tx.Gas()
+		gasPrice := tx.GasPrice()
+		gasValue := new(big.Int).Mul(gas, gasPrice)
+		from := msg.From()
+		if statedb.GetBalance(from).Cmp(gasValue) < 0 {
+			return nil, nil, fmt.Errorf("insufficient PAI for gas (%x). Req %v, has %v", from.Bytes()[:4], gasValue, statedb.GetBalance(from))
+		}
+		statedb.SubBalance(from, gasValue)
+		glog.Infof("ApplyTransactionEx() 1, gas is %v, gasPrice is %v, gasValue is %v\n", gas, gasPrice, gasValue)
+
 		if applyCb := GetApplyCb(etd.FuncName); applyCb != nil {
 			cch.GetMutex().Lock()
 			defer cch.GetMutex().Unlock()
@@ -212,9 +223,13 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool,
 			}
 		}
 
+		usedGas.Add(usedGas, gas)
+		totalUsedMoney.Add(totalUsedMoney, gasValue)
+		glog.Infof("ApplyTransactionEx() 2, totalUsedMoney is %v\n", totalUsedMoney)
+
 		receipt := types.NewReceipt(statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes(), usedGas)
 		receipt.TxHash = tx.Hash()
-		receipt.GasUsed = big.NewInt(0)
+		receipt.GasUsed = new(big.Int).Set(gas)
 
 		// Set the receipt logs and create a bloom for filtering
 		receipt.Logs = statedb.GetLogs(tx.Hash())
@@ -224,7 +239,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, gp *GasPool,
 		glog.V(logger.Debug).Infoln(receipt)
 		glog.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
 
-		return receipt, big.NewInt(0), nil
+		return receipt, gas, nil
 	}
 }
 
@@ -237,7 +252,7 @@ func AccumulateRewards(statedb *state.StateDB, header *types.Header, uncles []*t
 	reward := new(big.Int).Set(BlockReward)
 	coinbase := header.Coinbase
 	glog.Infof("AccumulateRewards() 0, coinbase is %x, reward is %v, statedb is %p\n",
-			coinbase, reward, statedb)
+		coinbase, reward, statedb)
 
 	r := new(big.Int)
 	for _, uncle := range uncles {
