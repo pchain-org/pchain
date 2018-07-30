@@ -64,21 +64,21 @@ type oritxdata struct {
 	Amount          *big.Int
 	Payload         []byte
 	//ExtendTxData 	*ExtendTxData
-	V               *big.Int // signature
-	R, S            *big.Int // signature
+	V    *big.Int // signature
+	R, S *big.Int // signature
 }
 
 type jsonOriTransaction struct {
-	Hash         *common.Hash            `json:"hash"`
-	AccountNonce *hexutil.Uint64         `json:"nonce"`
-	Price        *hexutil.Big            `json:"gasPrice"`
-	GasLimit     *hexutil.Big            `json:"gas"`
-	Recipient    *common.Address         `json:"to"`
-	Amount       *hexutil.Big            `json:"value"`
-	Payload      *hexutil.Bytes          `json:"input"`
-	V            *hexutil.Big            `json:"v"`
-	R            *hexutil.Big            `json:"r"`
-	S            *hexutil.Big            `json:"s"`
+	Hash         *common.Hash    `json:"hash"`
+	AccountNonce *hexutil.Uint64 `json:"nonce"`
+	Price        *hexutil.Big    `json:"gasPrice"`
+	GasLimit     *hexutil.Big    `json:"gas"`
+	Recipient    *common.Address `json:"to"`
+	Amount       *hexutil.Big    `json:"value"`
+	Payload      *hexutil.Bytes  `json:"input"`
+	V            *hexutil.Big    `json:"v"`
+	R            *hexutil.Big    `json:"r"`
+	S            *hexutil.Big    `json:"s"`
 }
 
 type Transaction struct {
@@ -90,8 +90,8 @@ type Transaction struct {
 }
 
 type ExtendTxData struct {
-	FuncName    string
-	Params      KeyValueSet
+	FuncName string
+	Params   KeyValueSet
 }
 
 type txdata struct {
@@ -100,50 +100,23 @@ type txdata struct {
 	Recipient       *common.Address `rlp:"nil"` // nil means contract creation
 	Amount          *big.Int
 	Payload         []byte
-	ExtendTxData 	*ExtendTxData
-	V               *big.Int // signature
-	R, S            *big.Int // signature
+	ExtendTxData    *ExtendTxData `rlp:"nil"`
+	V               *big.Int      // signature
+	R, S            *big.Int      // signature
 }
 
 type jsonTransaction struct {
-	Hash         *common.Hash            `json:"hash"`
-	AccountNonce *hexutil.Uint64         `json:"nonce"`
-	Price        *hexutil.Big            `json:"gasPrice"`
-	GasLimit     *hexutil.Big            `json:"gas"`
-	Recipient    *common.Address         `json:"to"`
-	Amount       *hexutil.Big            `json:"value"`
-	Payload      *hexutil.Bytes          `json:"input"`
-	ExtendTxData *ExtendTxData           `json:"extendTxData"`
-	V            *hexutil.Big            `json:"v"`
-	R            *hexutil.Big            `json:"r"`
-	S            *hexutil.Big            `json:"s"`
-}
-
-func OriToTransaction(oriTx *OriTransaction) *Transaction {
-
-	if oriTx == nil {
-		return nil
-	}
-
-	tx := &Transaction {
-		data : txdata{
-			AccountNonce: oriTx.data.AccountNonce,
-			Price: oriTx.data.Price,
-			GasLimit: oriTx.data.GasLimit,
-			Recipient: oriTx.data.Recipient,
-			Amount: oriTx.data.Amount,
-			Payload: oriTx.data.Payload[:],
-			ExtendTxData: &ExtendTxData{},
-			V: oriTx.data.V,
-			R: oriTx.data.R,
-			S: oriTx.data.S,
-		},
-		hash : oriTx.hash,
-		size : oriTx.size,
-		from : oriTx.from,
-	}
-
-	return tx
+	Hash         *common.Hash    `json:"hash"`
+	AccountNonce *hexutil.Uint64 `json:"nonce"`
+	Price        *hexutil.Big    `json:"gasPrice"`
+	GasLimit     *hexutil.Big    `json:"gas"`
+	Recipient    *common.Address `json:"to"`
+	Amount       *hexutil.Big    `json:"value"`
+	Payload      *hexutil.Bytes  `json:"input"`
+	ExtendTxData *ExtendTxData   `json:"extendTxData"`
+	V            *hexutil.Big    `json:"v"`
+	R            *hexutil.Big    `json:"r"`
+	S            *hexutil.Big    `json:"s"`
 }
 
 func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
@@ -151,7 +124,7 @@ func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice 
 }
 
 func NewTransactionEx(nonce uint64, to *common.Address, amount, gasLimit, gasPrice *big.Int, data []byte,
-			etd *ExtendTxData) *Transaction {
+	etd *ExtendTxData) *Transaction {
 	return newTransactionEx(nonce, to, amount, gasLimit, gasPrice, data, etd)
 }
 
@@ -189,7 +162,7 @@ func newTransaction(nonce uint64, to *common.Address, amount, gasLimit, gasPrice
 }
 
 func newTransactionEx(nonce uint64, to *common.Address, amount, gasLimit, gasPrice *big.Int, data []byte,
-			etd *ExtendTxData) *Transaction {
+	etd *ExtendTxData) *Transaction {
 
 	if len(data) > 0 {
 		data = common.CopyBytes(data)
@@ -249,22 +222,6 @@ func isProtectedV(V *big.Int) bool {
 	}
 	// anything not 27 or 28 are considered unprotected
 	return true
-}
-
-// DecodeRLP implements rlp.Encoder
-func (tx *OriTransaction) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &tx.data)
-}
-
-// DecodeRLP implements rlp.Decoder
-func (tx *OriTransaction) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	err := s.Decode(&tx.data)
-	if err == nil {
-		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
-	}
-
-	return err
 }
 
 // DecodeRLP implements rlp.Encoder
@@ -348,13 +305,13 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
+func (tx *Transaction) Data() []byte                { return common.CopyBytes(tx.data.Payload) }
 func (tx *Transaction) ExtendTxData() *ExtendTxData { return tx.data.ExtendTxData }
-func (tx *Transaction) Gas() *big.Int      { return new(big.Int).Set(tx.data.GasLimit) }
-func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Price) }
-func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
-func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
-func (tx *Transaction) CheckNonce() bool   { return true }
+func (tx *Transaction) Gas() *big.Int               { return new(big.Int).Set(tx.data.GasLimit) }
+func (tx *Transaction) GasPrice() *big.Int          { return new(big.Int).Set(tx.data.Price) }
+func (tx *Transaction) Value() *big.Int             { return new(big.Int).Set(tx.data.Amount) }
+func (tx *Transaction) Nonce() uint64               { return tx.data.AccountNonce }
+func (tx *Transaction) CheckNonce() bool            { return true }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
@@ -448,7 +405,11 @@ func (tx *Transaction) String() string {
 	}
 
 	if tx.data.Recipient == nil {
-		to = "[contract creation]"
+		if tx.data.ExtendTxData != nil && tx.data.ExtendTxData.FuncName != "" {
+			to = "[Extended Transaction]"
+		} else {
+			to = "[contract creation]"
+		}
 	} else {
 		to = fmt.Sprintf("%x", tx.data.Recipient[:])
 	}
@@ -639,3 +600,19 @@ func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
 
+// Custom DecodeRLP for ExtendTxData
+func (e *ExtendTxData) DecodeRLP(s *rlp.Stream) error {
+	kind, size, err := s.Kind()
+	if err != nil {
+		return err
+	}
+
+	if kind == rlp.String && size != 0 {
+		sbyte, err := s.Bytes()
+		if err != nil {
+			return err
+		}
+		err = json.Unmarshal(sbyte, e)
+	}
+	return err
+}
