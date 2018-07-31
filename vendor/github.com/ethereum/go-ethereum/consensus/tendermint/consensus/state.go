@@ -641,8 +641,6 @@ func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 
 	// Reset fields based on state.
 	_, validators, _ := state.GetValidators()
-	//liaoyd
-	// fmt.Println("validators:", validators)
 	lastPrecommits := (*types.VoteSet)(nil)
 	if cs.CommitRound > -1 && cs.Votes != nil {
 		if !cs.Votes.Precommits(cs.CommitRound).HasTwoThirdsMajority() {
@@ -1041,27 +1039,26 @@ func (cs *ConsensusState) createProposalBlock() (*types.Block, *types.PartSet) {
 		*/
 
 		/*
-				// Mempool validated transactions
-				txs := cs.mempool.Reap(cs.config.GetInt("block_size"))
+		// Mempool validated transactions
+		txs := cs.mempool.Reap(cs.config.GetInt("block_size"))
 
-				epTxs, err := cs.Epoch.ProposeTransactions("proposer", cs.Height)
-				if err != nil {
-					return nil, nil
-				}
+		epTxs, err := cs.Epoch.ProposeTransactions("proposer", cs.Height)
+		if err != nil {
+			return nil, nil
+		}
 
-				if len(epTxs) != 0 {
-					log.Info("createProposalBlock(), epoch propose", "len(txs)", len(epTxs))
-					txs = append(txs, epTxs...)
-				}
-		*/
-		/*
-		var epochBytes []byte = []byte{}
-		shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
-		if shouldProposeEpoch {
-			cs.Epoch.SetNextEpoch(cs.Epoch.ProposeNextEpoch(cs.Height))
-			epochBytes = cs.Epoch.NextEpoch.Bytes()
+		if len(epTxs) != 0 {
+			log.Info("createProposalBlock(), epoch propose", "len(txs)", len(epTxs))
+			txs = append(txs, epTxs...)
 		}
 		*/
+
+		var epochBytes []byte = []byte{}
+		shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(int(cs.Height))
+		if shouldProposeEpoch {
+			cs.Epoch.SetNextEpoch(cs.Epoch.ProposeNextEpoch(int(cs.Height)))
+			epochBytes = cs.Epoch.NextEpoch.Bytes()
+		}
 
 		_, val, _ := cs.state.GetValidators()
 
@@ -1074,7 +1071,8 @@ func (cs *ConsensusState) createProposalBlock() (*types.Block, *types.PartSet) {
 		cs.blockFromMiner = nil
 
 		return types.MakeBlock(cs.Height, cs.state.TdmExtra.ChainID, commit,
-				cs.state.TdmExtra.BlockID, val.Hash(), blockBytes, cs.config.GetInt( "block_part_size"))
+				cs.state.TdmExtra.BlockID, val.Hash(), blockBytes, epochBytes,
+				cs.config.GetInt( "block_part_size"))
 	} else {
 		panic("block from miner should not be nil, let's crash")
 		return nil, nil
@@ -1140,10 +1138,9 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	}
 
 	// Valdiate proposal block
-	/*
-	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.ExData.BlockExData)
+	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.TdmExtra.EpochBytes)
 	if proposedNextEpoch != nil {
-		err = cs.RoundState.Epoch.ValidateNextEpoch(proposedNextEpoch, height)
+		err = cs.RoundState.Epoch.ValidateNextEpoch(proposedNextEpoch, int(height))
 		if err != nil {
 			// ProposalBlock is invalid, prevote nil.
 			log.Warn("enterPrevote: Proposal reward scheme is invalid", "error", err)
@@ -1151,7 +1148,6 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 			return
 		}
 	}
-	*/
 
 	// Prevote cs.ProposalBlock
 	// NOTE: the proposal signature is validated when it is received,
@@ -1476,7 +1472,7 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 		fail.Fail() // XXX
 
 		// NewHeightStep!
-		cs.UpdateToStateAndEpoch(stateCopy, stateCopy.Epoch)
+		//cs.UpdateToStateAndEpoch(stateCopy, stateCopy.Epoch)
 
 		fail.Fail() // XXX
 

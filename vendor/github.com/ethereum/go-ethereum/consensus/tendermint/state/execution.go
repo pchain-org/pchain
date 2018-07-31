@@ -8,7 +8,7 @@ import (
 	//abci "github.com/tendermint/abci/types"
 	. "github.com/tendermint/go-common"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	//"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	rpcTxHook "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/txhook"
 )
 
@@ -87,8 +87,8 @@ func (s *State) validateBlock(block *types.Block) error {
 func (s *State) ApplyBlock(eventCache types.Fireable, block *types.Block, partsHeader types.PartSetHeader, cch rpcTxHook.CrossChainHelper) error {
 
 	//here handles the proposed next epoch
-	/*
-	nextEpochInBlock := epoch.FromBytes(block.ExData.BlockExData)
+
+	nextEpochInBlock := epoch.FromBytes(block.TdmExtra.EpochBytes)
 	if nextEpochInBlock != nil {
 		s.Epoch.SetNextEpoch(nextEpochInBlock)
 		s.Epoch.NextEpoch.RS = s.Epoch.RS
@@ -99,31 +99,31 @@ func (s *State) ApplyBlock(eventCache types.Fireable, block *types.Block, partsH
 	fail.Fail() // XXX
 
 	//here handles if need to enter next epoch
-	ok, err := s.Epoch.ShouldEnterNewEpoch(block.Height)
+	ok, err := s.Epoch.ShouldEnterNewEpoch(int(block.TdmExtra.Height))
 	if ok && err == nil {
 
 		// now update the block and validators
 		// fmt.Println("Diffs before:", abciResponses.EndBlock.Diffs)
 		// types.ValidatorChannel <- abciResponses.EndBlock.Diffs
-		types.ValidatorChannel <- s.Epoch.Number
-		abciResponses.EndBlock.Diffs = <-types.EndChannel
+		// types.ValidatorChannel <- s.Epoch.Number
+		// abciResponses.EndBlock.Diffs = <-types.EndChannel
 		// fmt.Println("Diffs after:", abciResponses.EndBlock.Diffs)
 
-		s.Epoch, _ = s.Epoch.EnterNewEpoch(block.Height)
+		s.Epoch, _ = s.Epoch.EnterNewEpoch(int(block.TdmExtra.Height))
 
 	} else if err != nil {
 		log.Warn(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
-			block.Height, s.Epoch, err))
+			block.TdmExtra.Height, s.Epoch, err))
 		return err
 	}
-	*/
+
 	//here handles when enter new epoch
 	s.SetBlockAndEpoch(block.TdmExtra, partsHeader)
 
 	fail.Fail() // XXX
 
 	// save the state
-	//s.Epoch.Save()
+	s.Epoch.Save()
 	//s.Save()
 	return nil
 }

@@ -85,7 +85,7 @@ func loadRewardScheme(db dbm.DB, key []byte) *RewardScheme {
 		wire.ReadBinaryPtr(&rsDoc, r, 0, n, err)
 		if *err != nil {
 			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
-			fmt.Printf("LoadState: Data has been corrupted or its spec has changed: %v\n", *err)
+			fmt.Printf("loadRewardScheme: Data has been corrupted or its spec has changed: %v\n", *err)
 			os.Exit(1)
 		}
 		// TODO: ensure that buf is completely read.

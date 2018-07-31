@@ -22,7 +22,9 @@ type TendermintExtra struct {
 	SeenCommitHash []byte    `json:"last_commit_hash"` // commit from validators from the last block
 	ValidatorsHash []byte    `json:"validators_hash"`  // validators for the current block
 	SeenCommit *Commit       `json:"seen_commit"`
+	EpochBytes     []byte    `json:"epoch_bytes"`
 }
+
 /*
 // EncodeRLP serializes ist into the Ethereum RLP format.
 func (te *TendermintExtra) EncodeRLP(w io.Writer) error {
@@ -64,6 +66,7 @@ func (te *TendermintExtra) Copy() *TendermintExtra {
 		SeenCommitHash:  te.SeenCommitHash,
 		ValidatorsHash:  te.ValidatorsHash,
 		SeenCommit:      te.SeenCommit,
+		EpochBytes:      te.EpochBytes,
 	}
 }
 
@@ -80,6 +83,7 @@ func (te *TendermintExtra) Hash() []byte {
 		"SeenCommit":  te.SeenCommitHash,
 		"Validators":  te.ValidatorsHash,
 		"NeedToSave":  te.NeedToSave,
+		"EpochBytes":  te.EpochBytes,
 	})
 }
 

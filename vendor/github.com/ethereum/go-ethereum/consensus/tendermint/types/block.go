@@ -24,7 +24,7 @@ type Block struct {
 }
 
 func MakeBlock(height uint64, chainID string, commit *Commit,
-	prevBlockID BlockID, valHash, blkExData []byte, partSize int) (*Block, *PartSet) {
+	prevBlockID BlockID, valHash, blkExData []byte, epochBytes []byte, partSize int) (*Block, *PartSet) {
 
 	exData := &ExData{
 		BlockExData: blkExData,
@@ -37,6 +37,7 @@ func MakeBlock(height uint64, chainID string, commit *Commit,
 		ValidatorsHash: valHash,
 		BlockID:    prevBlockID,
 		SeenCommit: commit,
+		EpochBytes: epochBytes,
 	}
 
 	block := &Block{
