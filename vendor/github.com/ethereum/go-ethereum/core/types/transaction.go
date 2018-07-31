@@ -600,6 +600,15 @@ func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
 
+// Custom EncodeRLP for ExtendTxData
+func (e *ExtendTxData) EncodeRLP(w io.Writer) error {
+	sbyte, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	return rlp.Encode(w, sbyte)
+}
+
 // Custom DecodeRLP for ExtendTxData
 func (e *ExtendTxData) DecodeRLP(s *rlp.Stream) error {
 	kind, size, err := s.Kind()
