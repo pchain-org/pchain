@@ -41,7 +41,6 @@ import (
 type EthApiBackend struct {
 	eth *Ethereum
 	gpo *gasprice.Oracle
-	client ethapi.Client
 	apiBridge ethapi.InnerAPIBridge
 	crossChainHelper core.CrossChainHelper
 }
@@ -221,10 +220,6 @@ func (b *EthApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	for i := 0; i < bloomFilterThreads; i++ {
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
-}
-
-func (b *EthApiBackend) Client() ethapi.Client {
-	return b.client
 }
 
 func (b *EthApiBackend) SetInnerAPIBridge(inBridge ethapi.InnerAPIBridge) {

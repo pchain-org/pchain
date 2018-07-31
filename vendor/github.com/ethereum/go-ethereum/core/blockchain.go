@@ -26,7 +26,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"runtime/debug"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -496,10 +495,11 @@ func (bc *BlockChain) insert(block *types.Block) {
 		bc.currentFastBlock.Store(block)
 	}
 
-	fmt.Printf("(bc *BlockChain) insert(block *types.Block) before AfterInsertBlock with blockNumber %v\n", block.NumberU64())
-	debug.PrintStack()
-	fmt.Printf("(bc *BlockChain) insert(block *types.Block) after AfterInsertBlock with blockNumber %v\n", block.NumberU64())
-	//bc.Engine().AfterInsertBlock(block)
+	fmt.Printf("(bc *BlockChain) insert(block *types.Block) with blockNumber %v\n", block.NumberU64())
+	ibCbMap := GetInsertBlockCbMap()
+	for _, cb := range ibCbMap {
+		cb(block)
+	}
 }
 
 // Genesis retrieves the chain's genesis block.

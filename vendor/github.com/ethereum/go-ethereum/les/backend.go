@@ -83,7 +83,7 @@ type LightEthereum struct {
 	wg sync.WaitGroup
 }
 
-func New(ctx *node.ServiceContext, config *eth.Config, client ethapi.Client, cch core.CrossChainHelper) (*LightEthereum, error) {
+func New(ctx *node.ServiceContext, config *eth.Config, cch core.CrossChainHelper) (*LightEthereum, error) {
 	chainDb, err := eth.CreateDB(ctx, config, "lightchaindata")
 	if err != nil {
 		return nil, err
@@ -134,7 +134,7 @@ func New(ctx *node.ServiceContext, config *eth.Config, client ethapi.Client, cch
 	if leth.protocolManager, err = NewProtocolManager(leth.chainConfig, true, ClientProtocolVersions, config.NetworkId, leth.eventMux, leth.engine, leth.peers, leth.blockchain, nil, chainDb, leth.odr, leth.relay, quitSync, &leth.wg); err != nil {
 		return nil, err
 	}
-	leth.ApiBackend = &LesApiBackend{leth, nil, client, nil, cch}
+	leth.ApiBackend = &LesApiBackend{leth, nil, nil, cch}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.GasPrice

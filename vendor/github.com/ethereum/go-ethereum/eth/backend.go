@@ -191,7 +191,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
 	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
-	eth.ApiBackend = &EthApiBackend{eth, nil, nil, nil, cch}
+	eth.ApiBackend = &EthApiBackend{eth, nil, nil, cch}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
 		gpoParams.Default = config.GasPrice

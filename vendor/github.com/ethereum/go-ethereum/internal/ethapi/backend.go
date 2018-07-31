@@ -34,13 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// used by Backend to call tendermint rpc endpoints
-// TODO: replace with HttpClient https://github.com/tendermint/go-rpc/issues/8
-type Client interface {
-	// see tendermint/go-rpc/client/http_client.go:115 func (c *ClientURI) Call(...)
-	Call(method string, params map[string]interface{}, result interface{}) (interface{}, error)
-}
-
 // Backend interface provides the common API services (that are provided by
 // both full and light clients) with access to necessary functions.
 type Backend interface {
@@ -76,8 +69,6 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
-	//This client connects to tendermint part
-	Client() Client
 
 	SetInnerAPIBridge(inBridge InnerAPIBridge)
 	GetInnerAPIBridge() InnerAPIBridge

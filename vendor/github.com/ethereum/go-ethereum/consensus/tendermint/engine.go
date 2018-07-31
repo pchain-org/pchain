@@ -435,11 +435,6 @@ func (sb *backend) ChainReader() consensus.ChainReader {
 	return sb.chain
 }
 
-func (sb *backend) AfterInsertBlock(block *types.Block) {
-
-	sb.core.SaveState(block)
-}
-
 // update timestamp and signature of the block based on its number of transactions
 func (sb *backend) updateBlock(parent *types.Header, block *types.Block) (*types.Block, error) {
 

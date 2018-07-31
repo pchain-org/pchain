@@ -32,9 +32,11 @@ type CrossChainHelper interface {
 
 type EtdValidateCb func(tx *types.Transaction, state *st.StateDB, cch CrossChainHelper) error
 type EtdApplyCb func(tx *types.Transaction, state *st.StateDB, cch CrossChainHelper) error
+type EtdInsertBlockCb func(block *types.Block)
 
-var validateCbMap map[string]EtdValidateCb = make(map[string]EtdValidateCb)
-var applyCbMap    map[string]EtdApplyCb = make(map[string]EtdApplyCb)
+var validateCbMap 		map[string]EtdValidateCb = make(map[string]EtdValidateCb)
+var applyCbMap    		map[string]EtdApplyCb = make(map[string]EtdApplyCb)
+var insertBlockCbMap    map[string]EtdInsertBlockCb = make(map[string]EtdInsertBlockCb)
 
 func RegisterValidateCb(name string, validateCb EtdValidateCb) error {
 
@@ -42,7 +44,7 @@ func RegisterValidateCb(name string, validateCb EtdValidateCb) error {
 	_, ok := validateCbMap[name]
 	if ok {
 		//fmt.Printf("RegisterValidateCb return (%v, %v)\n", cb, ok)
-		return errors.New("the name has registered in ValidateCbMap")
+		return errors.New("the name has registered in validateCbMap")
 	}
 
 	validateCbMap[name] = validateCb
@@ -63,7 +65,7 @@ func RegisterApplyCb(name string, applyCb EtdApplyCb) error {
 
 	_, ok := applyCbMap[name]
 	if ok {
-		return errors.New("the name has registered in ValidateCbMap")
+		return errors.New("the name has registered in applyCbMap")
 	}
 
 	applyCbMap[name] = applyCb
@@ -79,5 +81,33 @@ func GetApplyCb(name string) EtdApplyCb {
 	}
 
 	return nil
+}
+
+
+func RegisterInsertBlockCb(name string, insertBlockCb EtdInsertBlockCb) error {
+
+	_, ok := insertBlockCbMap[name]
+	if ok {
+		return errors.New("the name has registered in insertBlockCbMap")
+	}
+
+	insertBlockCbMap[name] = insertBlockCb
+
+	return nil
+}
+
+func GetInsertBlockCb(name string) EtdInsertBlockCb {
+
+	cb, ok := insertBlockCbMap[name]
+	if ok {
+		return cb
+	}
+
+	return nil
+}
+
+func GetInsertBlockCbMap() map[string]EtdInsertBlockCb {
+
+	return insertBlockCbMap
 }
 

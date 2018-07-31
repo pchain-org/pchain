@@ -1042,6 +1042,7 @@ func (cs *ConsensusState) createProposalBlock() (*types.Block, *types.PartSet) {
 		// Mempool validated transactions
 		txs := cs.mempool.Reap(cs.config.GetInt("block_size"))
 
+		//we should eliminate this kind of transactions, here just for prototype verification
 		epTxs, err := cs.Epoch.ProposeTransactions("proposer", cs.Height)
 		if err != nil {
 			return nil, nil
