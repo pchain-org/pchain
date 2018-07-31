@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	st "github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -77,7 +78,7 @@ func NewPublicChainAPI(b Backend) *PublicChainAPI {
 }
 
 func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Address, chainId string,
-	minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64) (common.Hash, error) {
+	minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64, gas *big.Int, gasPrice *big.Int) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
@@ -99,8 +100,8 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 	args := SendTxArgs{
 		From:         from,
 		To:           nil,
-		Gas:          nil,
-		GasPrice:     nil,
+		Gas:          (*hexutil.Big)(gas),
+		GasPrice:     (*hexutil.Big)(gasPrice),
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
@@ -111,7 +112,8 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address, pubkey string, chainId string, depositAmount *big.Int) (common.Hash, error) {
+func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address,
+	pubkey string, chainId string, depositAmount *big.Int, gas *big.Int, gasPrice *big.Int) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
@@ -131,8 +133,8 @@ func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address
 	args := SendTxArgs{
 		From:         from,
 		To:           nil,
-		Gas:          nil,
-		GasPrice:     nil,
+		Gas:          (*hexutil.Big)(gas),
+		GasPrice:     (*hexutil.Big)(gasPrice),
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
@@ -144,7 +146,7 @@ func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address
 }
 
 func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Address,
-	chainId string, amount *big.Int) (common.Hash, error) {
+	chainId string, amount *big.Int, gas *big.Int, gasPrice *big.Int) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
@@ -171,8 +173,8 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 	args := SendTxArgs{
 		From:         from,
 		To:           nil,
-		Gas:          nil,
-		GasPrice:     nil,
+		Gas:          (*hexutil.Big)(gas),
+		GasPrice:     (*hexutil.Big)(gasPrice),
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
@@ -184,7 +186,7 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 }
 
 func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Address,
-	txHash common.Hash) (common.Hash, error) {
+	txHash common.Hash, gas *big.Int, gasPrice *big.Int) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
 	if chainId == "pchain" {
@@ -204,8 +206,8 @@ func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Ad
 	args := SendTxArgs{
 		From:         from,
 		To:           nil,
-		Gas:          nil,
-		GasPrice:     nil,
+		Gas:          (*hexutil.Big)(gas),
+		GasPrice:     (*hexutil.Big)(gasPrice),
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
@@ -217,7 +219,7 @@ func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Ad
 }
 
 func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common.Address,
-	amount *big.Int) (common.Hash, error) {
+	amount *big.Int, gas *big.Int, gasPrice *big.Int) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
 	if chainId == "pchain" {
@@ -236,8 +238,8 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 	args := SendTxArgs{
 		From:         from,
 		To:           nil,
-		Gas:          nil,
-		GasPrice:     nil,
+		Gas:          (*hexutil.Big)(gas),
+		GasPrice:     (*hexutil.Big)(gasPrice),
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
@@ -249,7 +251,7 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 }
 
 func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.Address,
-	chainId string, txHash common.Hash) (common.Hash, error) {
+	chainId string, txHash common.Hash, gas *big.Int, gasPrice *big.Int) (common.Hash, error) {
 
 	if chainId == "pchain" {
 		return common.Hash{}, errors.New("argument can't be the main chain - pchain")
@@ -268,8 +270,8 @@ func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.
 	args := SendTxArgs{
 		From:         from,
 		To:           nil,
-		Gas:          nil,
-		GasPrice:     nil,
+		Gas:          (*hexutil.Big)(gas),
+		GasPrice:     (*hexutil.Big)(gasPrice),
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
