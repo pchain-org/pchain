@@ -258,6 +258,7 @@ func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
+//here the parameter - 'block' is normal block in pchain with extra data in extra header
 func (s *PublicChainAPI) SaveBlockToMainChain(ctx context.Context, from common.Address,
 						block string) (common.Hash, error) {
 
@@ -625,7 +626,7 @@ func sb2mc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCh
 
 	fmt.Printf("from is %X, txHash is %x, block is %s\n", from.Hex(), block)
 
-	err := cch.VerifyTdmBlock(from, block)
+	err := cch.VerifyBlock(from, block)
 	if err != nil {
 		return errors.New(fmt.Sprintf("block does not pass verfication", from, block))
 	}
@@ -648,5 +649,5 @@ func sb2mc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChain
 
 	fmt.Printf("from is %X, txHash is %x, block is %s\n", from.Hex(), block)
 
-	return cch.SaveTdmBlock2MainBlock(block)
+	return cch.SaveBlock2MainBlock(block)
 }

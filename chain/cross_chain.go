@@ -9,7 +9,7 @@ import (
 	"errors"
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	//tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/ethclient"
 	//"bytes"
@@ -109,29 +109,29 @@ func (cch *CrossChainHelper) GetTxFromChildChain(txHash common.Hash, chainId str
 }
 
 //get one child chain's block by number
-func (cch *CrossChainHelper) GetChildBlockByNumber(number int64, chainId string) *tdmTypes.Block {
+func (cch *CrossChainHelper) GetChildBlockByNumber(number int64, chainId string) *ethTypes.Block {
 
 	chainMgr := GetCMInstance(nil)
 	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
 
-	block, _ := core.GetChildTdmBlockByNumber(chainDb, number, chainId)
+	block, _ := core.GetChildBlockByNumber(chainDb, number, chainId)
 
 	return block
 }
 
 //get one child chain's block by hash
-func (cch *CrossChainHelper) GetChildBlockByHash(hash []byte, chainId string) *tdmTypes.Block {
+func (cch *CrossChainHelper) GetChildBlockByHash(hash []byte, chainId string) *ethTypes.Block {
 
 	chainMgr := GetCMInstance(nil)
 	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
 
-	block, _ := core.GetChildTdmBlockByHash(chainDb, hash, chainId)
+	block, _ := core.GetChildBlockByHash(chainDb, hash, chainId)
 
 	return block
 }
 
 //verify the signature of validators who voted for the block
-func (cch *CrossChainHelper) VerifyTdmBlock(from common.Address, block string) error {
+func (cch *CrossChainHelper) VerifyBlock(from common.Address, block string) error {
 
 	return nil
 	/*
@@ -199,20 +199,16 @@ func (cch *CrossChainHelper) VerifyTdmBlock(from common.Address, block string) e
 	*/
 }
 
-func (cch *CrossChainHelper) SaveTdmBlock2MainBlock(block string) error {
+func (cch *CrossChainHelper) SaveBlock2MainBlock(blockStr string) error {
 
-	var intBlock tdmTypes.IntegratedBlock
-	err := json.Unmarshal([]byte(block), &intBlock)
+	block := ethTypes.Block{}
+	err := json.Unmarshal([]byte(blockStr), &block)
 	if err != nil { return err }
-
-	tdmBlock := intBlock.Block
-	blockPartSize := intBlock.BlockPartSize
-	commit := intBlock.Commit
 
 	chainMgr := GetCMInstance(nil)
 	chainDb := chainMgr.mainChain.EthNode.Backend().ChainDb()
 
-	err = core.WriteTdmBlockWithDetail(chainDb, tdmBlock, blockPartSize, commit)
+	err = core.WriteChildBlockWithDetail(chainDb, &block)
 	if err != nil { return err }
 	/*
 	//here is epoch update; should be a more general mechanism

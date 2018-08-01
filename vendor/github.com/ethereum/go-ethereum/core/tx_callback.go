@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/event"
 	dbm "github.com/tendermint/go-db"
-	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
 
@@ -23,10 +22,10 @@ type CrossChainHelper interface {
 	GetClient() *ethclient.Client
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction	//should return varified transaction
 	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction	//should return varified transaction
-	VerifyTdmBlock(from common.Address, block string) error
-	SaveTdmBlock2MainBlock(block string) error
-	GetChildBlockByNumber(number int64, chainId string) *tdmTypes.Block	//get one chain's block by number
-	GetChildBlockByHash(hash []byte, chainId string) *tdmTypes.Block	//get one chain's block by hash
+	VerifyBlock(from common.Address, block string) error
+	SaveBlock2MainBlock(block string) error
+	GetChildBlockByNumber(number int64, chainId string) *types.Block	//get one chain's block by number
+	GetChildBlockByHash(hash []byte, chainId string) *types.Block	//get one chain's block by hash
 }
 
 

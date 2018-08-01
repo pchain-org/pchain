@@ -9,16 +9,6 @@ var TM2PB = tm2pb{}
 
 type tm2pb struct{}
 
-func (tm2pb) Header(header *Header) *types.Header {
-	return &types.Header{
-		ChainId:        header.ChainID,
-		Height:         uint64(header.Height),
-		Time:           uint64(header.Time.Unix()),
-		LastBlockId:    TM2PB.BlockID(header.LastBlockID),
-		LastCommitHash: header.LastCommitHash,
-	}
-}
-
 func (tm2pb) BlockID(blockID BlockID) *types.BlockID {
 	return &types.BlockID{
 		Hash:  blockID.Hash,

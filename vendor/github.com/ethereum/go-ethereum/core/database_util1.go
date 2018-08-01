@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	"github.com/tendermint/go-wire"
 	"io"
 )
 
@@ -41,44 +40,30 @@ var (
 	NotFoundErr = errors.New("not found") // general not found error
 )
 
-func GetChildTdmBlockByNumber(db ethdb.Database, blockNumber int64, chainId string) (*tdmTypes.Block, error) {
+func GetChildBlockByNumber(db ethdb.Database, blockNumber int64, chainId string) (*types.Block, error) {
 
 	key := calBlockKeyByNumber(blockNumber, chainId)
 
-	r := getReader(db, key)
-	if r == nil {
-		return nil, nil
-	}
-
-	var n int
-	var err error
-
-	block := wire.ReadBinary(&tdmTypes.Block{}, r, 0, &n, &err).(*tdmTypes.Block)
+	value, err := db.Get(key)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error reading block : %v", err))
+		return nil, err
 	}
 
-	return block, nil
+	block := &types.Block{}
+	return block.DecodeRLP1(value)
 }
 
-func GetChildTdmBlockByHash(db ethdb.Database, blockHash []byte, chainId string) (*tdmTypes.Block, error) {
+func GetChildBlockByHash(db ethdb.Database, blockHash []byte, chainId string) (*types.Block, error) {
 
 	key := calBlockKeyByHash(blockHash, chainId)
 
-	r := getReader(db, key)
-	if r == nil {
-		return nil, nil
-	}
-
-	var n int
-	var err error
-
-	block := wire.ReadBinary(&tdmTypes.Block{}, r, 0, &n, &err).(*tdmTypes.Block)
+	value, err := db.Get(key)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error reading block : %v", err))
+		return nil, err
 	}
 
-	return block, nil
+	block := &types.Block{}
+	return block.DecodeRLP1(value)
 }
 
 //notice: the 'txHash' is the hash format of ethereum, not tendermint
@@ -86,114 +71,86 @@ func GetChildTransactionByHash(db ethdb.Database, txHash common.Hash, chainId st
 
 	key := calTxKey(txHash, chainId)
 
-	r := getReader(db, key)
-	if r == nil {
-		return nil, nil
-	}
-
-	var n int
-	var err error
-
-	tx := wire.ReadBinary(&types.Transaction{}, r, 0, &n, &err).(*types.Transaction)
+	value, err := db.Get(key)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error reading block : %v", err))
+		return nil, err
 	}
 
-	return tx, nil
+	return decodeTx(value)
 }
 
-func DeleteTdmBlockWithDetail(db ethdb.Database, number int64, chainId string) error {
-	/*
-	tdmBlock, err := GetChildTdmBlockByNumber(db, number, chainId)
+func DeleteChildBlockWithDetail(db ethdb.Database, number int64, chainId string) error {
+
+	block, err := GetChildBlockByNumber(db, number, chainId)
 	if err != nil {return err}
 
-	DeleteTdmBlock(db, number, chainId)
+	DeleteChildBlock(db, number, chainId)
 	if err != nil {return err}
 
-	for _, tx := range tdmBlock.Txs {
+	for _, tx := range block.Transactions() {
 
-		err = DeleteTdmTransactions(db, tx.Hash(), chainId)
+		err = DeleteChildTransaction(db, tx.Hash(), chainId)
 		if err != nil {return err}
 	}
 
-	err = DeleteTdmExtraData(db, number, chainId)
-	if err != nil {return err}
-
-	err = DeleteTdmBlockPartSize(db, number, chainId)
-	if err != nil {return err}
-
-	return DeleteTdmCommits(db, number, chainId)
-	*/
 	return nil
 }
 
-func DeleteTdmBlock(db ethdb.Database, number int64, chainId string) error {
+func DeleteChildBlock(db ethdb.Database, number int64, chainId string) error {
 
 	return db.Delete(calBlockKeyByNumber(number, chainId))
 }
 
-func DeleteTdmTransactions(db ethdb.Database, txHash common.Hash, chainId string) error {
+func DeleteChildTransaction(db ethdb.Database, txHash common.Hash, chainId string) error {
 
 	return db.Delete(calTxKey(txHash, chainId))
 }
 
-func DeleteTdmExtraData(db ethdb.Database, number int64, chainId string) error {
+func WriteChildBlockWithDetail(db ethdb.Database, block *types.Block) error {
 
-	return db.Delete(calExtraDataKey(number, chainId))
-}
-
-func DeleteTdmBlockPartSize(db ethdb.Database, number int64, chainId string) error {
-
-	return db.Delete(calBlockPartSizeKey(number, chainId))
-}
-
-func DeleteTdmCommits(db ethdb.Database, number int64, chainId string) error {
-
-	return db.Delete(calCommitKey(number, chainId))
-}
-
-
-func WriteTdmBlockWithDetail(db ethdb.Database, tdmBlock *tdmTypes.Block, blockPartSize int, commit *tdmTypes.Commit) error {
-
-	WriteTdmBlock(db, tdmBlock)
-	WriteTdmTransactions(db, tdmBlock)
-	WriteTdmExtraData(db, tdmBlock)
-	WriteTdmBlockPartSize(db, tdmBlock, blockPartSize)
-	WriteTdmCommits(db, tdmBlock, commit)
+	WriteChildBlock(db, block)
+	WriteChildTransactions(db, block)
 
 	return nil
 }
 
-func WriteTdmBlock(db ethdb.Database, tdmBlock *tdmTypes.Block) error {
+func WriteChildBlock(db ethdb.Database, block *types.Block) error {
 
-	/*
-	//chainId := tdmBlock.ChainID
-	chainId := ""
-
-	blockByte := wire.BinaryBytes(tdmBlock)
-	key := calBlockKeyByHash(tdmBlock.EthBlock.Hash().Bytes(), chainId)
-
-	err := db.Put(key, blockByte)
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(block.Header())
 	if err != nil {
 		return err
 	}
 
-	key = calBlockKeyByNumber(tdmBlock.EthBlock.Number().Int64(), chainId)
+	blockByte, err := block.EncodeRLP1()
+	if err != nil {
+		return err
+	}
+
+	chainId := tdmExtra.ChainID
+	key := calBlockKeyByHash(block.Hash().Bytes(), chainId)
+	err = db.Put(key, blockByte)
+	if err != nil {
+		return err
+	}
+
+	key = calBlockKeyByNumber(block.Number().Int64(), chainId)
 	return db.Put(key, blockByte)
-	*/
-	return nil
 }
 
-func WriteTdmTransactions(db ethdb.Database, tdmBlock *tdmTypes.Block) error {
+func WriteChildTransactions(db ethdb.Database, block *types.Block) error {
 
-	/*
-	chainId := ""
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(block.Header())
+	if err != nil {
+		return err
+	}
 
-	if len(tdmBlock.EthBlock.Transactions()) == 0 {
+	chainId := tdmExtra.ChainID
+
+	if len(block.Transactions()) == 0 {
 		return nil
 	}
 
-	for _, tx := range tdmBlock.EthBlock.Transactions() {
+	for _, tx := range block.Transactions() {
 
 		key := calTxKey(tx.Hash(), chainId)//tdmBlock.ChainID
 
@@ -202,40 +159,7 @@ func WriteTdmTransactions(db ethdb.Database, tdmBlock *tdmTypes.Block) error {
 			return err
 		}
 	}
-	*/
-	return nil
-}
 
-func WriteTdmExtraData(db ethdb.Database, tdmBlock *tdmTypes.Block) error {
-
-	/*
-	if len(tdmBlock.BlockExData) == 0 {
-		return nil
-	}
-
-	key := calExtraDataKey(int64(tdmBlock.Height), tdmBlock.ChainID)
-	return db.Put(key, tdmBlock.BlockExData)
-	*/
-	return nil
-}
-
-func WriteTdmBlockPartSize(db ethdb.Database, tdmBlock *tdmTypes.Block, blockPartSize int) error {
-/*
-	key := calBlockPartSizeKey(tdmBlock.EthBlock.Number().Int64(), "")//tdmBlock.ChainID
-	bpsByte := wire.BinaryBytes(blockPartSize)
-
-	return db.Put(key, bpsByte)
-*/
-	return nil
-}
-
-func WriteTdmCommits(db ethdb.Database, tdmBlock *tdmTypes.Block, commit *tdmTypes.Commit) error {
-/*
-	commitByte := wire.BinaryBytes(commit)
-	key := calCommitKey(tdmBlock.EthBlock.Number().Int64(), "")//tdmBlock.ChainID
-
-	return db.Put(key, commitByte)
-*/
 	return nil
 }
 
@@ -252,21 +176,6 @@ func calBlockKeyByHash(hash []byte, chainId string) []byte {
 func calTxKey(hash common.Hash, chainId string) []byte {
 
 	return append(txPrefix, []byte(fmt.Sprintf("-%x-%s", hash, chainId))...)
-}
-
-func calExtraDataKey(number int64, chainId string) []byte {
-
-	return append(extraDataPrefix, []byte(fmt.Sprintf("-%v-%s", number, chainId))...)
-}
-
-func calBlockPartSizeKey(number int64, chainId string) []byte {
-
-	return append(blockPartSizePrefix, []byte(fmt.Sprintf("-%v-%s", number, chainId))...)
-}
-
-func calCommitKey(number int64, chainId string) []byte {
-
-	return append(commitPrefix, []byte(fmt.Sprintf("-%v-%s", number, chainId))...)
 }
 
 func getReader(db ethdb.Database, key []byte) io.Reader {

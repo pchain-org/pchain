@@ -13,7 +13,6 @@ import (
 
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
-	"github.com/tendermint/go-wire"
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
@@ -28,7 +27,7 @@ import (
 )
 
 type Backend interface {
-	Commit(proposal *types.Block, seals [][]byte) error
+	Commit(proposal *types.TdmBlock, seals [][]byte) error
 	ChainReader()   consss.ChainReader
 	GetBroadcaster() consss.Broadcaster
 }
@@ -158,10 +157,10 @@ type RoundState struct {
 	Epoch              *ep.Epoch
 	Validators         *types.ValidatorSet
 	Proposal           *types.Proposal
-	ProposalBlock      *types.Block
+	ProposalBlock      *types.TdmBlock
 	ProposalBlockParts *types.PartSet
 	LockedRound        int
-	LockedBlock        *types.Block
+	LockedBlock        *types.TdmBlock
 	LockedBlockParts   *types.PartSet
 	Votes              *HeightVoteSet
 	CommitRound        int            //
@@ -516,7 +515,7 @@ func (cs *ConsensusState) AddProposalBlockPart(height uint64, round int, part *t
 }
 
 // May block on send if queue is full.
-func (cs *ConsensusState) SetProposalAndBlock(proposal *types.Proposal, block *types.Block, parts *types.PartSet, peerKey string) error {
+func (cs *ConsensusState) SetProposalAndBlock(proposal *types.Proposal, block *types.TdmBlock, parts *types.PartSet, peerKey string) error {
 	cs.SetProposal(proposal, peerKey)
 	for i := 0; i < parts.Total(); i++ {
 		part := parts.GetPart(i)
@@ -919,9 +918,8 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 			var err error = nil
 			if cs.state.TdmExtra.NeedToSave {
 				//lastBlock := cs.blockStore.LoadBlock(height - 1)
-				lastBlock := cs.LoadBlock(cs.state.TdmExtra.Height)
-				intBlock := types.MakeIntegratedBlock(lastBlock, cs.LastCommit.MakeCommit(), cs.config.GetInt("block_part_size"))
-				err = cs.saveBlockToMainChain(intBlock)
+				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
+				err = cs.saveBlockToMainChain(lastBlock)
 			}
 			if err == nil {
 				cs.enterPrevote(height, cs.Round)
@@ -949,7 +947,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 }
 
 func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
-	var block *types.Block
+	var block *types.TdmBlock
 	var blockParts *types.PartSet
 
 	// Decide on block
@@ -1014,7 +1012,7 @@ func (cs *ConsensusState) isProposalComplete() bool {
 // Create the next block to propose and return it.
 // Returns nil block upon error.
 // NOTE: keep it side-effect free for clarity.
-func (cs *ConsensusState) createProposalBlock() (*types.Block, *types.PartSet) {
+func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet) {
 
 	//here we wait for ethereum block to propose
 	if cs.blockFromMiner != nil {
@@ -1063,16 +1061,12 @@ func (cs *ConsensusState) createProposalBlock() (*types.Block, *types.PartSet) {
 
 		_, val, _ := cs.state.GetValidators()
 
-		blockBytes, err := ethBlock.EncodeRLP1()
-		if err != nil {return nil, nil}
-
-		fmt.Printf("createProposalBlock blockBytes len : %v\n", len(blockBytes))
 		fmt.Printf("block.LastCommit is %v\n", commit)
 
 		cs.blockFromMiner = nil
 
 		return types.MakeBlock(cs.Height, cs.state.TdmExtra.ChainID, commit,
-				cs.state.TdmExtra.BlockID, val.Hash(), blockBytes, epochBytes,
+				ethBlock, val.Hash(), epochBytes,
 				cs.config.GetInt( "block_part_size"))
 	} else {
 		panic("block from miner should not be nil, let's crash")
@@ -1154,7 +1148,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	// NOTE: the proposal signature is validated when it is received,
 	// and the proposal block parts are validated as they are received (against the merkle hash in the proposal)
 	fmt.Printf("block is %p, extra is %p\n", cs.ProposalBlock, cs.ProposalBlock.TdmExtra)
-	fmt.Printf("ethblock is %X\n", cs.ProposalBlock.ExData.BlockExData)
+	fmt.Printf("ethblock is %s\n", cs.ProposalBlock.Block)
 	cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header())
 	return
 }
@@ -1310,13 +1304,13 @@ func (cs *ConsensusState) enterCommit(height uint64, commitRound int) {
 	log.Info(Fmt("enterCommit(%v/%v). Current: %v/%v/%v", height, commitRound, cs.Height, cs.Round, cs.Step))
 	fmt.Printf("block is %p\n", cs.ProposalBlock)
 	if cs.ProposalBlock != nil {
-		fmt.Printf("ethblock is %X\n", cs.ProposalBlock.ExData.BlockExData)
+		fmt.Printf("ethblock is %s\n", cs.ProposalBlock.Block)
 	}
 
 	defer func() {
 		fmt.Printf("defer() block is %p, extra is %p\n", cs.ProposalBlock)
 		if cs.ProposalBlock != nil {
-			fmt.Printf("defer() ethblock is %X\n", cs.ProposalBlock.ExData.BlockExData)
+			fmt.Printf("defer() ethblock is %s\n", cs.ProposalBlock.Block)
 		}
 
 		// Done enterCommit:
@@ -1362,7 +1356,7 @@ func (cs *ConsensusState) tryFinalizeCommit(height uint64) {
 
 	fmt.Printf("we force commit currently0, cs.ProposalBlock.is %p\n", cs.ProposalBlock)
 	if cs.ProposalBlock != nil {
-		fmt.Printf("we force commit currently0, cs.ProposalBlock.BlockExData is %x\n", cs.ProposalBlock.ExData.BlockExData)
+		fmt.Printf("we force commit currently0, cs.ProposalBlock.BlockExData is %s\n", cs.ProposalBlock.Block)
 	}
 
 	fmt.Printf("we force commit currently1\n")
@@ -1549,9 +1543,9 @@ func (cs *ConsensusState) addProposalBlockPart(height uint64, part *types.Part, 
 	}
 	if added && cs.ProposalBlockParts.IsComplete() {
 		// Added and completed!
-		var n int
-		var err error
-		cs.ProposalBlock = wire.ReadBinary(&types.Block{}, cs.ProposalBlockParts.GetReader(), types.MaxBlockSize, &n, &err).(*types.Block)
+		tdmBlock := &types.TdmBlock{}
+		cs.ProposalBlock, err = tdmBlock.FromBytes(cs.ProposalBlockParts.GetReader())
+
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
 		//log.Info("Received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
 		//fmt.Printf("Received complete proposal block is %v\n", cs.ProposalBlock.String())
@@ -1787,7 +1781,7 @@ func CompareHRS(h1 uint64, r1 int, s1 RoundStepType, h2 uint64, r2 int, s2 Round
 	return 0
 }
 
-func (cs *ConsensusState) saveBlockToMainChain(block *types.IntegratedBlock) error {
+func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) error {
 
 	client := cs.cch.GetClient()
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)

@@ -135,7 +135,6 @@ func (s *State) setBlockAndEpoch(
 	height uint64, blockID types.BlockID, blockTime time.Time) {
 
 	s.TdmExtra.Height = height
-	s.TdmExtra.BlockID = blockID
 	s.TdmExtra.Time = blockTime
 	s.TdmExtra.EpochNumber = uint64(s.Epoch.Number)
 	//s.Validators = nextValSet
@@ -233,7 +232,6 @@ func MakeGenesisState(/*db dbm.DB, */genDoc *types.GenesisDoc) *State {
 		TdmExtra:        &types.TendermintExtra{
 			ChainID:     genDoc.ChainID,
 			Height:      0,
-			BlockID:     types.BlockID{},
 			Time:        genDoc.GenesisTime,
 			EpochNumber: 0,
 			NeedToSave:  false,

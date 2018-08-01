@@ -5,11 +5,10 @@ import (
 	//"fmt"
 
 	fail "github.com/ebuchman/fail-test"
-	//abci "github.com/tendermint/abci/types"
 	. "github.com/tendermint/go-common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
-	rpcTxHook "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core/txhook"
 )
 
 
@@ -19,7 +18,7 @@ import (
 // ValExecBlock executes the block, but does NOT mutate State.
 // + validates the block
 // + executes block.Txs on the proxyAppConn
-func (s *State) ValExecBlock(eventCache types.Fireable, block *types.Block, cch rpcTxHook.CrossChainHelper) error {
+func (s *State) ValExecBlock(eventCache types.Fireable, block *types.TdmBlock, cch core.CrossChainHelper) error {
 	// Validate the block.
 	if err := s.validateBlock(block); err != nil {
 		return ErrInvalidBlock(err)
@@ -30,7 +29,7 @@ func (s *State) ValExecBlock(eventCache types.Fireable, block *types.Block, cch 
 
 // return a bit array of validators that signed the last commit
 // NOTE: assumes commits have already been authenticated
-func commitBitArrayFromBlock(block *types.Block) *BitArray {
+func commitBitArrayFromBlock(block *types.TdmBlock) *BitArray {
 
 	signed := NewBitArray(uint64(len(block.TdmExtra.SeenCommit.Precommits)))
 	for i, precommit := range block.TdmExtra.SeenCommit.Precommits {
@@ -44,11 +43,11 @@ func commitBitArrayFromBlock(block *types.Block) *BitArray {
 //-----------------------------------------------------
 // Validate block
 
-func (s *State) ValidateBlock(block *types.Block) error {
+func (s *State) ValidateBlock(block *types.TdmBlock) error {
 	return s.validateBlock(block)
 }
 
-func (s *State) validateBlock(block *types.Block) error {
+func (s *State) validateBlock(block *types.TdmBlock) error {
 	// Basic block validation.
 	err := block.ValidateBasic(s.TdmExtra)
 	if err != nil {
@@ -84,7 +83,7 @@ func (s *State) validateBlock(block *types.Block) error {
 // Transaction results are optionally indexed.
 
 // Validate, execute, and commit block against app, save block and state
-func (s *State) ApplyBlock(eventCache types.Fireable, block *types.Block, partsHeader types.PartSetHeader, cch rpcTxHook.CrossChainHelper) error {
+func (s *State) ApplyBlock(eventCache types.Fireable, block *types.TdmBlock, partsHeader types.PartSetHeader, cch core.CrossChainHelper) error {
 
 	//here handles the proposed next epoch
 

@@ -56,7 +56,7 @@ func (bs *ConsensusState) ApplyBlockEx(block *ethTypes.Block, state *sm.State, e
 
 // The +2/3 and other Precommit-votes for block at `height`.
 // This Commit comes from block.LastCommit for `height+1`.
-func (bs *ConsensusState) LoadBlock(height uint64) *types.Block {
+func (bs *ConsensusState) LoadBlock(height uint64) *types.TdmBlock {
 
 	cr := bs.GetChainReader()
 
@@ -64,14 +64,6 @@ func (bs *ConsensusState) LoadBlock(height uint64) *types.Block {
 	if ethBlock == nil {
 		return nil
 	}
-	blkExData, err := ethBlock.EncodeRLP1()
-	if err != nil {
-		return nil
-	}
-	ExData := &types.ExData {
-		BlockExData: blkExData,
-	}
-
 
 	header := cr.GetHeader(ethBlock.Hash(), ethBlock.NumberU64())
 	if header == nil {
@@ -82,8 +74,8 @@ func (bs *ConsensusState) LoadBlock(height uint64) *types.Block {
 		return nil
 	}
 
-	return &types.Block{
-		ExData: ExData,
+	return &types.TdmBlock{
+		Block: ethBlock,
 		TdmExtra: TdmExtra,
 	}
 }

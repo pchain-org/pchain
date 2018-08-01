@@ -387,17 +387,13 @@ func (sb *backend) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 
 
 // Commit implements istanbul.Backend.Commit
-func (sb *backend) Commit(proposal *tdmTypes.Block, seals [][]byte) error {
+func (sb *backend) Commit(proposal *tdmTypes.TdmBlock, seals [][]byte) error {
 	// Check if the proposal is a valid block
-	block := &types.Block{}
-	block, err := block.DecodeRLP1(proposal.ExData.BlockExData)
-	if err != nil {
-		return err
-	}
+	block := proposal.Block
 
 	h := block.Header()
 	// Append seals into extra-data
-	err = writeCommittedSeals(h, proposal.TdmExtra)
+	err := writeCommittedSeals(h, proposal.TdmExtra)
 	if err != nil {
 		return err
 	}

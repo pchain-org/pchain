@@ -9,7 +9,7 @@ import (
 	"time"
 
 	. "github.com/tendermint/go-common"
-	//ethTypes "github.com/ethereum/go-ethereum/core/types"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
 	//"github.com/tendermint/go-data"
@@ -18,39 +18,35 @@ import (
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 
 
-type Block struct {
-	ExData   *ExData            `json:"exdata"`
+type TdmBlock struct {
+	Block   *ethTypes.Block            `json:"block"`
 	TdmExtra *TendermintExtra   `json:"tdmexdata"`
 }
 
 func MakeBlock(height uint64, chainID string, commit *Commit,
-	prevBlockID BlockID, valHash, blkExData []byte, epochBytes []byte, partSize int) (*Block, *PartSet) {
-
-	exData := &ExData{
-		BlockExData: blkExData,
-	}
+	block *ethTypes.Block, valHash []byte, epochBytes []byte, partSize int) (*TdmBlock, *PartSet) {
 
 	TdmExtra := &TendermintExtra{
 		ChainID:        chainID,
 		Height:         uint64(height),
 		Time:           time.Now(),
 		ValidatorsHash: valHash,
-		BlockID:    prevBlockID,
 		SeenCommit: commit,
 		EpochBytes: epochBytes,
 	}
 
-	block := &Block{
-		ExData: exData,
+	tdmBlock := &TdmBlock{
+		Block: block,
 		TdmExtra: TdmExtra,
 	}
 
-	return block, block.MakePartSet(partSize)
+	return tdmBlock, tdmBlock.MakePartSet(partSize)
 }
 
 // Basic validation that doesn't involve state data.
-func (b *Block) ValidateBasic(tdmExtra *TendermintExtra) error {
+func (b *TdmBlock) ValidateBasic(tdmExtra *TendermintExtra) error {
 
+	fmt.Printf("b.TdmExtra is %v, tdmExtra is %v", b.TdmExtra, tdmExtra)
 	if b.TdmExtra.ChainID != tdmExtra.ChainID {
 		return errors.New(Fmt("Wrong Block.Header.ChainID. Expected %v, got %v", tdmExtra.ChainID, b.TdmExtra.ChainID))
 	}
@@ -75,12 +71,12 @@ func (b *Block) ValidateBasic(tdmExtra *TendermintExtra) error {
 }
 
 type IntegratedBlock struct {
-	Block *Block
+	Block *TdmBlock
 	Commit *Commit
 	BlockPartSize int
 }
 
-func MakeIntegratedBlock(block *Block, commit *Commit, blockPartSize int) (*IntegratedBlock) {
+func MakeIntegratedBlock(block *TdmBlock, commit *Commit, blockPartSize int) (*IntegratedBlock) {
 
 	if block == nil || commit == nil {
 		return nil
@@ -93,7 +89,7 @@ func MakeIntegratedBlock(block *Block, commit *Commit, blockPartSize int) (*Inte
 	}
 }
 
-func (b *Block) FillSeenCommitHash() {
+func (b *TdmBlock) FillSeenCommitHash() {
 	if b.TdmExtra.SeenCommitHash == nil {
 		b.TdmExtra.SeenCommitHash = b.TdmExtra.SeenCommit.Hash()
 	}
@@ -102,7 +98,7 @@ func (b *Block) FillSeenCommitHash() {
 
 // Computes and returns the block hash.
 // If the block is incomplete, block hash is nil for safety.
-func (b *Block) Hash() []byte {
+func (b *TdmBlock) Hash() []byte {
 	// fmt.Println(">>", b.Data)
 	if b == nil || b.TdmExtra.SeenCommit == nil {
 		return nil
@@ -112,15 +108,72 @@ func (b *Block) Hash() []byte {
 }
 
 
-func (b *Block) MakePartSet(partSize int) *PartSet {
+func (b *TdmBlock) MakePartSet(partSize int) *PartSet {
 
-	return NewPartSetFromData(wire.BinaryBytes(b), partSize)
+	return NewPartSetFromData(b.ToBytes(), partSize)
+}
+
+func (b *TdmBlock) ToBytes() []byte {
+
+	type TmpBlock struct {
+		BlockData []byte
+		TdmExtra *TendermintExtra
+	}
+	//fmt.Printf("TdmBlock.toBytes 0 with block: %v\n", b)
+
+	blockByte, err := b.Block.EncodeRLP1()
+	if err != nil {
+		fmt.Printf("TdmBlock.toBytes error\n")
+	}
+	//fmt.Printf("TdmBlock.toBytes 1 with blockbyte: %v\n", blockByte)
+	bb := &TmpBlock{
+		BlockData:   blockByte,
+		TdmExtra:    b.TdmExtra,
+	}
+	//fmt.Printf("TdmBlock.toBytes 1 with tdmblock: %v\n", bb)
+
+	ret :=  wire.BinaryBytes(bb)
+	//fmt.Printf("TdmBlock.toBytes 1 with ret:%v\n", ret)
+	return ret
+}
+
+func (b *TdmBlock) FromBytes(reader io.Reader) (*TdmBlock, error) {
+
+	type TmpBlock struct {
+		BlockData []byte
+		TdmExtra *TendermintExtra
+	}
+
+	//fmt.Printf("TdmBlock.FromBytes \n")
+
+	var n int
+	var err error
+	bb := wire.ReadBinary(&TmpBlock{}, reader, MaxBlockSize, &n, &err).(*TmpBlock)
+	if err != nil {
+		fmt.Printf("TdmBlock.FromBytes 0 error: %v\n", err)
+		return nil, err
+	}
+
+	block := &ethTypes.Block{}
+	block, err = block.DecodeRLP1(bb.BlockData)
+	if err != nil {
+		fmt.Printf("TdmBlock.FromBytes 1 error: %v\n", err)
+		return nil, err
+	}
+
+	tdmBlock := &TdmBlock{
+		Block: block,
+		TdmExtra: bb.TdmExtra,
+	}
+
+	//fmt.Printf("TdmBlock.FromBytes 2 with: %v\n", tdmBlock)
+	return tdmBlock, nil
 }
 
 // Convenience.
 // A nil block never hashes to anything.
 // Nothing hashes to a nil hash.
-func (b *Block) HashesTo(hash []byte) bool {
+func (b *TdmBlock) HashesTo(hash []byte) bool {
 	if len(hash) == 0 {
 		return false
 	}
@@ -130,11 +183,11 @@ func (b *Block) HashesTo(hash []byte) bool {
 	return bytes.Equal(b.Hash(), hash)
 }
 
-func (b *Block) String() string {
+func (b *TdmBlock) String() string {
 	return b.StringIndented("")
 }
 
-func (b *Block) StringIndented(indent string) string {
+func (b *TdmBlock) StringIndented(indent string) string {
 	if b == nil {
 		return "nil-Block"
 	}
@@ -145,67 +198,18 @@ func (b *Block) StringIndented(indent string) string {
 %s  %v
 %s  %v
 %s}#%X`,
-		indent, b.ExData.StringIndented(indent+"  "),
-		indent, "b.TdmExtra.HeaderField"/*b.TdmExtra.Header.StringIndented(indent+"  ")*/,
+		indent, b.Block.String(),
+		indent, b.TdmExtra,
 		indent, b.TdmExtra.SeenCommit.StringIndented(indent+"  "),
 		indent, b.Hash())
 }
 
-func (b *Block) StringShort() string {
+func (b *TdmBlock) StringShort() string {
 	if b == nil {
 		return "nil-Block"
 	} else {
 		return fmt.Sprintf("Block#%X", b.Hash())
 	}
-}
-
-//-----------------------------------------------------------------------------
-type Header struct {
-	ChainID        string    `json:"chain_id"`
-	Height         int       `json:"height"`
-	Time           time.Time `json:"time"`
-	LastBlockID    BlockID   `json:"last_block_id"`
-	LastCommitHash []byte    `json:"last_commit_hash"` // commit from validators from the last block
-	ValidatorsHash []byte    `json:"validators_hash"`  // validators for the current block
-}
-
-// NOTE: hash is nil if required fields are missing.
-func (h *Header) Hash() []byte {
-	if len(h.ValidatorsHash) == 0 {
-		return nil
-	}
-	return merkle.SimpleHashFromMap(map[string]interface{}{
-		"ChainID":     h.ChainID,
-		"Height":      h.Height,
-		"Time":        h.Time,
-		"LastBlockID": h.LastBlockID,
-		"LastCommit":  h.LastCommitHash,
-		"Validators":  h.ValidatorsHash,
-	})
-}
-
-func (h *Header) StringIndented(indent string) string {
-	if h == nil {
-		return "nil-Header"
-	}
-	return fmt.Sprintf(`Header{
-%s  ChainID:        %v
-%s  Height:         %v
-%s  Time:           %v
-%s  NumTxs:         %v
-%s  LastBlockID:    %v
-%s  LastCommit:     %X
-%s  Data:           %X
-%s  Validators:     %X
-%s  App:            %X
-%s}#%X`,
-		indent, h.ChainID,
-		indent, h.Height,
-		indent, h.Time,
-		indent, h.LastBlockID,
-		indent, h.LastCommitHash,
-		indent, h.ValidatorsHash,
-		indent, h.Hash())
 }
 
 //-------------------------------------
@@ -346,26 +350,6 @@ func (commit *Commit) StringIndented(indent string) string {
 		indent, commit.BlockID,
 		indent, strings.Join(precommitStrings, "\n"+indent+"  "),
 		indent, commit.hash)
-}
-
-type ExData struct {
-
-	BlockExData []byte `json:"ex_data"`
-
-	// Volatile
-	hash []byte
-}
-
-func (exData *ExData) StringIndented(indent string) string {
-	if exData == nil {
-		return "nil-ExData"
-	}
-
-	return fmt.Sprintf(`ExData{
-%s  %v
-%s}#%X`,
-		indent, string(exData.BlockExData),
-		indent, exData.hash)
 }
 
 //--------------------------------------------------------------------------------

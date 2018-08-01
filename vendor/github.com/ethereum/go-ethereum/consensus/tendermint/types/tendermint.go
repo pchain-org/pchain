@@ -2,7 +2,6 @@ package types
 
 
 import (
-	//"io"
 	"time"
 	"fmt"
 
@@ -16,9 +15,8 @@ type TendermintExtra struct {
 	ChainID        string    `json:"chain_id"`
 	Height         uint64     `json:"height"`
 	Time           time.Time `json:"time"`
-	BlockID    BlockID   `json:"block_id"`
 	NeedToSave     bool      `json:"need_to_save"`
-	EpochNumber    uint64       `json:"epoch_number"`
+	EpochNumber    uint64    `json:"epoch_number"`
 	SeenCommitHash []byte    `json:"last_commit_hash"` // commit from validators from the last block
 	ValidatorsHash []byte    `json:"validators_hash"`  // validators for the current block
 	SeenCommit *Commit       `json:"seen_commit"`
@@ -60,7 +58,6 @@ func (te *TendermintExtra) Copy() *TendermintExtra {
 		ChainID:         te.ChainID,
 		Height:			 te.Height,
 		Time: 		     te.Time,
-		BlockID:         te.BlockID,
 		NeedToSave:      te.NeedToSave,
 		EpochNumber:     te.EpochNumber,
 		SeenCommitHash:  te.SeenCommitHash,
@@ -79,7 +76,6 @@ func (te *TendermintExtra) Hash() []byte {
 		"ChainID":     te.ChainID,
 		"Height":      te.Height,
 		"Time":         te.Time,
-		"BlockID":     te.BlockID,
 		"SeenCommit":  te.SeenCommitHash,
 		"Validators":  te.ValidatorsHash,
 		"NeedToSave":  te.NeedToSave,
