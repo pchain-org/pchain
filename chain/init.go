@@ -215,11 +215,11 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 		var rewardScheme types.RewardSchemeDoc
 		if chainId == MainChain {
 			rewardScheme = types.RewardSchemeDoc{
-				TotalReward:        "210000000000000000000000000",
-				PreAllocated:       "178500000000000000000000000",
+				TotalReward:        "2100000000000000000000000000",
+				PreAllocated:       "1785000000000000000000000000",
 				AddedPerYear:       "0",
-				RewardFirstYear:    "5727300000000000000000000",
-				DescendPerYear:     "572730000000000000000000",
+				RewardFirstYear:    "572730000000000000000000000",
+				DescendPerYear:     "57273000000000000000000000",
 				Allocated:          "0",
 				EpochNumberPerYear: "12",
 			}
@@ -237,7 +237,7 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 
 		var rewardPerBlock string
 		if chainId == MainChain {
-			rewardPerBlock = "184133873456790100"
+			rewardPerBlock = "1841338734567901234"
 		} else {
 			rewardPerBlock = "0"
 		}
