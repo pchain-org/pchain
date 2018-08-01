@@ -65,22 +65,19 @@ func (strategy *ValidatorsStrategy) AccumulateRewards(state *state.StateDB, head
 	// Build Reward Data
 	validators := make([]*validatorsReward, 0, len(strategy.currentValidators))
 	for _, v := range strategy.currentValidators {
-		validators = append(validators, &validatorsReward{v.Address, v.Power, nil, nil})
+		validators = append(validators, &validatorsReward{v.Address, v.Power, nil, nil, big.NewInt(0)})
 	}
 
 	median := findMedian(validators)
 	totalSmooth := calculateSmooth(validators, median)
-	calculateRewardPercent(validators, totalSmooth)
+	calculateReward(validators, totalSmooth, totalReward)
 
 	// Add Balance per validator
 	for _, v := range validators {
 		plog.Debugf("Validators Strategy - Validator (%x)", v.Address)
 		plog.Debugf("Validators Strategy - Before the Reward, balance is: %v", state.GetBalance(v.Address))
-
-		reward, _ := new(big.Float).Mul(new(big.Float).SetInt(totalReward), v.rewardPercent).Int(nil)
-		plog.Debugf("Validators Strategy - Reward is: %v", reward)
-
-		state.AddBalance(v.Address, reward)
+		plog.Debugf("Validators Strategy - Reward is: %v", v.rewardAmount)
+		state.AddBalance(v.Address, v.rewardAmount)
 		plog.Debugf("Validators Strategy - After the Reward, balance is: %v", state.GetBalance(v.Address))
 	}
 
@@ -101,10 +98,18 @@ func (strategy *ValidatorsStrategy) AccumulateRewards(state *state.StateDB, head
 	Step 3
 	Calculate the final Reward
 
+	Step 4
+	Float the difference
+
 */
 func findMedian(validators []*validatorsReward) *big.Float {
 	sort.Slice(validators, func(i, j int) bool {
-		return validators[i].Deposit.Cmp(validators[j].Deposit) == -1
+		cmp := validators[i].Deposit.Cmp(validators[j].Deposit)
+		if cmp != 0 {
+			return cmp == -1
+		} else {
+			return validators[i].Address.Hex() < validators[j].Address.Hex()
+		}
 	})
 
 	size := len(validators)
@@ -131,10 +136,30 @@ func calculateSmooth(validators []*validatorsReward, median *big.Float) *big.Flo
 	return totalSmooth
 }
 
-func calculateRewardPercent(validators []*validatorsReward, totalSmooth *big.Float) {
+func calculateReward(validators []*validatorsReward, totalSmooth *big.Float, totalReward *big.Int) {
+	totalRewardSum := big.NewInt(0)
 	for _, v := range validators {
+		// Calculate the Reward Percent
 		v.rewardPercent = new(big.Float).Quo(v.smoothPercent, totalSmooth)
+		// Calculate the Reward for each validator
+		new(big.Float).Mul(new(big.Float).SetInt(totalReward), v.rewardPercent).Int(v.rewardAmount)
+
+		totalRewardSum.Add(totalRewardSum, v.rewardAmount)
 	}
+
+	// Float the difference
+	// Recheck the Total Reward
+	cmp := totalReward.Cmp(totalRewardSum)
+	if cmp == 1 {
+		// total sum less than total reward, add the diff to top validator
+		diff := new(big.Int).Sub(totalReward, totalRewardSum)
+		validators[len(validators)-1].rewardAmount.Add(validators[len(validators)-1].rewardAmount, diff)
+	} else if cmp == -1 {
+		// total sum greater than total reward, minus the diff from bottom validator
+		diff := new(big.Int).Sub(totalRewardSum, totalReward)
+		validators[0].rewardAmount.Sub(validators[0].rewardAmount, diff)
+	}
+
 }
 
 // --------------------------------
@@ -144,4 +169,5 @@ type validatorsReward struct {
 	Deposit       *big.Int
 	smoothPercent *big.Float
 	rewardPercent *big.Float
+	rewardAmount  *big.Int
 }
