@@ -48,7 +48,7 @@ import (
 
 const defaultGas = 90000
 
-const defaultMCGas = 100000
+const defaultMCGas = 21000
 const defaultMCGasPrice = 20000000000
 
 // TXs sending limit
