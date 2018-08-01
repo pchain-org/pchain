@@ -311,37 +311,39 @@ func (w *work) preCheck(blockchain *core.BlockChain, config *eth.Config, blockHa
 		err = fmt.Errorf("(w *work) preCheck(); sender does not exist")
 		return err
 	}
-	senderAccount := w.state.GetAccount(senderAddress)
+	/*
+		senderAccount := w.state.GetAccount(senderAddress)
 
-	// Pre-pay gas
-	mgas := msg.Gas()
-	mgval := new(big.Int).Mul(mgas, msg.GasPrice())
+		// Pre-pay gas
 
-	if _, exist := w.pcBalance[senderAccount]; !exist {
-		balance := senderAccount.Balance()
-		fmt.Printf("(w *work) preCheck(); balance is %v\n", balance)
-		w.pcBalance[senderAccount] = balance
-		fmt.Printf("(w *work) preCheck(); w.pcBalance[senderAccount] is %v\n", w.pcBalance[senderAccount])
-	}
+		mgas := msg.Gas()
+		mgval := new(big.Int).Mul(mgas, msg.GasPrice())
 
-	fmt.Printf("(w *work) preCheck(); before pre-sub, senderAccount %s has balance %v, gaslimit is now %v\n"+
-		"gas is %v, spending is %v\n",
-		senderAddress, w.pcBalance[senderAccount], w.pcGp, mgas, mgval)
-
-	if senderAccount.Balance().Cmp(mgval) < 0 {
-		err = fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", senderAddress.Bytes()[:4], mgval, senderAccount.Balance())
-	}
-	w.pcBalance[senderAccount].Sub(w.pcBalance[senderAccount], mgval)
-
-	if err := w.pcGp.SubGas(mgas); err != nil {
-		if core.IsGasLimitErr(err) {
-			return err
+		if _, exist := w.pcBalance[senderAccount]; !exist {
+			balance := senderAccount.Balance()
+			fmt.Printf("(w *work) preCheck(); balance is %v\n", balance)
+			w.pcBalance[senderAccount] = balance
+			fmt.Printf("(w *work) preCheck(); w.pcBalance[senderAccount] is %v\n", w.pcBalance[senderAccount])
 		}
-		return core.InvalidTxError(err)
-	}
-	fmt.Printf("(w *work) preCheck(); after sub, senderAddress %s has balance %v, gaslimit is now %v\n",
-		senderAddress, w.pcBalance[senderAccount], w.pcGp, mgas, mgval)
 
+		fmt.Printf("(w *work) preCheck(); before pre-sub, senderAccount %s has balance %v, gaslimit is now %v\n"+
+			"gas is %v, spending is %v\n",
+			senderAddress, w.pcBalance[senderAccount], w.pcGp, mgas, mgval)
+
+		if senderAccount.Balance().Cmp(mgval) < 0 {
+			err = fmt.Errorf("insufficient ETH for gas (%x). Req %v, has %v", senderAddress.Bytes()[:4], mgval, senderAccount.Balance())
+		}
+		w.pcBalance[senderAccount].Sub(w.pcBalance[senderAccount], mgval)
+
+		if err := w.pcGp.SubGas(mgas); err != nil {
+			if core.IsGasLimitErr(err) {
+				return err
+			}
+			return core.InvalidTxError(err)
+		}
+		fmt.Printf("(w *work) preCheck(); after sub, senderAddress %s has balance %v, gaslimit is now %v\n",
+			senderAddress, w.pcBalance[senderAccount], w.pcGp, mgas, mgval)
+	*/
 	return nil
 }
 

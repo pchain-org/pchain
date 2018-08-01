@@ -198,7 +198,7 @@ func (cch *CrossChainHelper) ReadyForLaunchChildChain(height uint64, stateDB *st
 
 	readyId := core.GetChildChainForLaunch(cch.chainInfoDB, height, stateDB)
 	if len(readyId) == 0 {
-		plog.Infof("ReadyForLaunchChildChain - No child chain to be launch in Block %v", height)
+		plog.Debugf("ReadyForLaunchChildChain - No child chain to be launch in Block %v", height)
 	} else {
 		plog.Infof("ReadyForLaunchChildChain - %v child chain(s) to be launch in Block %v. %v\n", len(readyId), height, readyId)
 		for _, chainId := range readyId {
