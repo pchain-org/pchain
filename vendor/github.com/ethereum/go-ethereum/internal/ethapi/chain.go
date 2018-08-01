@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
-	"math/big"
 	"strings"
 )
 
@@ -58,8 +57,7 @@ const (
 	WFMC_ARGS_TXHASH  = "txHash"
 
 	// Save Block To Main Chain Parameters
-	SB2MCFuncName_ARGS_FROM  = "from"
-	SB2MCFuncName_ARGS_BLOCK = "block"
+	SB2MCFuncName_ARGS_FROM = "from"
 )
 
 type PublicChainAPI struct {
@@ -78,7 +76,7 @@ func NewPublicChainAPI(b Backend) *PublicChainAPI {
 }
 
 func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Address, chainId string,
-	minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64, gas *big.Int, gasPrice *big.Int) (common.Hash, error) {
+	minValidators uint16, minDepositAmount *hexutil.Big, startBlock, endBlock uint64, gas, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
@@ -100,8 +98,8 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 	args := SendTxArgs{
 		From:         from,
 		To:           nil,
-		Gas:          (*hexutil.Big)(gas),
-		GasPrice:     (*hexutil.Big)(gasPrice),
+		Gas:          gas,
+		GasPrice:     gasPrice,
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
@@ -113,7 +111,7 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 }
 
 func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address,
-	pubkey string, chainId string, depositAmount *big.Int, gas *big.Int, gasPrice *big.Int) (common.Hash, error) {
+	pubkey string, chainId string, depositAmount *hexutil.Big, gas, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
@@ -133,8 +131,8 @@ func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address
 	args := SendTxArgs{
 		From:         from,
 		To:           nil,
-		Gas:          (*hexutil.Big)(gas),
-		GasPrice:     (*hexutil.Big)(gasPrice),
+		Gas:          gas,
+		GasPrice:     gasPrice,
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
@@ -146,7 +144,7 @@ func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address
 }
 
 func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Address,
-	chainId string, amount *big.Int, gas *big.Int, gasPrice *big.Int) (common.Hash, error) {
+	chainId string, amount *hexutil.Big, gas, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
@@ -173,8 +171,8 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 	args := SendTxArgs{
 		From:         from,
 		To:           nil,
-		Gas:          (*hexutil.Big)(gas),
-		GasPrice:     (*hexutil.Big)(gasPrice),
+		Gas:          gas,
+		GasPrice:     gasPrice,
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
@@ -186,7 +184,7 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 }
 
 func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Address,
-	txHash common.Hash, gas *big.Int, gasPrice *big.Int) (common.Hash, error) {
+	txHash common.Hash) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
 	if chainId == "pchain" {
@@ -206,8 +204,8 @@ func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Ad
 	args := SendTxArgs{
 		From:         from,
 		To:           nil,
-		Gas:          (*hexutil.Big)(gas),
-		GasPrice:     (*hexutil.Big)(gasPrice),
+		Gas:          nil,
+		GasPrice:     nil,
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
@@ -219,7 +217,7 @@ func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Ad
 }
 
 func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common.Address,
-	amount *big.Int, gas *big.Int, gasPrice *big.Int) (common.Hash, error) {
+	amount *hexutil.Big, gas, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
 	if chainId == "pchain" {
@@ -238,8 +236,8 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 	args := SendTxArgs{
 		From:         from,
 		To:           nil,
-		Gas:          (*hexutil.Big)(gas),
-		GasPrice:     (*hexutil.Big)(gasPrice),
+		Gas:          gas,
+		GasPrice:     gasPrice,
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
@@ -251,7 +249,7 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 }
 
 func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.Address,
-	chainId string, txHash common.Hash, gas *big.Int, gasPrice *big.Int) (common.Hash, error) {
+	chainId string, txHash common.Hash) (common.Hash, error) {
 
 	if chainId == "pchain" {
 		return common.Hash{}, errors.New("argument can't be the main chain - pchain")
@@ -270,8 +268,8 @@ func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.
 	args := SendTxArgs{
 		From:         from,
 		To:           nil,
-		Gas:          (*hexutil.Big)(gas),
-		GasPrice:     (*hexutil.Big)(gasPrice),
+		Gas:          nil,
+		GasPrice:     nil,
 		Value:        nil,
 		Data:         nil,
 		Nonce:        nil,
@@ -292,7 +290,6 @@ func (s *PublicChainAPI) SaveBlockToMainChain(ctx context.Context, from common.A
 
 	params := types.MakeKeyValueSet()
 	params.Set(SB2MCFuncName_ARGS_FROM, from)
-	params.Set(SB2MCFuncName_ARGS_BLOCK, block)
 
 	etd := &types.ExtendTxData{
 		FuncName: SB2MCFuncName,
@@ -305,7 +302,7 @@ func (s *PublicChainAPI) SaveBlockToMainChain(ctx context.Context, from common.A
 		Gas:          nil,
 		GasPrice:     nil,
 		Value:        nil,
-		Data:         nil,
+		Data:         hexutil.Bytes(block),
 		Nonce:        nil,
 		Type:         nil,
 		ExtendTxData: etd,
@@ -347,16 +344,17 @@ func init() {
 func ccc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	fromVar, _ := etd.Params.Get(CCC_ARGS_FROM)
-	from := fromVar.(common.Address)
-	chainIdVar, _ := etd.Params.Get(CCC_ARGS_CHAINID)
-	chainId := chainIdVar.(string)
+	from, _ := etd.GetAddress(CCC_ARGS_FROM)
+	chainId, _ := etd.GetString(CCC_ARGS_CHAINID)
+
 	minValidatorsVar, _ := etd.Params.Get(CCC_ARGS_VALIDATOR_THRESHOLD)
 	minValidators := minValidatorsVar.(uint16)
-	minDepositAmountVar, _ := etd.Params.Get(CCC_ARGS_TOKEN_THRESHOLD)
-	minDepositAmount := minDepositAmountVar.(*big.Int)
+
+	minDepositAmount, _ := etd.GetBigInt(CCC_ARGS_TOKEN_THRESHOLD)
+
 	startBlockVar, _ := etd.Params.Get(CCC_ARGS_START_BLOCK)
 	startBlock := startBlockVar.(uint64)
+
 	endBlockVar, _ := etd.Params.Get(CCC_ARGS_END_BLOCK)
 	endBlock := endBlockVar.(uint64)
 
@@ -371,22 +369,19 @@ func ccc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChai
 func ccc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	fromVar, _ := etd.Params.Get(CCC_ARGS_FROM)
-	from := common.BytesToAddress(fromVar.([]byte))
-	chainIdVar, _ := etd.Params.Get(CCC_ARGS_CHAINID)
-	chainId := string(chainIdVar.([]byte))
+	from, _ := etd.GetAddress(CCC_ARGS_FROM)
+	chainId, _ := etd.GetString(CCC_ARGS_CHAINID)
 
 	minValidatorsVar, _ := etd.Params.Get(CCC_ARGS_VALIDATOR_THRESHOLD)
-	minValidators := convertByteSliceToUint16(minValidatorsVar.([]byte))
+	minValidators := uint16(minValidatorsVar.(float64))
 
-	minDepositAmountVar, _ := etd.Params.Get(CCC_ARGS_TOKEN_THRESHOLD)
-	minDepositAmount := new(big.Int).SetBytes(minDepositAmountVar.([]byte))
+	minDepositAmount, _ := etd.GetBigInt(CCC_ARGS_TOKEN_THRESHOLD)
 
 	startBlockVar, _ := etd.Params.Get(CCC_ARGS_START_BLOCK)
-	startBlock := convertByteSliceToUint64(startBlockVar.([]byte))
+	startBlock := uint64(startBlockVar.(float64))
 
 	endBlockVar, _ := etd.Params.Get(CCC_ARGS_END_BLOCK)
-	endBlock := convertByteSliceToUint64(endBlockVar.([]byte))
+	endBlock := uint64(endBlockVar.(float64))
 
 	err := cch.CreateChildChain(from, chainId, minValidators, minDepositAmount, startBlock, endBlock)
 	if err != nil {
@@ -399,14 +394,10 @@ func ccc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHe
 func jcc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	fromVar, _ := etd.Params.Get(JCC_ARGS_FROM)
-	from := fromVar.(common.Address)
-	pubkeyVar, _ := etd.Params.Get(JCC_ARGS_PUBKEY)
-	pubkey := pubkeyVar.(string)
-	chainIdVar, _ := etd.Params.Get(JCC_ARGS_CHAINID)
-	chainId := chainIdVar.(string)
-	depositAmountVar, _ := etd.Params.Get(JCC_ARGS_DEPOSIT)
-	depositAmount := depositAmountVar.(*big.Int)
+	from, _ := etd.GetAddress(JCC_ARGS_FROM)
+	pubkey, _ := etd.GetString(JCC_ARGS_PUBKEY)
+	chainId, _ := etd.GetString(JCC_ARGS_CHAINID)
+	depositAmount, _ := etd.GetBigInt(JCC_ARGS_DEPOSIT)
 
 	// Check Balance
 	if state.GetBalance(from).Cmp(depositAmount) == -1 {
@@ -423,14 +414,10 @@ func jcc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChai
 func jcc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	fromVar, _ := etd.Params.Get(JCC_ARGS_FROM)
-	from := common.BytesToAddress(fromVar.([]byte))
-	pubkeyVar, _ := etd.Params.Get(JCC_ARGS_PUBKEY)
-	pubkey := string(pubkeyVar.([]byte))
-	chainIdVar, _ := etd.Params.Get(JCC_ARGS_CHAINID)
-	chainId := string(chainIdVar.([]byte))
-	depositAmountVar, _ := etd.Params.Get(JCC_ARGS_DEPOSIT)
-	depositAmount := new(big.Int).SetBytes(depositAmountVar.([]byte))
+	from, _ := etd.GetAddress(JCC_ARGS_FROM)
+	pubkey, _ := etd.GetString(JCC_ARGS_PUBKEY)
+	chainId, _ := etd.GetString(JCC_ARGS_CHAINID)
+	depositAmount, _ := etd.GetBigInt(JCC_ARGS_DEPOSIT)
 
 	// Check Balance
 	if state.GetBalance(from).Cmp(depositAmount) == -1 {
@@ -452,10 +439,8 @@ func jcc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHe
 func dimc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	fromInt, _ := etd.Params.Get(DIMC_ARGS_FROM)
-	from := fromInt.(common.Address)
-	amountInt, _ := etd.Params.Get(DIMC_ARGS_AMOUNT)
-	amount := amountInt.(*big.Int)
+	from, _ := etd.GetAddress(DIMC_ARGS_FROM)
+	amount, _ := etd.GetBigInt(DIMC_ARGS_AMOUNT)
 
 	if state.GetBalance(from).Cmp(amount) < 0 {
 		return errors.New(fmt.Sprintf("%x has no enough balance for deposit", from))
@@ -467,12 +452,9 @@ func dimc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCha
 func dimc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	fromInt, _ := etd.Params.Get(DIMC_ARGS_FROM)
-	from := common.BytesToAddress(fromInt.([]byte))
-	chainIdInt, _ := etd.Params.Get(DIMC_ARGS_CHAINID)
-	chainId := string(chainIdInt.([]byte))
-	amountInt, _ := etd.Params.Get(DIMC_ARGS_AMOUNT)
-	amount := new(big.Int).SetBytes(amountInt.([]byte))
+	from, _ := etd.GetAddress(DIMC_ARGS_FROM)
+	chainId, _ := etd.GetString(DIMC_ARGS_CHAINID)
+	amount, _ := etd.GetBigInt(DIMC_ARGS_AMOUNT)
 
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), chainId)
 	state.SubBalance(from, amount)
@@ -487,12 +469,9 @@ func dimc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainH
 func dicc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	fromInt, _ := etd.Params.Get(DICC_ARGS_FROM)
-	from := fromInt.(common.Address)
-	chainIdInt, _ := etd.Params.Get(DICC_ARGS_CHAINID)
-	chainId := chainIdInt.(string)
-	txHashInt, _ := etd.Params.Get(DICC_ARGS_TXHASH)
-	txHash := txHashInt.(common.Hash)
+	from, _ := etd.GetAddress(DICC_ARGS_FROM)
+	chainId, _ := etd.GetString(DICC_ARGS_CHAINID)
+	txHash, _ := etd.GetHash(DICC_ARGS_TXHASH)
 
 	mainTx := cch.GetTxFromMainChain(txHash)
 	if mainTx == nil {
@@ -508,10 +487,8 @@ func dicc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCha
 		return errors.New(fmt.Sprintf("not expected tx %s", mainEtd))
 	}
 
-	mainFromInt, _ := mainEtd.Params.Get(DIMC_ARGS_FROM)
-	mainFrom := common.BytesToAddress(mainFromInt.([]byte))
-	mainChainIdInt, _ := mainEtd.Params.Get(DIMC_ARGS_CHAINID)
-	mainChainId := string(mainChainIdInt.([]byte))
+	mainFrom, _ := mainEtd.GetAddress(DIMC_ARGS_FROM)
+	mainChainId, _ := mainEtd.GetString(DIMC_ARGS_CHAINID)
 
 	if mainFrom != from || mainChainId != chainId {
 		return errors.New("params are not consistent with tx in main chain")
@@ -523,9 +500,7 @@ func dicc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCha
 func dicc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	txHashInt, _ := etd.Params.Get(DICC_ARGS_TXHASH)
-	txHash := common.BytesToHash(txHashInt.([]byte))
-
+	txHash, _ := etd.GetHash(DICC_ARGS_TXHASH)
 	mainTx := cch.GetTxFromMainChain(txHash)
 	if mainTx == nil {
 		return errors.New(fmt.Sprintf("tx %x does not exist in main chain", txHash))
@@ -536,10 +511,8 @@ func dicc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainH
 		return errors.New(fmt.Sprintf("not expected tx %s", mainEtd))
 	}
 
-	mainFromInt, _ := mainEtd.Params.Get(DIMC_ARGS_FROM)
-	mainFrom := common.BytesToAddress(mainFromInt.([]byte))
-	mainAmountInt, _ := mainEtd.Params.Get(DIMC_ARGS_AMOUNT)
-	mainAmount := new(big.Int).SetBytes(mainAmountInt.([]byte))
+	mainFrom, _ := mainEtd.GetAddress(DIMC_ARGS_FROM)
+	mainAmount, _ := mainEtd.GetBigInt(DIMC_ARGS_AMOUNT)
 
 	// delete this cross chain tx
 	cch.DeleteCrossChainTx(txHash)
@@ -552,10 +525,8 @@ func dicc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainH
 func wfcc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	fromInt, _ := etd.Params.Get(WFCC_ARGS_FROM)
-	from := fromInt.(common.Address)
-	amountInt, _ := etd.Params.Get(WFCC_ARGS_AMOUNT)
-	amount := amountInt.(*big.Int)
+	from, _ := etd.GetAddress(WFCC_ARGS_FROM)
+	amount, _ := etd.GetBigInt(WFCC_ARGS_AMOUNT)
 
 	if state.GetBalance(from).Cmp(amount) < 0 {
 		return errors.New("no enough balance to withdraw")
@@ -567,10 +538,8 @@ func wfcc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCha
 func wfcc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	fromInt, _ := etd.Params.Get(WFCC_ARGS_FROM)
-	from := common.BytesToAddress(fromInt.([]byte))
-	amountInt, _ := etd.Params.Get(WFCC_ARGS_AMOUNT)
-	amount := new(big.Int).SetBytes(amountInt.([]byte))
+	from, _ := etd.GetAddress(WFCC_ARGS_FROM)
+	amount, _ := etd.GetBigInt(WFCC_ARGS_AMOUNT)
 
 	if state.GetBalance(from).Cmp(amount) < 0 {
 		return errors.New("no enough balance to withdraw")
@@ -587,12 +556,9 @@ func wfcc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainH
 func wfmc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	fromInt, _ := etd.Params.Get(WFMC_ARGS_FROM)
-	from := fromInt.(common.Address)
-	chainIdInt, _ := etd.Params.Get(WFMC_ARGS_CHAINID)
-	chainId := chainIdInt.(string)
-	txHashInt, _ := etd.Params.Get(WFMC_ARGS_TXHASH)
-	txHash := txHashInt.(common.Hash)
+	from, _ := etd.GetAddress(WFMC_ARGS_FROM)
+	chainId, _ := etd.GetString(WFMC_ARGS_CHAINID)
+	txHash, _ := etd.GetHash(WFMC_ARGS_TXHASH)
 
 	childTx := cch.GetTxFromChildChain(txHash, chainId)
 	if childTx == nil {
@@ -608,10 +574,8 @@ func wfmc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCha
 		return errors.New(fmt.Sprintf("not expected tx %s", childEtd))
 	}
 
-	childFromInt, _ := childEtd.Params.Get(WFCC_ARGS_FROM)
-	childFrom := common.BytesToAddress(childFromInt.([]byte))
-	childAmountInt, _ := childEtd.Params.Get(WFCC_ARGS_AMOUNT)
-	childAmount := new(big.Int).SetBytes(childAmountInt.([]byte))
+	childFrom, _ := childEtd.GetAddress(WFCC_ARGS_FROM)
+	childAmount, _ := childEtd.GetBigInt(WFCC_ARGS_AMOUNT)
 
 	if childFrom != from {
 		return errors.New("params are not consistent with tx in child chain")
@@ -628,12 +592,9 @@ func wfmc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCha
 func wfmc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	fromInt, _ := etd.Params.Get(WFMC_ARGS_FROM)
-	from := common.BytesToAddress(fromInt.([]byte))
-	chainIdInt, _ := etd.Params.Get(WFMC_ARGS_CHAINID)
-	chainId := string(chainIdInt.([]byte))
-	txHashInt, _ := etd.Params.Get(WFMC_ARGS_TXHASH)
-	txHash := common.BytesToHash(txHashInt.([]byte))
+	from, _ := etd.GetAddress(WFMC_ARGS_FROM)
+	chainId, _ := etd.GetString(WFMC_ARGS_CHAINID)
+	txHash, _ := etd.GetHash(WFMC_ARGS_TXHASH)
 
 	childTx := cch.GetTxFromChildChain(txHash, chainId)
 	if childTx == nil {
@@ -645,10 +606,8 @@ func wfmc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainH
 		return errors.New(fmt.Sprintf("not expected tx %s", childEtd))
 	}
 
-	childFromInt, _ := childEtd.Params.Get(WFCC_ARGS_FROM)
-	childFrom := common.BytesToAddress(childFromInt.([]byte))
-	childAmountInt, _ := childEtd.Params.Get(WFCC_ARGS_AMOUNT)
-	childAmount := new(big.Int).SetBytes(childAmountInt.([]byte))
+	childFrom, _ := childEtd.GetAddress(WFCC_ARGS_FROM)
+	childAmount, _ := childEtd.GetBigInt(WFCC_ARGS_AMOUNT)
 
 	if childFrom != from {
 		return errors.New("params are not consistent with tx in child chain")
@@ -672,10 +631,8 @@ func wfmc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainH
 func sb2mc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
-	fromInt, _ := etd.Params.Get(SB2MCFuncName_ARGS_FROM)
-	from := fromInt.(common.Address)
-	blockInt, _ := etd.Params.Get(SB2MCFuncName_ARGS_BLOCK)
-	block := blockInt.([]byte)
+	from, _ := etd.GetAddress(SB2MCFuncName_ARGS_FROM)
+	block := []byte(tx.Data())
 
 	err := cch.VerifyTdmBlock(from, block)
 	if err != nil {
@@ -686,12 +643,7 @@ func sb2mc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCh
 }
 
 func sb2mc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
-
-	//fromInt, _ := etd.Params.Get(SB2MCFuncName_ARGS_FROM)
-	//from := common.BytesToAddress(fromInt.([]byte))
-	blockInt, _ := etd.Params.Get(SB2MCFuncName_ARGS_BLOCK)
-	block := blockInt.([]byte)
+	block := []byte(tx.Data())
 
 	return cch.SaveTdmBlock2MainBlock(block)
 }

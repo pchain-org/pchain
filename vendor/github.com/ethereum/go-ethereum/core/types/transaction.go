@@ -625,3 +625,70 @@ func (e *ExtendTxData) DecodeRLP(s *rlp.Stream) error {
 	}
 	return err
 }
+
+func (e *ExtendTxData) GetString(key string) (string, error) {
+	v, err := e.Params.Get(key)
+	if err != nil {
+		return "", err
+	}
+
+	if vv, ok := v.(string); ok {
+		return vv, nil
+	} else {
+		return "", errors.New("wrong type")
+	}
+}
+
+func (e *ExtendTxData) GetAddress(key string) (common.Address, error) {
+	v, err := e.Params.Get(key)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	switch vv := v.(type) {
+	case string:
+		return common.HexToAddress(vv), nil
+	case common.Address:
+		return vv, nil
+	default:
+		return common.Address{}, errors.New("wrong type")
+	}
+}
+
+func (e *ExtendTxData) GetHash(key string) (common.Hash, error) {
+	v, err := e.Params.Get(key)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	switch vv := v.(type) {
+	case string:
+		return common.HexToHash(vv), nil
+	case common.Hash:
+		return vv, nil
+	default:
+		return common.Hash{}, errors.New("wrong type")
+	}
+}
+
+func (e *ExtendTxData) GetBigInt(key string) (*big.Int, error) {
+	v, err := e.Params.Get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	switch vv := v.(type) {
+	case string:
+		vvv, ok := new(big.Int).SetString(vv, 0)
+		if !ok {
+			return nil, errors.New("wrong type")
+		}
+		return vvv, nil
+	case *big.Int:
+		return vv, nil
+	case *hexutil.Big:
+		return (*big.Int)(vv), nil
+	default:
+		return nil, errors.New("wrong type")
+	}
+}

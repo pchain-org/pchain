@@ -1128,7 +1128,8 @@ type SendTxArgs struct {
 // prepareSendTxArgs is a helper function that fills in default values for unspecified tx fields.
 func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 
-	if args.ExtendTxData == nil {
+	etd := args.ExtendTxData
+	if etd == nil {
 		if args.Gas == nil {
 			args.Gas = (*hexutil.Big)(big.NewInt(defaultGas))
 		}
@@ -1144,11 +1145,14 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 		}
 	} else {
 		// TODO: adjust the gas/gasPrice for multi-chain tx
-		if args.Gas == nil {
-			args.Gas = (*hexutil.Big)(big.NewInt(defaultMCGas))
-		}
-		if args.GasPrice == nil {
-			args.GasPrice = (*hexutil.Big)(big.NewInt(defaultMCGasPrice))
+		// DICCFuncName and WFMCFuncName tx has no Gas/GasPrice because the account may not have enough money.
+		if etd.FuncName != DICCFuncName && etd.FuncName != WFMCFuncName {
+			if args.Gas == nil {
+				args.Gas = (*hexutil.Big)(big.NewInt(defaultMCGas))
+			}
+			if args.GasPrice == nil {
+				args.GasPrice = (*hexutil.Big)(big.NewInt(defaultMCGasPrice))
+			}
 		}
 	}
 
@@ -1183,7 +1187,7 @@ func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 
 	etd := tx.ExtendTxData()
 	// Contract Transaction with both etd and receipt nil
-	if tx.To() == nil && (etd == nil || etd.FuncName == "") {
+	if tx.To() == nil || (etd != nil && etd.FuncName != "") {
 		signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
 		from, _ := types.Sender(signer, tx)
 		addr := crypto.CreateAddress(from, tx.Nonce())
