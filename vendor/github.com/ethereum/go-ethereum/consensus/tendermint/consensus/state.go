@@ -13,6 +13,7 @@ import (
 
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
+	dbm "github.com/tendermint/go-db"
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
@@ -33,7 +34,8 @@ type Backend interface {
 }
 
 type Node interface {
-	InitStateAndEpoch() (*sm.State, *ep.Epoch)
+	Config() cfg.Config
+	EpochDB() dbm.DB
 }
 
 //-----------------------------------------------------------------------------
@@ -596,103 +598,6 @@ func (cs *ConsensusState) ReconstructLastCommit(state *sm.State) {
 		PanicSanity("Failed to reconstruct LastCommit: Does not have +2/3 maj")
 	}
 	cs.LastCommit = lastPrecommits
-}
-
-func (cs *ConsensusState) Initialize() {
-
-	//initialize state
-	cs.Height = 0
-	cs.blockFromMiner = nil
-
-	//initialize round state
-	//TODO: lhj, be very careful, should add lock when reload block
-	cs.Validators = nil
-	cs.Proposal = nil
-	cs.ProposalBlock = nil
-	cs.ProposalBlockParts = nil
-	cs.LockedRound = 0
-	cs.LockedBlock = nil
-	cs.LockedBlockParts = nil
-	cs.Votes = nil
-	cs.CommitRound = -1
-	cs.LastCommit = nil
-	cs.Epoch = nil
-	cs.LastValidators = nil
-	cs.state = nil
-	cs.epoch = nil
-}
-
-// Updates ConsensusState and increments height to match thatRewardScheme of state.
-// The round becomes 0 and cs.Step becomes RoundStepNewHeight.
-func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch) {
-
-	if cs.CommitRound > -1 && 0 < cs.Height && cs.Height != state.TdmExtra.Height {
-		PanicSanity(Fmt("updateToState() expected state height of %v but found %v",
-			cs.Height, state.TdmExtra.Height))
-	}
-	if cs.state != nil && cs.state.TdmExtra.Height+1 != cs.Height {
-		// This might happen when someone else is mutating cs.state.
-		// Someone forgot to pass in state.Copy() somewhere?!
-		PanicSanity(Fmt("Inconsistent cs.state.LastBlockHeight+1 %v vs cs.Height %v",
-			cs.state.TdmExtra.Height+1, cs.Height))
-	}
-
-	// If state isn't further out than cs.state, just ignore.
-	// This happens when SwitchToConsensus() is called in the reactor.
-	// We don't want to reset e.g. the Votes.
-	if cs.state != nil && (state.TdmExtra.Height <= cs.state.TdmExtra.Height) {
-		log.Notice("Ignoring updateToState()", "newHeight", state.TdmExtra.Height+1, "oldHeight", cs.state.TdmExtra.Height+1)
-		return
-	}
-
-	// Reset fields based on state.
-	_, validators, _ := state.GetValidators()
-	lastPrecommits := (*types.VoteSet)(nil)
-	if cs.CommitRound > -1 && cs.Votes != nil {
-		if !cs.Votes.Precommits(cs.CommitRound).HasTwoThirdsMajority() {
-			PanicSanity("updateToState(state) called but last Precommit round didn't have +2/3")
-		}
-		lastPrecommits = cs.Votes.Precommits(cs.CommitRound)
-	}
-
-	//Re-Initialized
-	cs.Initialize()
-
-	height := state.TdmExtra.Height + 1
-	// Next desired block height
-	cs.Height = height
-
-	// RoundState fields
-	cs.updateRoundStep(0, RoundStepNewHeight)
-	if cs.CommitTime.IsZero() {
-		// "Now" makes it easier to sync up dev nodes.
-		// We add timeoutCommit to allow transactions
-		// to be gathered for the first block.
-		// And alternative solution that relies on clocks:
-		//  cs.StartTime = state.LastBlockTime.Add(timeoutCommit)
-		cs.StartTime = cs.timeoutParams.Commit(time.Now())
-	} else {
-		cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
-	}
-
-	cs.Validators = validators
-	//cs.Proposal = nil
-	//cs.ProposalBlock = nil
-	//cs.ProposalBlockParts = nil
-	//cs.LockedRound = 0
-	//cs.LockedBlock = nil
-	//cs.LockedBlockParts = nil
-	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators)
-	//cs.CommitRound = -1
-	cs.LastCommit = lastPrecommits
-	cs.Epoch = epoch
-
-	cs.LastValidators, _, _ = state.GetValidators()
-
-	cs.state = state
-	cs.epoch = epoch
-
-	cs.newStep()
 }
 
 func (cs *ConsensusState) newStep() {

@@ -1,7 +1,6 @@
 package tendermint
 
 import (
-	//"bytes"
 	"net/http"
 	"strings"
 	cmn "github.com/tendermint/go-common"
@@ -11,11 +10,6 @@ import (
 
 	ethTypes  "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
-	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
-	//bc "github.com/ethereum/go-ethereum/consensus/tendermint/blockchain"
-	//"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex"
-	//"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/kv"
-	//"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/null"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/logger"
 
@@ -23,7 +17,6 @@ import (
 	"fmt"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"io/ioutil"
-	//"os"
 	"time"
 	"github.com/ethereum/go-ethereum/core"
 )
@@ -58,215 +51,16 @@ type Node struct {
 	cch              core.CrossChainHelper
 }
 
-/*
-// Deprecated
-func NewNodeDefault(config cfg.Config, cch core.CrossChainHelper) *Node {
-	// Get PrivValidator
-	privValidatorFile := config.GetString("priv_validator_file")
-	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
-	return NewNode(config, privValidator, proxy.DefaultClientCreator(config), cch)
-}
-
-// Deprecated
-func NewNode(config cfg.Config, privValidator *types.PrivValidator,
-	clientCreator proxy.ClientCreator, cch core.CrossChainHelper) *Node {
-
-	// Get BlockStore
-	blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
-	blockStore := bc.NewBlockStore(blockStoreDB)
-
-	ep.VADB = dbm.NewDB("validatoraction", config.GetString("db_backend"), config.GetString("db_dir"))
-
-	// Get State And Epoch
-	stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
-	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
-	state, epoch := InitStateAndEpoch(config, stateDB, epochDB)
-
-	// add the chainid and number of validators to the global config
-	config.Set("chain_id", state.ChainID)
-	config.Set("num_vals", state.Epoch.Validators.Size())
-
-	// Create the proxyApp, which manages connections (consensus, mempool, query)
-	// and sync tendermint and the app by replaying any necessary blocks
-	proxyApp := proxy.NewAppConns(config, clientCreator, consensus.NewHandshaker(config, state, blockStore, cch))
-	if _, err := proxyApp.Start(); err != nil {
-		cmn.Exit(cmn.Fmt("Error starting proxy app connections: %v", err))
-	}
-
-	// reload the state (it may have been updated by the handshake)
-	state = sm.LoadState(stateDB)
-	epoch = ep.LoadOneEpoch(epochDB, state.LastEpochNumber)
-	state.Epoch = epoch
-
-	//_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
-	fmt.Println("state.Validators:", state.Epoch.Validators)
-
-	// Transaction indexing
-	var txIndexer txindex.TxIndexer
-	switch config.GetString("tx_index") {
-	case "kv":
-		store := dbm.NewDB("tx_index", config.GetString("db_backend"), config.GetString("db_dir"))
-		txIndexer = kv.NewTxIndex(store)
-	default:
-		txIndexer = &null.TxIndex{}
-	}
-	state.TxIndexer = txIndexer
-
-	// Generate node PrivKey
-	//privKey := crypto.GenPrivKeyEd25519()
-
-	// Make event switch
-	eventSwitch := types.NewEventSwitch()
-	_, err := eventSwitch.Start()
-	if err != nil {
-		cmn.Exit(cmn.Fmt("Failed to start switch: %v", err))
-	}
-
-	// Decide whether to fast-sync or not
-	// We don't fast-sync when the only validator is us.
-	fastSync := config.GetBool("fast_sync")
-	if state.Epoch.Validators.Size() == 1 {
-		addr, _ := state.Epoch.Validators.GetByIndex(0)
-		if bytes.Equal(privValidator.Address, addr) {
-			fastSync = false
-		}
-	}
-
-	// Make BlockchainReactor
-	bcReactor := bc.NewBlockchainReactor(config, state.Copy(), proxyApp.Consensus(), blockStore, fastSync, cch)
-
-	// Make MempoolReactor
-	mempool := mempl.NewMempool(config, proxyApp.Mempool())
-	mempoolReactor := mempl.NewMempoolReactor(config, mempool, state.ChainID)
-
-	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(config, state.Copy(), proxyApp.Consensus(), blockStore, mempool, epoch, cch)
-	if privValidator != nil {
-		consensusState.SetPrivValidator(privValidator)
-	}
-	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
-
-	// Make p2p network switch
-	sw := p2p.NewSwitch(config.GetConfig("p2p"))
-	sw.AddReactor(state.ChainID, "MEMPOOL", mempoolReactor)
-	sw.AddReactor(state.ChainID, "BLOCKCHAIN", bcReactor)
-	sw.AddReactor(state.ChainID, "CONSENSUS", consensusReactor)
-
-	// Optionally, start the pex reactor
-	var addrBook *p2p.AddrBook
-	if config.GetBool("pex_reactor") {
-		addrBook = p2p.NewAddrBook(config.GetString("addrbook_file"), config.GetBool("addrbook_strict"))
-		pexReactor := p2p.NewPEXReactor(addrBook)
-		sw.AddReactor(state.ChainID, "PEX", pexReactor)
-	}
-
-	// Filter peers by addr or pubkey with an ABCI query.
-	// If the query return code is OK, add peer.
-	// XXX: Query format subject to change
-	if config.GetBool("filter_peers") {
-		// NOTE: addr is ip:port
-		sw.SetAddrFilter(func(addr net.Addr) error {
-			resQuery, err := proxyApp.Query().QuerySync(abci.RequestQuery{Path: cmn.Fmt("/p2p/filter/addr/%s", addr.String())})
-			if err != nil {
-				return err
-			}
-			if resQuery.Code.IsOK() {
-				return nil
-			}
-			return errors.New(resQuery.Code.String())
-		})
-		sw.SetPubKeyFilter(func(pubkey crypto.PubKeyEd25519) error {
-			resQuery, err := proxyApp.Query().QuerySync(abci.RequestQuery{Path: cmn.Fmt("/p2p/filter/pubkey/%X", pubkey.Bytes())})
-			if err != nil {
-				return err
-			}
-			if resQuery.Code.IsOK() {
-				return nil
-			}
-			return errors.New(resQuery.Code.String())
-		})
-	}
-
-	// add the event switch to all services
-	// they should all satisfy events.Eventable
-	SetEventSwitch(eventSwitch, bcReactor, mempoolReactor, consensusReactor)
-
-	// run the profile server
-	profileHost := config.GetString("prof_laddr")
-	if profileHost != "" {
-
-		go func() {
-			log.Warn("Profile server", "error", http.ListenAndServe(profileHost, nil))
-		}()
-	}
-
-	node := &Node{
-		config:        config,
-		genesisDoc:    state.GenesisDoc,
-		privValidator: privValidator,
-
-		stateDB:       stateDB,
-		epochDB:       epochDB,
-		//privKey:  privKey,
-		//sw:       sw,
-		//addrBook: addrBook,
-
-		evsw:             eventSwitch,
-		blockStore:       blockStore,
-		bcReactor:        bcReactor,
-		mempoolReactor:   mempoolReactor,
-		consensusState:   consensusState,
-		consensusReactor: consensusReactor,
-		proxyApp:         proxyApp,
-		txIndexer:        txIndexer,
-
-		cch:              cch,
-	}
-	node.BaseService = *cmn.NewBaseService(log, "Node", node)
-	return node
-}
-*/
 
 func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, cch core.CrossChainHelper) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
 	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
 
-
-	// ClientCreator will be instantiated later after ethermint proxyapp created
-	// clientCreator := proxy.DefaultClientCreator(config)
-
-	// Get BlockStore
-	//blockStoreDB := dbm.NewDB("blockstore", config.GetString("db_backend"), config.GetString("db_dir"))
-	//blockStore := bc.NewBlockStore(blockStoreDB)
-
 	ep.VADB = dbm.NewDB("validatoraction", config.GetString("db_backend"), config.GetString("db_dir"))
 
 	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
-	//stateDB := dbm.NewDB("state", config.GetString("db_backend"), config.GetString("db_dir"))
 
-	// Transaction indexing
-	//var txIndexer txindex.TxIndexer
-	//switch n.config.GetString("tx_index") {
-	//case "kv":
-	//	store := dbm.NewDB("tx_index", n.config.GetString("db_backend"), n.config.GetString("db_dir"))
-	//	txIndexer = kv.NewTxIndex(store)
-	//default:
-	//	txIndexer = &null.TxIndex{}
-	//}
-	//state.TxIndexer = txIndexer
-
-	// Decide whether to fast-sync or not
-	// We don't fast-sync when the only validator is us.
-	/*
-	fastSync := config.GetBool("fast_sync")
-	if state.Epoch.Validators.Size() == 1 {
-		addr, _ := state.Epoch.Validators.GetByIndex(0)
-		if bytes.Equal(privValidator.Address, addr) {
-			fastSync = false
-		}
-	}
-	*/
 	// Make ConsensusReactor
 	consensusState := consensus.NewConsensusState(config, backend, cch)
 	if privValidator != nil {
@@ -285,17 +79,14 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 
 	node := &Node{
 		config:        config,
-		//genesisDoc:    state.GenesisDoc,
 		privValidator: privValidator,
 
-		//stateDB:       stateDB,
 		epochDB:       epochDB,
 
 		sw:            sw,
 		addrBook:      addrBook,
 
 		evsw:          eventSwitch,
-		//blockStore:       blockStore,
 
 		backend:       backend,
 		cch:           cch,
@@ -315,16 +106,8 @@ func (n *Node) OnStart() error {
 
 	fmt.Printf("(n *Node) OnStart()\n")
 
-	//_, _ = consensus.OpenVAL(config.GetString("cs_val_file")) //load validator change from val
 
-	// add the chainid and number of validators to the global config
-	// TODO There is No Global Config, to be removed
-	//config.Set("chain_id", state.TdmExtra.ChainID)
-	//config.Set("num_vals", state.Epoch.Validators.Size())
-	// reload the state (it may have been updated by synchronization)
-
-
-	state, epoch := n.InitStateAndEpoch()
+	state, epoch := n.consensusState.InitStateAndEpoch()
 	n.consensusState.Initialize()
 	n.consensusState.UpdateToStateAndEpoch(state, epoch)
 
@@ -348,46 +131,6 @@ func (n *Node) OnStart() error {
 	return nil
 }
 
-/*
-// Deprecated
-func (n *Node) OnStart() error {
-
-	fmt.Printf("(n *Node) OnStart()")
-
-	// Create & add listener
-	//protocol, address := ProtocolAndAddress(n.config.GetString("node_laddr"))
-	//l := p2p.NewDefaultListener(protocol, address, n.config.GetBool("skip_upnp"))
-	//n.sw.AddListener(l)
-	//
-	//// Start the switch
-	//n.sw.SetNodeInfo(n.makeNodeInfo())
-	//n.sw.SetNodePrivKey(n.privKey)
-	//_, err := n.sw.Start()
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//// If seeds exist, add them to the address book and dial out
-	//if n.config.GetString("seeds") != "" {
-	//	// dial out
-	//	seeds := strings.Split(n.config.GetString("seeds"), ",")
-	//	if err := n.DialSeeds(seeds); err != nil {
-	//		return err
-	//	}
-	//}
-	//
-	//// Run the RPC server
-	//if n.config.GetString("rpc_laddr") != "" {
-	//	listeners, err := n.StartRPC()
-	//	if err != nil {
-	//		return err
-	//	}
-	//	n.rpcListeners = listeners
-	//}
-
-	return nil
-}
-*/
 
 func (n *Node) OnStop() {
 	fmt.Printf("(n *Node) OnStop() called\n")
@@ -455,60 +198,19 @@ func (n *Node) PrivValidator() *types.PrivValidator {
 	return n.privValidator
 }
 
+func (n *Node) Config() cfg.Config {
+	return n.config
+}
+
+func (n *Node) EpochDB() dbm.DB {
+	return n.epochDB
+}
+
 /*
 func (n *Node) GenesisDoc() *types.GenesisDoc {
 	return n.genesisDoc
 }
 */
-
-func (n *Node) InitStateAndEpoch() (*sm.State, *ep.Epoch) {
-
-	state := &sm.State{}
-	var epoch *ep.Epoch = nil
-
-	state.TdmExtra, _ = n.consensusState.LoadLastTendermintExtra()
-
-	if state.TdmExtra == nil { //means it it the first block
-
-		genDocFile := n.config.GetString("genesis_file")
-		if !cmn.FileExists(genDocFile) {
-			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), Couldn't find GenesisDoc file"))
-		}
-
-		jsonBlob, err := ioutil.ReadFile(genDocFile)
-		if err != nil {
-			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), Couldn't read GenesisDoc file: %v", err))
-		}
-
-		genDoc, err := types.GenesisDocFromJSON(jsonBlob)
-		if err != nil {
-			cmn.PanicSanity(cmn.Fmt("InitStateAndEpoch(), Genesis doc parse json error: %v", err))
-		}
-
-		state = sm.MakeGenesisState(/*stateDB, */genDoc)
-		//state.Save()
-
-		rewardScheme := ep.MakeRewardScheme(n.epochDB, &genDoc.RewardScheme)
-		epoch = ep.MakeOneEpoch(n.epochDB, &genDoc.CurrentEpoch)
-		epoch.RS = rewardScheme
-		fmt.Printf("0 epoch.Validators: %v\n", epoch.Validators)
-
-		if state.TdmExtra.EpochNumber != uint64(epoch.Number) {
-			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), initial state error"))
-		}
-		state.Epoch = epoch
-		fmt.Printf("0 state.Epoch.Validators: %v\n", state.Epoch.Validators)
-		rewardScheme.Save()
-		epoch.Save()
-
-	} else {
-		epoch = ep.LoadOneEpoch(n.epochDB, int(state.TdmExtra.EpochNumber))
-		state.Epoch = epoch
-		n.consensusState.ReconstructLastCommit(state)
-	}
-
-	return state, epoch
-}
 
 //------------------------------------------------------------------------------
 // Users wishing to:
