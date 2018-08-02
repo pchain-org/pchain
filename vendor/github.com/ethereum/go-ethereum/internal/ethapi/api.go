@@ -845,6 +845,17 @@ func newRPCTransactionFromBlockIndex(b *types.Block, txIndex uint) (*RPCTransact
 		}
 		from, _ := types.Sender(signer, tx)
 		v, r, s := tx.RawSignatureValues()
+
+		value := tx.Value()
+		etd := tx.ExtendTxData()
+		if etd != nil && etd.FuncName != "" {
+			if etd.FuncName == DIMCFuncName {
+				value, _ = etd.GetBigInt(DIMC_ARGS_AMOUNT)
+			} else if etd.FuncName == WFCCFuncName {
+				value, _ = etd.GetBigInt(WFCC_ARGS_AMOUNT)
+			}
+		}
+
 		return &RPCTransaction{
 			BlockHash:        b.Hash(),
 			BlockNumber:      (*hexutil.Big)(b.Number()),
@@ -856,7 +867,7 @@ func newRPCTransactionFromBlockIndex(b *types.Block, txIndex uint) (*RPCTransact
 			Nonce:            hexutil.Uint64(tx.Nonce()),
 			To:               tx.To(),
 			TransactionIndex: hexutil.Uint(txIndex),
-			Value:            (*hexutil.Big)(tx.Value()),
+			Value:            (*hexutil.Big)(value),
 			V:                (*hexutil.Big)(v),
 			R:                (*hexutil.Big)(r),
 			S:                (*hexutil.Big)(s),
