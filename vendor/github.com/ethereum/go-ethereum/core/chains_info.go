@@ -236,6 +236,18 @@ func GetChildChainIds(db dbm.DB) []string {
 	return strIdArr
 }
 
+func CheckChildChainRunning(db dbm.DB, chainId string) bool {
+	ids := GetChildChainIds(db)
+
+	for _, id := range ids {
+		if id == chainId {
+			return true
+		}
+	}
+
+	return false
+}
+
 // ---------------------
 // Pending Chain
 var pendingChainMtx sync.Mutex

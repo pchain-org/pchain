@@ -440,7 +440,13 @@ func dimc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossCha
 	etd := tx.ExtendTxData()
 
 	from, _ := etd.GetAddress(DIMC_ARGS_FROM)
+	chainId, _ := etd.GetString(DIMC_ARGS_CHAINID)
 	amount, _ := etd.GetBigInt(DIMC_ARGS_AMOUNT)
+
+	running := core.CheckChildChainRunning(cch.GetChainInfoDB(), chainId)
+	if !running {
+		return errors.New(fmt.Sprintf("%s chain not running", chainId))
+	}
 
 	if state.GetBalance(from).Cmp(amount) < 0 {
 		return errors.New(fmt.Sprintf("%x has no enough balance for deposit", from))
