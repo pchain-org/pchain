@@ -70,25 +70,6 @@ func (b *TdmBlock) ValidateBasic(tdmExtra *TendermintExtra) error {
 	return nil
 }
 
-type IntegratedBlock struct {
-	Block *TdmBlock
-	Commit *Commit
-	BlockPartSize int
-}
-
-func MakeIntegratedBlock(block *TdmBlock, commit *Commit, blockPartSize int) (*IntegratedBlock) {
-
-	if block == nil || commit == nil {
-		return nil
-	}
-
-	return &IntegratedBlock {
-		Block: block,
-		Commit: commit,
-		BlockPartSize: blockPartSize,
-	}
-}
-
 func (b *TdmBlock) FillSeenCommitHash() {
 	if b.TdmExtra.SeenCommitHash == nil {
 		b.TdmExtra.SeenCommitHash = b.TdmExtra.SeenCommit.Hash()

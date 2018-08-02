@@ -42,14 +42,20 @@ type Node interface {
 // TimeoutParams holds timeouts and deltas for each round step.
 // All timeouts and deltas in milliseconds.
 type TimeoutParams struct {
-	Propose0          int
-	ProposeDelta      int
-	Prevote0          int
-	PrevoteDelta      int
-	Precommit0        int
-	PrecommitDelta    int
-	Commit0           int
-	SkipTimeoutCommit bool
+	WaitForMinerBlock0  int
+	Propose0            int
+	ProposeDelta        int
+	Prevote0            int
+	PrevoteDelta        int
+	Precommit0          int
+	PrecommitDelta      int
+	Commit0             int
+	SkipTimeoutCommit   bool
+}
+
+// Wait this long for a proposal
+func (tp *TimeoutParams) WaitForMinerBlock() time.Duration {
+	return time.Duration(tp.WaitForMinerBlock0) * time.Millisecond
 }
 
 // Wait this long for a proposal
@@ -75,6 +81,7 @@ func (tp *TimeoutParams) Commit(t time.Time) time.Time {
 // InitTimeoutParamsFromConfig initializes parameters from config
 func InitTimeoutParamsFromConfig(config cfg.Config) *TimeoutParams {
 	return &TimeoutParams{
+		WaitForMinerBlock0: config.GetInt("timeout_wait_for_miner_block"),
 		Propose0:          config.GetInt("timeout_propose"),
 		ProposeDelta:      config.GetInt("timeout_propose_delta"),
 		Prevote0:          config.GetInt("timeout_prevote"),
@@ -105,7 +112,7 @@ type RoundStepType uint8 // These must be numeric, ordered.
 const (
 	RoundStepNewHeight     		= RoundStepType(0x01) // Wait til CommitTime + timeoutCommit
 	RoundStepNewRound      		= RoundStepType(0x02) // Setup new round and go to RoundStepPropose
-	RoundStepWaitMinerBlock		= RoundStepType(0x03) // wait proposal block from miner
+	RoundStepWaitForMinerBlock	= RoundStepType(0x03) // wait proposal block from miner
 	RoundStepPropose       		= RoundStepType(0x04) // Did propose, gossip proposal
 	RoundStepPrevote       		= RoundStepType(0x05) // Did prevote, gossip prevotes
 	RoundStepPrevoteWait   		= RoundStepType(0x06) // Did receive any +2/3 prevotes, start timeout
@@ -124,8 +131,8 @@ func (rs RoundStepType) String() string {
 		return "RoundStepNewRound"
 	case RoundStepPropose:
 		return "RoundStepPropose"
-	case RoundStepWaitMinerBlock:
-		return "RoundStepWaitMinerBlock"
+	case RoundStepWaitForMinerBlock:
+		return "RoundStepWaitForMinerBlock"
 	case RoundStepPrevote:
 		return "RoundStepPrevote"
 	case RoundStepPrevoteWait:
@@ -814,14 +821,13 @@ func (cs *ConsensusState) handleTimeout(ti timeoutInfo, rs RoundState) {
 		// NewRound event fired from enterNewRound.
 		// XXX: should we fire timeout here (for timeout commit)?
 		cs.enterNewRound(ti.Height, 0)
-	case RoundStepWaitMinerBlock:
+	case RoundStepWaitForMinerBlock:
 		types.FireEventTimeoutPropose(cs.evsw, cs.RoundStateEvent())
 		if cs.blockFromMiner != nil {
-			cs.enterPropose(ti.Height, ti.Round)
-		} else {
-			fmt.Printf("another round of RoundStepWaitMinerBlock, something wrong!!!")
-			cs.scheduleTimeout(3000 * time.Millisecond, cs.Height, cs.Round, RoundStepWaitMinerBlock)
+			fmt.Printf("another round of RoundStepWaitForMinerBlock, something wrong!!!")
 		}
+		//only wait miner block for time of tp.WaitForMinerBlock, or we try to get another round
+		cs.enterPropose(ti.Height, ti.Round)
 	case RoundStepPropose:
 		types.FireEventTimeoutPropose(cs.evsw, cs.RoundStateEvent())
 		cs.enterPrevote(ti.Height, ti.Round)
@@ -834,7 +840,6 @@ func (cs *ConsensusState) handleTimeout(ti timeoutInfo, rs RoundState) {
 	default:
 		panic(Fmt("Invalid timeout step: %v", ti.Step))
 	}
-
 }
 
 //-----------------------------------------------------------------------------
@@ -888,8 +893,8 @@ func (cs *ConsensusState) enterNewRound(height uint64, round int) {
 
 	// Immediately go to enterPropose.
 	if bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) && cs.blockFromMiner == nil{
-		fmt.Println("we are proposer, but blockFromMiner is nil!!!")
-		cs.scheduleTimeout(1000 * time.Millisecond, height, round, RoundStepWaitMinerBlock)
+		fmt.Println("we are proposer, but blockFromMiner is nil, let's wait a second!!!")
+		cs.scheduleTimeout(cs.timeoutParams.WaitForMinerBlock(), height, round, RoundStepWaitForMinerBlock)
 		return
 	}
 
@@ -1611,28 +1616,29 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 		fmt.Printf("addVote, vote is for previous blocks, just ignore\n")
 		return
 	}
+
 	/*
 	if vote.Height+1 == cs.Height {
-			if !(cs.Step == RoundStepNewHeight && vote.Type == types.VoteTypePrecommit) {
-				// TODO: give the reason ..
-				// fmt.Errorf("tryAddVote: Wrong height, not a LastCommit straggler commit.")
-				return added, ErrVoteHeightMismatch
-			}
-			added, err = cs.LastCommit.AddVote(vote)
-			if added {
-				log.Info(Fmt("Added to lastPrecommits: %v", cs.LastCommit.StringShort()))
-				types.FireEventVote(cs.evsw, types.EventDataVote{vote})
-
-				// if we can skip timeoutCommit and have all the votes now,
-				if cs.timeoutParams.SkipTimeoutCommit && cs.LastCommit.HasAll() {
-					// go straight to new round (skip timeout commit)
-					// cs.scheduleTimeout(time.Duration(0), cs.Height, 0, RoundStepNewHeight)
-					cs.enterNewRound(cs.Height, 0)
-				}
-			}
-
-			return
+		if !(cs.Step == RoundStepNewHeight && vote.Type == types.VoteTypePrecommit) {
+			// TODO: give the reason ..
+			// fmt.Errorf("tryAddVote: Wrong height, not a LastCommit straggler commit.")
+			return added, ErrVoteHeightMismatch
 		}
+
+		added, err = cs.LastCommit.AddVote(vote)
+		if added {
+			log.Info(Fmt("Added to lastPrecommits: %v", cs.LastCommit.StringShort()))
+			types.FireEventVote(cs.evsw, types.EventDataVote{vote})
+
+			// if we can skip timeoutCommit and have all the votes now,
+			if cs.timeoutParams.SkipTimeoutCommit && cs.LastCommit.HasAll() {
+				// go straight to new round (skip timeout commit)
+				// cs.scheduleTimeout(time.Duration(0), cs.Height, 0, RoundStepNewHeight)
+				cs.enterNewRound(cs.Height, 0)
+			}
+		}
+
+		return
 	}
 	*/
 
