@@ -1157,7 +1157,8 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 	} else {
 		// TODO: adjust the gas/gasPrice for multi-chain tx
 		// DICCFuncName and WFMCFuncName tx has no Gas/GasPrice because the account may not have enough money.
-		if etd.FuncName == DICCFuncName && etd.FuncName == WFMCFuncName {
+		// SB2MCFuncName costs no Gas/GasPrice
+		if etd.FuncName == DICCFuncName || etd.FuncName == WFMCFuncName || etd.FuncName == SB2MCFuncName {
 			args.Gas = nil
 			args.GasPrice = nil
 		} else {
