@@ -104,10 +104,6 @@ func RefreshABCIResponses(block *types.Block, state *State,
 		instance.cch = cch
 	}
 
-	if !instance.Commited {
-		fmt.Printf("The block begin-deliver-end-commit process not finished normally\n")
-	}
-
 	refreshABCIResponseCbMap := rpcTxHook.GetRefreshABCIResponseCbMap()
 	for _, refreshABCIResponseCb := range refreshABCIResponseCbMap {
 		refreshABCIResponseCb()
