@@ -311,6 +311,17 @@ func (s *PublicChainAPI) SaveBlockToMainChain(ctx context.Context, from common.A
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
+func (s *PublicChainAPI) GetTxFromChildChainByHash(ctx context.Context, chainId string, txHash common.Hash) (common.Hash, error) {
+	cch := s.b.GetCrossChainHelper()
+
+	childTx := cch.GetTxFromChildChain(txHash, chainId)
+	if childTx == nil {
+		return common.Hash{}, errors.New(fmt.Sprintf("tx %x does not exist in child chain %s", txHash, chainId))
+	}
+
+	return txHash, nil
+}
+
 func init() {
 	//CreateChildChain
 	core.RegisterValidateCb(CCCFuncName, ccc_ValidateCb)
