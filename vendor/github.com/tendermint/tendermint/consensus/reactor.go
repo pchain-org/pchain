@@ -131,7 +131,7 @@ func (conR *ConsensusReactor) AddPeer(peer *p2p.Peer) {
 	go conR.gossipVotesRoutine(peer, peerState)
 	go conR.queryMaj23Routine(peer, peerState)
 
-	go conR.validatorExMsgRoutine(peer, peerState)
+	// go conR.validatorExMsgRoutine(peer, peerState)
 	// go conR.GetDiffValidator()
 
 	// Send our state to peer.

@@ -221,10 +221,6 @@ func (a *ABCIResponses) ResCb(req *abci.Request, res *abci.Response) {
 		for _, commitCb := range commitCbMap {
 			commitCb(a)
 		}
-
-		vals := req.GetCommit().Validators
-		fmt.Printf("abci.Response_Commit, Validators are %v, a.Commited is %v\n", vals, a.Commited)
-
 	}
 }
 

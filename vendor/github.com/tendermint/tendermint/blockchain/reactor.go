@@ -12,9 +12,9 @@ import (
 	"github.com/tendermint/go-p2p"
 	"github.com/tendermint/go-wire"
 	"github.com/tendermint/tendermint/proxy"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
-	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 	//"fmt"
 )
 
@@ -141,8 +141,8 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 
 	log.Debug("Receive", "src", src, "chID", chID, "msg", msg)
 
-	var NON_ACCOUNT string = ""
-	var NON_EPOCH int = -1
+	//var NON_ACCOUNT string = ""
+	//var NON_EPOCH int = -1
 
 	switch msg := msg.(type) {
 	case *bcBlockRequestMessage:
@@ -169,42 +169,43 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 	case *bcStatusResponseMessage:
 		// Got a peer status. Unverified.
 		bcR.pool.SetPeerHeight(src.Key, msg.Height)
-	case *bcValidatorRequestMessage:
+		/*
+			case *bcValidatorRequestMessage:
 
-		for epoch, v := range types.ValChangedEpoch {
-			for i:=0; i<len(v); i++ {
-				valMsg := &bcValidatorResponseMessage{Account: NON_ACCOUNT, Epoch: epoch, AcceptVotes: v[i]}
-				fmt.Println("sending bcValidatorResponseMessage")
-				fmt.Println("valMsg:", valMsg)
-				queued := src.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{valMsg})
-				if !queued {
-					fmt.Println("queue is full!!!")
+				for epoch, v := range types.ValChangedEpoch {
+					for i:=0; i<len(v); i++ {
+						valMsg := &bcValidatorResponseMessage{Account: NON_ACCOUNT, Epoch: epoch, AcceptVotes: v[i]}
+						fmt.Println("sending bcValidatorResponseMessage")
+						fmt.Println("valMsg:", valMsg)
+						queued := src.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{valMsg})
+						if !queued {
+							fmt.Println("queue is full!!!")
+						}
+					}
 				}
-			}
-		}
 
-		for account, acceptVote := range types.AcceptVoteSet {
-			valMsg := &bcValidatorResponseMessage{Account: account, Epoch: NON_EPOCH, AcceptVotes: acceptVote}
-			fmt.Println("sending bcValidatorResponseMessage")
-			fmt.Println("valMsg:", valMsg)
-			queued := src.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{valMsg})
-			if !queued {
-				fmt.Println("queue is full!!!")
-			}
-		}
+				for account, acceptVote := range types.AcceptVoteSet {
+					valMsg := &bcValidatorResponseMessage{Account: account, Epoch: NON_EPOCH, AcceptVotes: acceptVote}
+					fmt.Println("sending bcValidatorResponseMessage")
+					fmt.Println("valMsg:", valMsg)
+					queued := src.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{valMsg})
+					if !queued {
+						fmt.Println("queue is full!!!")
+					}
+				}
 
-	case *bcValidatorResponseMessage:
-		fmt.Println("received bcValidatorMessage!!!")
-		fmt.Println("bcValidatorMessage:", msg)
-		//TODO: here are bugs, may not handle here; should handle it in Consensus Reactor after catched up!!
-		if (msg.Account != NON_ACCOUNT && msg.Epoch != NON_EPOCH) || (msg.Account == NON_ACCOUNT && msg.Epoch == NON_EPOCH) {
-			fmt.Println("recevied wrong bcValidatorResponseMessage")
-		} else if msg.Account != NON_ACCOUNT {
-			types.ValChangedEpoch[msg.Epoch] = append(types.ValChangedEpoch[msg.Epoch], msg.AcceptVotes) //TODO validate???
-		} else {
-			types.AcceptVoteSet[msg.Account] = msg.AcceptVotes //TODO validate???
-		}
-
+			case *bcValidatorResponseMessage:
+				fmt.Println("received bcValidatorMessage!!!")
+				fmt.Println("bcValidatorMessage:", msg)
+				//TODO: here are bugs, may not handle here; should handle it in Consensus Reactor after catched up!!
+				if (msg.Account != NON_ACCOUNT && msg.Epoch != NON_EPOCH) || (msg.Account == NON_ACCOUNT && msg.Epoch == NON_EPOCH) {
+					fmt.Println("recevied wrong bcValidatorResponseMessage")
+				} else if msg.Account != NON_ACCOUNT {
+					types.ValChangedEpoch[msg.Epoch] = append(types.ValChangedEpoch[msg.Epoch], msg.AcceptVotes) //TODO validate???
+				} else {
+					types.AcceptVoteSet[msg.Account] = msg.AcceptVotes //TODO validate???
+				}
+		*/
 	default:
 		log.Warn(cmn.Fmt("Unknown message type %v", reflect.TypeOf(msg)))
 	}
@@ -350,12 +351,12 @@ func (bcR *BlockchainReactor) SetEventSwitch(evsw types.EventSwitch) {
 
 //modified by liaoyd
 const (
-	msgTypeBlockRequest   = byte(0x10)
-	msgTypeBlockResponse  = byte(0x11)
-	msgTypeStatusResponse = byte(0x20)
-	msgTypeStatusRequest  = byte(0x21)
-	msgTypeValidatorRequest      = byte(0x31)
-	msgTypeValidatorResponse     = byte(0x32)
+	msgTypeBlockRequest      = byte(0x10)
+	msgTypeBlockResponse     = byte(0x11)
+	msgTypeStatusResponse    = byte(0x20)
+	msgTypeStatusRequest     = byte(0x21)
+	msgTypeValidatorRequest  = byte(0x31)
+	msgTypeValidatorResponse = byte(0x32)
 )
 
 // BlockchainMessage is a generic message for this reactor.
@@ -438,8 +439,8 @@ func (m *bcValidatorRequestMessage) String() string {
 //liaoyd
 //send validators during fast sync from types.ValChangedHeight
 type bcValidatorResponseMessage struct {
-	Account string
-	Epoch   int
+	Account     string
+	Epoch       int
 	AcceptVotes *types.AcceptVotes
 	//the above tri-tuble to represent the following structures:
 	//ValChangedEpoch map[int][]*types.AcceptVotes

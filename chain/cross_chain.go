@@ -105,8 +105,7 @@ func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId st
 
 // CreateChildChain Save the Child Chain Data into the DB, the data will be used later during Block Commit Callback
 func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock uint64) error {
-
-	fmt.Printf("cch CreateChildChain called\n")
+	plog.Debugln("CreateChildChain - start")
 
 	cci := &core.CoreChainInfo{
 		Owner:            from,
@@ -118,7 +117,7 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 		JoinedValidators: make([]core.JoinedValidator, 0),
 	}
 	core.CreatePendingChildChainData(cch.chainInfoDB, cci)
-
+	plog.Debugln("CreateChildChain - end")
 	return nil
 }
 
@@ -176,7 +175,7 @@ func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, 
 	// Load the Child Chain first
 	ci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
 	if ci == nil {
-		plog.Infof("JoinChildChain - Child Chain %s not exist, you can't join the chain\n", chainId)
+		plog.Errorf("JoinChildChain - Child Chain %s not exist, you can't join the chain", chainId)
 		return errors.New(fmt.Sprintf("Child Chain %s not exist, you can't join the chain", chainId))
 	}
 
