@@ -861,7 +861,7 @@ func (cs *ConsensusState) enterPropose(height int, round int) {
 				intBlock := types.MakeIntegratedBlock(lastBlock, cs.LastCommit.MakeCommit(), cs.config.GetInt("block_part_size"))
 				err := cs.saveBlockToMainChain(intBlock)
 				if err != nil {
-					log.Warn("saveBlockToMainChain failed, block: %d\n", height-1)
+					log.Error("saveBlockToMainChain failed, block: %d\n", height-1)
 				}
 			}
 		}
