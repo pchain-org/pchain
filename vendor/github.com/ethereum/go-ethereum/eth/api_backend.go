@@ -131,7 +131,7 @@ func (b *EthApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	//emmark
 	if b.pcInt != nil {
 		etd := signedTx.ExtendTxData()
-		if etd == nil || etd.FuncName != ethapi.DICCFuncName { //TODO: DICCFuncName can't pass PreCheck.
+		if etd == nil || (etd.FuncName != ethapi.DICCFuncName && etd.FuncName != ethapi.WFMCFuncName) { //TODO: DICCFuncName/WFMCFuncName can't pass PreCheck because account may not exist.
 			err := b.pcInt.PreCheck(signedTx)
 			if err != nil {
 				return err
