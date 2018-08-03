@@ -48,7 +48,7 @@ import (
 
 const defaultGas = 90000
 
-const defaultMCGas = 21000
+const defaultMCGas = 42000
 const defaultMCGasPrice = 20000000000
 
 // TXs sending limit
@@ -1157,10 +1157,11 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 	} else {
 		// TODO: adjust the gas/gasPrice for multi-chain tx
 		// DICCFuncName and WFMCFuncName tx has no Gas/GasPrice because the account may not have enough money.
-		if etd.FuncName != DICCFuncName && etd.FuncName != WFMCFuncName {
-			if args.Gas == nil {
-				args.Gas = (*hexutil.Big)(big.NewInt(defaultMCGas))
-			}
+		if etd.FuncName == DICCFuncName && etd.FuncName == WFMCFuncName {
+			args.Gas = nil
+			args.GasPrice = nil
+		} else {
+			args.Gas = (*hexutil.Big)(big.NewInt(defaultMCGas)) // temporarily force to 'defaultMCGas'.
 			if args.GasPrice == nil {
 				args.GasPrice = (*hexutil.Big)(big.NewInt(defaultMCGasPrice))
 			}
