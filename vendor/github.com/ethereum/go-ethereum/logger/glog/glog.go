@@ -456,7 +456,7 @@ func init() {
 
 	// Default stderrThreshold is ERROR.
 	logging.stderrThreshold = infoLog
-	fmt.Printf("glog init with level: %v\n", infoLog)
+	//fmt.Printf("glog init with level: %v\n", infoLog)
 	logging.setVState(1, nil, false)
 	go logging.flushDaemon()
 }

@@ -57,6 +57,13 @@ func main() {
 			Description: "Initialize the files",
 		},
 
+		{
+			Action:      chain.GenerateNodeInfoCmd,
+			Name:        "gen_node_info",
+			Usage:       "gen_node_info number", //generate node info for 'number' nodes
+			Description: "Generate node info for static-nodes.json",
+		},
+
 		// See consolecmd.go:
 		gethmain.ConsoleCommand,
 		gethmain.AttachCommand,
@@ -201,7 +208,7 @@ func newCliApp(version, usage string) *cli.App {
 	return app
 }
 
-func versionCmd() error {
+func versionCmd(ctx *cli.Context) error {
 	fmt.Println(version.Version)
 	return nil
 }
