@@ -369,6 +369,9 @@ func (n *Node) OnStart1() error {
 		}()
 	}
 
+	// Add ChainID to P2P Node Info
+	n.sw.NodeInfo().AddNetwork(state.ChainID)
+
 	// Start the Reactors for this Chain
 	n.sw.StartChainReactor(state.ChainID)
 

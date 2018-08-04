@@ -92,11 +92,6 @@ func (pNode *PChainP2P) StopP2P() {
 	pNode.sw.Stop()
 }
 
-func (pNode *PChainP2P) AddNetwork(chainID string) {
-	// Add Chain ID to Switch NodeInfo
-	pNode.sw.NodeInfo().AddNetwork(chainID)
-}
-
 func (pNode *PChainP2P) DialSeeds(p2pconfig cfg.Config) error {
 	// If seeds exist, add them to the address book and dial out
 	if p2pconfig.GetString("seeds") != "" {

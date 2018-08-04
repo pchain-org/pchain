@@ -110,7 +110,6 @@ func (cm *ChainManager) InitCrossChainHelper(typeMut *event.TypeMux) {
 
 func (cm *ChainManager) StartChains() error {
 
-	cm.p2pObj.AddNetwork(cm.mainChain.Id)
 	cm.mainQuit = make(chan int)
 	err := StartChain(cm.mainChain, cm.mainQuit)
 	if err != nil {
@@ -118,8 +117,6 @@ func (cm *ChainManager) StartChains() error {
 	}
 
 	for _, chain := range cm.childChains {
-		// Add Chain ID to NodeInfo first
-		cm.p2pObj.AddNetwork(chain.Id)
 		// Start each Chain
 		quit := make(chan int)
 		cm.childQuits[chain.Id] = quit
@@ -259,7 +256,6 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	cm.childChains[chainId] = chain
 
 	//StartChildChain to attach p2p and rpc
-	cm.p2pObj.AddNetwork(chainId)
 
 	// Start the new Child Chain, and it will start child chain reactors as well
 	quit := make(chan int)

@@ -146,7 +146,7 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 
 func StartChain(chain *Chain, quit chan int) error {
 
-	fmt.Printf("start main chain: %s\n", chain.Id)
+	fmt.Printf("start chain: %s\n", chain.Id)
 	go func() {
 		fmt.Println("ethermintCmd->utils.StartNode(stack)")
 		utils.StartNode1(chain.EthNode)
