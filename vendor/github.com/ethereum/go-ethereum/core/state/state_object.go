@@ -100,12 +100,12 @@ func (s *StateObject) empty() bool {
 // Account is the Ethereum consensus representation of accounts.
 // These objects are stored in the main account trie.
 type Account struct {
-	Nonce		uint64
-	Balance		*big.Int	//for normal user
-	LockedBalance	*big.Int	//for validator, can not be consumed
-	ChainBalance   	*big.Int	//for child chain owner, can not be consumed
-	Root     	common.Hash // merkle root of the storage trie
-	CodeHash	[]byte
+	Nonce         uint64
+	Balance       *big.Int    //for normal user
+	LockedBalance *big.Int    //for validator, can not be consumed
+	ChainBalance  *big.Int    //for child chain owner, can not be consumed
+	Root          common.Hash // merkle root of the storage trie
+	CodeHash      []byte
 }
 
 // newObject creates a state object.
@@ -306,13 +306,13 @@ func (c *StateObject) AddLockedBalance(amount *big.Int) {
 
 		return
 	}
-	
-	fmt.Printf("StateObject_AddLockedBalance : value before lock: addr %x balance %d, value to lock\n",
-			c.Address(), c.LockedBalance(), amount)
+
+	fmt.Printf("StateObject_AddLockedBalance : value before lock: addr %x balance %d, value to lock %d\n",
+		c.Address(), c.LockedBalance(), amount)
 
 	c.SetLockedBalance(new(big.Int).Add(c.LockedBalance(), amount))
 
-	fmt.Printf("StateObject_AddLockedBalance : value after lock: addr %x balance %d\n",c.Address(), c.LockedBalance())
+	fmt.Printf("StateObject_AddLockedBalance : value after lock: addr %x balance %d\n", c.Address(), c.LockedBalance())
 
 	if glog.V(logger.Core) {
 		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.LockedBalance(), amount)
@@ -364,7 +364,7 @@ func (c *StateObject) AddChainBalance(amount *big.Int) {
 
 	c.SetChainBalance(new(big.Int).Add(c.ChainBalance(), amount))
 
-	fmt.Printf("StateObject_AddChainBalance : value after lock: addr %x balance %d\n",c.Address(), c.ChainBalance())
+	fmt.Printf("StateObject_AddChainBalance : value after lock: addr %x balance %d\n", c.Address(), c.ChainBalance())
 
 	if glog.V(logger.Core) {
 		glog.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.ChainBalance(), amount)
