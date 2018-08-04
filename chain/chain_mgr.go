@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
+	"github.com/tendermint/tendermint/epoch"
 	"github.com/tendermint/tendermint/types"
 	"gopkg.in/urfave/cli.v1"
 	"net"
@@ -74,13 +75,21 @@ func (cm *ChainManager) LoadChains() error {
 	fmt.Printf("LoadChains 0, childChainIds is %v, len is %d\n", childChainIds, len(childChainIds))
 
 	for _, chainId := range childChainIds {
+		ci := core.GetChainInfo(cm.cch.chainInfoDB, chainId)
+		// Check if we are in this child chain
+		if ci.Epoch == nil || !cm.checkCoinbaseInChildChain(ci.Epoch) {
+			continue
+		}
 
+		plog.Infof("Start to Load Child Chain - %s", chainId)
 		chain := LoadChildChain(cm.ctx, chainId, cm.p2pObj)
 		if chain == nil {
-			return errors.New("load child chain failed")
+			plog.Errorf("Load Child Chain - %s Failed.", chainId)
+			continue
 		}
 
 		cm.childChains[chainId] = chain
+		plog.Infof("Load Child Chain - %s Success!", chainId)
 	}
 
 	return nil
@@ -272,6 +281,14 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	rpc.Hookup(chain.Id, chain.RpcHandler)
 
 	<-quit
+}
+
+func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool {
+	var backend *ethereum.Backend
+	cm.mainChain.EthNode.Service(&backend)
+	localEtherbase, _ := backend.Ethereum().Etherbase()
+
+	return childEpoch.Validators.HasAddress(localEtherbase[:])
 }
 
 func (cm *ChainManager) WaitChainsStop() {
