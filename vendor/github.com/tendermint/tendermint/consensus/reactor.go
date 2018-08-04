@@ -63,6 +63,7 @@ func (conR *ConsensusReactor) OnStart() error {
 	// upon their respective events (ie. uses evsw)
 	conR.registerEventCallbacks()
 
+	//go conR.StartConsensusState()
 	//liaoyd
 	go conR.GetDiffValidator()
 
@@ -74,6 +75,22 @@ func (conR *ConsensusReactor) OnStart() error {
 		}
 	}
 	return nil
+}
+
+func (conR *ConsensusReactor) StartConsensusState ()  {
+	_, vs := conR.conS.GetValidators()
+	for ;len(vs) != len(conR.peerStates)+1; {
+		time.Sleep(time.Second)
+	}
+	logger.Errorf("validatorSet:%v", len(vs))
+	logger.Errorf("peer num:%+v", len(conR.peerStates))
+	//liaoyd
+	go conR.GetDiffValidator()
+
+	if !conR.fastSync {
+		// conR.catchupValidator(val, ok)
+		conR.conS.Start()
+	}
 }
 
 func (conR *ConsensusReactor) OnStop() {
@@ -192,7 +209,6 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 
 	switch chID {
 	case StateChannel:
-		// fmt.Println(chID, src, msg)
 		switch msg := msg.(type) {
 		case *NewRoundStepMessage:
 			ps.ApplyNewRoundStepMessage(msg)
@@ -230,9 +246,6 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 				Votes:   ourVotes,
 			}})
 		case *TestMessage:
-			fmt.Println(chID, src, msg)
-			fmt.Println("get test message!!!!!!!!!")
-			// fmt.Println(src.PubKey())
 			switch msg.ValidatorMsg.Action {
 			case "JOIN":
 				// msg.ValidatorMsg.PubKey = src.PubKey()     //get PubKey
@@ -410,6 +423,7 @@ func (conR *ConsensusReactor) sendProposalBlockParts(peer *p2p.Peer, proposal *t
 		propsalMsg := &ProposalMessage{Proposal: proposal}
 		success := false
 		peerState, ok := conR.peerStates[peer.PeerKey()]
+		i := int64(0)
 		for ;!success; {
 			rs := conR.conS.getRoundState() //copy (snapshot)
 			if proposal.Height+1 < rs.Height {
@@ -421,7 +435,8 @@ func (conR *ConsensusReactor) sendProposalBlockParts(peer *p2p.Peer, proposal *t
 					peerState.SetHasProposal(proposal)
 					success = true
 				} else {
-					time.Sleep(peerGossipSleepDuration)
+					time.Sleep(time.Duration(i)*peerGossipSleepDuration)
+					i *= 2
 				}
 			}
 		}
@@ -586,13 +601,24 @@ OUTER_LOOP:
 			logger.Info("Stopping gossipDataRoutine for ", peer)
 			return
 		}
+
+		if conR.conS.privValidator == nil {
+			panic("conR.conS.privValidator is nil")
+		}
+		if strings.Compare(conR.conS.nodeInfo.PubKey.KeyString(), conR.conS.ProposerPeerKey) != 0 {
+			//				logger.Debug(Fmt("gossipVoteRoutine: Peer (%s) is not proposer (key %s) on validator (pubkey %v) not send vote (height %d round %d)\n", peer.PeerKey(), conR.conS.ProposerPeerKey, conR.conS.privValidator.GetPubKey(), rs.Height, rs.Round))
+
+			time.Sleep(peerGossipSleepDuration)
+			continue OUTER_LOOP
+		}
+
 		rs := conR.conS.GetRoundState()
 		prs := ps.GetRoundState()
 
 		// Send Proposal && ProposalPOL BitArray?
 		if rs.Proposal != nil && !prs.Proposal {
 			//fmt.Printf("gossipDataRoutine: Validator (pkey %v proposr %v) send proposal (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetPubKey(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round, peer.PeerKey())
-			fmt.Printf("gossipDataRoutine: Validator (proposer %v) send proposal (height %d round %d) to peer %v\n", conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round, peer.PeerKey())
+			logger.Debugf("gossipDataRoutine: Validator (proposer %v) send proposal (height %d round %d) to peer %v\n", conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round, peer.PeerKey())
 
 			// Proposal: share the proposal metadata with peer.
 			{
@@ -634,7 +660,7 @@ OUTER_LOOP:
 			}
 			continue OUTER_LOOP
 		}
-
+/*
 		// If the peer is on a previous height, help catch up.
 		if (0 < prs.Height) && (prs.Height < rs.Height) {
 		//	logger.Debug(Fmt("gossipDataRoutine: Validator (pkey %v proposer %v) help peer (%s) catchup (height %d round %d)\n", conR.conS.privValidator.GetPubKey(), conR.conS.IsProposer(), peer.PeerKey(), prs.Height, prs.Round))
@@ -682,7 +708,9 @@ OUTER_LOOP:
 				continue OUTER_LOOP
 			}
 		}
+		*/
 	}
+
 }
 
 func (conR *ConsensusReactor) gossipDataRoutine(peer *p2p.Peer, ps *PeerState) {
@@ -711,7 +739,7 @@ OUTER_LOOP:
 		// Now consider sending other things, like the Proposal itself.
 
 
-
+/*
 		// Send prevote 2/3+ BLS signature aggregation
 	 if rs.PrevoteMaj23SignAggr != nil && !prs.PrevoteMaj23SignAggr {
 			logger.Debug(Fmt("gossipDataRoutine: Validator (addr %v proposr %v) send prevoteAggr (height %d round %d index %d) to peer %v\n", conR.conS.privValidator.GetAddress(), conR.conS.IsProposer(), rs.Proposal.Height, rs.Proposal.Round))
@@ -743,6 +771,7 @@ OUTER_LOOP:
 			}
 			continue OUTER_LOOP
 		}
+*/
 		// Nothing to do. Sleep.
 		time.Sleep(peerGossipSleepDuration)
 		continue OUTER_LOOP
@@ -1106,7 +1135,7 @@ func (ps *PeerState) SetHasProposal(proposal *types.Proposal) {
 		return
 	}
 	if ps.Proposal {
-		logger.Error("peer has proposal yet")
+		logger.Debug("peer has proposal yet")
 		return
 	}
 
@@ -1200,7 +1229,7 @@ func (ps *PeerState) SetHasMaj23PrevotePart(height int, round int, index int) {
 
 // Received VotesAggr part for precommit, save it
 func (ps *PeerState) SetHasMaj23PrecommitPart(height int, round int, index int) {
-fmt.Printf("enter SetHasMaj23PrecommitPart: part %d\n", index)
+   	logger.Debugf("enter SetHasMaj23PrecommitPart: part %d\n", index)
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
 
@@ -1790,7 +1819,7 @@ func SendValidatorMsgToCons(from string, key string, epoch int, power uint64, ac
 }
 
 func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerState) {
-	fmt.Println("in func validatorExMsgRoutine(peer *p2p.Peer, ps *PeerState)")
+	logger.Debugf("in func validatorExMsgRoutine(peer *p2p.Peer, ps *PeerState)")
 	types.AcceptVoteSet = make(map[string]*types.AcceptVotes)
 	// AcceptVoteSet := types.AcceptVoteSet
 	ValidatorMsgMap = make(map[string]*types.ValidatorMsg)
@@ -1803,7 +1832,6 @@ func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerStat
 			next = ValidatorMsgList.FrontWait()
 		}
 		msg := next.Value.(*types.ValidatorMsg)
-		fmt.Println("msg:", msg)
 
 		switch msg.Action {
 		case "JOIN": //joinValidator
@@ -1813,7 +1841,7 @@ func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerStat
 			// fmt.Println("priVal:", privVal)
 			// fmt.Println("priValPubKey:", privVal.PubKey)
 			tMsg := &TestMessage{ValidatorMsg: msg}
-			fmt.Println("broadcast message!!!!!!")
+			logger.Debugf("broadcast message!!!!!!")
 			peer.Send(StateChannel, struct{ ConsensusMessage }{tMsg})
 
 			from := msg.From
@@ -1823,12 +1851,12 @@ func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerStat
 			}
 		case "ACCEPT": //acceptJoinReq
 			if conR.conS.privValidator == nil || !conR.conS.Validators.HasAddress(conR.conS.privValidator.GetAddress()) {
-				fmt.Println("we are not in validator set")
+				logger.Debugf("we are not in validator set")
 				break
 			}
 			if received, ok := ValidatorMsgMap[msg.Target]; ok {
 				if received.Epoch <= conR.conS.Epoch.Number {
-					fmt.Println("request height is lower than consensus height")
+					logger.Debugf("request height is lower than consensus height")
 					break
 				}
 				if received.Power == msg.Power && received.Epoch == msg.Epoch {
@@ -1839,16 +1867,16 @@ func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerStat
 
 					conR.conS.privValidator.SignValidatorMsg(conR.conS.state.ChainID, msg)
 					tMsg := &TestMessage{ValidatorMsg: msg}
-					fmt.Println("sending tMsg!!!", tMsg)
+					logger.Debugf("sending tMsg!!!", tMsg)
 					// conR.Switch.Broadcast(StateChannel, struct{ ConsensusMessage }{tMsg})
 					peer.Send(StateChannel, struct{ ConsensusMessage }{tMsg})
 					conR.tryAddAcceptVote(msg)
 
 				} else {
-					fmt.Println("different power or height")
+					logger.Debugf("different power or height")
 				}
 			} else {
-				fmt.Println("didn't received JOIN request")
+				logger.Debugf("didn't received JOIN request")
 			}
 		}
 		next = next.NextWait()
@@ -1857,36 +1885,36 @@ func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerStat
 }
 
 func (conR *ConsensusReactor) tryAddAcceptVote(validatorMsg *types.ValidatorMsg) (success bool, err error) {
-	fmt.Println("in func (conR *ConsensusReactor) tryAddAcceptVote(validatorMsg *types.ValidatorMsg) (success bool, err error)")
+	logger.Debugf("in func (conR *ConsensusReactor) tryAddAcceptVote(validatorMsg *types.ValidatorMsg) (success bool, err error)")
 	_, val := conR.conS.Validators.GetByIndex(validatorMsg.ValidatorIndex)
 	if val == nil {
-		fmt.Println("bad index!!!!!")
+		logger.Debugf("bad index!!!!!")
 		return false, types.ErrVoteInvalidValidatorIndex
 	}
 	if !val.PubKey.VerifyBytes(types.SignBytes(conR.conS.state.ChainID, validatorMsg), validatorMsg.Signature) {
 		// Bad signature.
-		fmt.Println("bad signature!!!!!")
+		logger.Debugf("bad signature!!!!!")
 		return false, types.ErrVoteInvalidSignature
 	}
 	if validatorMsg.Epoch <= conR.conS.Epoch.Number {
-		fmt.Println("bad height!!!!!")
+		logger.Debugf("bad height!!!!!")
 		return false, nil
 	}
 	return conR.addAcceptVotes(validatorMsg)
 }
 
 func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (success bool, err error) {
-	fmt.Println("in func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (success bool, err error)")
+	logger.Debugf("in func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (success bool, err error)")
 	_, val := conR.conS.Validators.GetByIndex(validatorMsg.ValidatorIndex)
 	target := validatorMsg.Target
 	if types.AcceptVoteSet[target].Votes[validatorMsg.ValidatorIndex] != nil {
-		fmt.Println("duplicate vote!!!")
+		logger.Debugf("duplicate vote!!!")
 		return false, nil
 	}
 	types.AcceptVoteSet[target].Sum += val.VotingPower
 	types.AcceptVoteSet[target].Votes[validatorMsg.ValidatorIndex] = validatorMsg
 	if types.AcceptVoteSet[target].Sum > conR.conS.Validators.TotalVotingPower()*2/3 && !types.AcceptVoteSet[target].Maj23 {
-		fmt.Println("update validator set!!!!")
+		logger.Debugf("update validator set!!!!")
 		types.AcceptVoteSet[target].Maj23 = true
 		//these following values should be filled when join/withdraw, and not modified here
 		/*
@@ -1906,7 +1934,7 @@ func (conR *ConsensusReactor) GetDiffValidator() {
 	val, err := OpenVAL(conR.conS.config.GetString("cs_val_file"))
 	// AcceptVoteSet := types.AcceptVoteSet
 	if err != nil {
-		fmt.Println("ERROR IN OPENVAL", err)
+		logger.Debugf("ERROR IN OPENVAL:%+v", err)
 	}
 	for {
 		var diffs []*abci.Validator
@@ -1914,7 +1942,7 @@ func (conR *ConsensusReactor) GetDiffValidator() {
 		epochNumber := <-types.ValidatorChannel
 		for k, v := range types.AcceptVoteSet {
 			if v.Epoch == epochNumber {
-				fmt.Println("k:", k, "v:", v)
+				logger.Debugf("k:%+v, v:%+v", k, v)
 				if v.Maj23 {
 					diffs = append(
 						diffs,
