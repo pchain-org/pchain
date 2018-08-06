@@ -286,7 +286,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool {
 	var backend *ethereum.Backend
 	cm.mainChain.EthNode.Service(&backend)
-	localEtherbase, _ := backend.Ethereum().Etherbase()
+	localEtherbase := backend.Config().Etherbase
 
 	return childEpoch.Validators.HasAddress(localEtherbase[:])
 }
