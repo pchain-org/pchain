@@ -27,9 +27,11 @@ var plog = plogger.GetLogger("ChainManager")
 type ChainManager struct {
 	ctx *cli.Context
 
-	mainChain   *Chain
+	mainChain     *Chain
+	mainQuit      chan int
+	mainStartDone chan int
+
 	childChains map[string]*Chain
-	mainQuit    chan int
 	childQuits  map[string]chan int
 	p2pObj      *p2p.PChainP2P
 	cch         *CrossChainHelper
@@ -61,8 +63,8 @@ func (cm *ChainManager) StartP2P() error {
 	return nil
 }
 
-func (cm *ChainManager) LoadChains() error {
-
+func (cm *ChainManager) LoadAndStartMainChain() error {
+	// Load Main Chain
 	cm.mainChain = LoadMainChain(cm.ctx, MainChain, cm.p2pObj)
 	if cm.mainChain == nil {
 		return errors.New("Load main chain failed")
@@ -71,8 +73,19 @@ func (cm *ChainManager) LoadChains() error {
 	//set the event.TypeMutex to cch
 	cm.InitCrossChainHelper(cm.mainChain.EthNode.EventMux())
 
+	// Start the Main Chain
+	cm.mainQuit = make(chan int)
+	cm.mainStartDone = make(chan int)
+	err := StartChain(cm.mainChain, cm.mainStartDone, cm.mainQuit)
+	return err
+}
+
+func (cm *ChainManager) LoadChains() error {
+	// Wait for Main Chain Start Complete
+	<-cm.mainStartDone
+
 	childChainIds := core.GetChildChainIds(cm.cch.chainInfoDB)
-	fmt.Printf("LoadChains 0, childChainIds is %v, len is %d\n", childChainIds, len(childChainIds))
+	plog.Printf("Before Load Child Chains, childChainIds is %v, len is %d", childChainIds, len(childChainIds))
 
 	for _, chainId := range childChainIds {
 		ci := core.GetChainInfo(cm.cch.chainInfoDB, chainId)
@@ -103,7 +116,7 @@ func (cm *ChainManager) InitCrossChainHelper(typeMut *event.TypeMux) {
 		cm.ctx.GlobalString(DataDirFlag.Name))
 
 	if cm.ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
-		host := cm.ctx.GlobalString(utils.RPCListenAddrFlag.Name)
+		host := "127.0.0.1" //cm.ctx.GlobalString(utils.RPCListenAddrFlag.Name)
 		port := cm.ctx.GlobalInt(utils.RPCPortFlag.Name)
 		url := net.JoinHostPort(host, strconv.Itoa(port))
 		url = "http://" + url + "/pchain"
@@ -119,17 +132,11 @@ func (cm *ChainManager) InitCrossChainHelper(typeMut *event.TypeMux) {
 
 func (cm *ChainManager) StartChains() error {
 
-	cm.mainQuit = make(chan int)
-	err := StartChain(cm.mainChain, cm.mainQuit)
-	if err != nil {
-		return err
-	}
-
 	for _, chain := range cm.childChains {
 		// Start each Chain
 		quit := make(chan int)
 		cm.childQuits[chain.Id] = quit
-		err = StartChain(chain, quit)
+		err := StartChain(chain, nil, quit)
 		if err != nil {
 			return err
 		}
@@ -137,7 +144,7 @@ func (cm *ChainManager) StartChains() error {
 
 	// Dial the Seeds after network has been added into NodeInfo
 	mainChainConfig := etm.GetTendermintConfig(cm.mainChain.Id, cm.ctx)
-	err = cm.p2pObj.DialSeeds(mainChainConfig)
+	err := cm.p2pObj.DialSeeds(mainChainConfig)
 	if err != nil {
 		return err
 	}
@@ -269,7 +276,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	// Start the new Child Chain, and it will start child chain reactors as well
 	quit := make(chan int)
 	cm.childQuits[chain.Id] = quit
-	err := StartChain(chain, quit)
+	err := StartChain(chain, nil, quit)
 	if err != nil {
 		return
 	}
@@ -286,7 +293,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool {
 	var backend *ethereum.Backend
 	cm.mainChain.EthNode.Service(&backend)
-	localEtherbase := backend.Config().Etherbase
+	localEtherbase, _ := backend.Ethereum().Etherbase()
 
 	return childEpoch.Validators.HasAddress(localEtherbase[:])
 }

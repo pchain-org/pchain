@@ -144,7 +144,7 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 	return chain
 }
 
-func StartChain(chain *Chain, quit chan int) error {
+func StartChain(chain *Chain, startDone, quit chan int) error {
 
 	fmt.Printf("start chain: %s\n", chain.Id)
 	go func() {
@@ -192,6 +192,9 @@ func StartChain(chain *Chain, quit chan int) error {
 		err = chain.TdmNode.OnStart1()
 		if err != nil {
 			cmn.Exit(cmn.Fmt("Failed to start node: %v", err))
+		}
+		if startDone != nil {
+			startDone <- 1
 		}
 
 		//fmt.Printf("Started node", "nodeInfo", chain.TdmNode.sw.NodeInfo())
