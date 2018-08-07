@@ -114,7 +114,6 @@ func (cs *ConsensusState) Initialize() {
 	cs.CommitRound = -1
 	cs.LastCommit = nil
 	cs.Epoch = nil
-	cs.LastValidators = nil
 	cs.state = nil
 	cs.epoch = nil
 }
@@ -168,8 +167,6 @@ func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators)
 	cs.LastCommit = lastPrecommits
 	cs.Epoch = epoch
-
-	cs.LastValidators, _, _ = state.GetValidators()
 
 	cs.state = state
 	cs.epoch = epoch

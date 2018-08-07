@@ -172,7 +172,6 @@ type RoundState struct {
 	Votes              *HeightVoteSet
 	CommitRound        int            //
 	LastCommit         *types.VoteSet // Last precommits at Height-1
-	LastValidators     *types.ValidatorSet
 }
 
 func (rs *RoundState) RoundStateEvent() types.EventDataRoundState {
@@ -201,7 +200,6 @@ func (rs *RoundState) StringIndented(indent string) string {
 %s  LockedBlock:   %v %v
 %s  Votes:         %v
 %s  LastCommit: %v
-%s  LastValidators:    %v
 %s}`,
 		indent, rs.Height, rs.Round, rs.Step,
 		indent, rs.StartTime,
@@ -213,7 +211,6 @@ func (rs *RoundState) StringIndented(indent string) string {
 		indent, rs.LockedBlockParts.StringShort(), rs.LockedBlock.StringShort(),
 		indent, rs.Votes.StringIndented(indent+"    "),
 		indent, rs.LastCommit.StringShort(),
-		indent, rs.LastValidators.StringIndented(indent+"    "),
 		indent)
 }
 
@@ -876,25 +873,8 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 		fmt.Printf("block received from miner: %p\n", ethBlock)
 
 		var commit = &types.Commit{}
-		/*
-		if cs.Height == 1 {
-			// We're creating a proposal for the first block.
-			// The commit is empty, but not nil.
-			commit = &types.Commit{}
-		} else if cs.LastCommit.HasTwoThirdsMajority() {
-			// Make the commit from LastCommit
-			commit = cs.LastCommit.MakeCommit()
-		} else {
-			// This shouldn't happen.
-			log.Error("enterPropose: Cannot propose anything: No commit for the previous block.")
-			return
-		}
-		*/
 
 		/*
-		// Mempool validated transactions
-		txs := cs.mempool.Reap(cs.config.GetInt("block_size"))
-
 		//we should eliminate this kind of transactions, here just for prototype verification
 		epTxs, err := cs.Epoch.ProposeTransactions("proposer", cs.Height)
 		if err != nil {
@@ -924,7 +904,7 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 				ethBlock, val.Hash(), epochBytes,
 				cs.config.GetInt( "block_part_size"))
 	} else {
-		panic("block from miner should not be nil, let's crash")
+		fmt.Printf("block from miner should not be nil, let's start another round")
 		return nil, nil
 	}
 }
