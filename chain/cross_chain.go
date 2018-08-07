@@ -92,14 +92,6 @@ func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId st
 		return errors.New("end block number has already passed")
 	}
 
-	// TODO Check Full node
-	//chainMgr := GetCMInstance(nil)
-	//epoch := chainMgr.mainChain.TdmNode.ConsensusState().Epoch
-	//found := epoch.Validators.HasAddress(from.Bytes())
-	//if !found {
-	//	return errors.New(fmt.Sprint("You are not a validator in Main Chain, therefore child chain creation is forbidden"))
-	//}
-
 	return nil
 }
 
@@ -201,11 +193,11 @@ func (cch *CrossChainHelper) ReadyForLaunchChildChain(height uint64, stateDB *st
 	} else {
 		plog.Infof("ReadyForLaunchChildChain - %v child chain(s) to be launch in Block %v. %v\n", len(readyId), height, readyId)
 		for _, chainId := range readyId {
-			cch.GetTypeMutex().Post(core.CreateChildChainEvent{ChainId: chainId})
 			// Convert the Chain Info from Pending to Formal
 			cci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
 			core.SaveChainInfo(cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: *cci})
-			core.DeletePendingChildChainData(cch.chainInfoDB, chainId)
+			// Send Post to Chain Manager
+			cch.GetTypeMutex().Post(core.CreateChildChainEvent{ChainId: chainId})
 		}
 	}
 

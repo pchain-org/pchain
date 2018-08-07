@@ -281,6 +281,9 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		return
 	}
 
+	// Child Chain start success, then delete the pending data in chain info db
+	core.DeletePendingChildChainData(cm.cch.chainInfoDB, chainId)
+
 	// Broadcast Child ID to all peers
 	cm.p2pObj.BroadcastChildChainID(chainId)
 
