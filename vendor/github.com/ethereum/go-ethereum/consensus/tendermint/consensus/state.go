@@ -9,8 +9,6 @@ import (
 	"time"
 	//"runtime/debug"
 
-	"github.com/ebuchman/fail-test"
-
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
@@ -83,7 +81,7 @@ func (tp *TimeoutParams) Commit(t time.Time) time.Time {
 // InitTimeoutParamsFromConfig initializes parameters from config
 func InitTimeoutParamsFromConfig(config cfg.Config) *TimeoutParams {
 	return &TimeoutParams{
-		WaitForMinerBlock0: config.GetInt("timeout_wait_for_miner_block"),
+		WaitForMinerBlock0:config.GetInt("timeout_wait_for_miner_block"),
 		Propose0:          config.GetInt("timeout_propose"),
 		ProposeDelta:      config.GetInt("timeout_propose_delta"),
 		Prevote0:          config.GetInt("timeout_prevote"),
@@ -99,7 +97,7 @@ func InitTimeoutParamsFromConfig(config cfg.Config) *TimeoutParams {
 // Errors
 
 var (
-	ErrMinerBlock               = errors.New(("Miner block is nil"))
+	ErrMinerBlock               = errors.New("Miner block is nil")
 	ErrInvalidProposalSignature = errors.New("Error invalid proposal signature")
 	ErrInvalidProposalPOLRound  = errors.New("Error invalid proposal POL round")
 	ErrAddingVote               = errors.New("Error adding vote")
@@ -260,12 +258,12 @@ type ConsensusState struct {
 	BaseService
 
 	config       cfg.Config
-	//blockStore   types.BlockStore
 	privValidator PrivValidator // for signing votes
 
 	cch 	core.CrossChainHelper
 
 	mtx sync.Mutex
+	nhMtx sync.Mutex
 	RoundState
 	epoch *ep.Epoch
 	state *sm.State // State until height-1.
@@ -286,10 +284,10 @@ type ConsensusState struct {
 
 	done chan struct{}
 
-	blockFromMiner *ethTypes.Block
-	backend Backend
+	blockFromMiner   *ethTypes.Block
+	backend          Backend
 
-	node          Node
+	node             Node
 }
 
 func NewConsensusState(config cfg.Config, backend Backend, cch  core.CrossChainHelper) *ConsensusState {
@@ -385,25 +383,12 @@ func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 func (cs *ConsensusState) LoadCommit(height uint64) *types.Commit {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
-	/*
-	if height == cs.blockStore.Height() {
-		return cs.blockStore.LoadSeenCommit(height)
-	}
-	return cs.blockStore.LoadBlockCommit(height)
-	*/
+
 	tdmExtra, height := cs.LoadTendermintExtra(height)
 	return tdmExtra.SeenCommit
 }
 
 func (cs *ConsensusState) OnStart() error {
-
-	/*
-	walFile := cs.config.GetString("cs_wal_file")
-	if err := cs.OpenWAL(walFile); err != nil {
-		log.Error("Error loading ConsensusState wal", "error", err.Error())
-		return err
-	}
-	*/
 
 	// we need the timeoutRoutine for replay so
 	//  we don't block on the tick chan.
@@ -412,23 +397,10 @@ func (cs *ConsensusState) OnStart() error {
 	//  to deal with them (by that point, at most one will be valid)
 	cs.timeoutTicker.Start()
 
-	// we may have lost some votes if the process crashed
-	// reload from consensus log to catchup
-	/*
-	if err := cs.catchupReplay(cs.Height); err != nil {
-		log.Error("Error on catchup replay. Proceeding to start ConsensusState anyway", "error", err.Error())
-		// NOTE: if we ever do return an error here,
-		// make sure to stop the timeoutTicker
-	}
-	*/
-
 	// now start the receiveRoutine
 	go cs.receiveRoutine(0)
 
 	cs.StartNewHeight()
-	// schedule the first round!
-	// use GetRoundState so we don't race the receiveRoutine for access
-	//cs.scheduleRound0(cs.GetRoundState())
 
 	return nil
 }
@@ -445,13 +417,6 @@ func (cs *ConsensusState) OnStop() {
 
 	cs.BaseService.OnStop()
 	cs.timeoutTicker.Stop()
-
-	// Make BaseService.Wait() wait until cs.wal.Wait()
-	/*
-	if cs.wal != nil && cs.IsRunning() {
-		cs.wal.Wait()
-	}
-	*/
 }
 
 // NOTE: be sure to Stop() the event switch and drain
@@ -459,26 +424,6 @@ func (cs *ConsensusState) OnStop() {
 func (cs *ConsensusState) Wait() {
 	<-cs.done
 }
-
-/*
-// Open file to log all consensus messages and timeouts for deterministic accountability
-func (cs *ConsensusState) OpenWAL(walFile string) (err error) {
-	err = EnsureDir(filepath.Dir(walFile), 0700)
-	if err != nil {
-		log.Error("Error ensuring ConsensusState wal dir", "error", err.Error())
-		return err
-	}
-
-	cs.mtx.Lock()
-	defer cs.mtx.Unlock()
-	wal, err := NewWAL(walFile, cs.config.GetBool("cs_wal_light"))
-	if err != nil {
-		return err
-	}
-	cs.wal = wal
-	return nil
-}
-*/
 
 //------------------------------------------------------------
 // Public interface for passing messages into the consensus state,
@@ -1034,7 +979,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	}
 
 	// Valdiate proposal block
-	err := cs.state.ValidateBlock(cs.ProposalBlock)
+	err := cs.ProposalBlock.ValidateBasic(cs.state.TdmExtra)
 	if err != nil {
 		// ProposalBlock is invalid, prevote nil.
 		log.Warn("enterPrevote: ProposalBlock is invalid", "error", err)
@@ -1156,7 +1101,7 @@ func (cs *ConsensusState) enterPrecommit(height uint64, round int) {
 	if cs.ProposalBlock.HashesTo(blockID.Hash) {
 		log.Notice("enterPrecommit: +2/3 prevoted proposal block. Locking", "hash", blockID.Hash)
 		// Validate the block.
-		if err := cs.state.ValidateBlock(cs.ProposalBlock); err != nil {
+		if err := cs.ProposalBlock.ValidateBasic(cs.state.TdmExtra); err != nil {
 			PanicConsensus(Fmt("enterPrecommit: +2/3 prevoted for an invalid block: %v", err))
 		}
 		cs.LockedRound = round
@@ -1310,11 +1255,9 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 	if !block.HashesTo(blockID.Hash) {
 		PanicSanity(Fmt("Cannot finalizeCommit, ProposalBlock does not hash to commit hash"))
 	}
-	if err := cs.state.ValidateBlock(block); err != nil {
+	if err := block.ValidateBasic(cs.state.TdmExtra); err != nil {
 		PanicConsensus(Fmt("+2/3 committed an invalid block: %v", err))
 	}
-
-	fail.Fail() // XXX
 
 	// Save to blockStore.
 	//if cs.blockStore.Height() < block.TdmExtra.Height {
@@ -1323,27 +1266,9 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 		// but may differ from the LastCommit included in the next block
 		precommits := cs.Votes.Precommits(cs.CommitRound)
 		seenCommit := precommits.MakeCommit()
-		//cs.blockStore.SaveBlock(block, blockParts, seenCommit)
+
 		block.TdmExtra.SeenCommit = seenCommit
-		block.FillSeenCommitHash()
-
-
-		fail.Fail() // XXX
-
-		/*
-		// Finish writing to the WAL for this height.
-		// NOTE: If we fail before writing this, we'll never write it,
-		// and just recover by running ApplyBlock in the Handshake.
-		// If we moved it before persisting the block, we'd have to allow
-		// WAL replay for blocks with an #ENDHEIGHT
-		// As is, ConsensusState should not be started again
-		// until we successfully call ApplyBlock (ie. here or in Handshake after restart)
-		if cs.wal != nil {
-			cs.wal.writeEndHeight(height)
-		}
-		*/
-
-		fail.Fail() // XXX
+		block.TdmExtra.SeenCommitHash = seenCommit.Hash()
 
 		// Create a copy of the state for staging
 		// and an event cache for txs
@@ -1361,8 +1286,6 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 			return
 		}
 
-		fail.Fail() // XXX
-
 		// Fire event for new block.
 		// NOTE: If we fail before firing, these events will never fire
 		//
@@ -1372,14 +1295,9 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 		//   Both options mean we may fire more than once. Is that fine ?
 		types.FireEventNewBlock(cs.evsw, types.EventDataNewBlock{block})
 		types.FireEventNewBlockHeader(cs.evsw, types.EventDataNewBlockHeader{int(block.TdmExtra.Height)})
-		//eventCache.Flush()
-
-		fail.Fail() // XXX
 
 		// NewHeightStep!
 		//cs.UpdateToStateAndEpoch(stateCopy, stateCopy.Epoch)
-
-		fail.Fail() // XXX
 
 		cs.backend.Commit(block, [][]byte{}/*signatures*/)
 	} else {
@@ -1515,37 +1433,11 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 		fmt.Printf("block extra is %p\n", cs.ProposalBlock.TdmExtra)
 	}
 
-	// A precommit for the previous height?
-	// These come in while we wait timeoutCommit
+	// A precommit for the previous height, just ignore
 	if vote.Height < cs.Height {
 		fmt.Printf("addVote, vote is for previous blocks, just ignore\n")
 		return
 	}
-
-	/*
-	if vote.Height+1 == cs.Height {
-		if !(cs.Step == RoundStepNewHeight && vote.Type == types.VoteTypePrecommit) {
-			// TODO: give the reason ..
-			// fmt.Errorf("tryAddVote: Wrong height, not a LastCommit straggler commit.")
-			return added, ErrVoteHeightMismatch
-		}
-
-		added, err = cs.LastCommit.AddVote(vote)
-		if added {
-			log.Info(Fmt("Added to lastPrecommits: %v", cs.LastCommit.StringShort()))
-			types.FireEventVote(cs.evsw, types.EventDataVote{vote})
-
-			// if we can skip timeoutCommit and have all the votes now,
-			if cs.timeoutParams.SkipTimeoutCommit && cs.LastCommit.HasAll() {
-				// go straight to new round (skip timeout commit)
-				// cs.scheduleTimeout(time.Duration(0), cs.Height, 0, RoundStepNewHeight)
-				cs.enterNewRound(cs.Height, 0)
-			}
-		}
-
-		return
-	}
-	*/
 
 	// A prevote/precommit for this height?
 	if vote.Height == cs.Height {

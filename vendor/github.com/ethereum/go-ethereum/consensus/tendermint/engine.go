@@ -7,7 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	//"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
-	//"bytes"
+	"bytes"
 	//"time"
 	"github.com/ethereum/go-ethereum/core/state"
 	"fmt"
@@ -27,13 +27,51 @@ const (
 )
 
 var (
+	// errInvalidProposal is returned when a prposal is malformed.
+	errInvalidProposal = errors.New("invalid proposal")
+	// errInvalidSignature is returned when given signature is not signed by given
+	// address.
+	errInvalidSignature = errors.New("invalid signature")
+	// errUnknownBlock is returned when the list of validators is requested for a block
+	// that is not part of the local blockchain.
+	errUnknownBlock = errors.New("unknown block")
+	// errUnauthorized is returned if a header is signed by a non authorized entity.
+	errUnauthorized = errors.New("unauthorized")
+	// errInvalidDifficulty is returned if the difficulty of a block is not 1
+	errInvalidDifficulty = errors.New("invalid difficulty")
+	// errInvalidExtraDataFormat is returned when the extra data format is incorrect
+	errInvalidExtraDataFormat = errors.New("invalid extra data format")
+	// errInvalidMixDigest is returned if a block's mix digest is not Istanbul digest.
+	errInvalidMixDigest = errors.New("invalid Istanbul mix digest")
+	// errInvalidNonce is returned if a block's nonce is invalid
+	errInvalidNonce = errors.New("invalid nonce")
+	// errInvalidUncleHash is returned if a block contains an non-empty uncle list.
+	errInvalidUncleHash = errors.New("non empty uncle hash")
+	// errInconsistentValidatorSet is returned if the validator set is inconsistent
+	errInconsistentValidatorSet = errors.New("non empty uncle hash")
+	// errInvalidTimestamp is returned if the timestamp of a block is lower than the previous block's timestamp + the minimum block period.
+	errInvalidTimestamp = errors.New("invalid timestamp")
+	// errInvalidVotingChain is returned if an authorization list is attempted to
+	// be modified via out-of-range or non-contiguous headers.
+	errInvalidVotingChain = errors.New("invalid voting chain")
+	// errInvalidVote is returned if a nonce value is something else that the two
+	// allowed constants of 0x00..0 or 0xff..f.
+	errInvalidVote = errors.New("vote nonce not 0x00..0 or 0xff..f")
+	// errInvalidCommittedSeals is returned if the committed seal is not signed by any of parent validators.
+	errInvalidCommittedSeals = errors.New("invalid committed seals")
+	// errEmptyCommittedSeals is returned if the field of committed seals is zero.
+	errEmptyCommittedSeals = errors.New("zero committed seals")
+	// errMismatchTxhashes is returned if the TxHash in header is mismatch.
+	errMismatchTxhashes = errors.New("mismatch transactions hashes")
+)
+
+var (
 	defaultDifficulty = big.NewInt(1)
 	nilUncleHash      = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
 	emptyNonce        = types.BlockNonce{}
 	now               = time.Now
 
-	nonceAuthVote = hexutil.MustDecode("0xffffffffffffffff") // Magic nonce number to vote on adding a new validator
-	nonceDropVote = hexutil.MustDecode("0x0000000000000000") // Magic nonce number to vote on removing a validator.
+	nonceTendermint = hexutil.MustDecode("0x88ff88ff88ff88ff") // Magic nonce number to vote on adding a new validator
 
 	inmemoryAddresses  = 20 // Number of recent addresses from ecrecover
 	recentAddresses, _ = lru.NewARC(inmemoryAddresses)
@@ -118,9 +156,7 @@ func (sb *backend) Author(header *types.Header) (common.Address, error) {
 // via the VerifySeal method.
 func (sb *backend) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
 
-	fmt.Printf("Tendermint: (sb *backend) VerifyHeader, add logic here\n")
-
-	return nil
+	return sb.verifyHeader(chain, header, nil)
 }
 
 // verifyHeader checks whether a header conforms to the consensus rules.The
@@ -130,8 +166,38 @@ func (sb *backend) VerifyHeader(chain consensus.ChainReader, header *types.Heade
 func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
 
 	fmt.Printf("Tendermint: (sb *backend) verifyHeader, add logic here\n")
+	if header.Number == nil {
+		return errUnknownBlock
+	}
 
-	return nil
+	// Don't waste time checking blocks from the future
+	if header.Time.Cmp(big.NewInt(now().Unix())) > 0 {
+		return consensus.ErrFutureBlock
+	}
+
+	// Ensure that the extra data format is satisfied
+	if _, err := tdmTypes.ExtractTendermintExtra(header); err != nil {
+		return errInvalidExtraDataFormat
+	}
+
+	// Ensure that the coinbase is valid
+	if header.Nonce != (emptyNonce) && !bytes.Equal(header.Nonce[:], nonceTendermint) {
+		return errInvalidNonce
+	}
+	// Ensure that the mix digest is zero as we don't have fork protection currently
+	if header.MixDigest != types.TendermintDigest {
+		return errInvalidMixDigest
+	}
+	// Ensure that the block doesn't contain any uncles which are meaningless in Istanbul
+	if header.UncleHash != nilUncleHash {
+		return errInvalidUncleHash
+	}
+	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
+	if header.Difficulty == nil || header.Difficulty.Cmp(defaultDifficulty) != 0 {
+		return errInvalidDifficulty
+	}
+
+	return sb.verifyCascadingFields(chain, header, parents)
 }
 
 // verifyCascadingFields verifies all the header fields that are not standalone,
@@ -141,9 +207,42 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 func (sb *backend) verifyCascadingFields(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
 	// The genesis block is the always valid dead-end
 
-	fmt.Printf("Tendermint: (sb *backend) verifyCascadingFields, add logic here\n")
+	number := header.Number.Uint64()
+	if number == 0 {
+		return nil
+	}
+	// Ensure that the block's timestamp isn't too close to it's parent
+	var parent *types.Header
+	if len(parents) > 0 {
+		parent = parents[len(parents)-1]
+	} else {
+		parent = chain.GetHeader(header.ParentHash, number-1)
+	}
+	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
+		return consensus.ErrUnknownAncestor
+	}
+	/*
+	if parent.Time.Uint64()+sb.config.BlockPeriod > header.Time.Uint64() {
+		return errInvalidTimestamp
+	}
+	// Verify validators in extraData. Validators in snapshot and extraData should be the same.
+	snap, err := sb.snapshot(chain, number-1, header.ParentHash, parents)
+	if err != nil {
+		return err
+	}
 
-	return nil
+	validators := make([]byte, len(snap.validators())*common.AddressLength)
+	for i, validator := range snap.validators() {
+		copy(validators[i*common.AddressLength:], validator[:])
+	}
+	*/
+	if err := sb.verifySigner(chain, header, parents); err != nil {
+		return err
+	}
+
+	err := sb.verifyCommittedSeals(chain, header, parents)
+	fmt.Printf("verifyCascadingFields with err: %v\n", err)
+	return err
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
@@ -159,8 +258,7 @@ func (sb *backend) VerifyHeaders(chain consensus.ChainReader, headers []*types.H
 	go func() {
 		for i, header := range headers {
 			//err := sb.verifyHeader(chain, header, headers[:i])
-			err := errors.New(fmt.Sprintf("try to make an error type %v, %v", i, header.Time))
-			err = nil
+			err := sb.verifyHeader(chain, header, headers[:i])
 			select {
 			case <-abort:
 				return
@@ -176,8 +274,9 @@ func (sb *backend) VerifyHeaders(chain consensus.ChainReader, headers []*types.H
 // rules of a given engine.
 func (sb *backend) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
 
-	fmt.Printf("Tendermint: (sb *backend) VerifyUncles, add logic here\n")
-
+	if len(block.Uncles()) > 0 {
+		return errInvalidUncleHash
+	}
 	return nil
 }
 
@@ -185,7 +284,7 @@ func (sb *backend) VerifyUncles(chain consensus.ChainReader, block *types.Block)
 func (sb *backend) verifySigner(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
 
 	fmt.Printf("Tendermint: (sb *backend) verifySigner, add logic here\n")
-
+	//no need to verify signer here, the proposer has been verified when reaching consensus
 	return nil
 }
 
@@ -193,6 +292,29 @@ func (sb *backend) verifySigner(chain consensus.ChainReader, header *types.Heade
 func (sb *backend) verifyCommittedSeals(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
 
 	fmt.Printf("Tendermint: (sb *backend) verifyCommittedSeals, add logic here\n")
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
+	if err != nil {
+		return errInvalidExtraDataFormat
+	}
+
+	epoch := sb.core.consensusState.Epoch.GetEpochByBlockNumber(int(tdmExtra.Height))
+	if epoch == nil || epoch.Validators == nil{
+		return errInconsistentValidatorSet
+	}
+
+	valSet := epoch.Validators
+	if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
+		return errInconsistentValidatorSet
+	}
+
+	seenCommit := tdmExtra.SeenCommit
+	if !bytes.Equal(tdmExtra.SeenCommitHash, seenCommit.Hash()) {
+		return errInvalidCommittedSeals
+	}
+
+	if err = valSet.VerifyCommit(tdmExtra.ChainID, tdmExtra.Height, seenCommit); err != nil {
+		return errInvalidSignature
+	}
 
 	return nil
 }
@@ -201,10 +323,17 @@ func (sb *backend) verifyCommittedSeals(chain consensus.ChainReader, header *typ
 // the consensus rules of the given engine.
 func (sb *backend) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
 	// get parent header and ensure the signer is in parent's validator set
+	number := header.Number.Uint64()
+	if number == 0 {
+		return errUnknownBlock
+	}
 
-	fmt.Printf("Tendermint: (sb *backend) VerifySeal, add logic here\n")
+	// ensure that the difficulty equals to defaultDifficulty
+	if header.Difficulty.Cmp(defaultDifficulty) != 0 {
+		return errInvalidDifficulty
+	}
 
-	return nil
+	return sb.verifySigner(chain, header, nil)
 }
 
 // Prepare initializes the consensus fields of a block header according to the
@@ -259,7 +388,6 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	}
 	*/
 	// add validators in snapshot to extraData's validators section
-	//extra, err := prepareExtra(header, snap.validators())
 	extra, err := prepareExtra(header, nil)
 	if err != nil {
 		return err
@@ -283,13 +411,11 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 			uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 
-	fmt.Printf("Tendermint: (sb *backend) Finalize, add logic here\n")
-
 	// No block rewards in Istanbul, so the state remains as is and uncles are dropped
 	// TODO: we need consider reward here
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = nilUncleHash
-	fmt.Printf("Tendermint: (sb *backend) Finalize, header.Number is %v, root are: %x\n", header.Number, header.Root)
+
 	fmt.Printf("Tendermint: (sb *backend) Finalize, receipts are: %v\n", receipts)
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts), nil
@@ -380,9 +506,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 // current signer.
 func (sb *backend) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
 
-	fmt.Printf("Tendermint: (sb *backend) CalcDifficulty, add logic here\n")
-
-	return new(big.Int).SetUint64(0)
+	return defaultDifficulty
 }
 
 

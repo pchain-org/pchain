@@ -33,14 +33,12 @@ type ConsensusReactor struct {
 	p2p.BaseReactor // BaseService + p2p.Switch
 
 	conS     *ConsensusState
-	//fastSync bool
 	evsw     types.EventSwitch
 }
 
-func NewConsensusReactor(consensusState *ConsensusState/*, fastSync bool*/) *ConsensusReactor {
+func NewConsensusReactor(consensusState *ConsensusState) *ConsensusReactor {
 	conR := &ConsensusReactor{
 		conS:     consensusState,
-		//fastSync: fastSync,
 	}
 	conR.BaseReactor = *p2p.NewBaseReactor(log, "ConsensusReactor", conR)
 	return conR
@@ -132,10 +130,7 @@ func (conR *ConsensusReactor) AddPeer(peer *p2p.Peer) {
 	// go conR.GetDiffValidator()
 
 	// Send our state to peer.
-	// If we're fast_syncing, broadcast a RoundStepMessage later upon SwitchToConsensus().
-	//if !conR.fastSync {
-		conR.sendNewRoundStepMessages(peer)
-	//}
+	conR.sendNewRoundStepMessages(peer)
 }
 
 // Implements Reactor
@@ -337,7 +332,7 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 		//if conR.conS.Step < RoundStepPropose {
 		re := data.(types.EventDataRequest)
 		block := re.Proposal
-		log.Info("with heighs","block.NumberU64()", block.NumberU64(), "conR.conS.Height", conR.conS.Height, "conR.conS.Step", conR.conS.Step )
+		log.Info("with height","block.NumberU64()", block.NumberU64(), "conR.conS.Height", conR.conS.Height, "conR.conS.Step", conR.conS.Step )
 		//wait block in new height or new block has been inserted to start a new height
 		if block.NumberU64() == conR.conS.Height || block.NumberU64() == conR.conS.Height + 1 {
 
@@ -1492,50 +1487,3 @@ func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (
 	}
 	return true, nil
 }
-
-/*
-func (conR *ConsensusReactor) GetDiffValidator() {
-	types.ValidatorChannel = make(chan int)
-	types.EndChannel = make(chan []*abci.Validator)
-	val, err := OpenVAL(conR.conS.config.GetString("cs_val_file"))
-	// AcceptVoteSet := types.AcceptVoteSet
-	if err != nil {
-		fmt.Println("ERROR IN OPENVAL", err)
-	}
-	for {
-		var diffs []*abci.Validator
-		init := 0
-		epochNumber := <-types.ValidatorChannel
-		for k, v := range types.AcceptVoteSet {
-			if v.Epoch == epochNumber {
-				fmt.Println("k:", k, "v:", v)
-				if v.Maj23 {
-					diffs = append(
-						diffs,
-						&abci.Validator{
-							PubKey: v.PubKey.Bytes(),
-							Power:  v.Power,
-						},
-					)
-					if init == 0 {
-						val.writeEpoch(v.Epoch)
-						val.Save(&types.PreVal{ValidatorSet: conR.conS.Validators})
-						init = 1
-					}
-					val.Save(v)
-
-					types.ValChangedEpoch[v.Epoch] = append(
-						types.ValChangedEpoch[v.Epoch],
-						v,
-					)
-				}
-				//delete(ValidatorMsgMap, v.Key)
-				//delete(types.AcceptVoteSet, v.Key)
-				delete(ValidatorMsgMap, k)
-				delete(types.AcceptVoteSet, k)
-			}
-		}
-		types.EndChannel <- diffs
-	}
-}
-*/

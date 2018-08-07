@@ -241,7 +241,7 @@ func (valSet *ValidatorSet) Iterate(fn func(index int, val *Validator) bool) {
 }
 
 // Verify that +2/3 of the set had signed the given signBytes
-func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height uint64, commit *Commit) error {
+func (valSet *ValidatorSet) VerifyCommit(chainID string, height uint64, commit *Commit) error {
 
 	if valSet.Size() != len(commit.Precommits) {
 		return fmt.Errorf("Invalid commit -- wrong set size: %v vs %v", valSet.Size(), len(commit.Precommits))
@@ -274,9 +274,6 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height
 		precommitSignBytes := SignBytes(chainID, precommit)
 		if !val.PubKey.VerifyBytes(precommitSignBytes, precommit.Signature) {
 			return fmt.Errorf("Invalid commit -- invalid signature: %v", precommit)
-		}
-		if !blockID.Equals(precommit.BlockID) {
-			continue // Not an error, but doesn't count
 		}
 		// Good precommit!
 		talliedVotingPower += val.VotingPower

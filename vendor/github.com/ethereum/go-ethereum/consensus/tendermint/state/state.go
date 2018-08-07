@@ -155,32 +155,6 @@ func (s *State) GetValidators() (*types.ValidatorSet, *types.ValidatorSet, error
 
 	return nil, nil, errors.New("epoch information error")
 }
-/*
-// Load the most recent state from "state" db,
-// or create a new one (and save) from genesis.
-func GetState(config cfg.Config, stateDB dbm.DB) *State {
-	state := LoadState(stateDB)
-	if state == nil {
-		state = MakeGenesisStateFromFile(stateDB, config.GetString("genesis_file"))
-
-		state.Save()
-
-		_, val, _ := state.GetValidators()
-		fmt.Printf("GetState() state 0, state.validators are: %v\n", val)
-	} else if valSetFromGenesis {
-		valSet := MakeGenesisValidatorsFromFile(config.GetString("genesis_file"))
-		state.Validators = valSet
-		state.Save()
-
-		_, val := state.GetValidators()
-		fmt.Printf("GetState() state 1, state.validators are: %v\n", val)
-	} else {
-		_, val, _ := state.GetValidators()
-		fmt.Printf("GetState() state 2, state.validators are: %v\n", val)
-	}
-	return state
-}
-*/
 
 //-----------------------------------------------------------------------------
 // Genesis

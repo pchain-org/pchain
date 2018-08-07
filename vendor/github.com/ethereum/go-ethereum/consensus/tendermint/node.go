@@ -34,7 +34,6 @@ type Node struct {
 	//genesisDoc    *types.GenesisDoc    // initial validator set
 	privValidator *types.PrivValidator // local node's validator key
 
-	stateDB       dbm.DB
 	epochDB       dbm.DB
 
 	sw       *p2p.Switch           // p2p connections
@@ -106,18 +105,18 @@ func (n *Node) OnStart() error {
 
 	fmt.Printf("(n *Node) OnStart()\n")
 
-
+	/*
 	state, epoch := n.consensusState.InitStateAndEpoch()
 	n.consensusState.Initialize()
 	n.consensusState.UpdateToStateAndEpoch(state, epoch)
-
+	*/
 	_, err := n.evsw.Start()
 	if err != nil {
 		cmn.Exit(cmn.Fmt("Failed to start switch: %v", err))
 	}
 
 	// Start the Reactors for this Chain
-	n.sw.StartChainReactor(state.TdmExtra.ChainID)
+	n.sw.StartChainReactor(n.config.GetString("chain_id")/*state.TdmExtra.ChainID*/)
 
 	// run the profile server
 	profileHost := n.config.GetString("prof_laddr")

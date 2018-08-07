@@ -1,10 +1,9 @@
 package state
 
 import (
-	//"errors"
+	"errors"
 	//"fmt"
 
-	fail "github.com/ebuchman/fail-test"
 	. "github.com/tendermint/go-common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
@@ -47,6 +46,8 @@ func (s *State) ValidateBlock(block *types.TdmBlock) error {
 	return s.validateBlock(block)
 }
 
+
+//Very current block
 func (s *State) validateBlock(block *types.TdmBlock) error {
 	// Basic block validation.
 	err := block.ValidateBasic(s.TdmExtra)
@@ -54,26 +55,19 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 		return err
 	}
 
-	/* We have no last commit any more
 	// Validate block SeenCommit.
-	if block.TdmExtra.Height == 1 {
-		if len(block.TdmExtra.SeenCommit.Precommits) != 0 {
-			return errors.New("Block at height 1 (first block) should have no LastCommit precommits")
-		}
-	} else {
-		//fmt.Printf("(s *State) validateBlock(), avoid LastValidators and LastCommit.Precommits size check for validatorset change\n")
-		lastValidators, _, err := s.GetValidators()
-
-		if err != nil && lastValidators != nil {
-			err = lastValidators.VerifyCommit(
-				s.ChainID, s.LastBlockID, int(block.TdmExtra.Height) - 1, block.TdmExtra.SeenCommit)
-		}
-
-		if err != nil {
-			return err
-		}
+	epoch := s.Epoch.GetEpochByBlockNumber(int(block.TdmExtra.Height))
+	if epoch == nil || epoch.Validators == nil{
+		return errors.New("no epoch for current block height")
 	}
-	*/
+
+	valSet := epoch.Validators
+	err = valSet.VerifyCommit(block.TdmExtra.ChainID, block.TdmExtra.Height,
+								block.TdmExtra.SeenCommit)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -94,8 +88,6 @@ func (s *State) ApplyBlock(eventCache types.Fireable, block *types.TdmBlock, par
 		s.Epoch.NextEpoch.Status = epoch.EPOCH_VOTED_NOT_SAVED
 		s.Epoch.Save()
 	}
-
-	fail.Fail() // XXX
 
 	//here handles if need to enter next epoch
 	ok, err := s.Epoch.ShouldEnterNewEpoch(int(block.TdmExtra.Height))
@@ -118,8 +110,6 @@ func (s *State) ApplyBlock(eventCache types.Fireable, block *types.TdmBlock, par
 
 	//here handles when enter new epoch
 	s.SetBlockAndEpoch(block.TdmExtra, partsHeader)
-
-	fail.Fail() // XXX
 
 	// save the state
 	s.Epoch.Save()

@@ -26,32 +26,23 @@ func (bs *ConsensusState) GetChainReader() consss.ChainReader {
 func (cs *ConsensusState) StartNewHeight() {
 
 	//start locking
-	//cs.mtx.Lock()
-	//cs.timeoutTicker.Stop()
+	cs.nhMtx.Lock()
+	defer cs.nhMtx.Unlock()
 
 	//reload the block
 	cr := cs.backend.ChainReader()
 	curEthBlock := cr.CurrentBlock()
 	curHeight := curEthBlock.NumberU64()
 	fmt.Printf("(cs *ConsensusState) StartNewHeight, current block height is %v\n", curHeight)
-	if curHeight != 0 {
-		//reload
-		state, epoch := cs.InitStateAndEpoch()
-		cs.Initialize()
-		cs.ApplyBlockEx(curEthBlock, state, epoch)
-		cs.UpdateToStateAndEpoch(state, epoch)
-	}
+
+	state, epoch := cs.InitStateAndEpoch()
+	cs.Initialize()
+	cs.ApplyBlockEx(curEthBlock, state, epoch)
+	cs.UpdateToStateAndEpoch(state, epoch)
 
 	cs.newStep()
-
-	//do unlock here
-	//cs.mtx.Unlock()
-
-	//cs.timeoutTicker.Start()
-
 	cs.scheduleRound0(cs.GetRoundState())
 }
-
 
 func (cs *ConsensusState) InitStateAndEpoch() (*sm.State, *ep.Epoch) {
 
@@ -128,10 +119,10 @@ func (cs *ConsensusState) Initialize() {
 	cs.epoch = nil
 }
 
+//apply latest information such as epoch to the new height of consensus
 func (bs *ConsensusState) ApplyBlockEx(block *ethTypes.Block, state *sm.State, epoch *ep.Epoch) error {
 	return nil
 }
-
 
 // Updates ConsensusState and increments height to match thatRewardScheme of state.
 // The round becomes 0 and cs.Step becomes RoundStepNewHeight.
@@ -141,21 +132,8 @@ func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 		cmn.PanicSanity(cmn.Fmt("updateToState() expected state height of %v but found %v",
 			cs.Height, state.TdmExtra.Height))
 	}
-	if cs.state != nil && cs.state.TdmExtra.Height+1 != cs.Height {
-		// This might happen when someone else is mutating cs.state.
-		// Someone forgot to pass in state.Copy() somewhere?!
-		cmn.PanicSanity(cmn.Fmt("Inconsistent cs.state.LastBlockHeight+1 %v vs cs.Height %v",
-			cs.state.TdmExtra.Height+1, cs.Height))
-	}
 
-	// If state isn't further out than cs.state, just ignore.
-	// This happens when SwitchToConsensus() is called in the reactor.
-	// We don't want to reset e.g. the Votes.
-	if cs.state != nil && (state.TdmExtra.Height <= cs.state.TdmExtra.Height) {
-		log.Notice("Ignoring updateToState()", "newHeight", state.TdmExtra.Height+1, "oldHeight", cs.state.TdmExtra.Height+1)
-		return
-	}
-
+	//lhj, try to remove this if{}
 	// Reset fields based on state.
 	_, validators, _ := state.GetValidators()
 	lastPrecommits := (*types.VoteSet)(nil)
@@ -166,7 +144,7 @@ func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 		lastPrecommits = cs.Votes.Precommits(cs.CommitRound)
 	}
 
-	//Re-Initialized
+	//Re-Initialized, really need this?
 	cs.Initialize()
 
 	height := state.TdmExtra.Height + 1
@@ -187,14 +165,7 @@ func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	}
 
 	cs.Validators = validators
-	//cs.Proposal = nil
-	//cs.ProposalBlock = nil
-	//cs.ProposalBlockParts = nil
-	//cs.LockedRound = 0
-	//cs.LockedBlock = nil
-	//cs.LockedBlockParts = nil
 	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators)
-	//cs.CommitRound = -1
 	cs.LastCommit = lastPrecommits
 	cs.Epoch = epoch
 

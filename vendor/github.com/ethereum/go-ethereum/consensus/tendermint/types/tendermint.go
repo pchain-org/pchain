@@ -87,11 +87,7 @@ func (te *TendermintExtra) Hash() []byte {
 // error if the length of the given extra-data is less than 32 bytes or the extra-data can not
 // be decoded.
 func ExtractTendermintExtra(h *ethTypes.Header) (*TendermintExtra, error) {
-	/*
-	if len(h.Extra) < TendermintExtraVanity {
-		return nil, ErrInvalidTendermintHeaderExtra
-	}
-	*/
+
 	if len(h.Extra) == 0 {
 		return &TendermintExtra{}, nil
 	}
