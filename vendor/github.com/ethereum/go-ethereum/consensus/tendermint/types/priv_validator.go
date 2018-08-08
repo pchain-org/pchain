@@ -2,7 +2,7 @@ package types
 
 import (
 	"bytes"
-	"errors"
+	//"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -36,15 +36,9 @@ func voteToStep(vote *Vote) int8 {
 	}
 }
 
-
 type PrivValidator struct {
 	Address       []byte           `json:"address"`
 	PubKey        crypto.PubKey    `json:"pub_key"`
-	LastHeight    uint64              `json:"last_height"`
-	LastRound     int              `json:"last_round"`
-	LastStep      int8             `json:"last_step"`
-	LastSignature crypto.Signature `json:"last_signature"` // so we dont lose signatures
-	LastSignBytes []byte           `json:"last_signbytes"` // so we dont lose signatures
 
 	// PrivKey should be empty if a Signer other than the default is being used.
 	PrivKey crypto.PrivKey `json:"priv_key"`
@@ -82,12 +76,9 @@ func (privVal *PrivValidator) SetSigner(s Signer) {
 	privVal.Signer = s
 }
 
-
 func NewKeyStore(keydir string, scryptN, scryptP int) *keystore.KeyStorePassphrase {
 	return keystore.NewKeyStoreByTenermint(keydir, scryptN, scryptP)
 }
-
-
 
 func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 	newKey, err := keystore.NewKey(crand.Reader)
@@ -100,11 +91,6 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 		Address:       pubKey.Address(),
 		PubKey:        pubKey,
 		PrivKey:       privKey,
-		LastHeight:    0,
-		LastRound:     0,
-		LastStep:      stepNone,
-		LastSignature: nil,
-		LastSignBytes: nil,
 		filePath:      "",
 		Signer:        NewDefaultSigner(privKey),
 	}, newKey
@@ -132,11 +118,6 @@ func GenPrivValidator() *PrivValidator {
 		Address:       pubKey.Address(),
 		PubKey:        pubKey,
 		PrivKey:       privKey,
-		LastHeight:    0,
-		LastRound:     0,
-		LastStep:      stepNone,
-		LastSignature: nil,
-		LastSignBytes: nil,
 		filePath:      "",
 		Signer:        NewDefaultSigner(privKey),
 	}
@@ -195,16 +176,6 @@ func (privVal *PrivValidator) save() {
 	}
 }
 
-// NOTE: Unsafe!
-func (privVal *PrivValidator) Reset() {
-	privVal.LastHeight = 0
-	privVal.LastRound = 0
-	privVal.LastStep = 0
-	privVal.LastSignature = nil
-	privVal.LastSignBytes = nil
-	privVal.Save()
-}
-
 func (privVal *PrivValidator) GetAddress() []byte {
 	return privVal.Address
 }
@@ -212,10 +183,8 @@ func (privVal *PrivValidator) GetAddress() []byte {
 func (privVal *PrivValidator) SignVote(chainID string, vote *Vote) error {
 	privVal.mtx.Lock()
 	defer privVal.mtx.Unlock()
-	signature, err := privVal.signBytesHRS(vote.Height, int(vote.Round), voteToStep(vote), SignBytes(chainID, vote))
-	if err != nil {
-		return errors.New(Fmt("Error signing vote: %v", err))
-	}
+
+	signature := privVal.Sign(SignBytes(chainID, vote))
 	vote.Signature = signature
 	return nil
 }
@@ -223,68 +192,14 @@ func (privVal *PrivValidator) SignVote(chainID string, vote *Vote) error {
 func (privVal *PrivValidator) SignProposal(chainID string, proposal *Proposal) error {
 	privVal.mtx.Lock()
 	defer privVal.mtx.Unlock()
-	signature, err := privVal.signBytesHRS(proposal.Height, proposal.Round, stepPropose, SignBytes(chainID, proposal))
-	if err != nil {
-		fmt.Printf("Error signing proposal: %v\n", err)
-		return errors.New(Fmt("Error signing proposal: %v", err))
-	}
+
+	signature := privVal.Sign(SignBytes(chainID, proposal))
 	proposal.Signature = signature
 	return nil
 }
 
-// check if there's a regression. Else sign and write the hrs+signature to disk
-// lhj, we sign and not save
-func (privVal *PrivValidator) signBytesHRS(height uint64, round int, step int8, signBytes []byte) (crypto.Signature, error) {
-	/*
-	// If height regression, err
-	if privVal.LastHeight > height {
-		return nil, errors.New("Height regression")
-	}
-	// More cases for when the height matches
-	if privVal.LastHeight == height {
-		// If round regression, err
-		if privVal.LastRound > round {
-			return nil, errors.New("Round regression")
-		}
-		// If step regression, err
-		if privVal.LastRound == round {
-			if privVal.LastStep > step {
-				return nil, errors.New("Step regression")
-			} else if privVal.LastStep == step {
-				if privVal.LastSignBytes != nil {
-					if privVal.LastSignature == nil {
-						PanicSanity("privVal: LastSignature is nil but LastSignBytes is not!")
-					}
-					// so we dont sign a conflicting vote or proposal
-					// NOTE: proposals are non-deterministic (include time),
-					// so we can actually lose them, but will still never sign conflicting ones
-					if bytes.Equal(privVal.LastSignBytes, signBytes) {
-						log.Notice("Using privVal.LastSignature", "sig", privVal.LastSignature)
-						return privVal.LastSignature, nil
-					}
-				}
-				return nil, errors.New("Step regression")
-			}
-		}
-	}
-	*/
-	// Sign
-	signature := privVal.Sign(signBytes)
-
-	// Persist height/round/step
-	privVal.LastHeight = height
-	privVal.LastRound = round
-	privVal.LastStep = step
-	privVal.LastSignature = signature
-	privVal.LastSignBytes = signBytes
-	//privVal.save()
-
-	return signature, nil
-
-}
-
 func (privVal *PrivValidator) String() string {
-	return fmt.Sprintf("PrivValidator{%X LH:%v, LR:%v, LS:%v}", privVal.Address, privVal.LastHeight, privVal.LastRound, privVal.LastStep)
+	return fmt.Sprintf("PrivValidator{%X}", privVal.Address)
 }
 
 //-------------------------------------

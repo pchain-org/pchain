@@ -1284,16 +1284,6 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 		log.Info("Calling finalizeCommit on already stored block", "height", block.TdmExtra.Height)
 	}
 
-	//lhj, We wait block insert message
-
-	// cs.StartTime is already set.
-	// Schedule Round0 to start soon.
-	// cs.scheduleRound0(&cs.RoundState)
-
-	// By here,
-	// * cs.Height has been increment to height+1
-	// * cs.Step is now RoundStepNewHeight
-	// * cs.StartTime is set to when we will start round0.
 	return
 }
 

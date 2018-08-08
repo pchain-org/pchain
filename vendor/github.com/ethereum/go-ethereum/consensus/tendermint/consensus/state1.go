@@ -102,7 +102,6 @@ func (cs *ConsensusState) Initialize() {
 	cs.blockFromMiner = nil
 
 	//initialize round state
-	//TODO: lhj, be very careful, should add lock when reload block
 	cs.Validators = nil
 	cs.Proposal = nil
 	cs.ProposalBlock = nil
@@ -132,7 +131,6 @@ func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 			cs.Height, state.TdmExtra.Height))
 	}
 
-	//lhj, try to remove this if{}
 	// Reset fields based on state.
 	_, validators, _ := state.GetValidators()
 	lastPrecommits := (*types.VoteSet)(nil)

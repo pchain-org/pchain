@@ -95,10 +95,7 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
-
-	//TODO lhj, be careful, we really need go back for this issue !!!
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
-		fmt.Printf("ValidateState(), header.Number is %v\n", header.Number)
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
 	}
 	return nil
