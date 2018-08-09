@@ -24,10 +24,10 @@ import (
 
 // Adds a route for each function in the funcMap, as well as general jsonrpc and websocket handlers for all functions.
 // "result" is the interface on which the result objects are registered, and is popualted with every RPCResponse
-func RegisterRPCFuncs(mux *http.ServeMux, funcMap map[string]*RPCFunc) {
+func RegisterRPCFuncs(mux *http.ServeMux, funcMap map[string]*RPCFunc, context interface{}) {
 	// HTTP endpoints
 	for funcName, rpcFunc := range funcMap {
-		mux.HandleFunc("/"+funcName, makeHTTPHandler(rpcFunc))
+		mux.HandleFunc("/"+funcName, makeHTTPHandler(rpcFunc, context))
 	}
 
 	// JSONRPC endpoints
@@ -224,7 +224,7 @@ func _jsonObjectToArg(ty reflect.Type, object interface{}) (reflect.Value, error
 // rpc.http
 
 // convert from a function name to the http handler
-func makeHTTPHandler(rpcFunc *RPCFunc) func(http.ResponseWriter, *http.Request) {
+func makeHTTPHandler(rpcFunc *RPCFunc, context interface{}) func(http.ResponseWriter, *http.Request) {
 	// Exception for websocket endpoints
 	if rpcFunc.ws {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -239,6 +239,8 @@ func makeHTTPHandler(rpcFunc *RPCFunc) func(http.ResponseWriter, *http.Request) 
 			WriteRPCResponseHTTP(w, types.NewRPCResponse("", nil, fmt.Sprintf("Error converting http params to args: %v", err.Error())))
 			return
 		}
+		// assign the RPCDataContext to first parameter
+		args[0] = reflect.ValueOf(context)
 		returns := rpcFunc.f.Call(args)
 		logger.Info("HTTPRestRPC", " method:", r.URL.Path, " args:", args, " returns:", returns)
 		result, err := unreflectResult(returns)
@@ -256,9 +258,9 @@ func httpParamsToArgs(rpcFunc *RPCFunc, r *http.Request) ([]reflect.Value, error
 	values := make([]reflect.Value, len(rpcFunc.args))
 
 	for i, name := range rpcFunc.argNames {
-		argType := rpcFunc.args[i]
+		argType := rpcFunc.args[i + 1] // i + 1 because we add an hidden args at the beginning of the arguments
 
-		values[i] = reflect.Zero(argType) // set default for that type
+		values[i + 1] = reflect.Zero(argType) // set default for that type
 
 		arg := GetParam(r, name)
 		// logger.Info("param to arg", "argType", argType, "name", name, "arg", arg)
@@ -272,12 +274,12 @@ func httpParamsToArgs(rpcFunc *RPCFunc, r *http.Request) ([]reflect.Value, error
 			return nil, err
 		}
 		if ok {
-			values[i] = v
+			values[i + 1] = v
 			continue
 		}
 
 		// Pass values to go-wire
-		values[i], err = _jsonStringToArg(argType, arg)
+		values[i + 1], err = _jsonStringToArg(argType, arg)
 		if err != nil {
 			return nil, err
 		}

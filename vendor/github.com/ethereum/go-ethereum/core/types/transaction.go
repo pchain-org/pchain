@@ -49,40 +49,6 @@ func deriveSigner(V *big.Int) Signer {
 	}
 }
 
-type OriTransaction struct {
-	data oritxdata
-	// caches
-	hash atomic.Value
-	size atomic.Value
-	from atomic.Value
-}
-
-type oritxdata struct {
-	AccountNonce    uint64
-	Price, GasLimit *big.Int
-	Recipient       *common.Address `rlp:"nil"` // nil means contract creation
-	Amount          *big.Int
-	//Type            uint64
-	Payload         []byte
-	//ExtendTxData 	*ExtendTxData
-	V               *big.Int // signature
-	R, S            *big.Int // signature
-}
-
-type jsonOriTransaction struct {
-	Hash         *common.Hash            `json:"hash"`
-	AccountNonce *hexutil.Uint64         `json:"nonce"`
-	Price        *hexutil.Big            `json:"gasPrice"`
-	GasLimit     *hexutil.Big            `json:"gas"`
-	Recipient    *common.Address         `json:"to"`
-	Amount       *hexutil.Big            `json:"value"`
-	//Type         *hexutil.Uint64         `json:"type"`
-	Payload      *hexutil.Bytes          `json:"input"`
-	V            *hexutil.Big            `json:"v"`
-	R            *hexutil.Big            `json:"r"`
-	S            *hexutil.Big            `json:"s"`
-}
-
 type Transaction struct {
 	data txdata
 	// caches
@@ -92,8 +58,8 @@ type Transaction struct {
 }
 
 type ExtendTxData struct {
-	FuncName    string
-	Params      KeyValueSet
+	FuncName string
+	Params   KeyValueSet
 }
 
 type txdata struct {
@@ -101,54 +67,24 @@ type txdata struct {
 	Price, GasLimit *big.Int
 	Recipient       *common.Address `rlp:"nil"` // nil means contract creation
 	Amount          *big.Int
-	Type            uint64
 	Payload         []byte
-	ExtendTxData 	*ExtendTxData
-	V               *big.Int // signature
-	R, S            *big.Int // signature
+	ExtendTxData    *ExtendTxData `rlp:"nil"`
+	V               *big.Int      // signature
+	R, S            *big.Int      // signature
 }
 
 type jsonTransaction struct {
-	Hash         *common.Hash            `json:"hash"`
-	AccountNonce *hexutil.Uint64         `json:"nonce"`
-	Price        *hexutil.Big            `json:"gasPrice"`
-	GasLimit     *hexutil.Big            `json:"gas"`
-	Recipient    *common.Address         `json:"to"`
-	Amount       *hexutil.Big            `json:"value"`
-	Type         *hexutil.Uint64         `json:"type"`
-	Payload      *hexutil.Bytes          `json:"input"`
-	ExtendTxData *ExtendTxData           `json:"extendTxData"`
-	V            *hexutil.Big            `json:"v"`
-	R            *hexutil.Big            `json:"r"`
-	S            *hexutil.Big            `json:"s"`
-}
-
-func OriToTransaction(oriTx *OriTransaction) *Transaction {
-
-	if oriTx == nil {
-		return nil
-	}
-
-	tx := &Transaction {
-		data : txdata{
-			AccountNonce: oriTx.data.AccountNonce,
-			Price: oriTx.data.Price,
-			GasLimit: oriTx.data.GasLimit,
-			Recipient: oriTx.data.Recipient,
-			Amount: oriTx.data.Amount,
-			Type: 0,
-			Payload: oriTx.data.Payload[:],
-			ExtendTxData: &ExtendTxData{},
-			V: oriTx.data.V,
-			R: oriTx.data.R,
-			S: oriTx.data.S,
-		},
-		hash : oriTx.hash,
-		size : oriTx.size,
-		from : oriTx.from,
-	}
-
-	return tx
+	Hash         *common.Hash    `json:"hash"`
+	AccountNonce *hexutil.Uint64 `json:"nonce"`
+	Price        *hexutil.Big    `json:"gasPrice"`
+	GasLimit     *hexutil.Big    `json:"gas"`
+	Recipient    *common.Address `json:"to"`
+	Amount       *hexutil.Big    `json:"value"`
+	Payload      *hexutil.Bytes  `json:"input"`
+	ExtendTxData *ExtendTxData   `json:"extendTxData"`
+	V            *hexutil.Big    `json:"v"`
+	R            *hexutil.Big    `json:"r"`
+	S            *hexutil.Big    `json:"s"`
 }
 
 func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice *big.Int, data []byte) *Transaction {
@@ -156,7 +92,7 @@ func NewTransaction(nonce uint64, to common.Address, amount, gasLimit, gasPrice 
 }
 
 func NewTransactionEx(nonce uint64, to *common.Address, amount, gasLimit, gasPrice *big.Int, data []byte,
-			etd *ExtendTxData) *Transaction {
+	etd *ExtendTxData) *Transaction {
 	return newTransactionEx(nonce, to, amount, gasLimit, gasPrice, data, etd)
 }
 
@@ -174,7 +110,6 @@ func newTransaction(nonce uint64, to *common.Address, amount, gasLimit, gasPrice
 		Payload:      data,
 		ExtendTxData: new(ExtendTxData),
 		Amount:       new(big.Int),
-//		Type:         new(big.Int),
 		GasLimit:     new(big.Int),
 		Price:        new(big.Int),
 		V:            new(big.Int),
@@ -195,7 +130,7 @@ func newTransaction(nonce uint64, to *common.Address, amount, gasLimit, gasPrice
 }
 
 func newTransactionEx(nonce uint64, to *common.Address, amount, gasLimit, gasPrice *big.Int, data []byte,
-			etd *ExtendTxData) *Transaction {
+	etd *ExtendTxData) *Transaction {
 
 	if len(data) > 0 {
 		data = common.CopyBytes(data)
@@ -206,7 +141,6 @@ func newTransactionEx(nonce uint64, to *common.Address, amount, gasLimit, gasPri
 		Payload:      data,
 		ExtendTxData: etd,
 		Amount:       new(big.Int),
-		//		Type:         new(big.Int),
 		GasLimit:     new(big.Int),
 		Price:        new(big.Int),
 		V:            new(big.Int),
@@ -259,22 +193,6 @@ func isProtectedV(V *big.Int) bool {
 }
 
 // DecodeRLP implements rlp.Encoder
-func (tx *OriTransaction) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &tx.data)
-}
-
-// DecodeRLP implements rlp.Decoder
-func (tx *OriTransaction) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	err := s.Decode(&tx.data)
-	if err == nil {
-		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
-	}
-
-	return err
-}
-
-// DecodeRLP implements rlp.Encoder
 func (tx *Transaction) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, &tx.data)
 }
@@ -301,7 +219,6 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		GasLimit:     (*hexutil.Big)(tx.data.GasLimit),
 		Recipient:    tx.data.Recipient,
 		Amount:       (*hexutil.Big)(tx.data.Amount),
-		Type:         (*hexutil.Uint64)(&tx.data.Type),
 		Payload:      (*hexutil.Bytes)(&tx.data.Payload),
 		ExtendTxData: (*ExtendTxData)(tx.data.ExtendTxData),
 		V:            (*hexutil.Big)(tx.data.V),
@@ -345,7 +262,6 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 		AccountNonce: uint64(*dec.AccountNonce),
 		Recipient:    dec.Recipient,
 		Amount:       (*big.Int)(dec.Amount),
-		Type:         uint64(*dec.Type),
 		GasLimit:     (*big.Int)(dec.GasLimit),
 		Price:        (*big.Int)(dec.Price),
 		Payload:      *dec.Payload,
@@ -357,15 +273,13 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
+func (tx *Transaction) Data() []byte                { return common.CopyBytes(tx.data.Payload) }
 func (tx *Transaction) ExtendTxData() *ExtendTxData { return tx.data.ExtendTxData }
-func (tx *Transaction) Gas() *big.Int      { return new(big.Int).Set(tx.data.GasLimit) }
-func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Price) }
-func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
-//func (tx *Transaction) Type() *big.Int   { return new(big.Int).Set(tx.data.Type) }
-func (tx *Transaction) Type() uint64        { return tx.data.Type }
-func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
-func (tx *Transaction) CheckNonce() bool   { return true }
+func (tx *Transaction) Gas() *big.Int               { return new(big.Int).Set(tx.data.GasLimit) }
+func (tx *Transaction) GasPrice() *big.Int          { return new(big.Int).Set(tx.data.Price) }
+func (tx *Transaction) Value() *big.Int             { return new(big.Int).Set(tx.data.Amount) }
+func (tx *Transaction) Nonce() uint64               { return tx.data.AccountNonce }
+func (tx *Transaction) CheckNonce() bool            { return true }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
@@ -413,7 +327,6 @@ func (tx *Transaction) Size() common.StorageSize {
 func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
 		nonce:      tx.data.AccountNonce,
-		mtype:      tx.data.Type,
 		price:      new(big.Int).Set(tx.data.Price),
 		gasLimit:   new(big.Int).Set(tx.data.GasLimit),
 		to:         tx.data.Recipient,
@@ -440,11 +353,6 @@ func (tx *Transaction) Cost() *big.Int {
 	return total
 }
 
-// Set the type of transaction.
-func (tx *Transaction) SetType(mtype uint64) {
-	tx.data.Type = mtype
-}
-
 func (tx *Transaction) RawSignatureValues() (*big.Int, *big.Int, *big.Int) {
 	return tx.data.V, tx.data.R, tx.data.S
 }
@@ -465,7 +373,11 @@ func (tx *Transaction) String() string {
 	}
 
 	if tx.data.Recipient == nil {
-		to = "[contract creation]"
+		if tx.data.ExtendTxData != nil && tx.data.ExtendTxData.FuncName != "" {
+			to = "[Extended Transaction]"
+		} else {
+			to = "[contract creation]"
+		}
 	} else {
 		to = fmt.Sprintf("%x", tx.data.Recipient[:])
 	}
@@ -632,7 +544,6 @@ type Message struct {
 	amount, price, gasLimit *big.Int
 	data                    []byte
 	checkNonce              bool
-	mtype			uint64
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount, gasLimit, price *big.Int, data []byte, checkNonce bool) Message {
@@ -656,5 +567,96 @@ func (m Message) Gas() *big.Int        { return m.gasLimit }
 func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
-func (m Message) Type() uint64         { return m.mtype }
 
+// Custom EncodeRLP for ExtendTxData
+func (e *ExtendTxData) EncodeRLP(w io.Writer) error {
+	sbyte, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	return rlp.Encode(w, sbyte)
+}
+
+// Custom DecodeRLP for ExtendTxData
+func (e *ExtendTxData) DecodeRLP(s *rlp.Stream) error {
+	kind, size, err := s.Kind()
+	if err != nil {
+		return err
+	}
+
+	if kind == rlp.String && size != 0 {
+		sbyte, err := s.Bytes()
+		if err != nil {
+			return err
+		}
+		err = json.Unmarshal(sbyte, e)
+	}
+	return err
+}
+
+func (e *ExtendTxData) GetString(key string) (string, error) {
+	v, err := e.Params.Get(key)
+	if err != nil {
+		return "", err
+	}
+
+	if vv, ok := v.(string); ok {
+		return vv, nil
+	} else {
+		return "", errors.New("wrong type")
+	}
+}
+
+func (e *ExtendTxData) GetAddress(key string) (common.Address, error) {
+	v, err := e.Params.Get(key)
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	switch vv := v.(type) {
+	case string:
+		return common.HexToAddress(vv), nil
+	case common.Address:
+		return vv, nil
+	default:
+		return common.Address{}, errors.New("wrong type")
+	}
+}
+
+func (e *ExtendTxData) GetHash(key string) (common.Hash, error) {
+	v, err := e.Params.Get(key)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	switch vv := v.(type) {
+	case string:
+		return common.HexToHash(vv), nil
+	case common.Hash:
+		return vv, nil
+	default:
+		return common.Hash{}, errors.New("wrong type")
+	}
+}
+
+func (e *ExtendTxData) GetBigInt(key string) (*big.Int, error) {
+	v, err := e.Params.Get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	switch vv := v.(type) {
+	case string:
+		vvv, ok := new(big.Int).SetString(vv, 0)
+		if !ok {
+			return nil, errors.New("wrong type")
+		}
+		return vvv, nil
+	case *big.Int:
+		return vv, nil
+	case *hexutil.Big:
+		return (*big.Int)(vv), nil
+	default:
+		return nil, errors.New("wrong type")
+	}
+}

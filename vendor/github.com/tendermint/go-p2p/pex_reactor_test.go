@@ -71,7 +71,7 @@ func TestPEXReactorRunning(t *testing.T) {
 		switches[i] = makeSwitch(i, "127.0.0.1", "123.123.123", func(i int, sw *Switch) *Switch {
 			r := NewPEXReactor(book)
 			r.SetEnsurePeersPeriod(250 * time.Millisecond)
-			sw.AddReactor("pex", r)
+			sw.AddReactor("pchain","pex", r)
 			return sw
 		})
 	}

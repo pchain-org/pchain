@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-
 type Genesis struct {
 	ChainConfig *params.ChainConfig `json:"config"`
 	Nonce       string
@@ -52,7 +51,6 @@ type Genesis struct {
 		Balance string
 		Nonce   string
 		Amount  string
-		PubKey  string
 	}
 }
 

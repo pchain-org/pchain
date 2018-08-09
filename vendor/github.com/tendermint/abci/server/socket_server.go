@@ -44,6 +44,20 @@ func NewSocketServer(protoAddr string, app types.Application) (cmn.Service, erro
 	return s, err
 }
 
+func NewSocketServerNotStart(protoAddr string, app types.Application) (cmn.Service, error) {
+	parts := strings.SplitN(protoAddr, "://", 2)
+	proto, addr := parts[0], parts[1]
+	s := &SocketServer{
+		proto:    proto,
+		addr:     addr,
+		listener: nil,
+		app:      app,
+		conns:    make(map[int]net.Conn),
+	}
+	s.BaseService = *cmn.NewBaseService(nil, "ABCIServer", s)
+	return s, nil
+}
+
 func (s *SocketServer) OnStart() error {
 	s.BaseService.OnStart()
 	ln, err := net.Listen(s.proto, s.addr)
@@ -181,7 +195,7 @@ func (s *SocketServer) handleRequest(req *types.Request, responses chan<- *types
 		res := s.app.CheckTx(r.CheckTx.Tx)
 		responses <- types.ToResponseCheckTx(res.Code, res.Data, res.Log)
 	case *types.Request_Commit:
-		res := s.app.Commit(r.Commit.Validators, r.Commit.RewardPerBlock)
+		res := s.app.Commit(r.Commit.Validators, nil, nil)
 		responses <- types.ToResponseCommit(res.Code, res.Data, res.Log)
 	case *types.Request_Query:
 		resQuery := s.app.Query(*r.Query)

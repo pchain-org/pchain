@@ -2,16 +2,17 @@ package types
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"math/big"
 	"sort"
 	"strings"
-	"errors"
 
+	abci "github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/go-common"
+	crypto "github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
-	crypto "github.com/tendermint/go-crypto"
-	abci "github.com/tendermint/abci/types"
 )
 
 // ValidatorSet represent a set of *Validator at a given height.
@@ -26,11 +27,12 @@ import (
 // TODO: consider validator Accum overflow
 // TODO: move valset into an iavl tree where key is 'blockbonded|pubkey'
 type ValidatorSet struct {
-	Validators []*Validator // NOTE: persisted via reflect, must be exported.
-	Proposer   *Validator
+	// NOTE: persisted via reflect, must be exported.
+	Validators []*Validator `json:"validators"`
+	Proposer   *Validator   `json:"proposer"`
 
 	// cached (unexported)
-	totalVotingPower int64
+	totalVotingPower *big.Int
 }
 
 func NewValidatorSet(vals []*Validator) *ValidatorSet {
@@ -56,7 +58,7 @@ func (valSet *ValidatorSet) IncrementAccum(times int) {
 	// Add VotingPower * times to each validator and order into heap.
 	validatorsHeap := cmn.NewHeap()
 	for _, val := range valSet.Validators {
-		val.Accum += int64(val.VotingPower) * int64(times) // TODO: mind overflow
+		val.Accum.Add(val.Accum, new(big.Int).Mul(val.VotingPower, big.NewInt(int64(times)))) // TODO: mind overflow
 		validatorsHeap.Push(val, accumComparable{val})
 	}
 
@@ -66,7 +68,7 @@ func (valSet *ValidatorSet) IncrementAccum(times int) {
 		if i == times-1 {
 			valSet.Proposer = mostest
 		}
-		mostest.Accum -= int64(valSet.TotalVotingPower())
+		mostest.Accum.Sub(mostest.Accum, valSet.TotalVotingPower())
 		validatorsHeap.Update(mostest, accumComparable{mostest})
 	}
 }
@@ -86,16 +88,16 @@ func (valSet *ValidatorSet) Copy() *ValidatorSet {
 
 func (valSet *ValidatorSet) Equals(other *ValidatorSet) bool {
 
-	if valSet.totalVotingPower != other.totalVotingPower ||
+	if valSet.totalVotingPower.Cmp(other.totalVotingPower) != 0 ||
 		!valSet.Proposer.Equals(other.Proposer) ||
-		len(valSet.Validators) != len(other.Validators){
+		len(valSet.Validators) != len(other.Validators) {
 		return false
 	}
 
 	for _, v := range other.Validators {
 
 		_, val := valSet.GetByAddress(v.Address)
-		if val == nil || !val.Equals(v){
+		if val == nil || !val.Equals(v) {
 			return false
 		}
 	}
@@ -103,11 +105,13 @@ func (valSet *ValidatorSet) Equals(other *ValidatorSet) bool {
 	return true
 }
 
+// HasAddress returns true if address given is in the validator set, false -
+// otherwise.
 func (valSet *ValidatorSet) HasAddress(address []byte) bool {
 	idx := sort.Search(len(valSet.Validators), func(i int) bool {
 		return bytes.Compare(address, valSet.Validators[i].Address) <= 0
 	})
-	return idx != len(valSet.Validators) && bytes.Compare(valSet.Validators[idx].Address, address) == 0
+	return idx < len(valSet.Validators) && bytes.Equal(valSet.Validators[idx].Address, address)
 }
 
 func (valSet *ValidatorSet) GetByAddress(address []byte) (index int, val *Validator) {
@@ -130,10 +134,11 @@ func (valSet *ValidatorSet) Size() int {
 	return len(valSet.Validators)
 }
 
-func (valSet *ValidatorSet) TotalVotingPower() int64 {
-	if valSet.totalVotingPower == 0 {
+func (valSet *ValidatorSet) TotalVotingPower() *big.Int {
+	if valSet.totalVotingPower == nil {
+		valSet.totalVotingPower = big.NewInt(0)
 		for _, val := range valSet.Validators {
-			valSet.totalVotingPower += val.VotingPower
+			valSet.totalVotingPower.Add(valSet.totalVotingPower, val.VotingPower)
 		}
 	}
 	return valSet.totalVotingPower
@@ -179,7 +184,7 @@ func (valSet *ValidatorSet) Add(val *Validator) (added bool) {
 		valSet.Validators = append(valSet.Validators, val)
 		// Invalidate cache
 		valSet.Proposer = nil
-		valSet.totalVotingPower = 0
+		valSet.totalVotingPower = nil
 		return true
 	} else if bytes.Compare(valSet.Validators[idx].Address, val.Address) == 0 {
 		return false
@@ -191,7 +196,7 @@ func (valSet *ValidatorSet) Add(val *Validator) (added bool) {
 		valSet.Validators = newValidators
 		// Invalidate cache
 		valSet.Proposer = nil
-		valSet.totalVotingPower = 0
+		valSet.totalVotingPower = nil
 		return true
 	}
 }
@@ -204,7 +209,7 @@ func (valSet *ValidatorSet) Update(val *Validator) (updated bool) {
 		valSet.Validators[index] = val.Copy()
 		// Invalidate cache
 		valSet.Proposer = nil
-		valSet.totalVotingPower = 0
+		valSet.totalVotingPower = nil
 		return true
 	}
 }
@@ -224,7 +229,7 @@ func (valSet *ValidatorSet) Remove(address []byte) (val *Validator, removed bool
 		valSet.Validators = newValidators
 		// Invalidate cache
 		valSet.Proposer = nil
-		valSet.totalVotingPower = 0
+		valSet.totalVotingPower = nil
 		return removedVal, true
 	}
 }
@@ -241,16 +246,16 @@ func (valSet *ValidatorSet) Iterate(fn func(index int, val *Validator) bool) {
 // Verify that +2/3 of the set had signed the given signBytes
 func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height int, commit *Commit) error {
 	/*
-	if valSet.Size() != len(commit.Precommits) {
-		return fmt.Errorf("Invalid commit -- wrong set size: %v vs %v", valSet.Size(), len(commit.Precommits))
-	}
+		if valSet.Size() != len(commit.Precommits) {
+			return fmt.Errorf("Invalid commit -- wrong set size: %v vs %v", valSet.Size(), len(commit.Precommits))
+		}
 	*/
 	fmt.Printf("(valSet *ValidatorSet) VerifyCommit(), avoid valSet and commit.Precommits size check for validatorset change\n")
 	if height != commit.Height() {
 		return fmt.Errorf("Invalid commit -- wrong height: %v vs %v", height, commit.Height())
 	}
 
-	talliedVotingPower := int64(0)
+	talliedVotingPower := big.NewInt(0)
 	round := commit.Round()
 
 	for idx, precommit := range commit.Precommits {
@@ -277,14 +282,17 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, blockID BlockID, height
 			continue // Not an error, but doesn't count
 		}
 		// Good precommit!
-		talliedVotingPower += val.VotingPower
+		talliedVotingPower.Add(talliedVotingPower, val.VotingPower)
 	}
 
-	if talliedVotingPower > valSet.TotalVotingPower()*2/3 {
+	twoThird := new(big.Int).Mul(valSet.TotalVotingPower(), big.NewInt(2))
+	twoThird.Div(twoThird, big.NewInt(3))
+
+	if talliedVotingPower.Cmp(twoThird) == 1 {
 		return nil
 	} else {
 		return fmt.Errorf("Invalid commit -- insufficient voting power: got %v, needed %v",
-			talliedVotingPower, (valSet.TotalVotingPower()*2/3 + 1))
+			talliedVotingPower, twoThird.Add(twoThird, big.NewInt(1)))
 	}
 }
 
@@ -326,9 +334,9 @@ func UpdateValidators(validators *ValidatorSet, changedValidators []*abci.Valida
 		}
 
 		address := pubkey.Address()
-		power := int64(v.Power)
+		power := v.Power
 		// mind the overflow from uint64
-		if power < 0 {
+		if power.Sign() == -1 {
 			return errors.New(cmn.Fmt("Power (%d) overflows int64", v.Power))
 		}
 
@@ -339,7 +347,7 @@ func UpdateValidators(validators *ValidatorSet, changedValidators []*abci.Valida
 			if !added {
 				return errors.New(cmn.Fmt("Failed to add new validator %X with voting power %d", address, power))
 			}
-		} else if v.Power == 0 {
+		} else if v.Power.Sign() == 0 {
 			// remove val
 			_, removed := validators.Remove(address)
 			if !removed {
@@ -356,7 +364,6 @@ func UpdateValidators(validators *ValidatorSet, changedValidators []*abci.Valida
 	}
 	return nil
 }
-
 
 func (valSet *ValidatorSet) ToBytes() []byte {
 	buf, n, err := new(bytes.Buffer), new(int), new(error)
@@ -379,7 +386,7 @@ func (valSet *ValidatorSet) FromBytes(b []byte) {
 func (valSet *ValidatorSet) ToAbciValidators() []*abci.Validator {
 
 	abciValidators := make([]*abci.Validator, len(valSet.Validators))
-	for i,val := range valSet.Validators {
+	for i, val := range valSet.Validators {
 		abciValidators[i] = val.ToAbciValidator()
 	}
 

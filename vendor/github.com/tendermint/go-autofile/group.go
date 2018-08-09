@@ -222,23 +222,24 @@ func (g *Group) checkTotalSizeLimit() {
 	}
 }
 
+// RotateFile causes group to close the current head and assign it some index.
+// Note it does not create a new head.
 func (g *Group) RotateFile() {
 	g.mtx.Lock()
 	defer g.mtx.Unlock()
 
+	headPath := g.Head.Path
 
-	err := g.Head.closeFile()
-	if err != nil {
-		logger.Panic(err)
+	if err := g.Head.closeFile(); err != nil {
+		panic(err)
 	}
 
-	dstPath := filePathForIndex(g.Head.Path, g.maxIndex, g.maxIndex+1)
-	err = os.Rename(g.Head.Path, dstPath)
-	if err != nil {
-		logger.Panic(err)
+	indexPath := filePathForIndex(headPath, g.maxIndex, g.maxIndex+1)
+	if err := os.Rename(headPath, indexPath); err != nil {
+		panic(err)
 	}
 
-	g.maxIndex += 1
+	g.maxIndex++
 }
 
 // NOTE: if error, returns no GroupReader.

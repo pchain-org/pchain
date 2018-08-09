@@ -4,12 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 
 	//. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
-
-	abci "github.com/tendermint/abci/types"
 	// crypto "github.com/tendermint/go-crypto"
 )
 
@@ -58,13 +57,13 @@ type ValidatorMsg struct {
 	ValidatorIndex int              `json:"validator_index"`
 	Key            string           `json:"key"`
 	PubKey         crypto.PubKey    `json:"pub_key"`
-	Power          uint64           `json:"power"`
+	Power          *big.Int         `json:"power"`
 	Action         string           `json:"action"`
 	Target         string           `json:"target"`
 	Signature      crypto.Signature `json:"signature"`
 }
 
-func NewValidatorMsg(from string, key string, epoch int, power uint64, action string, target string) *ValidatorMsg {
+func NewValidatorMsg(from string, key string, epoch int, power *big.Int, action string, target string) *ValidatorMsg {
 	return &ValidatorMsg{
 		From:   from,
 		Key:    key,
@@ -82,20 +81,20 @@ func (e *ValidatorMsg) String() string {
 
 func (e *ValidatorMsg) WriteSignBytes(chainID string, w io.Writer, n *int, err *error) {
 	wire.WriteJSON(CanonicalJSONOnceValidatorMsg{
-		ChainID: chainID,
-		ValidatorMsg:   CanonicalValidatorMsg(e),
+		ChainID:      chainID,
+		ValidatorMsg: CanonicalValidatorMsg(e),
 	}, w, n, err)
 }
 
 type AcceptVotes struct {
-	Epoch  int           `json:"epoch"`
-	Key    string        `json:"key"`
-	PubKey crypto.PubKey `json:"pub_key"`
-	Power  uint64        `"power"`
-	Action string        `"action"`
-	Sum    int64         `"sum"`
-	Votes  []*ValidatorMsg      `votes`
-	Maj23  bool          `"maj23"`
+	Epoch  int             `json:"epoch"`
+	Key    string          `json:"key"`
+	PubKey crypto.PubKey   `json:"pub_key"`
+	Power  *big.Int        `"power"`
+	Action string          `"action"`
+	Sum    *big.Int        `"sum"`
+	Votes  []*ValidatorMsg `votes`
+	Maj23  bool            `"maj23"`
 }
 
 type PreVal struct {
@@ -106,7 +105,8 @@ var AcceptVoteSet map[string]*AcceptVotes //votes, using address as the key
 
 // var ValidatorChannel chan []*abci.Validator
 var ValidatorChannel chan int
-var EndChannel chan []*abci.Validator
+
+//var EndChannel chan []*abci.Validator
 
 var ValChangedEpoch map[int][]*AcceptVotes
 

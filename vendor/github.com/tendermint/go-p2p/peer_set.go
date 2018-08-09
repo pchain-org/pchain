@@ -35,8 +35,8 @@ func NewPeerSet() *PeerSet {
 	}
 }
 
-// Returns false if peer with key (PubKeyEd25519) is already in set
-// or if we have too many peers from the peer's IP range
+// Add adds the peer to the PeerSet.
+// It returns ErrSwitchDuplicatePeer if the peer is already present.
 func (ps *PeerSet) Add(peer *Peer) error {
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
@@ -101,13 +101,14 @@ func (ps *PeerSet) Remove(peer *Peer) {
 
 }
 
+// Size returns the number of unique items in the peerSet.
 func (ps *PeerSet) Size() int {
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
 	return len(ps.list)
 }
 
-// threadsafe list of peers.
+// List returns the threadsafe list of peers.
 func (ps *PeerSet) List() []*Peer {
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()

@@ -30,10 +30,10 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/net/context"
-	"github.com/ethereum/go-ethereum/miner"
 	"sync"
 )
 
@@ -43,10 +43,13 @@ type PreCheckInt interface {
 
 // EthApiBackend implements ethapi.Backend for full nodes
 type EthApiBackend struct {
-	eth *Ethereum
-	gpo *gasprice.GasPriceOracle
-	pending miner.Pending
-	pcInt PreCheckInt
+	eth              *Ethereum
+	gpo              *gasprice.GasPriceOracle
+	pending          miner.Pending
+	pcInt            PreCheckInt
+	client           ethapi.Client
+	apiBridge        ethapi.InnerAPIBridge
+	crossChainHelper core.CrossChainHelper
 }
 
 func (b *EthApiBackend) ChainConfig() *params.ChainConfig {
@@ -126,10 +129,13 @@ func (b *EthApiBackend) GetVMEnv(ctx context.Context, msg core.Message, state et
 
 func (b *EthApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	//emmark
-	if (b.pcInt != nil) {
-		err := b.pcInt.PreCheck(signedTx)
-		if (err != nil) {
-			return err
+	if b.pcInt != nil {
+		etd := signedTx.ExtendTxData()
+		if etd == nil || (etd.FuncName != ethapi.DICCFuncName && etd.FuncName != ethapi.WFMCFuncName) { //TODO: DICCFuncName/WFMCFuncName can't pass PreCheck because account may not exist.
+			err := b.pcInt.PreCheck(signedTx)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -220,7 +226,19 @@ func (b *EthApiBackend) AccountManager() *accounts.Manager {
 }
 
 func (b *EthApiBackend) Client() ethapi.Client {
-	return b.eth.Client()
+	return b.client
+}
+
+func (b *EthApiBackend) SetInnerAPIBridge(inBridge ethapi.InnerAPIBridge) {
+	b.apiBridge = inBridge
+}
+
+func (b *EthApiBackend) GetInnerAPIBridge() ethapi.InnerAPIBridge {
+	return b.apiBridge
+}
+
+func (b *EthApiBackend) GetCrossChainHelper() core.CrossChainHelper {
+	return b.crossChainHelper
 }
 
 type EthApiState struct {

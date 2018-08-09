@@ -3,9 +3,10 @@ package dummy
 import (
 	"bytes"
 	"encoding/hex"
-	"strconv"
+	"math/big"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/go-common"
 	dbm "github.com/tendermint/go-db"
@@ -76,7 +77,7 @@ func (app *PersistentDummyApplication) CheckTx(tx []byte) types.Result {
 	return app.app.CheckTx(tx)
 }
 
-func (app *PersistentDummyApplication) Commit(validators []*types.Validator, rewardPerBlock string) types.Result {
+func (app *PersistentDummyApplication) Commit(validators []*types.Validator, rewardPerBlock *big.Int, refund []*types.RefundValidatorAmount) types.Result {
 	// Save
 	appHash := app.app.state.Save()
 	logger.Info("Saved state", " root:", appHash)
@@ -195,19 +196,19 @@ func (app *PersistentDummyApplication) execValidatorTx(tx []byte) types.Result {
 	if err != nil {
 		return types.ErrEncodingError.SetLog(cmn.Fmt("Pubkey (%s) is invalid hex", pubkeyS))
 	}
-	power, err := strconv.Atoi(powerS)
-	if err != nil {
+	power, ok := new(big.Int).SetString(powerS, 0)
+	if !ok {
 		return types.ErrEncodingError.SetLog(cmn.Fmt("Power (%s) is not an int", powerS))
 	}
 
 	// update
-	return app.updateValidator(&types.Validator{pubkey, uint64(power)})
+	return app.updateValidator(&types.Validator{common.Address{}, pubkey, power})
 }
 
 // add, update, or remove a validator
 func (app *PersistentDummyApplication) updateValidator(v *types.Validator) types.Result {
 	key := []byte("val:" + string(v.PubKey))
-	if v.Power == 0 {
+	if v.Power.Sign() == 0 {
 		// remove validator
 		if !app.app.state.Has(key) {
 			return types.ErrUnauthorized.SetLog(cmn.Fmt("Cannot remove non-existent validator %X", key))

@@ -99,8 +99,9 @@ func (s *StateObject) empty() bool {
 // These objects are stored in the main account trie.
 type Account struct {
 	Nonce         uint64
-	Balance       *big.Int
-	LockedBalance *big.Int
+	Balance       *big.Int    //for normal user
+	LockedBalance *big.Int    //for validator, can not be consumed
+	ChainBalance  *big.Int    //for child chain owner, can not be consumed
 	Root          common.Hash // merkle root of the storage trie
 	CodeHash      []byte
 }
@@ -112,6 +113,9 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 	}
 	if data.LockedBalance == nil {
 		data.LockedBalance = new(big.Int)
+	}
+	if data.ChainBalance == nil {
+		data.ChainBalance = new(big.Int)
 	}
 	if data.CodeHash == nil {
 		data.CodeHash = emptyCodeHash
@@ -295,8 +299,8 @@ func (c *StateObject) AddLockedBalance(amount *big.Int) {
 		return
 	}
 
-	fmt.Printf("StateObject_AddLockedBalance : value to lock %d\n", amount)
-	fmt.Printf("StateObject_AddLockedBalance : value before lock: addr %x balance %d\n", c.Address(), c.LockedBalance())
+	fmt.Printf("StateObject_AddLockedBalance : value before lock: addr %x balance %d, value to lock %d\n",
+		c.Address(), c.LockedBalance(), amount)
 
 	c.SetLockedBalance(new(big.Int).Add(c.LockedBalance(), amount))
 
@@ -304,6 +308,16 @@ func (c *StateObject) AddLockedBalance(amount *big.Int) {
 
 	logger.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.LockedBalance(), amount)
 
+}
+
+// SubLockedBalance removes amount from c's locked balance.
+func (c *StateObject) SubLockedBalance(amount *big.Int) {
+	if amount.Cmp(common.Big0) == 0 {
+		return
+	}
+	c.SetLockedBalance(new(big.Int).Sub(c.LockedBalance(), amount))
+
+	logger.Infof("%x: #%d %v (- %v)\n", c.Address(), c.Nonce(), c.LockedBalance(), amount)
 }
 
 func (self *StateObject) SetLockedBalance(amount *big.Int) {
@@ -322,15 +336,52 @@ func (self *StateObject) setLockedBalance(amount *big.Int) {
 	}
 }
 
-// SubLockedBalance removes amount from c's locked balance.
-func (c *StateObject) SubLockedBalance(amount *big.Int) {
+// AddChainBalance add amount to the locked balance.
+func (c *StateObject) AddChainBalance(amount *big.Int) {
+	// EIP158: We must check emptiness for the objects such that the account
+	// clearing (0,0,0 objects) can take effect.
+	if amount.Cmp(common.Big0) == 0 {
+		if c.empty() {
+			c.touch()
+		}
+
+		return
+	}
+
+	fmt.Printf("StateObject_AddChainBalance : value before lock: addr %x balance %d, value to lock\n",
+		c.Address(), c.ChainBalance(), amount)
+
+	c.SetChainBalance(new(big.Int).Add(c.ChainBalance(), amount))
+
+	fmt.Printf("StateObject_AddChainBalance : value after lock: addr %x balance %d\n", c.Address(), c.ChainBalance())
+
+	logger.Infof("%x: #%d %v (+ %v)\n", c.Address(), c.Nonce(), c.ChainBalance(), amount)
+}
+
+// SubChainBalance removes amount from c's chain balance.
+func (c *StateObject) SubChainBalance(amount *big.Int) {
 	if amount.Cmp(common.Big0) == 0 {
 		return
 	}
-	c.SetLockedBalance(new(big.Int).Sub(c.LockedBalance(), amount))
+	c.SetChainBalance(new(big.Int).Sub(c.ChainBalance(), amount))
 
 	logger.Errorf("%x: #%d %v (- %v)\n", c.Address(), c.Nonce(), c.LockedBalance(), amount)
+}
 
+func (self *StateObject) SetChainBalance(amount *big.Int) {
+	self.db.journal = append(self.db.journal, balanceChange{
+		account: &self.address,
+		prev:    new(big.Int).Set(self.data.ChainBalance),
+	})
+	self.setChainBalance(amount)
+}
+
+func (self *StateObject) setChainBalance(amount *big.Int) {
+	self.data.ChainBalance = amount
+	if self.onDirty != nil {
+		self.onDirty(self.Address())
+		self.onDirty = nil
+	}
 }
 
 // Return the gas back to the origin. Used by the Virtual machine or Closures
@@ -419,6 +470,10 @@ func (self *StateObject) Balance() *big.Int {
 
 func (self *StateObject) LockedBalance() *big.Int {
 	return self.data.LockedBalance
+}
+
+func (self *StateObject) ChainBalance() *big.Int {
+	return self.data.ChainBalance
 }
 
 func (self *StateObject) Nonce() uint64 {

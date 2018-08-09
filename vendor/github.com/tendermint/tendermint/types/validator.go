@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
+	abciTypes "github.com/tendermint/abci/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
-	abciTypes "github.com/tendermint/abci/types"
 )
 
 // Volatile state for each Validator
@@ -17,16 +19,16 @@ import (
 type Validator struct {
 	Address     []byte        `json:"address"`
 	PubKey      crypto.PubKey `json:"pub_key"`
-	VotingPower int64         `json:"voting_power"`
-	Accum       int64         `json:"accum"`
+	VotingPower *big.Int      `json:"voting_power"`
+	Accum       *big.Int      `json:"accum"`
 }
 
-func NewValidator(pubKey crypto.PubKey, votingPower int64) *Validator {
+func NewValidator(pubKey crypto.PubKey, votingPower *big.Int) *Validator {
 	return &Validator{
 		Address:     pubKey.Address(),
 		PubKey:      pubKey,
 		VotingPower: votingPower,
-		Accum:       0,
+		Accum:       big.NewInt(0),
 	}
 }
 
@@ -34,6 +36,8 @@ func NewValidator(pubKey crypto.PubKey, votingPower int64) *Validator {
 // Panics if the validator is nil.
 func (v *Validator) Copy() *Validator {
 	vCopy := *v
+	vCopy.VotingPower = new(big.Int).Set(v.VotingPower)
+	vCopy.Accum = new(big.Int).Set(v.Accum)
 	return &vCopy
 }
 
@@ -41,7 +45,7 @@ func (v *Validator) Equals(other *Validator) bool {
 
 	return bytes.Equal(v.Address, other.Address) &&
 		v.PubKey.Equals(other.PubKey) &&
-		v.VotingPower == other.VotingPower
+		v.VotingPower.Cmp(other.VotingPower) == 0
 }
 
 // Returns the one with higher Accum.
@@ -49,9 +53,9 @@ func (v *Validator) CompareAccum(other *Validator) *Validator {
 	if v == nil {
 		return other
 	}
-	if v.Accum > other.Accum {
+	if v.Accum.Cmp(other.Accum) == 1 {
 		return v
-	} else if v.Accum < other.Accum {
+	} else if v.Accum.Cmp(other.Accum) == -1 {
 		return other
 	} else {
 		if bytes.Compare(v.Address, other.Address) < 0 {
@@ -80,12 +84,11 @@ func (v *Validator) Hash() []byte {
 	return wire.BinaryRipemd160(v)
 }
 
-
 func (v *Validator) ToAbciValidator() *abciTypes.Validator {
-
-	return &abciTypes.Validator {
-		PubKey: v.PubKey.Bytes(),
-		Power: uint64(v.VotingPower),
+	return &abciTypes.Validator{
+		Address: common.BytesToAddress(v.Address),
+		PubKey:  v.PubKey.Bytes(),
+		Power:   v.VotingPower,
 	}
 }
 
@@ -112,13 +115,13 @@ func (vc validatorCodec) Compare(o1 interface{}, o2 interface{}) int {
 // For testing...
 
 func RandValidator(randPower bool, minPower int64) (*Validator, *PrivValidator) {
-	privVal := GenPrivValidator()
+	privVal := GenPrivValidator("")
 	_, tempFilePath := Tempfile("priv_validator_")
 	privVal.SetFile(tempFilePath)
 	votePower := minPower
 	if randPower {
 		votePower += int64(RandUint32())
 	}
-	val := NewValidator(privVal.PubKey, votePower)
+	val := NewValidator(privVal.PubKey, big.NewInt(votePower))
 	return val, privVal
 }

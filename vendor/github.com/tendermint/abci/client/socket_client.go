@@ -5,6 +5,7 @@ import (
 	"container/list"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
 	"reflect"
 	"sync"
@@ -257,7 +258,7 @@ func (cli *socketClient) QueryAsync(reqQuery types.RequestQuery) *ReqRes {
 }
 
 func (cli *socketClient) CommitAsync(validators []*types.Validator) *ReqRes {
-	return cli.queueRequest(types.ToRequestCommit(validators, ""), nil)
+	return cli.queueRequest(types.ToRequestCommit(validators, nil), nil)
 }
 
 func (cli *socketClient) InitChainAsync(validators []*types.Validator) *ReqRes {
@@ -347,7 +348,7 @@ func (cli *socketClient) QuerySync(reqQuery types.RequestQuery) (resQuery types.
 	return resQuery, nil
 }
 
-func (cli *socketClient) CommitSync(validators []*types.Validator, rewardPerBlock string) (res types.Result) {
+func (cli *socketClient) CommitSync(validators []*types.Validator, rewardPerBlock *big.Int, refund []*types.RefundValidatorAmount) (res types.Result) {
 	reqres := cli.queueRequest(types.ToRequestCommit(validators, rewardPerBlock), nil)
 	cli.FlushSync()
 	if err := cli.Error(); err != nil {

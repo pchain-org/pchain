@@ -2,8 +2,8 @@ package types
 
 import (
 	"bytes"
-
 	"github.com/tendermint/go-wire"
+	"math/big"
 )
 
 // validators implements sort
@@ -28,8 +28,8 @@ func (v Validators) Swap(i, j int) {
 //-------------------------------------
 
 type validatorPretty struct {
-	PubKey []byte `json:"pub_key"`
-	Power  uint64 `json:"power"`
+	PubKey []byte   `json:"pub_key"`
+	Power  *big.Int `json:"power"`
 }
 
 func ValidatorsString(vs Validators) string {

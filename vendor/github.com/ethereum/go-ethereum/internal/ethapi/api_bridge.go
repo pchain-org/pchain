@@ -7,13 +7,13 @@ import (
 	"github.com/aristanetworks/goarista/monotime"
 )
 
+type InnerAPIBridge interface {
+	SendTransaction(ctx context.Context, args SendTxArgs) (common.Hash, error)
+}
 
 type APIBridge struct {
 	txapi *PublicTransactionPoolAPI
 }
-
-var ApiBridge APIBridge
-
 
 func (ab *APIBridge)SendTransaction(ctx context.Context, args SendTxArgs) (common.Hash, error){
 
@@ -27,3 +27,4 @@ func (ab *APIBridge)SendTransaction(ctx context.Context, args SendTxArgs) (commo
 
 	return ab.txapi.SendTransaction(ctx, args)
 }
+

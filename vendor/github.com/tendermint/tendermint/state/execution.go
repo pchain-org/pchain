@@ -5,14 +5,18 @@ import (
 	"fmt"
 
 	fail "github.com/ebuchman/fail-test"
+	"github.com/pchain/common/plogger"
 	abci "github.com/tendermint/abci/types"
 	. "github.com/tendermint/go-common"
+	"github.com/tendermint/tendermint/epoch"
+	tdmMempool "github.com/tendermint/tendermint/mempool"
 	"github.com/tendermint/tendermint/proxy"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 	"github.com/tendermint/tendermint/state/txindex"
 	"github.com/tendermint/tendermint/types"
-	"github.com/tendermint/tendermint/epoch"
 )
 
+var plog = plogger.GetLogger("tendermint/execution")
 
 //--------------------------------------------------
 // Execute the block
@@ -20,14 +24,15 @@ import (
 // ValExecBlock executes the block, but does NOT mutate State.
 // + validates the block
 // + executes block.Txs on the proxyAppConn
-func (s *State) ValExecBlock(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus, block *types.Block) (*ABCIResponses, error) {
+func (s *State) ValExecBlock(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus, block *types.Block,
+	cch rpcTxHook.CrossChainHelper) (*ABCIResponses, error) {
 	// Validate the block.
 	if err := s.validateBlock(block); err != nil {
 		return nil, ErrInvalidBlock(err)
 	}
 
 	// Execute the block txs
-	abciResponses, err := execBlockOnProxyApp(eventCache, proxyAppConn, s, block)
+	abciResponses, err := execBlockOnProxyApp(eventCache, proxyAppConn, s, block, cch)
 	if err != nil {
 		// There was some error in proxyApp
 		// TODO Report error and wait for proxyApp to be available.
@@ -41,9 +46,9 @@ func (s *State) ValExecBlock(eventCache types.Fireable, proxyAppConn proxy.AppCo
 // Returns a list of transaction results and updates to the validator set
 // TODO: Generate a bitmap or otherwise store tx validity in state.
 func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus,
-				state *State, block *types.Block) (*ABCIResponses, error) {
+	state *State, block *types.Block, cch rpcTxHook.CrossChainHelper) (*ABCIResponses, error) {
 
-	abciResponses := RefreshABCIResponses(block, state, eventCache, proxyAppConn)
+	abciResponses := RefreshABCIResponses(block, state, eventCache, proxyAppConn, cch)
 
 	// Begin block
 	err := proxyAppConn.BeginBlockSync(block.Hash().Bytes(), types.TM2PB.Header(block.Header))
@@ -59,10 +64,10 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 			return nil, errors.New(res.Error())
 		}
 		/*
-		proxyAppConn.DeliverTxAsync(tx)
-		if err := proxyAppConn.Error(); err != nil {
-			return nil, err
-		}
+			proxyAppConn.DeliverTxAsync(tx)
+			if err := proxyAppConn.Error(); err != nil {
+				return nil, err
+			}
 		*/
 	}
 
@@ -116,19 +121,19 @@ func (s *State) validateBlock(block *types.Block) error {
 		}
 	} else {
 		/*
-		if len(block.LastCommit.Precommits) != s.LastValidators.Size() {
-			fmt.Printf("validateBlock(), LastCommit.Precommits are: %v, LastValidators are: %v\n",
-				block.LastCommit.Precommits, s.LastValidators)
-			return errors.New(Fmt("Invalid block commit size. Expected %v, got %v",
-				s.LastValidators.Size(), len(block.LastCommit.Precommits)))
-		}
+			if len(block.LastCommit.Precommits) != s.LastValidators.Size() {
+				fmt.Printf("validateBlock(), LastCommit.Precommits are: %v, LastValidators are: %v\n",
+					block.LastCommit.Precommits, s.LastValidators)
+				return errors.New(Fmt("Invalid block commit size. Expected %v, got %v",
+					s.LastValidators.Size(), len(block.LastCommit.Precommits)))
+			}
 		*/
 		//fmt.Printf("(s *State) validateBlock(), avoid LastValidators and LastCommit.Precommits size check for validatorset change\n")
 		lastValidators, _, err := s.GetValidators()
 
 		if err != nil && lastValidators != nil {
 			err = lastValidators.VerifyCommit(
-				s.ChainID, s.LastBlockID, block.Height - 1, block.LastCommit)
+				s.ChainID, s.LastBlockID, block.Height-1, block.LastCommit)
 		}
 
 		if err != nil {
@@ -146,9 +151,9 @@ func (s *State) validateBlock(block *types.Block) error {
 
 // Validate, execute, and commit block against app, save block and state
 func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConnConsensus,
-	block *types.Block, partsHeader types.PartSetHeader, mempool types.Mempool) error {
+	block *types.Block, partsHeader types.PartSetHeader, mempool types.Mempool, cch rpcTxHook.CrossChainHelper) error {
 
-	abciResponses, err := s.ValExecBlock(eventCache, proxyAppConn, block)
+	abciResponses, err := s.ValExecBlock(eventCache, proxyAppConn, block, cch)
 	if err != nil {
 		return fmt.Errorf("Exec failed for application: %v", err)
 	}
@@ -159,50 +164,62 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 	s.indexTxs(abciResponses)
 
 	// save the results before we commit
-	s.SaveABCIResponses(abciResponses)
+	saveABCIResponses(s.db, block.Height, abciResponses)
 
 	fail.Fail() // XXX
 
 	//here handles the proposed next epoch
 	nextEpochInBlock := epoch.FromBytes(block.ExData.BlockExData)
-	if nextEpochInBlock != nil {
+	if nextEpochInBlock != nil && nextEpochInBlock.Number != 0 {
+
+		nextEpochInBlock.RS = s.Epoch.RS
+		nextEpochInBlock.SetEpochValidatorVoteSet(epoch.NewEpochValidatorVoteSet())
+		nextEpochInBlock.Status = epoch.EPOCH_VOTED_NOT_SAVED
 		s.Epoch.SetNextEpoch(nextEpochInBlock)
-		s.Epoch.NextEpoch.RS = s.Epoch.RS
-		s.Epoch.NextEpoch.Status = epoch.EPOCH_VOTED_NOT_SAVED
+
 		s.Epoch.Save()
 	}
 
 	fail.Fail() // XXX
 
-	//here handles if need to enter next epoch
+	plog.Infof("Apply Block height %d, Epoch No %d", block.Height, s.Epoch.Number)
+	// Check if need to enter next epoch
 	ok, err := s.Epoch.ShouldEnterNewEpoch(block.Height)
-	if ok && err == nil {
-
-		// now update the block and validators
-		// fmt.Println("Diffs before:", abciResponses.EndBlock.Diffs)
-		// types.ValidatorChannel <- abciResponses.EndBlock.Diffs
-		types.ValidatorChannel <- s.Epoch.Number
-		abciResponses.EndBlock.Diffs = <-types.EndChannel
-		// fmt.Println("Diffs after:", abciResponses.EndBlock.Diffs)
-
-		s.Epoch, _ = s.Epoch.EnterNewEpoch(block.Height)
-
-	} else if err != nil {
-		logger.Warnf(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
-			block.Height, s.Epoch, err))
+	if err != nil {
+		logger.Warn(Fmt("ApplyBlock(%v): Check Enter new Epoch Failed. Current epoch: %v, error: %v", block.Height, s.Epoch, err))
 		return err
 	}
-
-	//here handles when enter new epoch
-	s.SetBlockAndEpoch(block.Header, partsHeader)
+	var refund []*abci.RefundValidatorAmount
+	var nextEpoch *epoch.Epoch
+	if ok {
+		// Yes, let create the next epoch and calculate the new validator set and refund list
+		nextEpoch, refund, err = s.Epoch.EnterNewEpoch(block.Height)
+		if err != nil {
+			logger.Warn(Fmt("ApplyBlock(%v): Enter New Epoch Failed. Current epoch: %v, error: %v", block.Height, s.Epoch, err))
+			return err
+		}
+	}
+	plog.Infof("Apply Block after switch epoch. height %d, Epoch No %d", block.Height, s.Epoch.Number)
 
 	// lock mempool, commit state, update mempoool
-	err = s.CommitStateUpdateMempool(proxyAppConn, block, mempool)
+	err = s.CommitStateUpdateMempool(proxyAppConn, block, mempool, refund)
 	if err != nil {
 		return fmt.Errorf("Commit failed for application: %v", err)
 	}
 
 	fail.Fail() // XXX
+
+	//here handles when enter new epoch
+	s.SetBlockAndEpoch(block.Header, partsHeader)
+
+	// if next Epoch is not nil, let's move to the next Epoch
+	if nextEpoch != nil {
+		s.Epoch = nextEpoch
+		// Update the Epoch in Mempool
+		if mem, ok := mempool.(*tdmMempool.Mempool); ok {
+			mem.SetEpoch(nextEpoch)
+		}
+	}
 
 	// save the state
 	s.Epoch.Save()
@@ -213,13 +230,14 @@ func (s *State) ApplyBlock(eventCache types.Fireable, proxyAppConn proxy.AppConn
 // mempool must be locked during commit and update
 // because state is typically reset on Commit and old txs must be replayed
 // against committed state before new txs are run in the mempool, lest they be invalid
-func (s *State) CommitStateUpdateMempool(proxyAppConn proxy.AppConnConsensus, block *types.Block, mempool types.Mempool) error {
+func (s *State) CommitStateUpdateMempool(proxyAppConn proxy.AppConnConsensus, block *types.Block, mempool types.Mempool,
+	refundList []*abci.RefundValidatorAmount) error {
 	mempool.Lock()
 	defer mempool.Unlock()
 
 	// Commit block, get hash back
-	lastValidators,_,_ := s.GetValidators()
-	res := proxyAppConn.CommitSync(lastValidators.ToAbciValidators(), s.Epoch.RewardPerBlock.String())
+	lastValidators, _, _ := s.GetValidators()
+	res := proxyAppConn.CommitSync(lastValidators.ToAbciValidators(), s.Epoch.RewardPerBlock, refundList)
 	if res.IsErr() {
 		logger.Warn("Error in proxyAppConn.CommitSync", " error:", res)
 		return res
@@ -256,16 +274,18 @@ func (s *State) indexTxs(abciResponses *ABCIResponses) {
 
 // Exec and commit a block on the proxyApp without validating or mutating the state
 // Returns the application root hash (result of abci.Commit)
-func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, state *State, block *types.Block) ([]byte, error) {
+func ExecCommitBlock(appConnConsensus proxy.AppConnConsensus, state *State, block *types.Block, cch rpcTxHook.CrossChainHelper) ([]byte, error) {
 	var eventCache types.Fireable // nil
-	_, err := execBlockOnProxyApp(eventCache, appConnConsensus, state, block)
+	_, err := execBlockOnProxyApp(eventCache, appConnConsensus, state, block, cch)
 	if err != nil {
 		logger.Warn("Error executing block on proxy app", " height:", block.Height, "err", err)
 		return nil, err
 	}
+	// TODO Add Epoch Logic in Replay process
+
 	// Commit block, get hash back
 	lastValidators, _, _ := state.GetValidators()
-	res := appConnConsensus.CommitSync(lastValidators.ToAbciValidators(), state.Epoch.RewardPerBlock.String())
+	res := appConnConsensus.CommitSync(lastValidators.ToAbciValidators(), state.Epoch.RewardPerBlock, nil)
 	if res.IsErr() {
 		logger.Warn("Error in proxyAppConn.CommitSync", " error:", res)
 		return nil, res

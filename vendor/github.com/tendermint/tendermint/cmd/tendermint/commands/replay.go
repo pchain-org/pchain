@@ -2,11 +2,14 @@ package commands
 
 import (
 	"fmt"
-
 	"github.com/tendermint/tendermint/consensus"
-
 	"github.com/spf13/cobra"
 )
+
+
+/****
+not support any more
+****/
 
 var replayCmd = &cobra.Command{
 	Use:   "replay [walfile]",

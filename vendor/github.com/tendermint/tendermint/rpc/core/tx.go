@@ -8,14 +8,14 @@ import (
 	"github.com/tendermint/tendermint/types"
 )
 
-func Tx(hash []byte, prove bool) (*ctypes.ResultTx, error) {
+func Tx(context *RPCDataContext, hash []byte, prove bool) (*ctypes.ResultTx, error) {
 
 	// if index is disabled, return error
-	if _, ok := txIndexer.(*null.TxIndex); ok {
+	if _, ok := context.txIndexer.(*null.TxIndex); ok {
 		return nil, fmt.Errorf("Transaction indexing is disabled.")
 	}
 
-	r, err := txIndexer.Get(hash)
+	r, err := context.txIndexer.Get(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +29,7 @@ func Tx(hash []byte, prove bool) (*ctypes.ResultTx, error) {
 
 	var proof types.TxProof
 	if prove {
-		block := blockStore.LoadBlock(height)
+		block := context.blockStore.LoadBlock(height)
 		proof = block.Data.Txs.Proof(index)
 	}
 

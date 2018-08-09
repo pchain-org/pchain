@@ -7,17 +7,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	"fmt"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	abci "github.com/tendermint/abci/types"
 	auto "github.com/tendermint/go-autofile"
 	"github.com/tendermint/go-clist"
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
+	"github.com/tendermint/tendermint/epoch"
 	"github.com/tendermint/tendermint/proxy"
-	"github.com/tendermint/tendermint/types"
-	"github.com/ethereum/go-ethereum/rlp"
-	"fmt"
-	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
+	"github.com/tendermint/tendermint/types"
 )
 
 /*
@@ -64,6 +65,8 @@ type Mempool struct {
 	recheckCursor *clist.CElement // next expected response
 	recheckEnd    *clist.CElement // re-checking stops here
 
+	epoch *epoch.Epoch // Use for Tx Check
+
 	// Keep a cache of already-seen txs.
 	// This reduces the pressure on the proxyApp.
 	cache *txCache
@@ -88,6 +91,10 @@ func NewMempool(config cfg.Config, proxyAppConn proxy.AppConnMempool) *Mempool {
 	mempool.initWAL()
 	proxyAppConn.SetResponseCallback(mempool.resCb)
 	return mempool
+}
+
+func (mem *Mempool) SetEpoch(ep *epoch.Epoch) {
+	mem.epoch = ep
 }
 
 func (mem *Mempool) initWAL() {
@@ -216,14 +223,14 @@ func (mem *Mempool) resCbNormal(req *abci.Request, res *abci.Response) {
 		if etd != nil && etd.FuncName != "" {
 			checkTxCb := rpcTxHook.GetCheckTxCb(etd.FuncName)
 			if checkTxCb != nil {
-				err = checkTxCb(ethtx)
+				err = checkTxCb(mem.height, ethtx, mem.epoch)
 				if err != nil {
-					fmt.Printf("checkTxCb failed for %s\n", etd.FuncName)
+					fmt.Printf("checkTxCb failed for %s, %v\n", etd.FuncName, err.Error())
 				}
 			}
 		}
 
-		if r.CheckTx.Code == abci.CodeType_OK && err == nil{
+		if r.CheckTx.Code == abci.CodeType_OK && err == nil {
 			mem.counter++
 			memTx := &mempoolTx{
 				counter: mem.counter,

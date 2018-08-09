@@ -192,7 +192,7 @@ func (c *Config) IPCEndpoint() string {
 		if strings.HasPrefix(c.IPCPath, `\\.\pipe\`) {
 			return c.IPCPath
 		}
-		return `\\.\pipe\` + c.IPCPath
+		return `\\.\pipe\` + c.DataDir + `\` + c.IPCPath
 	}
 	// Resolve names into the data directory full paths otherwise
 	if filepath.Base(c.IPCPath) == c.IPCPath {

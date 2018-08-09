@@ -36,7 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
-	
+
 	"github.com/pchain/common/plogger"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -47,6 +47,9 @@ import (
 )
 var logger = plogger.GetLogger("ethereum")
 const defaultGas = 90000
+
+const defaultMCGas = 42000
+const defaultMCGasPrice = 20000000000
 
 // TXs sending limit
 const TRANSACTION_NUM_LIMIT = 200000
@@ -801,7 +804,6 @@ type RPCTransaction struct {
 	Hash             common.Hash     `json:"hash"`
 	Input            hexutil.Bytes   `json:"input"`
 	Nonce            hexutil.Uint64  `json:"nonce"`
-	Type		 hexutil.Uint64 `json:"type"`
 	To               *common.Address `json:"to"`
 	TransactionIndex hexutil.Uint    `json:"transactionIndex"`
 	Value            *hexutil.Big    `json:"value"`
@@ -825,7 +827,6 @@ func newRPCPendingTransaction(tx *types.Transaction) *RPCTransaction {
 		Hash:     tx.Hash(),
 		Input:    hexutil.Bytes(tx.Data()),
 		Nonce:    hexutil.Uint64(tx.Nonce()),
-		Type:     (hexutil.Uint64)(tx.Type()),
 		To:       tx.To(),
 		Value:    (*hexutil.Big)(tx.Value()),
 		V:        (*hexutil.Big)(v),
@@ -844,6 +845,17 @@ func newRPCTransactionFromBlockIndex(b *types.Block, txIndex uint) (*RPCTransact
 		}
 		from, _ := types.Sender(signer, tx)
 		v, r, s := tx.RawSignatureValues()
+
+		value := tx.Value()
+		etd := tx.ExtendTxData()
+		if etd != nil && etd.FuncName != "" {
+			if etd.FuncName == DIMCFuncName {
+				value, _ = etd.GetBigInt(DIMC_ARGS_AMOUNT)
+			} else if etd.FuncName == WFCCFuncName {
+				value, _ = etd.GetBigInt(WFCC_ARGS_AMOUNT)
+			}
+		}
+
 		return &RPCTransaction{
 			BlockHash:        b.Hash(),
 			BlockNumber:      (*hexutil.Big)(b.Number()),
@@ -853,10 +865,9 @@ func newRPCTransactionFromBlockIndex(b *types.Block, txIndex uint) (*RPCTransact
 			Hash:             tx.Hash(),
 			Input:            hexutil.Bytes(tx.Data()),
 			Nonce:            hexutil.Uint64(tx.Nonce()),
-			Type:   	  (hexutil.Uint64)(tx.Type()),
 			To:               tx.To(),
 			TransactionIndex: hexutil.Uint(txIndex),
-			Value:            (*hexutil.Big)(tx.Value()),
+			Value:            (*hexutil.Big)(value),
 			V:                (*hexutil.Big)(v),
 			R:                (*hexutil.Big)(r),
 			S:                (*hexutil.Big)(s),
@@ -1114,21 +1125,22 @@ func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transacti
 
 // SendTxArgs represents the arguments to sumbit a new transaction into the transaction pool.
 type SendTxArgs struct {
-	From     common.Address     `json:"from"`
-	To       *common.Address    `json:"to"`
-	Gas      *hexutil.Big       `json:"gas"`
-	GasPrice *hexutil.Big       `json:"gasPrice"`
-	Value    *hexutil.Big       `json:"value"`
-	Data     hexutil.Bytes      `json:"data"`
-	Nonce    *hexutil.Uint64    `json:"nonce"`
-	Type     *hexutil.Big       `json:"type"`
-	ExtendTxData *types.ExtendTxData  `json:"extendTxData"`
+	From         common.Address      `json:"from"`
+	To           *common.Address     `json:"to"`
+	Gas          *hexutil.Big        `json:"gas"`
+	GasPrice     *hexutil.Big        `json:"gasPrice"`
+	Value        *hexutil.Big        `json:"value"`
+	Data         hexutil.Bytes       `json:"data"`
+	Nonce        *hexutil.Uint64     `json:"nonce"`
+	Type         *hexutil.Big        `json:"type"`
+	ExtendTxData *types.ExtendTxData `json:"extendTxData"`
 }
 
 // prepareSendTxArgs is a helper function that fills in default values for unspecified tx fields.
 func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 
-	if(args.ExtendTxData == nil) {
+	etd := args.ExtendTxData
+	if etd == nil {
 		if args.Gas == nil {
 			args.Gas = (*hexutil.Big)(big.NewInt(defaultGas))
 		}
@@ -1141,6 +1153,19 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 		}
 		if args.Value == nil {
 			args.Value = new(hexutil.Big)
+		}
+	} else {
+		// TODO: adjust the gas/gasPrice for multi-chain tx
+		// DICCFuncName and WFMCFuncName tx has no Gas/GasPrice because the account may not have enough money.
+		// SB2MCFuncName costs no Gas/GasPrice
+		if etd.FuncName == DICCFuncName || etd.FuncName == WFMCFuncName || etd.FuncName == SB2MCFuncName {
+			args.Gas = nil
+			args.GasPrice = nil
+		} else {
+			args.Gas = (*hexutil.Big)(big.NewInt(defaultMCGas)) // temporarily force to 'defaultMCGas'.
+			if args.GasPrice == nil {
+				args.GasPrice = (*hexutil.Big)(big.NewInt(defaultMCGasPrice))
+			}
 		}
 	}
 
@@ -1157,7 +1182,7 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 
 func (args *SendTxArgs) toTransaction() *types.Transaction {
 
-	if (args.ExtendTxData == nil) {
+	if args.ExtendTxData == nil {
 		if args.To == nil {
 			return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), (*big.Int)(args.Gas), (*big.Int)(args.GasPrice), args.Data)
 		}
@@ -1173,7 +1198,9 @@ func submitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 		return common.Hash{}, err
 	}
 
-	if tx.To() == nil {
+	etd := tx.ExtendTxData()
+	// Contract Transaction with both etd and receipt nil
+	if tx.To() == nil || (etd != nil && etd.FuncName != "") {
 		signer := types.MakeSigner(b.ChainConfig(), b.CurrentBlock().Number())
 		from, _ := types.Sender(signer, tx)
 		addr := crypto.CreateAddress(from, tx.Nonce())
@@ -1213,7 +1240,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	}
 
 	if args.Type != nil && (*args.Type).ToInt().Uint64() > 0 && args.From.Hash() != (*args.To).Hash() {
-		panic("From/To must be the same address when (un)locking asset.\n")  
+		panic("From/To must be the same address when (un)locking asset.\n")
 
 		// should change the panic to some error msg
 		// return common.Hash{}, err
@@ -1231,14 +1258,6 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	fmt.Printf("(s *PublicBlockChainAPI) SendTransaction(), tx(%s) has nonce(%v)\n", tx.Hash(), tx.Nonce())
 	//fmt.Println("(s *PublicBlockChainAPI) SendTransaction() 2")
 
-	// Set TX type based on input
-	if args.Type != nil {
-		tx.SetType(args.Type.ToInt().Uint64())
-
-		fmt.Printf("SendTransaction: Set type to %d for tx %s\n", tx.Type(), tx.Hash().Hex())
-	} else {
-		logger.Infof("Tx(%s): Not set type, default type %d \n", tx.Hash().Hex(), tx.Type())
-	}
 	var chainID *big.Int
 	if config := s.b.ChainConfig(); config.IsEIP155(s.b.CurrentBlock().Number()) {
 		chainID = config.ChainId
@@ -1253,45 +1272,26 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
-func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encodedTx hexutil.Bytes) (string, error) {
+func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, encodedTx hexutil.Bytes) (common.Hash, error) {
 
 	//emmark
 	txs, err := s.b.GetPoolTransactions()
 	if err != nil {
-		return "", err
+		return common.Hash{}, err
 	}
 
 	fmt.Println("(s *PublicTransactionPoolAPI) SendRawTransaction(), has transaction %v in pool\n", txs.Len())
 
 	if txs.Len() >= TRANSACTION_NUM_LIMIT {
 		err = fmt.Errorf("System busy: too many transactions, please try again later.")
-		return "", err
+		return common.Hash{}, err
 	}
 
-	oritx := new(types.OriTransaction)
-	if err := rlp.DecodeBytes(encodedTx, oritx); err != nil {
-		return "", err
+	tx := new(types.Transaction)
+	if err := rlp.DecodeBytes(encodedTx, tx); err != nil {
+		return common.Hash{}, err
 	}
-
-	tx := types.OriToTransaction(oritx)
-
-	if err := s.b.SendTx(ctx, tx); err != nil {
-		return "", err
-	}
-
-	signer := types.MakeSigner(s.b.ChainConfig(), s.b.CurrentBlock().Number())
-	if tx.To() == nil {
-		from, err := types.Sender(signer, tx)
-		if err != nil {
-			return "", err
-		}
-		addr := crypto.CreateAddress(from, tx.Nonce())
-		logger.Infof("Tx(%x) created: %x\n", tx.Hash(), addr)
-	} else {
-		logger.Infof("Tx(%x) to: %x\n", tx.Hash(), tx.To())
-	}
-
-	return tx.Hash().Hex(), nil
+	return submitTransaction(ctx, s.b, tx)
 }
 
 // Sign calculates an ECDSA signature for:
