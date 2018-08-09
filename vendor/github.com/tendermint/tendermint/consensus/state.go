@@ -1635,42 +1635,49 @@ func CompareHRS(h1, r1 int, s1 RoundStepType, h2, r2 int, s2 RoundStepType) int 
 	return 0
 }
 
-func (cs *ConsensusState) saveBlockToMainChain(block *types.IntegratedBlock) error {
+func (cs *ConsensusState) saveBlockToMainChain(block *types.IntegratedBlock) {
 
 	client := cs.cch.GetClient()
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	number, err := client.BlockNumber(ctx)
 	if err != nil {
-		return err
+		logger.Error("saveBlockToMainChain: failed to get BlockNumber at the beginning.")
+		return
 	}
 
 	bs := wire.BinaryBytes(*block)
 	hash, err := client.SaveBlockToMainChain(ctx, common.BytesToAddress(cs.privValidator.GetAddress()), bs)
 	if err != nil {
-		return err
+		logger.Errorf("saveBlockToMainChain(rpc) failed, err: %v", err)
+		return
+	} else {
+		logger.Infof("saveBlockToMainChain(rpc) success, hash: %v", hash)
 	}
 
+	//we wait for 3 blocks, if not write to main chain, just return
 	curNumber := number
-	//we wait for 3 blocks, if not write to main chain, just return error
 	for new(big.Int).Sub(curNumber, number).Int64() < 3 {
 
 		tmpNumber, err := client.BlockNumber(ctx)
 		if err != nil {
-			return err
+			logger.Error("saveBlockToMainChain: failed to get BlockNumber, abort to wait for 3 blocks")
+			return
 		}
 
 		if tmpNumber.Cmp(curNumber) > 0 {
 			_, isPending, err := client.TransactionByHash(ctx, hash)
 			if !isPending && err == nil {
-				return nil
+				logger.Info("saveBlockToMainChain: tx packaged in block in main chain")
+				return
 			}
 
 			curNumber = tmpNumber
 		} else {
+			// we don't want to make too many rpc calls
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
 
-	return errors.New("block not saved after 3 main chain block generated")
+	logger.Error("saveBlockToMainChain: tx not packaged in any block after 3 blocks in main chain")
 }
