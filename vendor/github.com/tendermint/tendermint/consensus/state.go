@@ -859,7 +859,7 @@ func (cs *ConsensusState) enterPropose(height int, round int) {
 
 				lastBlock := cs.blockStore.LoadBlock(height - 1)
 				intBlock := types.MakeIntegratedBlock(lastBlock, cs.LastCommit.MakeCommit(), cs.config.GetInt("block_part_size"))
-				go cs.saveBlockToMainChain(intBlock)
+				cs.saveBlockToMainChain(intBlock)
 			}
 		}
 	}
