@@ -340,11 +340,16 @@ func GetChildChainForLaunch(db dbm.DB, height uint64, stateDB *state.StateDB) []
 			newPendingIdx = append(newPendingIdx, v)
 		} else if v.End < height {
 			// Refund the Lock Balance
+			fmt.Printf("cancel the vote child chain %s, start to refund the ", v.ChainID)
 			cci := GetPendingChildChainData(db, v.ChainID)
 			for _, jv := range cci.JoinedValidators {
+				fmt.Printf("Address %x, %v, current balance %v", jv.Address, jv.DepositAmount, stateDB.GetBalance(jv.Address))
 				stateDB.SubLockedBalance(jv.Address, jv.DepositAmount)
 				stateDB.AddBalance(jv.Address, jv.DepositAmount)
+				fmt.Printf("After - Address %x, current balance %v", jv.Address, stateDB.GetBalance(jv.Address))
 			}
+			fmt.Println("cancel the vote child chain, refund success")
+
 			// remove it
 			DeletePendingChildChainData(db, v.ChainID)
 		} else {
