@@ -9,8 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 
 	"encoding/json"
 	"fmt"
@@ -170,7 +168,7 @@ func init_eth_blockchain(chainId string, ethGenesisPath string, ctx *cli.Context
 	}
 
 	fmt.Printf("init_eth_blockchain end\n")
-	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
+	logger.Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
 }
 
 func init_em_files(config cfg.Config, chainId string, genesisPath string, validators []types.GenesisValidator) error {
@@ -263,7 +261,7 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 		if privValidator != nil {
 			coinbase, amount, checkErr := checkAccount(*coreGenesis)
 			if checkErr != nil {
-				glog.V(logger.Error).Infof(checkErr.Error())
+				logger.Infof(checkErr.Error())
 				cmn.Exit(checkErr.Error())
 			}
 

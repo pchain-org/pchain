@@ -2,21 +2,17 @@ package etmmain
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/cmd/geth"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/pchain/common/plogger"
+	"github.com/pchain/ethermint/version"
+	cfg "github.com/tendermint/go-config"
+	"gopkg.in/urfave/cli.v1"
 	"os"
 	"path/filepath"
-
-	"gopkg.in/urfave/cli.v1"
-
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-
-	"github.com/pchain/ethermint/version"
-
-	cfg "github.com/tendermint/go-config"
-
-	"github.com/ethereum/go-ethereum/cmd/geth"
 )
+
+var logger = plogger.GetLogger("etmmain")
 
 const (
 	// Client identifier to advertise over the network
@@ -27,10 +23,11 @@ var (
 	// tendermint config
 	config cfg.Config
 )
+
 //Deprecated
 func main() {
 
-	glog.V(logger.Info).Infof("Starting ethermint")
+	logger.Infof("Starting ethermint")
 
 	cliApp := newCliApp(version.Version, "the ethermint command line interface")
 	cliApp.Action = ethermintCmd
@@ -50,9 +47,9 @@ func main() {
 		},
 
 		{
-			Action:		initEthGenesis,
-			Name:		"init_eth_genesis",
-			Usage:		"init_eth_genesis balance:\"10,10,10\"",
+			Action:      initEthGenesis,
+			Name:        "init_eth_genesis",
+			Usage:       "init_eth_genesis balance:\"10,10,10\"",
 			Description: "Initialize the balance of accounts",
 		},
 

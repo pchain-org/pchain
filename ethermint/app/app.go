@@ -8,18 +8,19 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"fmt"
+	"github.com/pchain/common/plogger"
 	"github.com/pchain/ethermint/ethereum"
 	emtTypes "github.com/pchain/ethermint/types"
 	abciTypes "github.com/tendermint/abci/types"
 	"math/big"
 	"os"
 )
+
+var logger = plogger.GetLogger("ethermint-app")
 
 // EthermintApplication implements an ABCI application
 type EthermintApplication struct {
@@ -74,8 +75,8 @@ func (app *EthermintApplication) SetOption(key string, value string) (log string
 
 // InitChain initalizes the validator set
 func (app *EthermintApplication) InitChain(validators []*abciTypes.Validator) {
-	glog.V(logger.Debug).Infof("InitChain")
-	glog.V(logger.Debug).Infof("Should not invoked. exit")
+	logger.Debugln("InitChain")
+	logger.Debugln("Should not invoked. exit")
 	os.Exit(1)
 	//app.SetValidators(validators)
 }
@@ -86,7 +87,7 @@ func (app *EthermintApplication) PreCheck(tx *ethTypes.Transaction) error {
 
 // CheckTx checks a transaction is valid but does not mutate the state
 func (app *EthermintApplication) CheckTx(txBytes []byte) abciTypes.Result {
-	glog.V(logger.Debug).Infof("Check tx")
+	logger.Infof("Check tx")
 
 	tx, err := decodeTx(txBytes)
 	if err != nil {
@@ -107,10 +108,10 @@ func (app *EthermintApplication) DeliverTx(txBytes []byte) abciTypes.Result {
 	if err != nil {
 		return abciTypes.ErrEncodingError
 	}
-	glog.V(logger.Debug).Infof("Got DeliverTx (tx): %v", tx)
+	logger.Infof("Got DeliverTx (tx): %v", tx)
 	err = app.backend.DeliverTx(tx)
 	if err != nil {
-		glog.V(logger.Debug).Infof("DeliverTx error: %v", err)
+		logger.Errorf("DeliverTx error: %v", err)
 		return abciTypes.ErrInternalError
 	}
 	app.CollectTx(tx)
@@ -119,7 +120,7 @@ func (app *EthermintApplication) DeliverTx(txBytes []byte) abciTypes.Result {
 
 // BeginBlock starts a new Ethereum block
 func (app *EthermintApplication) BeginBlock(hash []byte, tmHeader *abciTypes.Header) {
-	glog.V(logger.Debug).Infof("Begin block")
+	logger.Infof("Begin block")
 
 	// update the eth header with the tendermint header
 	app.backend.UpdateHeaderWithTimeInfo(tmHeader)
@@ -147,7 +148,7 @@ func (app *EthermintApplication) Commit(validators []*abciTypes.Validator, rewar
 
 	blockHash, err := app.backend.Commit(app.Receiver())
 	if err != nil {
-		glog.V(logger.Debug).Infof("Error getting latest ethereum state: %v", err)
+		logger.Errorf("Error getting latest ethereum state: %v", err)
 		return abciTypes.ErrInternalError
 	}
 

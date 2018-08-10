@@ -7,17 +7,18 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/pchain/chain"
+	"github.com/pchain/common/plogger"
 	etm "github.com/pchain/ethermint/cmd/ethermint"
 	"github.com/pchain/ethermint/version"
 	"gopkg.in/urfave/cli.v1"
 )
 
+var logger = plogger.GetLogger("main")
+
 func main() {
 
-	glog.V(logger.Info).Infof("Starting pchain")
+	logger.Infof("Starting pchain")
 
 	cliApp := newCliApp(version.Version, "the ethermint command line interface")
 	cliApp.Action = pchainCmd

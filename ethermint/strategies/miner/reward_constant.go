@@ -5,11 +5,13 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/pchain/common/plogger"
 	"github.com/pchain/ethermint/ethereum"
 	tmTypes "github.com/tendermint/tendermint/types"
 	"math/big"
 )
+
+var logger = plogger.GetLogger("minerRewardStrategies")
 
 type MinerRewardStrategy struct {
 }
@@ -53,7 +55,7 @@ func (strategy *MinerRewardStrategy) AccumulateRewards(statedb *state.StateDB, h
 	}
 
 	coinbase := header.Coinbase
-	glog.Infof("(strategy *MinerRewardStrategy)AccumulateRewards() 0, coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
+	logger.Infof("(strategy *MinerRewardStrategy)AccumulateRewards() 0, coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
 	statedb.AddBalance(header.Coinbase, reward)
-	glog.Infof("(strategy *MinerRewardStrategy)AccumulateRewards() 1, coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
+	logger.Infof("(strategy *MinerRewardStrategy)AccumulateRewards() 1, coinbase is %x, balance is %v\n", coinbase, statedb.GetBalance(coinbase))
 }

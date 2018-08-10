@@ -3,13 +3,15 @@ package rpc
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/pchain/common/plogger"
 	"github.com/tendermint/go-rpc/server"
 	"gopkg.in/urfave/cli.v1"
 	"net"
 	"net/http"
 	"strconv"
 )
+
+var logger = plogger.GetLogger("rpc")
 
 var listenAddrs map[string]interface{}
 var listeners map[string]net.Listener
@@ -121,9 +123,9 @@ func StartRPC1(ctx *cli.Context, chainIds []string, handlers []http.Handler) err
 */
 func StopRPC() {
 	for _, l := range listeners {
-		glog.Info("Closing rpc listener", "listener", l)
+		logger.Info("Closing rpc listener", "listener", l)
 		if err := l.Close(); err != nil {
-			glog.Error("Error closing listener", "listener", l, "error", err)
+			logger.Error("Error closing listener", "listener", l, "error", err)
 		}
 	}
 }

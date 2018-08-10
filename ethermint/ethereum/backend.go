@@ -13,8 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -23,11 +21,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/pchain/common/plogger"
 	emtTypes "github.com/pchain/ethermint/types"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	abciTypes "github.com/tendermint/abci/types"
 	"github.com/tendermint/tendermint/rpc/core/types"
 )
+
+var logger = plogger.GetLogger("ethermint-ethereum")
 
 const TRANSACTION_NUM_LIMIT = 200000
 
@@ -105,7 +106,7 @@ func waitForServer(s *Backend) error {
 	for result == nil {
 		_, err := s.client.Call("status", map[string]interface{}{}, &result)
 		if err != nil {
-			glog.V(logger.Info).Infof("Waiting for tendermint endpoint to start: %s", err)
+			logger.Infof("Waiting for tendermint endpoint to start: %s", err)
 		}
 		if retriesCount += 1; retriesCount >= maxWaitForServerRetries {
 			return abciTypes.ErrInternalError
@@ -212,14 +213,14 @@ func (s *Backend) txBroadcastLoop() {
 
 	if err := waitForServer(s); err != nil {
 		// timeouted when waiting for tendermint communication failed
-		glog.V(logger.Error).Infof("Failed to run tendermint HTTP endpoint, err=%s", err)
+		logger.Errorf("Failed to run tendermint HTTP endpoint, err=%s", err)
 		os.Exit(1)
 	}
 
 	for obj := range txSub.Chan() {
 		event := obj.Data.(core.TxPreEvent)
 		if err := s.BroadcastTx(event.Tx); err != nil {
-			glog.V(logger.Error).Infof("Broadcast, err=%s", err)
+			logger.Errorf("Broadcast, err=%s", err)
 		}
 	}
 }
@@ -381,7 +382,7 @@ func (w *work) deliverTx(blockchain *core.BlockChain, config *eth.Config, blockH
 	)
 	if err != nil {
 		return err
-		glog.V(logger.Debug).Infof("DeliverTx error: %v", err)
+		logger.Debugf("DeliverTx error: %v", err)
 		return abciTypes.ErrInternalError
 	}
 	fmt.Printf("(w *work) deliverTx(); after apply transaction, w.gp is %v\n", w.gp)
@@ -521,19 +522,19 @@ func (w *work) commit(blockchain *core.BlockChain) (common.Hash, error) {
 
 	parent := blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		glog.V(logger.Error).Infoln("Invalid block found during mining")
+		logger.Errorln("Invalid block found during mining")
 		return common.Hash{}, errors.New("Invalid block found during mining")
 	}
 
 	auxValidator := blockchain.AuxValidator()
 	if err := core.ValidateHeader(w.config, auxValidator, block.Header(), parent.Header(), true, false); err != nil && err != core.BlockFutureErr {
-		glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
+		logger.Errorln("Invalid header on mined block:", err)
 		return common.Hash{}, err
 	}
 
 	stat, err := blockchain.WriteBlock(block)
 	if err != nil {
-		glog.V(logger.Error).Infoln("error writing block to chain", err)
+		logger.Errorln("error writing block to chain", err)
 		return common.Hash{}, err
 	}
 
@@ -564,7 +565,7 @@ func (w *work) commit(blockchain *core.BlockChain) (common.Hash, error) {
 	// broadcast before waiting for validation
 	go func(block *ethTypes.Block, logs []*ethTypes.Log, receipts []*ethTypes.Receipt) {
 		if err := core.WriteBlockReceipts(w.chainDb, block.Hash(), block.NumberU64(), receipts); err != nil {
-			glog.V(logger.Warn).Infoln("error writing block receipts:", err)
+			logger.Warnln("error writing block receipts:", err)
 		}
 	}(block, w.state.Logs(), w.receipts)
 

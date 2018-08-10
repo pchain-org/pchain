@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	eth "github.com/ethereum/go-ethereum/node"
 	etmApp "github.com/pchain/ethermint/app"
 	etm "github.com/pchain/ethermint/cmd/ethermint"
@@ -21,6 +20,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/pchain/common/plogger"
 	"github.com/pchain/p2p"
 	"github.com/tendermint/go-rpc/server"
 	"github.com/tendermint/tendermint/proxy"
@@ -31,6 +31,8 @@ const (
 	// Client identifier to advertise over the network
 	MainChain = "pchain"
 )
+
+var logger = plogger.GetLogger("chain")
 
 type Chain struct {
 	Id         string
@@ -73,10 +75,6 @@ func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chai
 		fmt.Println("consensus is not pos, so not start the pos prototol")
 		return nil
 	}
-
-	//set verbosity level for go-ethereum
-	glog.SetToStderr(true)
-	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	fmt.Println("tm node")
 	chain.TdmNode = MakeTendermintNode(config, pNode, listener, GetCMInstance(ctx).cch)
@@ -128,10 +126,6 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 		fmt.Println("consensus is not pos, so not start the pos prototol")
 		return nil
 	}
-
-	//set verbosity level for go-ethereum
-	glog.SetToStderr(true)
-	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	fmt.Println("tm node")
 	tdmNode := MakeTendermintNode(config, pNode, listener, cch)
