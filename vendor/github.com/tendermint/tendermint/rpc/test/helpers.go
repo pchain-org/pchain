@@ -10,8 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	logger "github.com/tendermint/go-logger"
-	wire "github.com/tendermint/go-wire"
+	"github.com/tendermint/go-wire"
 
 	abci "github.com/tendermint/abci/types"
 	cfg "github.com/tendermint/go-config"
@@ -20,7 +19,7 @@ import (
 	nm "github.com/tendermint/tendermint/node"
 	"github.com/tendermint/tendermint/proxy"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
-	core_grpc "github.com/tendermint/tendermint/rpc/grpc"
+	"github.com/tendermint/tendermint/rpc/grpc"
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -60,8 +59,6 @@ func GetConfig() cfg.Config {
 	if config == nil {
 		pathname := makePathname()
 		config = tendermint_test.ResetConfig(pathname)
-		// Shut up the logging
-		logger.SetLogLevel(tmLogLevel)
 		// and we use random ports to run in parallel
 		tm, rpc, grpc := makeAddrs()
 		config.Set("node_laddr", tm)

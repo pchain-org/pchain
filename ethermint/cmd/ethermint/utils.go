@@ -11,7 +11,6 @@ import (
 	"gopkg.in/urfave/cli.v1"
 
 	cfg "github.com/tendermint/go-config"
-	tmlog "github.com/tendermint/go-logger"
 	tmcfg "github.com/tendermint/tendermint/config/tendermint"
 )
 
@@ -26,8 +25,6 @@ func GetTendermintConfig(chainId string, ctx *cli.Context) cfg.Config {
 	checkAndSet(config, ctx, "fast_sync")
 	checkAndSet(config, ctx, "skip_upnp")
 	checkAndSet(config, ctx, "rpc_laddr")
-
-	tmlog.SetLogLevel(config.GetString("log_level"))
 
 	return config
 }
