@@ -127,6 +127,7 @@ func (app *EthermintApplication) BeginBlock(hash []byte, tmHeader *abciTypes.Hea
 
 // EndBlock accumulates rewards for the validators and updates them
 func (app *EthermintApplication) EndBlock(height uint64) abciTypes.ResponseEndBlock {
+	glog.V(logger.Debug).Infof("End block")
 
 	// Check the Child Chain Launch criteria
 	app.backend.CheckAndProcessChildChain(height)
@@ -136,6 +137,7 @@ func (app *EthermintApplication) EndBlock(height uint64) abciTypes.ResponseEndBl
 
 // Commit commits the block and returns a hash of the current state
 func (app *EthermintApplication) Commit(validators []*abciTypes.Validator, rewardPerBlock *big.Int, refund []*abciTypes.RefundValidatorAmount) abciTypes.Result {
+	glog.V(logger.Debug).Infof("Commit")
 	// Before commit the block to Ethereum, refund the balance for quit Validator
 	if len(refund) != 0 {
 		app.backend.RefundValidatorLockedBalance(refund)
