@@ -50,7 +50,7 @@ func expandPath(p string) string {
 	return path.Clean(os.ExpandEnv(p))
 }
 
-func HomeDir() string {
+func homeDir() string {
 	if home := os.Getenv("HOME"); home != "" {
 		return home
 	}
@@ -62,7 +62,7 @@ func HomeDir() string {
 
 func DefaultDataDir() string {
 	// Try to place the data folder in the user's home dir
-	home := HomeDir()
+	home := homeDir()
 	if home != "" {
 		if runtime.GOOS == "darwin" {
 			return filepath.Join(home, "Library", "Pchain")
@@ -79,4 +79,9 @@ func DefaultDataDir() string {
 func ChainDir(ctx *cli.Context, chainId string) string {
 	datadir := ctx.GlobalString(DataDirFlag.Name)
 	return filepath.Join(datadir, chainId)
+}
+
+// DefaultLogDir return the default relative Log folder
+func defaultLogDir() string {
+	return "log"
 }

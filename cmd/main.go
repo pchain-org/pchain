@@ -11,14 +11,11 @@ import (
 	"github.com/pchain/common/plogger"
 	etm "github.com/pchain/ethermint/cmd/ethermint"
 	"github.com/pchain/ethermint/version"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/urfave/cli.v1"
 )
 
-var logger = plogger.GetLogger("main")
-
 func main() {
-
-	logger.Infof("Starting pchain")
 
 	cliApp := newCliApp(version.Version, "the ethermint command line interface")
 	cliApp.Action = pchainCmd
@@ -56,6 +53,21 @@ func main() {
 	cliApp.HideVersion = true // we have a command to print the version
 
 	cliApp.Before = func(ctx *cli.Context) error {
+		// Log Folder
+		logFolderFlag := ctx.GlobalString(chain.LogDirFlag.Name)
+		plogger.SetLogFolder(logFolderFlag)
+
+		// Log Level
+		logLevelFlag := ctx.GlobalString(chain.LogLevelFlag.Name)
+		logLevel, err := logrus.ParseLevel(logLevelFlag)
+		if err != nil {
+			fmt.Printf("unknown log level, default level should be info\n")
+			return err
+		}
+		plogger.SetVerbosity(logLevel)
+
+		plogger.InitLogWriter()
+
 		chain.Config = etm.GetTendermintConfig(chain.MainChain, ctx)
 		return nil
 	}
@@ -122,13 +134,14 @@ func newCliApp(version, usage string) *cli.App {
 		utils.GpobaseStepDownFlag,
 		utils.GpobaseStepUpFlag,
 		utils.GpobaseCorrectionFactorFlag,
-		chain.VerbosityFlag, // not exposed by go-ethereum
-		chain.DataDirFlag,   // so we control defaults
+
+		chain.LogLevelFlag,
+		chain.LogDirFlag,
+		chain.DataDirFlag, // so we control defaults
 
 		//ethermint flags
 		chain.MonikerFlag,
 		chain.NodeLaddrFlag,
-		chain.LogLevelFlag,
 		chain.SeedsFlag,
 		chain.FastSyncFlag,
 		chain.SkipUpnpFlag,
