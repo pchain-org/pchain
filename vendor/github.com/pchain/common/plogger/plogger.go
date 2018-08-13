@@ -11,7 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 )
 
@@ -34,7 +33,7 @@ func getLogger(module string) {
 
 	logger = logrus.New()
 	logger.Level = verbosity
-	logger.Formatter = &logrus.TextFormatter{ForceColors: true, FullTimestamp: true, Disable}
+	logger.Formatter = &logrus.TextFormatter{ForceColors: true, FullTimestamp: true}
 
 	filelineHook := NewHook()
 	filelineHook.Field = "file" // Customize source field name
