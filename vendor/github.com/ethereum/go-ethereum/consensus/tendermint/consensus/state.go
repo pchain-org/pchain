@@ -308,8 +308,6 @@ func NewConsensusState(config cfg.Config, backend Backend, cch  core.CrossChainH
 	cs.doPrevote = cs.defaultDoPrevote
 	cs.setProposal = cs.defaultSetProposal
 
-	//cs.UpdateToStateAndEpoch(state, epoch)
-
 	// Don't call scheduleRound0 yet.
 	// We do that upon Start().
 
@@ -1250,36 +1248,12 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 		block.TdmExtra.SeenCommit = seenCommit
 		block.TdmExtra.SeenCommitHash = seenCommit.Hash()
 
-		// Create a copy of the state for staging
-		// and an event cache for txs
-		stateCopy := cs.state.Copy()
-		//eventCache := types.NewEventCache(cs.evsw)
-
-		//epochCopy := cs.epoch.Copy()
-		// Execute and commit the block, update and save the state, and update the mempool.
-		// All calls to the proxyAppConn come here.
-		// NOTE: the block.AppHash wont reflect these txs until the next block
-		//err := stateCopy.ApplyBlock(eventCache, cs.proxyAppConn, block, blockParts.Header(), cs.mempool, cs.cch)
-		err := stateCopy.ApplyBlock(nil, block, blockParts.Header(), cs.cch)
-		if err != nil {
-			log.Error("Error on ApplyBlock. Did the application crash? Please restart tendermint", "error", err)
-			return
-		}
-
 		// Fire event for new block.
-		// NOTE: If we fail before firing, these events will never fire
-		//
-		// TODO: Either
-		// 	* Fire before persisting state, in ApplyBlock
-		//	* Fire on start up if we haven't written any new WAL msgs
-		//   Both options mean we may fire more than once. Is that fine ?
 		types.FireEventNewBlock(cs.evsw, types.EventDataNewBlock{block})
 		types.FireEventNewBlockHeader(cs.evsw, types.EventDataNewBlockHeader{int(block.TdmExtra.Height)})
 
-		// NewHeightStep!
-		//cs.UpdateToStateAndEpoch(stateCopy, stateCopy.Epoch)
-
-		cs.backend.Commit(block, [][]byte{}/*signatures*/)
+		//the second parameter as signature has been set above
+		cs.backend.Commit(block, [][]byte{})
 	} else {
 		log.Info("Calling finalizeCommit on already stored block", "height", block.TdmExtra.Height)
 	}
@@ -1374,15 +1348,6 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerKey string) error {
 				log.Warn("Found conflicting vote from ourselves. Did you unsafe_reset a validator?", "height", vote.Height, "round", vote.Round, "type", vote.Type)
 				return err
 			}
-			log.Warn("Found conflicting vote. Publish evidence (TODO)")
-			/* TODO
-			evidenceTx := &types.DupeoutTx{
-				Address: address,
-				VoteA:   *errDupe.VoteA,
-				VoteB:   *errDupe.VoteB,
-			}
-			cs.mempool.BroadcastTx(struct{???}{evidenceTx}) // shouldn't need to check returned err
-			*/
 			return err
 		} else {
 			// Probably an invalid signature. Bad peer.

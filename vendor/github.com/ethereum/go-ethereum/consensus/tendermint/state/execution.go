@@ -5,26 +5,13 @@ import (
 	//"fmt"
 
 	. "github.com/tendermint/go-common"
-	"github.com/ethereum/go-ethereum/core"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 )
 
 
 //--------------------------------------------------
-// Execute the block
-
-// ValExecBlock executes the block, but does NOT mutate State.
-// + validates the block
-// + executes block.Txs on the proxyAppConn
-func (s *State) ValExecBlock(eventCache types.Fireable, block *types.TdmBlock, cch core.CrossChainHelper) error {
-	// Validate the block.
-	if err := s.validateBlock(block); err != nil {
-		return ErrInvalidBlock(err)
-	}
-
-	return nil
-}
 
 // return a bit array of validators that signed the last commit
 // NOTE: assumes commits have already been authenticated
@@ -45,7 +32,6 @@ func commitBitArrayFromBlock(block *types.TdmBlock) *BitArray {
 func (s *State) ValidateBlock(block *types.TdmBlock) error {
 	return s.validateBlock(block)
 }
-
 
 //Very current block
 func (s *State) validateBlock(block *types.TdmBlock) error {
@@ -72,47 +58,34 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 }
 
 //-----------------------------------------------------------------------------
-// ApplyBlock validates & executes the block, updates state w/ ABCI responses,
-// then commits and updates the mempool atomically, then saves state.
-// Transaction results are optionally indexed.
+// ApplyBlock applies the epoch infor from last block
+func (s *State) ApplyBlock(block *ethTypes.Block, epoch *ep.Epoch) (*ep.Epoch) {
 
-// Validate, execute, and commit block against app, save block and state
-func (s *State) ApplyBlock(eventCache types.Fireable, block *types.TdmBlock, partsHeader types.PartSetHeader, cch core.CrossChainHelper) error {
+	if block.NumberU64() == 0 {
+		return epoch
+	}
 
+	tdmExtra, _ := types.ExtractTendermintExtra(block.Header())
 	//here handles the proposed next epoch
-
-	nextEpochInBlock := epoch.FromBytes(block.TdmExtra.EpochBytes)
+	nextEpochInBlock := ep.FromBytes(tdmExtra.EpochBytes)
 	if nextEpochInBlock != nil {
-		s.Epoch.SetNextEpoch(nextEpochInBlock)
-		s.Epoch.NextEpoch.RS = s.Epoch.RS
-		s.Epoch.NextEpoch.Status = epoch.EPOCH_VOTED_NOT_SAVED
-		s.Epoch.Save()
+		epoch.SetNextEpoch(nextEpochInBlock)
+		epoch.NextEpoch.RS = s.Epoch.RS
+		epoch.NextEpoch.Status = ep.EPOCH_VOTED_NOT_SAVED
+		epoch.Save()
 	}
 
 	//here handles if need to enter next epoch
-	ok, err := s.Epoch.ShouldEnterNewEpoch(int(block.TdmExtra.Height))
+	ok, err := epoch.ShouldEnterNewEpoch(int(tdmExtra.Height))
 	if ok && err == nil {
-
 		// now update the block and validators
-		// fmt.Println("Diffs before:", abciResponses.EndBlock.Diffs)
-		// types.ValidatorChannel <- abciResponses.EndBlock.Diffs
-		// types.ValidatorChannel <- s.Epoch.Number
-		// abciResponses.EndBlock.Diffs = <-types.EndChannel
-		// fmt.Println("Diffs after:", abciResponses.EndBlock.Diffs)
-
-		s.Epoch, _ = s.Epoch.EnterNewEpoch(int(block.TdmExtra.Height))
-
+		epoch, _ = epoch.EnterNewEpoch(int(tdmExtra.Height))
+		epoch.Save()
 	} else if err != nil {
-		log.Warn(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
-			block.TdmExtra.Height, s.Epoch, err))
-		return err
+		log.Error(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
+			tdmExtra.Height, s.Epoch, err))
+		return nil
 	}
 
-	//here handles when enter new epoch
-	s.SetBlockAndEpoch(block.TdmExtra, partsHeader)
-
-	// save the state
-	s.Epoch.Save()
-	//s.Save()
-	return nil
+	return epoch
 }

@@ -32,6 +32,7 @@ const (
 type ConsensusReactor struct {
 	p2p.BaseReactor // BaseService + p2p.Switch
 
+	ChainId  string //make access easier
 	conS     *ConsensusState
 	evsw     types.EventSwitch
 }
@@ -39,6 +40,7 @@ type ConsensusReactor struct {
 func NewConsensusReactor(consensusState *ConsensusState) *ConsensusReactor {
 	conR := &ConsensusReactor{
 		conS:     consensusState,
+		ChainId:  consensusState.config.GetString("chain_id"),
 	}
 	conR.BaseReactor = *p2p.NewBaseReactor(log, "ConsensusReactor", conR)
 	return conR
@@ -66,20 +68,6 @@ func (conR *ConsensusReactor) OnStop() {
 	conR.BaseReactor.OnStop()
 	conR.conS.Stop()
 }
-
-/*
-// Switch from the fast_sync to the consensus:
-// reset the state, turn off fast_sync, start the consensus-state-machine
-func (conR *ConsensusReactor) SwitchToConsensus(state *sm.State) {
-	log.Notice("SwitchToConsensus")
-	conR.conS.ReconstructLastCommit(state)
-	// NOTE: The line below causes broadcastNewRoundStepRoutine() to
-	// broadcast a NewRoundStepMessage.
-	conR.conS.UpdateToStateAndEpoch(state, conR.conS.epoch)
-	//conR.fastSync = false
-	conR.conS.Start()
-}
-*/
 
 // Implements Reactor
 func (conR *ConsensusReactor) GetChannels() []*p2p.ChannelDescriptor {
@@ -119,7 +107,7 @@ func (conR *ConsensusReactor) AddPeer(peer *p2p.Peer) {
 
 	// Create peerState for peer
 	peerState := NewPeerState(peer)
-	peer.Data.Set(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey, peerState)
+	peer.Data.Set(conR.ChainId + "." + types.PeerStateKey, peerState)
 
 	// Begin routines for this peer.
 	go conR.gossipDataRoutine(peer, peerState)
@@ -163,7 +151,7 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 	log.Debug("Receive", "src", src, "chId", chID, "msg", msg)
 
 	// Get peer states
-	ps := src.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+	ps := src.Data.Get(conR.ChainId + "." + types.PeerStateKey).(*PeerState)
 
 	switch chID {
 	case StateChannel:
@@ -197,7 +185,7 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 				log.Warn("Bad VoteSetBitsMessage field Type")
 				return
 			}
-			src.TrySend(conR.conS.state.TdmExtra.ChainID, VoteSetBitsChannel, struct{ ConsensusMessage }{&VoteSetBitsMessage{
+			src.TrySend(conR.ChainId, VoteSetBitsChannel, struct{ ConsensusMessage }{&VoteSetBitsMessage{
 				Height:  msg.Height,
 				Round:   msg.Round,
 				Type:    msg.Type,
@@ -358,10 +346,10 @@ func (conR *ConsensusReactor) broadcastNewRoundStep(rs *RoundState) {
 
 	nrsMsg, csMsg := makeRoundStepMessages(rs)
 	if nrsMsg != nil {
-		conR.Switch.Broadcast(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{nrsMsg})
+		conR.Switch.Broadcast(conR.ChainId, StateChannel, struct{ ConsensusMessage }{nrsMsg})
 	}
 	if csMsg != nil {
-		conR.Switch.Broadcast(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{csMsg})
+		conR.Switch.Broadcast(conR.ChainId, StateChannel, struct{ ConsensusMessage }{csMsg})
 	}
 }
 
@@ -373,7 +361,7 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 		Type:   vote.Type,
 		Index:  int(vote.ValidatorIndex),
 	}
-	conR.Switch.Broadcast(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{msg})
+	conR.Switch.Broadcast(conR.ChainId, StateChannel, struct{ ConsensusMessage }{msg})
 	/*
 		// TODO: Make this broadcast more selective.
 		for _, peer := range conR.Switch.Peers().List() {
@@ -413,10 +401,10 @@ func (conR *ConsensusReactor) sendNewRoundStepMessages(peer *p2p.Peer) {
 	rs := conR.conS.GetRoundState()
 	nrsMsg, csMsg := makeRoundStepMessages(rs)
 	if nrsMsg != nil {
-		peer.Send(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{nrsMsg})
+		peer.Send(conR.ChainId, StateChannel, struct{ ConsensusMessage }{nrsMsg})
 	}
 	if csMsg != nil {
-		peer.Send(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{csMsg})
+		peer.Send(conR.ChainId, StateChannel, struct{ ConsensusMessage }{csMsg})
 	}
 }
 
@@ -432,7 +420,7 @@ OUTER_LOOP:
 		}
 		rs := conR.conS.GetRoundState()
 
-		ps1 := peer.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+		ps1 := peer.Data.Get(conR.ChainId + "." + types.PeerStateKey).(*PeerState)
 		prs := ps1.GetRoundState()
 		//prs := ps.GetRoundState()
 
@@ -452,7 +440,7 @@ OUTER_LOOP:
 					Round:  rs.Round,  // This tells peer that this part applies to us.
 					Part:   part,
 				}
-				if peer.Send(conR.conS.state.TdmExtra.ChainID, DataChannel, struct{ ConsensusMessage }{msg}) {
+				if peer.Send(conR.ChainId, DataChannel, struct{ ConsensusMessage }{msg}) {
 					ps.SetHasProposalBlockPart(prs.Height, prs.Round, int(index))
 				}
 				continue OUTER_LOOP
@@ -497,7 +485,7 @@ OUTER_LOOP:
 					Round:  prs.Round,  // Not our height, so it doesn't matter.
 					Part:   part,
 				}
-				if peer.Send(conR.conS.state.ChainID, DataChannel, struct{ ConsensusMessage }{msg}) {
+				if peer.Send(conR.ChainID, DataChannel, struct{ ConsensusMessage }{msg}) {
 					ps.SetHasProposalBlockPart(prs.Height, prs.Round, index)
 				}
 
@@ -528,7 +516,7 @@ OUTER_LOOP:
 			// Proposal: share the proposal metadata with peer.
 			{
 				msg := &ProposalMessage{Proposal: rs.Proposal}
-				if peer.Send(conR.conS.state.TdmExtra.ChainID, DataChannel, struct{ ConsensusMessage }{msg}) {
+				if peer.Send(conR.ChainId, DataChannel, struct{ ConsensusMessage }{msg}) {
 					ps.SetHasProposal(rs.Proposal)
 				}
 			}
@@ -542,7 +530,7 @@ OUTER_LOOP:
 					ProposalPOLRound: rs.Proposal.POLRound,
 					ProposalPOL:      rs.Votes.Prevotes(rs.Proposal.POLRound).BitArray(),
 				}
-				peer.Send(conR.conS.state.TdmExtra.ChainID, DataChannel, struct{ ConsensusMessage }{msg})
+				peer.Send(conR.ChainId, DataChannel, struct{ ConsensusMessage }{msg})
 			}
 			continue OUTER_LOOP
 		}
@@ -568,7 +556,7 @@ OUTER_LOOP:
 		}
 		rs := conR.conS.GetRoundState()
 
-		ps1 := peer.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+		ps1 := peer.Data.Get(conR.ChainId + "." + types.PeerStateKey).(*PeerState)
 		prs := ps1.GetRoundState()
 		//prs := ps.GetRoundState()
 
@@ -586,21 +574,21 @@ OUTER_LOOP:
 		if rs.Height == prs.Height {
 			// If there are lastCommits to send...
 			if prs.Step == RoundStepNewHeight {
-				if ps.PickSendVote(conR.conS.state.TdmExtra.ChainID, rs.LastCommit) {
+				if ps.PickSendVote(conR.ChainId, rs.LastCommit) {
 					log.Debug("Picked rs.LastCommit to send")
 					continue OUTER_LOOP
 				}
 			}
 			// If there are prevotes to send...
 			if prs.Step <= RoundStepPrevote && prs.Round != -1 && prs.Round <= rs.Round {
-				if ps.PickSendVote(conR.conS.state.TdmExtra.ChainID, rs.Votes.Prevotes(prs.Round)) {
+				if ps.PickSendVote(conR.ChainId, rs.Votes.Prevotes(prs.Round)) {
 					log.Debug("Picked rs.Prevotes(prs.Round) to send")
 					continue OUTER_LOOP
 				}
 			}
 			// If there are precommits to send...
 			if prs.Step <= RoundStepPrecommit && prs.Round != -1 && prs.Round <= rs.Round {
-				if ps.PickSendVote(conR.conS.state.TdmExtra.ChainID, rs.Votes.Precommits(prs.Round)) {
+				if ps.PickSendVote(conR.ChainId, rs.Votes.Precommits(prs.Round)) {
 					log.Debug("Picked rs.Precommits(prs.Round) to send")
 					continue OUTER_LOOP
 				}
@@ -608,7 +596,7 @@ OUTER_LOOP:
 			// If there are POLPrevotes to send...
 			if prs.ProposalPOLRound != -1 {
 				if polPrevotes := rs.Votes.Prevotes(prs.ProposalPOLRound); polPrevotes != nil {
-					if ps.PickSendVote(conR.conS.state.TdmExtra.ChainID, polPrevotes) {
+					if ps.PickSendVote(conR.ChainId, polPrevotes) {
 						log.Debug("Picked rs.Prevotes(prs.ProposalPOLRound) to send")
 						continue OUTER_LOOP
 					}
@@ -619,7 +607,7 @@ OUTER_LOOP:
 		// Special catchup logic.
 		// If peer is lagging by height 1, send LastCommit.
 		if prs.Height != 0 && rs.Height == prs.Height+1 {
-			if ps.PickSendVote(conR.conS.state.TdmExtra.ChainID, rs.LastCommit) {
+			if ps.PickSendVote(conR.ChainId, rs.LastCommit) {
 				log.Debug("Picked rs.LastCommit to send")
 				continue OUTER_LOOP
 			}
@@ -634,7 +622,7 @@ OUTER_LOOP:
 			tdmExtra, _ := conR.conS.LoadTendermintExtra(prs.Height)
 			commit := tdmExtra.SeenCommit
 			log.Info("Loaded BlockCommit for catch-up", "height", prs.Height, "commit", commit)
-			if ps.PickSendVote(conR.conS.state.TdmExtra.ChainID, commit) {
+			if ps.PickSendVote(conR.ChainId, commit) {
 				log.Debug("Picked Catchup commit to send")
 				continue OUTER_LOOP
 			}
@@ -672,13 +660,13 @@ OUTER_LOOP:
 		// Maybe send Height/Round/Prevotes
 		{
 			rs := conR.conS.GetRoundState()
-			ps1 := peer.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+			ps1 := peer.Data.Get(conR.ChainId + "." + types.PeerStateKey).(*PeerState)
 			prs := ps1.GetRoundState()
 			//prs := ps.GetRoundState()
 
 			if rs.Height == prs.Height {
 				if maj23, ok := rs.Votes.Prevotes(prs.Round).TwoThirdsMajority(); ok {
-					peer.TrySend(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{&VoteSetMaj23Message{
+					peer.TrySend(conR.ChainId, StateChannel, struct{ ConsensusMessage }{&VoteSetMaj23Message{
 						Height:  prs.Height,
 						Round:   prs.Round,
 						Type:    types.VoteTypePrevote,
@@ -692,12 +680,12 @@ OUTER_LOOP:
 		// Maybe send Height/Round/Precommits
 		{
 			rs := conR.conS.GetRoundState()
-			ps1 := peer.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+			ps1 := peer.Data.Get(conR.ChainId + "." + types.PeerStateKey).(*PeerState)
 			prs := ps1.GetRoundState()
 			//prs := ps.GetRoundState()
 			if rs.Height == prs.Height {
 				if maj23, ok := rs.Votes.Precommits(prs.Round).TwoThirdsMajority(); ok {
-					peer.TrySend(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{&VoteSetMaj23Message{
+					peer.TrySend(conR.ChainId, StateChannel, struct{ ConsensusMessage }{&VoteSetMaj23Message{
 						Height:  prs.Height,
 						Round:   prs.Round,
 						Type:    types.VoteTypePrecommit,
@@ -711,12 +699,12 @@ OUTER_LOOP:
 		// Maybe send Height/Round/ProposalPOL
 		{
 			rs := conR.conS.GetRoundState()
-			ps1 := peer.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+			ps1 := peer.Data.Get(conR.ChainId + "." + types.PeerStateKey).(*PeerState)
 			prs := ps1.GetRoundState()
 			//prs := ps.GetRoundState()
 			if rs.Height == prs.Height && prs.ProposalPOLRound >= 0 {
 				if maj23, ok := rs.Votes.Prevotes(prs.ProposalPOLRound).TwoThirdsMajority(); ok {
-					peer.TrySend(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{&VoteSetMaj23Message{
+					peer.TrySend(conR.ChainId, StateChannel, struct{ ConsensusMessage }{&VoteSetMaj23Message{
 						Height:  prs.Height,
 						Round:   prs.ProposalPOLRound,
 						Type:    types.VoteTypePrevote,
@@ -732,12 +720,12 @@ OUTER_LOOP:
 
 		// Maybe send Height/CatchupCommitRound/CatchupCommit.
 		{
-			ps1 := peer.Data.Get(conR.conS.state.TdmExtra.ChainID + "." + types.PeerStateKey).(*PeerState)
+			ps1 := peer.Data.Get(conR.ChainId + "." + types.PeerStateKey).(*PeerState)
 			prs := ps1.GetRoundState()
 			//prs := ps.GetRoundState()
 			if prs.CatchupCommitRound != -1 && 0 < prs.Height && int64(prs.Height) <= conR.conS.GetChainReader().CurrentHeader().Number.Int64() {
 				commit := conR.conS.LoadCommit(prs.Height)
-				peer.TrySend(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{&VoteSetMaj23Message{
+				peer.TrySend(conR.ChainId, StateChannel, struct{ ConsensusMessage }{&VoteSetMaj23Message{
 					Height:  prs.Height,
 					Round:   commit.Round(),
 					Type:    types.VoteTypePrecommit,
@@ -1402,7 +1390,7 @@ func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerStat
 			// fmt.Println("priValPubKey:", privVal.PubKey)
 			tMsg := &TestMessage{ValidatorMsg: msg}
 			fmt.Println("broadcast message!!!!!!")
-			peer.Send(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{tMsg})
+			peer.Send(conR.ChainId, StateChannel, struct{ ConsensusMessage }{tMsg})
 
 			from := msg.From
 			ValidatorMsgMap[from] = msg
@@ -1425,11 +1413,11 @@ func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerStat
 					msg.ValidatorIndex = valIndex
 					msg.PubKey = received.PubKey
 
-					conR.conS.privValidator.SignValidatorMsg(conR.conS.state.TdmExtra.ChainID, msg)
+					conR.conS.privValidator.SignValidatorMsg(conR.ChainId, msg)
 					tMsg := &TestMessage{ValidatorMsg: msg}
 					fmt.Println("sending tMsg!!!", tMsg)
 					// conR.Switch.Broadcast(StateChannel, struct{ ConsensusMessage }{tMsg})
-					peer.Send(conR.conS.state.TdmExtra.ChainID, StateChannel, struct{ ConsensusMessage }{tMsg})
+					peer.Send(conR.ChainId, StateChannel, struct{ ConsensusMessage }{tMsg})
 					conR.tryAddAcceptVote(msg)
 
 				} else {
@@ -1451,7 +1439,7 @@ func (conR *ConsensusReactor) tryAddAcceptVote(validatorMsg *types.ValidatorMsg)
 		fmt.Println("bad index!!!!!")
 		return false, types.ErrVoteInvalidValidatorIndex
 	}
-	if !val.PubKey.VerifyBytes(types.SignBytes(conR.conS.state.TdmExtra.ChainID, validatorMsg), validatorMsg.Signature) {
+	if !val.PubKey.VerifyBytes(types.SignBytes(conR.ChainId, validatorMsg), validatorMsg.Signature) {
 		// Bad signature.
 		fmt.Println("bad signature!!!!!")
 		return false, types.ErrVoteInvalidSignature

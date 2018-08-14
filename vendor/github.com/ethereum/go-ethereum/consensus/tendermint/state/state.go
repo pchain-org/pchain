@@ -124,23 +124,6 @@ func (s *State) Bytes() []byte {
 	return buf.Bytes()
 }
 
-// Mutate state variables to match block and validators
-// after running EndBlock
-func (s *State) SetBlockAndEpoch(tdmExtra *types.TendermintExtra, blockPartsHeader types.PartSetHeader) {
-
-	s.setBlockAndEpoch(tdmExtra.Height, types.BlockID{tdmExtra.Hash(), blockPartsHeader}, tdmExtra.Time)
-}
-
-func (s *State) setBlockAndEpoch(
-	height uint64, blockID types.BlockID, blockTime time.Time) {
-
-	s.TdmExtra.Height = height
-	s.TdmExtra.Time = blockTime
-	s.TdmExtra.EpochNumber = uint64(s.Epoch.Number)
-	//s.Validators = nextValSet
-	//s.LastValidators = prevValSet
-}
-
 func (s *State) GetValidators() (*types.ValidatorSet, *types.ValidatorSet, error) {
 
 	if s.Epoch == nil {

@@ -5,7 +5,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	consss "github.com/ethereum/go-ethereum/consensus"
 	//"github.com/ethereum/go-ethereum/common"
-	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	cmn "github.com/tendermint/go-common"
@@ -36,8 +35,7 @@ func (cs *ConsensusState) StartNewHeight() {
 	fmt.Printf("(cs *ConsensusState) StartNewHeight, current block height is %v\n", curHeight)
 
 	state, epoch := cs.InitStateAndEpoch()
-	cs.Initialize()
-	cs.ApplyBlockEx(curEthBlock, state, epoch)
+	epoch = state.ApplyBlock(curEthBlock, epoch)
 	cs.UpdateToStateAndEpoch(state, epoch)
 
 	cs.newStep()
@@ -117,19 +115,9 @@ func (cs *ConsensusState) Initialize() {
 	cs.epoch = nil
 }
 
-//apply latest information such as epoch to the new height of consensus
-func (bs *ConsensusState) ApplyBlockEx(block *ethTypes.Block, state *sm.State, epoch *ep.Epoch) error {
-	return nil
-}
-
 // Updates ConsensusState and increments height to match thatRewardScheme of state.
 // The round becomes 0 and cs.Step becomes RoundStepNewHeight.
 func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch) {
-
-	if cs.CommitRound > -1 && 0 < cs.Height && cs.Height != state.TdmExtra.Height {
-		cmn.PanicSanity(cmn.Fmt("updateToState() expected state height of %v but found %v",
-			cs.Height, state.TdmExtra.Height))
-	}
 
 	// Reset fields based on state.
 	_, validators, _ := state.GetValidators()
@@ -141,7 +129,6 @@ func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 		lastPrecommits = cs.Votes.Precommits(cs.CommitRound)
 	}
 
-	//Re-Initialized, really need this?
 	cs.Initialize()
 
 	height := state.TdmExtra.Height + 1
