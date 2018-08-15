@@ -105,6 +105,36 @@ func (s *PublicTendermintAPI) GetEpoch(ctx context.Context, number uint64) (inte
 	return result.(*core_types.ResultEpoch), nil
 }
 
+/*
+	"unconfirmed_txs":      rpc.NewRPCFunc(UnconfirmedTxsResult, ""),
+	"num_unconfirmed_txs":  rpc.NewRPCFunc(NumUnconfirmedTxsResult, ""),
+*/
+func (s *PublicTendermintAPI) GetUnconfirmedTxs(ctx context.Context) (interface{}, error) {
+
+	var result core_types.TMResult
+
+	_, err := s.Client.Call("unconfirmed_txs", nil, &result)
+	if err != nil {
+		fmt.Println(err)
+		return -1, err
+	}
+
+	return result.(*core_types.ResultUnconfirmedTxs), nil
+}
+
+func (s *PublicTendermintAPI) GetNumUnconfirmedTxs(ctx context.Context) (interface{}, error) {
+
+	var result core_types.TMResult
+
+	_, err := s.Client.Call("num_unconfirmed_txs", nil, &result)
+	if err != nil {
+		fmt.Println(err)
+		return -1, err
+	}
+
+	return result.(*core_types.ResultUnconfirmedTxs), nil
+}
+
 // GasPrice returns a suggestion for a gas price.
 func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string, epoch uint64) (interface{}, error) {
 
