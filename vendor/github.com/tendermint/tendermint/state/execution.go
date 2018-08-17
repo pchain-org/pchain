@@ -59,15 +59,17 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 
 	// Run txs of block
 	for _, tx := range block.Txs {
-		res := proxyAppConn.DeliverTxSync(tx)
-		if res.IsErr() {
-			return nil, errors.New(res.Error())
-		}
+		proxyAppConn.DeliverTxSync(tx)
 		/*
-			proxyAppConn.DeliverTxAsync(tx)
-			if err := proxyAppConn.Error(); err != nil {
-				return nil, err
+			res := proxyAppConn.DeliverTxSync(tx)
+			if res.IsErr() {
+				return nil, errors.New(res.Error())
 			}
+
+				proxyAppConn.DeliverTxAsync(tx)
+				if err := proxyAppConn.Error(); err != nil {
+					return nil, err
+				}
 		*/
 	}
 

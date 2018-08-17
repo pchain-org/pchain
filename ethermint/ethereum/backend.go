@@ -380,9 +380,8 @@ func (w *work) deliverTx(blockchain *core.BlockChain, config *eth.Config, blockH
 		cch,
 	)
 	if err != nil {
-		return err
 		glog.V(logger.Debug).Infof("DeliverTx error: %v", err)
-		return abciTypes.ErrInternalError
+		return abciTypes.ErrInternalError.AppendLog(err.Error())
 	}
 	fmt.Printf("(w *work) deliverTx(); after apply transaction, w.gp is %v\n", w.gp)
 	logs := w.state.GetLogs(tx.Hash())
