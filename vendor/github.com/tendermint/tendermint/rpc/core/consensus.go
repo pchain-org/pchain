@@ -7,11 +7,10 @@ import (
 	"github.com/tendermint/tendermint/types"
 )
 
-
-func DumpConsensusState() (*ctypes.ResultDumpConsensusState, error) {
-	roundState := consensusState.GetRoundState()
+func DumpConsensusState(context *RPCDataContext) (*ctypes.ResultDumpConsensusState, error) {
+	roundState := context.consensusState.GetRoundState()
 	peerRoundStates := []string{}
-	for _, peer := range p2pSwitch.Peers().List() {
+	for _, peer := range context.p2pSwitch.Peers().List() {
 		// TODO: clean this up?
 		peerState := peer.Data.Get(types.PeerStateKey).(*cm.PeerState)
 		peerRoundState := peerState.GetRoundState()

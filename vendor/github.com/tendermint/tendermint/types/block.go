@@ -46,8 +46,8 @@ func MakeBlock(height int, chainID string, txs []Tx, commit *Commit,
 			AppHash:        BytesToHash256(appHash), // state merkle root of txs from the previous block.
 		},
 		LastCommit: commit,
-		Data: data,
-		ExData: exData,
+		Data:       data,
+		ExData:     exData,
 	}
 	block.FillHeader()
 
@@ -98,12 +98,31 @@ func (b *Block) ValidateBasic(chainID string, lastBlockHeight int, lastBlockID B
 		return errors.New(Fmt("Wrong Block.Header.DataHash.  Expected %X, got %X", b.DataHash, b.Data.Hash()))
 	}
 	/*
-	if !bytes.Equal(b.AppHash, appHash) {
-		return errors.New(Fmt("Wrong Block.Header.AppHash.  Expected %X, got %X", appHash, b.AppHash))
-	}
+		if !bytes.Equal(b.AppHash, appHash) {
+			return errors.New(Fmt("Wrong Block.Header.AppHash.  Expected %X, got %X", appHash, b.AppHash))
+		}
 	*/
 	// NOTE: the AppHash and ValidatorsHash are validated later.
 	return nil
+}
+
+type IntegratedBlock struct {
+	Block         *Block
+	Commit        *Commit
+	BlockPartSize int
+}
+
+func MakeIntegratedBlock(block *Block, commit *Commit, blockPartSize int) *IntegratedBlock {
+
+	if block == nil || commit == nil {
+		return nil
+	}
+
+	return &IntegratedBlock{
+		Block:         block,
+		Commit:        commit,
+		BlockPartSize: blockPartSize,
+	}
 }
 
 func (b *Block) FillHeader() {
@@ -118,7 +137,6 @@ func (b *Block) FillHeader() {
 // Computes and returns the block hash.
 // If the block is incomplete, block hash is nil for safety.
 func (b *Block) Hash() Hash160 {
-	// fmt.Println(">>", b.Data)
 	if b == nil || b.Header == nil || b.Data == nil || b.LastCommit == nil {
 		return EMPTY_HASH160
 	}
@@ -180,10 +198,10 @@ type Header struct {
 	Time           time.Time `json:"time"`
 	NumTxs         int       `json:"num_txs"` // XXX: Can we get rid of this?
 	LastBlockID    BlockID   `json:"last_block_id"`
-	LastCommitHash Hash160    `json:"last_commit_hash"` // commit from validators from the last block
-	DataHash       Hash160    `json:"data_hash"`        // transactions
-	ValidatorsHash Hash160    `json:"validators_hash"`  // validators for the current block
-	AppHash        Hash256    `json:"app_hash"`         // state after txs from the previous block
+	LastCommitHash Hash160   `json:"last_commit_hash"` // commit from validators from the last block
+	DataHash       Hash160   `json:"data_hash"`        // transactions
+	ValidatorsHash Hash160   `json:"validators_hash"`  // validators for the current block
+	AppHash        Hash256   `json:"app_hash"`         // state after txs from the previous block
 }
 
 // NOTE: hash is nil if required fields are missing.
@@ -239,17 +257,18 @@ type Commit struct {
 	// Any peer with a block can gossip precommits by index with a peer without recalculating the
 	// active ValidatorSet.
 	BlockID    BlockID `json:"blockID"`
-
 	Height		int	`json:"height"`
 	Round		int	`json:"round"`
 
 	// BLS signature aggregation to be added here
 	SignAggr	crypto.BLSSignature     `json:"SignAggr"`
-	BitArray       *BitArray
+	BitArray        *BitArray
 
 	// Volatile
-	hash           []byte
+	hash            []byte
 }
+
+
 
 func (commit *Commit) Type() byte {
 	return VoteTypePrecommit
@@ -263,16 +282,6 @@ func (commit *Commit) NumCommits() int {
 	return commit.BitArray.NumBitsSet()
 }
 
-//func (commit *Commit) GetByIndex(index int) *Vote {
-//	return commit.Precommits[index]
-//}
-
-//func (commit *Commit) IsCommit() bool {
-//	if len(commit.Precommits) == 0 {
-//		return false
-//	}
-//	return true
-//}
 
 func (commit *Commit) ValidateBasic() error {
 	if commit.BlockID.IsZero() {
@@ -337,7 +346,6 @@ type Data struct {
 }
 
 type ExData struct {
-
 	BlockExData []byte `json:"ex_data"`
 
 	// Volatile
@@ -385,7 +393,7 @@ func (data *Data) StringIndented(indent string) string {
 //--------------------------------------------------------------------------------
 
 type BlockID struct {
-	Hash        Hash160        `json:"hash"`
+	Hash        Hash160       `json:"hash"`
 	PartsHeader PartSetHeader `json:"parts"`
 }
 

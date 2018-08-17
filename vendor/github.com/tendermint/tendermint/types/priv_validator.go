@@ -130,17 +130,17 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 }
 
 // Generates a new validator with private key.
-func GenPrivValidator() *PrivValidator {
+func GenPrivValidator(keydir string) *PrivValidator {
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP
 	//password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
-	ks := keystore.NewKeyStoreByTenermint("pchain", scryptN, scryptP)
+	ks := keystore.NewKeyStoreByTenermint(keydir, scryptN, scryptP)
 	newKey, err := keystore.NewKey(crand.Reader)
 	if err != nil {
 		return nil
 	}
 	a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
-	if err := ks.StoreKey(a.URL.Path, newKey, ""); err != nil {
+	if err := ks.StoreKey(a.URL.Path, newKey, "pchain"); err != nil {
 		return nil
 	}
 	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
@@ -174,14 +174,14 @@ func LoadPrivValidator(filePath string) *PrivValidator {
 	return privVal
 }
 
-func LoadOrGenPrivValidator(filePath string) *PrivValidator {
+func LoadOrGenPrivValidator(filePath, keydir string) *PrivValidator {
 	var privValidator *PrivValidator
 	if _, err := os.Stat(filePath); err == nil {
 		privValidator = LoadPrivValidator(filePath)
 		logger.Info("Loaded PrivValidator",
 			" file:", filePath, " privValidator:", privValidator)
 	} else {
-		privValidator = GenPrivValidator()
+		privValidator = GenPrivValidator(keydir)
 		privValidator.SetFile(filePath)
 		privValidator.Save()
 		logger.Info("Generated PrivValidator", " file:", filePath)
@@ -235,8 +235,6 @@ func (privVal *PrivValidator) GetPubKey() crypto.PubKey {
 func (privVal *PrivValidator) SignVote(chainID string, vote *Vote) error {
 	privVal.mtx.Lock()
 	defer privVal.mtx.Unlock()
-
-	//fmt.Printf("SignVote: %#v\n", SignBytes(chainID, vote)[0:7])
 	signature, err := privVal.signBytesHRS(vote.Height, vote.Round, voteToStep(vote), SignBytes(chainID, vote))
 	if err != nil {
 		return errors.New(Fmt("Error signing vote: %v", err))
@@ -305,7 +303,6 @@ func (privVal *PrivValidator) signBytesHRS(height, round int, step int8, signByt
 	return signature, nil
 
 }
-
 
 func (privVal *PrivValidator) String() string {
 	return fmt.Sprintf("PrivValidator{%X LH:%v, LR:%v, LS:%v}", privVal.Address, privVal.LastHeight, privVal.LastRound, privVal.LastStep)

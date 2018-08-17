@@ -33,6 +33,10 @@ type (
 		Got      *State
 		Expected *State
 	}
+
+	ErrNoABCIResponsesForHeight struct {
+		Height int
+	}
 )
 
 func (e ErrUnknownBlock) Error() string {
@@ -52,4 +56,8 @@ func (e ErrLastStateMismatch) Error() string {
 
 func (e ErrStateMismatch) Error() string {
 	return Fmt("State after replay does not match saved state. Got ----\n%v\nExpected ----\n%v\n", e.Got, e.Expected)
+}
+
+func (e ErrNoABCIResponsesForHeight) Error() string {
+	return Fmt("Could not find results for height #%d", e.Height)
 }

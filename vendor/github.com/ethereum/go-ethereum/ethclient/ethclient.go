@@ -420,6 +420,17 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", common.ToHex(data))
 }
 
+func (ec *Client) BlockNumber(ctx context.Context) (*big.Int, error) {
+
+	var hex hexutil.Big
+
+	err := ec.c.CallContext(ctx, &hex, "eth_blockNumber")
+	if err != nil {
+		return nil, err
+	}
+	return (*big.Int)(&hex), nil
+}
+
 func toCallArg(msg ethereum.CallMsg) interface{} {
 	arg := map[string]interface{}{
 		"from": msg.From,

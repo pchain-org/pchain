@@ -3,6 +3,7 @@ package blockchain
 import (
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	. "github.com/tendermint/go-common"
@@ -210,9 +211,11 @@ func (pool *BlockPool) AddBlock(peerID string, block *types.Block, blockSize int
 	}
 
 	if requester.setBlock(block, peerID) {
-		pool.numPending--
+		atomic.AddInt32(&pool.numPending, -1)
 		peer := pool.peers[peerID]
-		peer.decrPending(blockSize)
+		if peer != nil {
+			peer.decrPending(blockSize)
+		}
 		logger.Info("(pool *BlockPool) AddBlock 2")
 	} else {
 		// Bad peer?

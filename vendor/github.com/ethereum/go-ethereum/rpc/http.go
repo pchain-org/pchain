@@ -147,7 +147,6 @@ func NewHTTPServer(corsString string, srv *Server) *http.Server {
 
 // ServeHTTP serves JSON-RPC requests over HTTP.
 func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("r.ContenLength:", r.ContentLength)
 	if r.ContentLength > maxHTTPRequestContentLength {
 		http.Error(w,
 			fmt.Sprintf("content length too large (%d>%d)", r.ContentLength, maxHTTPRequestContentLength),
@@ -162,6 +161,10 @@ func (srv *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	codec := NewJSONCodec(&httpReadWriteNopCloser{r.Body, w})
 	defer codec.Close()
 	srv.ServeSingleRequest(codec, OptionMethodInvocation)
+}
+
+func NewCorsHandler(srv *Server, corsString string) http.Handler {
+	return newCorsHandler(srv, corsString)
 }
 
 func newCorsHandler(srv *Server, corsString string) http.Handler {

@@ -3,9 +3,11 @@ package state
 import (
 	"bytes"
 	"io/ioutil"
+	"math/big"
 	"sync"
 	"time"
 
+	"fmt"
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
@@ -13,16 +15,14 @@ import (
 	"github.com/tendermint/tendermint/state/txindex"
 	"github.com/tendermint/tendermint/state/txindex/null"
 	"github.com/tendermint/tendermint/types"
-	"fmt"
 	//"runtime/debug"
-	//"github.com/tendermint/ethermint/strategies/validators"
-	"github.com/tendermint/tendermint/epoch"
+	//"github.com/pchain/ethermint/strategies/validators"
 	"github.com/pkg/errors"
+	"github.com/tendermint/tendermint/epoch"
 )
 
 var (
-	stateKey         = []byte("stateKey")
-	abciResponsesKey = []byte("abciResponsesKey")
+	stateKey = []byte("stateKey")
 )
 
 //-----------------------------------------------------------------------------
@@ -42,8 +42,8 @@ type State struct {
 	LastBlockID     types.BlockID
 	LastBlockTime   time.Time
 
-	LastEpochNumber	int
-	Epoch *epoch.Epoch
+	LastEpochNumber int
+	Epoch           *epoch.Epoch
 	//Validators      *types.ValidatorSet
 	//LastValidators  *types.ValidatorSet // block.LastCommit validated against this
 
@@ -52,6 +52,7 @@ type State struct {
 
 	TxIndexer txindex.TxIndexer `json:"-"` // Transaction indexer.
 
+	BlockNumberToSave int //record the number of the block which should be saved to main chain
 	// Intermediate results from processing
 	// Persisted separately from the state
 	//abciResponses *ABCIResponses
@@ -79,7 +80,6 @@ func loadState(db dbm.DB, key []byte) *State {
 	return s
 }
 
-
 func (s *State) Copy() *State {
 	//fmt.Printf("State.Copy(), s.LastValidators are %v\n",s.LastValidators)
 	//debug.PrintStack()
@@ -95,8 +95,9 @@ func (s *State) Copy() *State {
 		Epoch:           s.Epoch.Copy(),
 		//Validators:      s.Validators.Copy(),
 		//LastValidators:  s.LastValidators.Copy(),
-		AppHash:         s.AppHash,
-		TxIndexer:       s.TxIndexer, // pointer here, not value
+		AppHash:           s.AppHash,
+		TxIndexer:         s.TxIndexer, // pointer here, not value
+		BlockNumberToSave: s.BlockNumberToSave,
 	}
 }
 
@@ -104,29 +105,6 @@ func (s *State) Save() {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	s.db.SetSync(stateKey, s.Bytes())
-}
-
-// Sets the ABCIResponses in the state and writes them to disk
-// in case we crash after app.Commit and before s.Save()
-func (s *State) SaveABCIResponses(abciResponses *ABCIResponses) {
-	// save the validators to the db
-	s.db.SetSync(abciResponsesKey, abciResponses.Bytes())
-}
-
-func (s *State) LoadABCIResponses() *ABCIResponses {
-	abciResponses := new(ABCIResponses)
-
-	buf := s.db.Get(abciResponsesKey)
-	if len(buf) != 0 {
-		r, n, err := bytes.NewReader(buf), new(int), new(error)
-		wire.ReadBinaryPtr(abciResponses, r, 0, n, err)
-		if *err != nil {
-			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
-			Exit(Fmt("LoadABCIResponses: Data has been corrupted or its spec has changed: %v\n", *err))
-		}
-		// TODO: ensure that buf is completely read.
-	}
-	return abciResponses
 }
 
 func (s *State) Equals(s2 *State) bool {
@@ -147,7 +125,7 @@ func (s *State) Bytes() []byte {
 func (s *State) SetBlockAndEpoch(header *types.Header, blockPartsHeader types.PartSetHeader) {
 
 	s.setBlockAndEpoch(header.Height, types.BlockID{header.Hash(), blockPartsHeader},
-				header.Time)
+		header.Time)
 }
 
 func (s *State) setBlockAndEpoch(
@@ -161,7 +139,8 @@ func (s *State) setBlockAndEpoch(
 	//s.LastValidators = prevValSet
 }
 
-func (s *State) GetValidators() (*types.ValidatorSet, *types.ValidatorSet, error) {
+// GetValidators returns the last and current validator sets.
+func (s *State) GetValidators() (last *types.ValidatorSet, current *types.ValidatorSet, err error) {
 
 	if s.Epoch == nil {
 		return nil, nil, errors.New("epoch does not exist")
@@ -169,7 +148,7 @@ func (s *State) GetValidators() (*types.ValidatorSet, *types.ValidatorSet, error
 
 	if s.LastEpochNumber == s.Epoch.Number {
 		return s.Epoch.Validators, s.Epoch.Validators, nil
-	} else if s.LastEpochNumber == s.Epoch.Number - 1 {
+	} else if s.LastEpochNumber == s.Epoch.Number-1 {
 		return s.Epoch.PreviousEpoch.Validators, s.Epoch.Validators, nil
 	}
 
@@ -202,7 +181,6 @@ func GetState(config cfg.Config, stateDB dbm.DB /*, valSetFromGenesis bool*/) *S
 	*/
 	return state
 }
-
 
 //-----------------------------------------------------------------------------
 // Genesis
@@ -245,21 +223,23 @@ func MakeGenesisState(db dbm.DB, genDoc *types.GenesisDoc) *State {
 			Address:     address,
 			PubKey:      pubKey,
 			VotingPower: val.Amount,
+			Accum:       big.NewInt(0),
 		}
 	}
 
 	return &State{
-		db:              db,
-		GenesisDoc:      genDoc,
-		ChainID:         genDoc.ChainID,
-		LastBlockHeight: 0,
-		LastBlockID:     types.BlockID{},
-		LastBlockTime:   genDoc.GenesisTime,
-		LastEpochNumber: 0,
+		db:                db,
+		GenesisDoc:        genDoc,
+		ChainID:           genDoc.ChainID,
+		LastBlockHeight:   0,
+		LastBlockID:       types.BlockID{},
+		LastBlockTime:     genDoc.GenesisTime,
+		LastEpochNumber:   0,
+		BlockNumberToSave: 1,
 		//Validators:      types.NewValidatorSet(validators),
 		//LastValidators:  types.NewValidatorSet(nil),
-		AppHash:         genDoc.AppHash,
-		TxIndexer:       &null.TxIndex{}, // we do not need indexer during replay and in tests
+		AppHash:   genDoc.AppHash,
+		TxIndexer: &null.TxIndex{}, // we do not need indexer during replay and in tests
 	}
 }
 
@@ -290,6 +270,7 @@ func MakeGenesisValidatorsFromFile(genDocFile string) *types.ValidatorSet {
 			Address:     address,
 			PubKey:      pubKey,
 			VotingPower: val.Amount,
+			Accum:       big.NewInt(0),
 		}
 	}
 

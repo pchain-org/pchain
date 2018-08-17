@@ -12,24 +12,6 @@ import (
 	wire "github.com/tendermint/go-wire"
 )
 
-// Peer is an interface representing a peer connected on a reactor.
-/*
-type Peer interface {
-	cmn.Service
-
-	Key() string
-	IsOutbound() bool
-	IsPersistent() bool
-	Status() ConnectionStatus
-
-	Send(byte, interface{}) bool
-	TrySend(byte, interface{}) bool
-
-	Set(string, interface{})
-	Get(string) interface{}
-}
-*/
-
 // Peer could be marked as persistent, in which case you can use
 // Redial function to reconnect. Note that inbound peers can't be
 // made persistent. They should be made persistent on the other end.
@@ -38,13 +20,12 @@ type Peer interface {
 type Peer struct {
 	cmn.BaseService
 
-	outbound bool
-
-	conn  net.Conn     // source connection
-	mconn *MConnection // multiplex connection
-
+	outbound   bool
 	persistent bool
 	config     *PeerConfig
+	conn       net.Conn // source connection
+
+	mconn *MConnection // multiplex connection
 
 	*NodeInfo
 	Key  string
@@ -76,17 +57,17 @@ func DefaultPeerConfig() *PeerConfig {
 	}
 }
 
-func newOutboundPeer(addr *NetAddress, reactorsByCh map[byte]Reactor, chDescs []*ChannelDescriptor, onPeerError func(*Peer, interface{}), ourNodePrivKey crypto.PrivKeyEd25519) (*Peer, error) {
-	return newOutboundPeerWithConfig(addr, reactorsByCh, chDescs, onPeerError, ourNodePrivKey, DefaultPeerConfig())
+func newOutboundPeer(addr *NetAddress, switchChainRouter map[string]*ChainRouter, onPeerError func(*Peer, interface{}), ourNodePrivKey crypto.PrivKeyEd25519) (*Peer, error) {
+	return newOutboundPeerWithConfig(addr, switchChainRouter, onPeerError, ourNodePrivKey, DefaultPeerConfig())
 }
 
-func newOutboundPeerWithConfig(addr *NetAddress, reactorsByCh map[byte]Reactor, chDescs []*ChannelDescriptor, onPeerError func(*Peer, interface{}), ourNodePrivKey crypto.PrivKeyEd25519, config *PeerConfig) (*Peer, error) {
+func newOutboundPeerWithConfig(addr *NetAddress, switchChainRouter map[string]*ChainRouter, onPeerError func(*Peer, interface{}), ourNodePrivKey crypto.PrivKeyEd25519, config *PeerConfig) (*Peer, error) {
 	conn, err := dial(addr, config)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error creating peer")
 	}
 
-	peer, err := newPeerFromConnAndConfig(conn, true, reactorsByCh, chDescs, onPeerError, ourNodePrivKey, config)
+	peer, err := newPeerFromConnAndConfig(conn, true, switchChainRouter, onPeerError, ourNodePrivKey, config)
 	if err != nil {
 		conn.Close()
 		return nil, err
@@ -94,15 +75,15 @@ func newOutboundPeerWithConfig(addr *NetAddress, reactorsByCh map[byte]Reactor, 
 	return peer, nil
 }
 
-func newInboundPeer(conn net.Conn, reactorsByCh map[byte]Reactor, chDescs []*ChannelDescriptor, onPeerError func(*Peer, interface{}), ourNodePrivKey crypto.PrivKeyEd25519) (*Peer, error) {
-	return newInboundPeerWithConfig(conn, reactorsByCh, chDescs, onPeerError, ourNodePrivKey, DefaultPeerConfig())
+func newInboundPeer(conn net.Conn, switchChainRouter map[string]*ChainRouter, onPeerError func(*Peer, interface{}), ourNodePrivKey crypto.PrivKeyEd25519) (*Peer, error) {
+	return newInboundPeerWithConfig(conn, switchChainRouter, onPeerError, ourNodePrivKey, DefaultPeerConfig())
 }
 
-func newInboundPeerWithConfig(conn net.Conn, reactorsByCh map[byte]Reactor, chDescs []*ChannelDescriptor, onPeerError func(*Peer, interface{}), ourNodePrivKey crypto.PrivKeyEd25519, config *PeerConfig) (*Peer, error) {
-	return newPeerFromConnAndConfig(conn, false, reactorsByCh, chDescs, onPeerError, ourNodePrivKey, config)
+func newInboundPeerWithConfig(conn net.Conn, switchChainRouter map[string]*ChainRouter, onPeerError func(*Peer, interface{}), ourNodePrivKey crypto.PrivKeyEd25519, config *PeerConfig) (*Peer, error) {
+	return newPeerFromConnAndConfig(conn, false, switchChainRouter, onPeerError, ourNodePrivKey, config)
 }
 
-func newPeerFromConnAndConfig(rawConn net.Conn, outbound bool, reactorsByCh map[byte]Reactor, chDescs []*ChannelDescriptor, onPeerError func(*Peer, interface{}), ourNodePrivKey crypto.PrivKeyEd25519, config *PeerConfig) (*Peer, error) {
+func newPeerFromConnAndConfig(rawConn net.Conn, outbound bool, switchChainRouter map[string]*ChainRouter, onPeerError func(*Peer, interface{}), ourNodePrivKey crypto.PrivKeyEd25519, config *PeerConfig) (*Peer, error) {
 	conn := rawConn
 
 	// Fuzz connection
@@ -130,7 +111,7 @@ func newPeerFromConnAndConfig(rawConn net.Conn, outbound bool, reactorsByCh map[
 		Data:     cmn.NewCMap(),
 	}
 
-	p.mconn = createMConnection(conn, p, reactorsByCh, chDescs, onPeerError, config.MConfig)
+	p.mconn = createMConnection(conn, p, switchChainRouter, onPeerError, config.MConfig)
 
 	p.BaseService = *cmn.NewBaseService(logger, "Peer", p)
 
@@ -194,6 +175,11 @@ func (p *Peer) HandshakeTimeout(ourNodeInfo *NodeInfo, timeout time.Duration) er
 	p.conn.SetDeadline(time.Time{})
 
 	peerNodeInfo.RemoteAddr = p.Addr().String()
+	// Add Networks Set from Array
+	peerNodeInfo.Networks.nwSet = make(map[string]struct{})
+	for _, network := range peerNodeInfo.Networks.NwArr {
+		peerNodeInfo.Networks.nwSet[network] = struct{}{}
+	}
 
 	p.NodeInfo = peerNodeInfo
 	p.Key = peerNodeInfo.PubKey.KeyString()
@@ -232,7 +218,7 @@ func (p *Peer) OnStart() error {
 // OnStop implements BaseService.
 func (p *Peer) OnStop() {
 	p.BaseService.OnStop()
-	p.mconn.Stop()
+	p.mconn.Stop() // stop everything and close the conn
 }
 
 // Connection returns underlying MConnection.
@@ -247,30 +233,30 @@ func (p *Peer) IsOutbound() bool {
 
 // Send msg to the channel identified by chID byte. Returns false if the send
 // queue is full after timeout, specified by MConnection.
-func (p *Peer) Send(chID byte, msg interface{}) bool {
+func (p *Peer) Send(chainID string, chID byte, msg interface{}) bool {
 	if !p.IsRunning() {
 		// see Switch#Broadcast, where we fetch the list of peers and loop over
 		// them - while we're looping, one peer may be removed and stopped.
 		return false
 	}
-	return p.mconn.Send(chID, msg)
+	return p.mconn.Send(chainID, chID, msg)
 }
 
 // TrySend msg to the channel identified by chID byte. Immediately returns
 // false if the send queue is full.
-func (p *Peer) TrySend(chID byte, msg interface{}) bool {
+func (p *Peer) TrySend(chainID string, chID byte, msg interface{}) bool {
 	if !p.IsRunning() {
 		return false
 	}
-	return p.mconn.TrySend(chID, msg)
+	return p.mconn.TrySend(chainID, chID, msg)
 }
 
 // CanSend returns true if the send queue is not full, false otherwise.
-func (p *Peer) CanSend(chID byte) bool {
+func (p *Peer) CanSend(chainID string, chID byte) bool {
 	if !p.IsRunning() {
 		return false
 	}
-	return p.mconn.CanSend(chID)
+	return p.mconn.CanSend(chainID, chID)
 }
 
 // WriteTo writes the peer's public key to w.
@@ -305,21 +291,36 @@ func (p *Peer) PeerKey() string {
 	return p.Key
 }
 
-// NodeInfo returns a copy of the peer's NodeInfo.
-/*
-func (p *peer) NodeInfo() *NodeInfo {
-	if p.nodeInfo == nil {
-		return nil
-	}
-	n := *p.nodeInfo // copy
-	return &n
+// IsInTheSameNetwork Check the Peer if it's in the same chain
+func (p *Peer) IsInTheSameNetwork(chainID string) bool {
+	_, same := p.Networks.nwSet[chainID]
+	return same
 }
-*/
 
-// Status returns the peer's ConnectionStatus.
-func (p *Peer) Status() ConnectionStatus {
-	return p.mconn.Status()
+// GetSameNetwork Return the same network slice between peer and current node
+func (p *Peer) GetSameNetwork(nodeNetwork NetworkSet) []string {
+	// initial the slice with cap = length of node network
+	sameNetwork := make([]string, 0, len(nodeNetwork.NwArr))
+	for _, network := range nodeNetwork.NwArr {
+		if _, ok := p.Networks.nwSet[network]; ok {
+			sameNetwork = append(sameNetwork, network)
+		}
+	}
+	return sameNetwork
 }
+
+// AddChainChannelByChainID Add the Chain Channel into MConn
+// then add the peer to each Child Chain Reactor
+func (p *Peer) AddChainChannelByChainID(chainID string, chainRouter *ChainRouter) {
+	p.mconn.addChainChannelByChainID(chainID, chainRouter)
+
+	for _, reactor := range chainRouter.reactors {
+		reactor.AddPeer(p)
+	}
+}
+
+//------------------------------------------------------------------
+// helper funcs
 
 func dial(addr *NetAddress, config *PeerConfig) (net.Conn, error) {
 	logger.Info("Dialing address:", addr)
@@ -331,9 +332,16 @@ func dial(addr *NetAddress, config *PeerConfig) (net.Conn, error) {
 	return conn, nil
 }
 
-func createMConnection(conn net.Conn, p *Peer, reactorsByCh map[byte]Reactor, chDescs []*ChannelDescriptor, onPeerError func(*Peer, interface{}), config *MConnConfig) *MConnection {
-	onReceive := func(chID byte, msgBytes []byte) {
-		reactor := reactorsByCh[chID]
+func createMConnection(conn net.Conn, p *Peer, switchChainRouter map[string]*ChainRouter, onPeerError func(*Peer, interface{}), config *MConnConfig) *MConnection {
+
+	onReceive := func(chainID string, chID byte, msgBytes []byte) {
+
+		chain, ok := switchChainRouter[chainID]
+		if !ok {
+			cmn.PanicSanity(cmn.Fmt("Unknown chain %s", chainID))
+		}
+
+		reactor := chain.reactorsByCh[chID]
 		if reactor == nil {
 			cmn.PanicSanity(cmn.Fmt("Unknown channel %X", chID))
 		}
@@ -344,5 +352,5 @@ func createMConnection(conn net.Conn, p *Peer, reactorsByCh map[byte]Reactor, ch
 		onPeerError(p, r)
 	}
 
-	return NewMConnectionWithConfig(conn, chDescs, onReceive, onError, config)
+	return NewMConnectionWithConfig(conn, switchChainRouter, onReceive, onError, config)
 }

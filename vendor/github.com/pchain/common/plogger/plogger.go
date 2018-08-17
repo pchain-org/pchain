@@ -5,23 +5,25 @@ import (
 	"syscall"
 	"time"
 
+	"errors"
 	"github.com/lestrrat-go/file-rotatelogs"
 	"github.com/rifflock/lfshook"
 	"github.com/sirupsen/logrus"
 	"os"
-	"runtime"
+	"path/filepath"
 	"sync"
 )
 
 var logger *logrus.Logger
-var verbosity = logrus.InfoLevel
+var verbosity = logrus.DebugLevel
+var folder string
 var once sync.Once
 
 func GetLogger(module string) *logrus.Logger {
-    once.Do(func(){
-    	getLogger(module)
+	once.Do(func() {
+		getLogger(module)
 	})
-    return logger
+	return logger
 }
 
 func getLogger(module string) {
@@ -29,14 +31,62 @@ func getLogger(module string) {
 		return
 	}
 
-	dir , err := initLogDir()
+	logger = logrus.New()
+	logger.Level = verbosity
+	logger.Formatter = &logrus.TextFormatter{ForceColors: true, FullTimestamp: true}
+
+	filelineHook := NewHook()
+	filelineHook.Field = "file" // Customize source field name
+	logger.Hooks.Add(filelineHook)
+
+	return
+}
+
+func SetVerbosity(level logrus.Level) {
+	verbosity = level
+	if logger != nil {
+		logger.SetLevel(level)
+	}
+}
+
+func SetLogFolder(logFolder string) {
+	folder = logFolder
+}
+
+func initLogDir() (string, error) {
+
+	if folder == "" {
+		return "", errors.New("Please set the log folder first")
+	}
+
+	_, err := os.Stat(folder)
+	if err == nil {
+		return folder, nil
+	}
+
+	if os.IsNotExist(err) {
+		err = os.MkdirAll(folder, os.ModePerm)
+		if err == nil {
+			return folder, nil
+		} else {
+			fmt.Println("os mkdir error")
+			return "", err
+		}
+	}
+
+	return "", err
+}
+
+func InitLogWriter() {
+	dir, err := initLogDir()
 	if err != nil {
 		fmt.Println("initLogDir error")
 		syscall.Exit(-1)
 	}
 
-	fmt.Printf("log directory %s\r\n", dir)
-	path := dir + "pchain.%Y%m%d-%H.log"
+	absPath, _ := filepath.Abs(dir)
+	fmt.Printf("PChain Log Folder: %s\n", absPath)
+	path := filepath.Join(dir, "pchain.%Y%m%d-%H.log")
 
 	writer, err := rotatelogs.New(
 		path,
@@ -51,18 +101,6 @@ func getLogger(module string) {
 		syscall.Exit(-1)
 	}
 
-	logger = logrus.New()
-	logger.Level = verbosity
-	if runtime.GOOS == "windows"{
-	    logger.Formatter = &logrus.TextFormatter{DisableColors:true}
-	} else {
-		logger.Formatter = &logrus.TextFormatter{}
-	}
-
-	filelineHook := NewHook()
-	filelineHook.Field = "file" // Customize source field name
-	logger.Hooks.Add(filelineHook)
-
 	logger.Hooks.Add(lfshook.NewHook(
 		lfshook.WriterMap{
 			logrus.DebugLevel: writer,
@@ -74,44 +112,4 @@ func getLogger(module string) {
 		},
 		&logrus.TextFormatter{},
 	))
-
-	return
-}
-
-func SetVerbosity(level logrus.Level) {
-	verbosity = level
-	if logger != nil {
-		logger.SetLevel(level)
-	}
-}
-
-func init() {
-	GetLogger("main")
-}
-
-func initLogDir() (string, error){
-	path := "";
-	if runtime.GOOS == "windows" {
-		path = ".\\log\\"
-	} else {
-		path = "/tmp/pchain/log/"
-	}
-
-	_, err := os.Stat(path)
-	if err == nil {
-		return path, nil
-	}
-
-	if os.IsNotExist(err) {
-        err = os.MkdirAll(path, os.ModePerm)
-        if err == nil {
-        	return path, nil
-		} else {
-			fmt.Println("os mkdir error")
-			return "", err
-		}
-	}
-
-
-	return "", err
 }

@@ -38,8 +38,6 @@ var (
 	Sha256WordGas          = big.NewInt(12)     //
 
 	MinGasLimit     = big.NewInt(5000)                  // Minimum the gas limit may ever be.
-//	GenesisGasLimit = big.NewInt(471238800000000000)    // Gas limit of the Genesis block.
-//	TargetGasLimit  = new(big.Int).Set(GenesisGasLimit) // The artificial target
 	GenesisGasLimit = big.NewInt(4712388)               // Gas limit of the Genesis block.
 	TargetGasLimit  = new(big.Int).Set(GenesisGasLimit) // The artificial target
 

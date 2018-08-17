@@ -154,7 +154,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			GpobaseCorrectionFactor: 110,
 		}
 		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, ethConf, nil)
+			return les.New(ctx, ethConf, nil, nil)
 		}); err != nil {
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}

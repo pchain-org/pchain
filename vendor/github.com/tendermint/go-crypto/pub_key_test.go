@@ -1,9 +1,11 @@
 package crypto
 
 import (
+	"encoding/hex"
 	"testing"
 
-	"fmt"
+	"github.com/btcsuite/btcutil/base58"
+	"github.com/stretchr/testify/assert"
 )
 
 type keyData struct {
@@ -20,6 +22,20 @@ var secpDataTable = []keyData{
 	},
 }
 
-func TestPub(t *testing.T) {
-	fmt.Println("hello")
+func TestPubKeySecp256k1Address(t *testing.T) {
+	for _, d := range secpDataTable {
+		privB, _ := hex.DecodeString(d.priv)
+		pubB, _ := hex.DecodeString(d.pub)
+		addrB, _, _ := base58.CheckDecode(d.addr)
+
+		var priv PrivKeySecp256k1
+		copy(priv[:], privB)
+
+		pubT := priv.PubKey().(PubKeySecp256k1)
+		pub := pubT[:]
+		addr := priv.PubKey().Address()
+
+		assert.Equal(t, pub, pubB, "Expected pub keys to match")
+		assert.Equal(t, addr, addrB, "Expected addresses to match")
+	}
 }

@@ -1,42 +1,83 @@
 package core
 
 import (
-	cm "github.com/tendermint/tendermint/consensus"
-	"github.com/tendermint/tendermint/types"
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	"fmt"
-	"github.com/syndtr/goleveldb/leveldb/errors"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/syndtr/goleveldb/leveldb/errors"
+	cm "github.com/tendermint/tendermint/consensus"
 	ep "github.com/tendermint/tendermint/epoch"
+	ctypes "github.com/tendermint/tendermint/rpc/core/types"
+	"github.com/tendermint/tendermint/types"
+	"math/big"
 )
 
-func CurrentEpochNumber() (*ctypes.ResultUint64, error) {
-	return &ctypes.ResultUint64{Value: uint64(consensusState.GetRoundState().Epoch.Number)}, nil
+func CurrentEpochNumber(context *RPCDataContext) (*ctypes.ResultUint64, error) {
+	return &ctypes.ResultUint64{Value: uint64(context.consensusState.GetRoundState().Epoch.Number)}, nil
 }
 
-func Epoch(number int)  (*ctypes.ResultEpoch, error) {
+func Epoch(context *RPCDataContext, number int) (*ctypes.ResultEpoch, error) {
 
-	curEpoch := consensusState.GetRoundState().Epoch
+	var resultEpoch *ep.Epoch
+	curEpoch := context.consensusState.GetRoundState().Epoch
 	if number < 0 || number > curEpoch.Number {
 		return nil, errors.New("epoch number out of range")
 	}
 
 	if number == curEpoch.Number {
-		return &ctypes.ResultEpoch{Epoch: curEpoch.MakeOneEpochDoc()}, nil
+		resultEpoch = curEpoch
+		//return &ctypes.ResultEpoch{Epoch: curEpoch.MakeOneEpochDoc()}, nil
+	} else {
+		resultEpoch = ep.LoadOneEpoch(curEpoch.GetDB(), number)
 	}
 
-	spEpoch := ep.LoadOneEpoch(curEpoch.GetDB(), number)
+	validators := make([]types.GenesisValidator, len(resultEpoch.Validators.Validators))
+	for i, val := range resultEpoch.Validators.Validators {
+		validators[i] = types.GenesisValidator{
+			EthAccount: common.BytesToAddress(val.Address),
+			PubKey:     val.PubKey,
+			Amount:     val.VotingPower,
+			Name:       "",
+		}
+	}
 
-	return &ctypes.ResultEpoch{Epoch: spEpoch.MakeOneEpochDoc()}, nil
+	return &ctypes.ResultEpoch{
+		resultEpoch.Number,
+		resultEpoch.RewardPerBlock,
+		resultEpoch.StartBlock,
+		resultEpoch.EndBlock,
+		resultEpoch.StartTime,
+		resultEpoch.EndTime,
+		resultEpoch.GetVoteStartHeight(),
+		resultEpoch.GetVoteEndHeight(),
+		resultEpoch.GetRevealVoteStartHeight(),
+		resultEpoch.GetRevealVoteEndHeight(),
+		resultEpoch.BlockGenerated,
+		resultEpoch.Status,
+		validators,
+	}, nil
 }
 
-func Validators() (*ctypes.ResultValidators, error) {
-	blockHeight, validators := consensusState.GetValidators()
+func Validators(context *RPCDataContext) (*ctypes.ResultValidators, error) {
+	blockHeight, validators := context.consensusState.GetValidators()
 	return &ctypes.ResultValidators{blockHeight, validators}, nil
 }
 
-func ValidatorOperation(from string, epoch int, power uint64, action string, target string, sig []byte) (*ctypes.ResultValidatorOperation, error) {
+func EpochVotes(context *RPCDataContext) (*ctypes.ResultEpochVotes, error) {
+	ep := context.consensusState.GetRoundState().Epoch
+	if ep.GetNextEpoch() != nil {
+		return &ctypes.ResultEpochVotes{
+			ep.GetNextEpoch().Number,
+			ep.GetNextEpoch().StartBlock,
+			ep.GetNextEpoch().EndBlock,
+			ep.GetNextEpoch().GetEpochValidatorVoteSet().Votes,
+		}, nil
+	}
+	return nil, errors.New("next epoch has not been proposed")
+}
+
+// Deprecated
+func ValidatorOperation(context *RPCDataContext, from string, epoch int, power uint64, action string, target string, sig []byte) (*ctypes.ResultValidatorOperation, error) {
 
 	fmt.Println("in func ValidatorOperation(s string) (*ctypes.ResultValidatorOperation, error)")
 
@@ -69,32 +110,31 @@ func ValidatorOperation(from string, epoch int, power uint64, action string, tar
 	fmt.Printf("in func ValidatorOperation(), recovered address is %s, key is : %s\n", recoveredAddr.Hex(), key)
 
 	//check epoch
-	if epoch <= consensusState.GetRoundState().Epoch.Number {
+	if epoch <= context.consensusState.GetRoundState().Epoch.Number {
 		return &ctypes.ResultValidatorOperation{}, errors.New("epoch should be bigger than current epoch number")
 	}
 
 	/*
-	if EthApi.getBalance(from) < power {
-		return &ctypes.ResultValidatorOperation{}, errors.New("no enough balance")
-		EthApi.SubBalance(from, power)
-		EthApi.AddDeposit(from, power)
-	}
+		if EthApi.getBalance(from) < power {
+			return &ctypes.ResultValidatorOperation{}, errors.New("no enough balance")
+			EthApi.SubBalance(from, power)
+			EthApi.AddDeposit(from, power)
+		}
 	*/
-
-	cm.SendValidatorMsgToCons(from, key, epoch, power, action, target)
+	cm.SendValidatorMsgToCons(from, key, epoch, new(big.Int).SetUint64(power), action, target)
 	return &ctypes.ResultValidatorOperation{
-		From: from,
-		Epoch: epoch,
-		Power: power,
+		From:   from,
+		Epoch:  epoch,
+		Power:  power,
 		Action: action,
 		Target: target,
 	}, nil
 }
 
-func ValidatorEpoch(address string, epoch int) (*ctypes.ResultValidatorEpoch, error) {
+func ValidatorEpoch(context *RPCDataContext, address string, epoch int) (*ctypes.ResultValidatorEpoch, error) {
 
 	//fmt.Println("in func ValidatorEpoch(address string) (*ctypes.ResultValidatorEpoch, error)")
-	curEpoch := consensusState.GetRoundState().Epoch
+	curEpoch := context.consensusState.GetRoundState().Epoch
 	if epoch < 0 || epoch > curEpoch.Number {
 		return nil, errors.New("epoch number out of range")
 	}
@@ -109,9 +149,9 @@ func ValidatorEpoch(address string, epoch int) (*ctypes.ResultValidatorEpoch, er
 	vals = spEpoch.Validators.Validators
 
 	var validator *types.Validator = nil
-	for i:=0; i<len(vals); i++ {
+	for i := 0; i < len(vals); i++ {
 		fmt.Println("in func ValidatorEpoch(), string is %s, address is %s",
-				address, fmt.Sprintf("%x", vals[i].Address))
+			address, fmt.Sprintf("%x", vals[i].Address))
 		if address == fmt.Sprintf("%x", vals[i].Address) {
 			validator = vals[i]
 			break
@@ -120,58 +160,29 @@ func ValidatorEpoch(address string, epoch int) (*ctypes.ResultValidatorEpoch, er
 
 	return &ctypes.ResultValidatorEpoch{
 		EpochNumber: epoch,
-		Validator: &types.GenesisValidator {
-				EthAccount: common.BytesToAddress(validator.Address),
-				PubKey: validator.PubKey,
-				Amount: validator.VotingPower,
-				Name: "",
+		Validator: &types.GenesisValidator{
+			EthAccount: common.BytesToAddress(validator.Address),
+			PubKey:     validator.PubKey,
+			Amount:     validator.VotingPower,
+			Name:       "",
 		},
 	}, nil
 	/*
-	blockHeight, validators := consensusState.GetValidators()
-	//fmt.Printf("in func GetValidators returns: %v\n", validators)
-	//fmt.Printf("in func GetValidators address is : %v\n", address)
+		blockHeight, validators := consensusState.GetValidators()
+		//fmt.Printf("in func GetValidators returns: %v\n", validators)
+		//fmt.Printf("in func GetValidators address is : %v\n", address)
 
-	var result *ctypes.ResultValidatorEpoch = nil
-	var err error = nil
+		var result *ctypes.ResultValidatorEpoch = nil
+		var err error = nil
 
-	if address == "all" {
+		if address == "all" {
 
-		//fmt.Println("in func GetValidators 0")
-		valWithOperations := make([]*ctypes.ResultValidatorEpochValidator, len(validators))
+			//fmt.Println("in func GetValidators 0")
+			valWithOperations := make([]*ctypes.ResultValidatorEpochValidator, len(validators))
 
-		for i, v := range validators {
+			for i, v := range validators {
 
-			valWithOperations[i] = &ctypes.ResultValidatorEpochValidator {
-				Validator: v,
-				Operation: nil,
-			}
-
-			acceptVotes := types.AcceptVoteSet[v.PubKey.KeyString()]
-			if acceptVotes != nil {
-				valWithOperations[i].Operation = &ctypes.ResultValidatorOperationSimple {
-					Epoch: acceptVotes.Epoch,
-					Operation: acceptVotes.Action,
-					Amount: acceptVotes.Power,
-				}
-			}
-		}
-
-		result = &ctypes.ResultValidatorEpoch{
-			BlockHeight: blockHeight,
-			Validators: valWithOperations,
-			Epoch: consensusState.GetRoundState().Epoch,
-		}
-
-	} else {
-		//fmt.Printf("in func GetValidators 1\n")
-		found := false
-		for i, v := range validators {
-
-			//fmt.Printf("in func GetValidators 2, address is:%v, v.Address is %X\n", address, string(v.Address))
-			if address == fmt.Sprintf("%X", v.Address) {
-				valWithOperations := make([]*ctypes.ResultValidatorEpochValidator, 1)
-				valWithOperations[0] = &ctypes.ResultValidatorEpochValidator {
+				valWithOperations[i] = &ctypes.ResultValidatorEpochValidator {
 					Validator: v,
 					Operation: nil,
 				}
@@ -184,43 +195,75 @@ func ValidatorEpoch(address string, epoch int) (*ctypes.ResultValidatorEpoch, er
 						Amount: acceptVotes.Power,
 					}
 				}
+			}
 
-				result = &ctypes.ResultValidatorEpoch{
-					BlockHeight: blockHeight,
-					Validators: valWithOperations,
-					Epoch: consensusState.GetRoundState().Epoch,
+			result = &ctypes.ResultValidatorEpoch{
+				BlockHeight: blockHeight,
+				Validators: valWithOperations,
+				Epoch: consensusState.GetRoundState().Epoch,
+			}
+
+		} else {
+			//fmt.Printf("in func GetValidators 1\n")
+			found := false
+			for i, v := range validators {
+
+				//fmt.Printf("in func GetValidators 2, address is:%v, v.Address is %X\n", address, string(v.Address))
+				if address == fmt.Sprintf("%X", v.Address) {
+					valWithOperations := make([]*ctypes.ResultValidatorEpochValidator, 1)
+					valWithOperations[0] = &ctypes.ResultValidatorEpochValidator {
+						Validator: v,
+						Operation: nil,
+					}
+
+					acceptVotes := types.AcceptVoteSet[v.PubKey.KeyString()]
+					if acceptVotes != nil {
+						valWithOperations[i].Operation = &ctypes.ResultValidatorOperationSimple {
+							Epoch: acceptVotes.Epoch,
+							Operation: acceptVotes.Action,
+							Amount: acceptVotes.Power,
+						}
+					}
+
+					result = &ctypes.ResultValidatorEpoch{
+						BlockHeight: blockHeight,
+						Validators: valWithOperations,
+						Epoch: consensusState.GetRoundState().Epoch,
+					}
+					found = true
+					break
 				}
-				found = true
-				break
+			}
+
+			if !found {
+				err = errors.New("no validator found")
 			}
 		}
 
-		if !found {
-			err = errors.New("no validator found")
-		}
-	}
-
-	return result, err
+		return result, err
 	*/
 }
 
-func UnconfirmedValidatorsOperation() (*ctypes.ResultValidatorsOperation, error){
-	return getValidatorsOperation(ep.VA_UNCONFIRMED_EPOCH)
+// Deprecated
+func UnconfirmedValidatorsOperation(context *RPCDataContext) (*ctypes.ResultValidatorsOperation, error) {
+	return getValidatorsOperation(context, ep.VA_UNCONFIRMED_EPOCH)
 }
 
-func ConfirmedValidatorsOperation(epoch int) (*ctypes.ResultValidatorsOperation, error){
-	return getValidatorsOperation(epoch)
+// Deprecated
+func ConfirmedValidatorsOperation(context *RPCDataContext, epoch int) (*ctypes.ResultValidatorsOperation, error) {
+	return getValidatorsOperation(context, epoch)
 }
 
-func getValidatorsOperation(epoch int) (*ctypes.ResultValidatorsOperation, error){
+// Deprecated
+func getValidatorsOperation(context *RPCDataContext, epoch int) (*ctypes.ResultValidatorsOperation, error) {
 
-	curEpoch := consensusState.GetRoundState().Epoch
+	curEpoch := context.consensusState.GetRoundState().Epoch
 	if epoch < ep.VA_UNCONFIRMED_EPOCH || epoch > curEpoch.Number {
 		return nil, errors.New("epoch number out of range")
 	}
 	voSet := ep.LoadValidatorOperationSet(epoch)
 
-	resultVoArr := make([]*ep.ValidatorOperation,0)
+	resultVoArr := make([]*ep.ValidatorOperation, 0)
 	if voSet != nil {
 		for _, voArr := range voSet.Operations {
 			resultVoArr = append(resultVoArr, voArr...)
@@ -230,6 +273,7 @@ func getValidatorsOperation(epoch int) (*ctypes.ResultValidatorsOperation, error
 	return &ctypes.ResultValidatorsOperation{VOArray: resultVoArr}, nil
 }
 
+// Deprecated
 func signHash(data []byte) []byte {
 	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
 	return crypto.Keccak256([]byte(msg))

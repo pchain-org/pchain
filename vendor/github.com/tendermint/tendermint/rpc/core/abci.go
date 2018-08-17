@@ -7,8 +7,8 @@ import (
 
 //-----------------------------------------------------------------------------
 
-func ABCIQuery(path string, data []byte, prove bool) (*ctypes.ResultABCIQuery, error) {
-	resQuery, err := proxyAppQuery.QuerySync(abci.RequestQuery{
+func ABCIQuery(context *RPCDataContext, path string, data []byte, prove bool) (*ctypes.ResultABCIQuery, error) {
+	resQuery, err := context.proxyAppQuery.QuerySync(abci.RequestQuery{
 		Path:  path,
 		Data:  data,
 		Prove: prove,
@@ -20,8 +20,8 @@ func ABCIQuery(path string, data []byte, prove bool) (*ctypes.ResultABCIQuery, e
 	return &ctypes.ResultABCIQuery{resQuery}, nil
 }
 
-func ABCIInfo() (*ctypes.ResultABCIInfo, error) {
-	resInfo, err := proxyAppQuery.InfoSync()
+func ABCIInfo(context *RPCDataContext) (*ctypes.ResultABCIInfo, error) {
+	resInfo, err := context.proxyAppQuery.InfoSync()
 	if err != nil {
 		return nil, err
 	}

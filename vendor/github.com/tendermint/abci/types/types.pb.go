@@ -41,13 +41,15 @@ It has these top-level messages:
 */
 package types
 
-import proto "github.com/golang/protobuf/proto"
-import fmt "fmt"
-import math "math"
+import "github.com/golang/protobuf/proto"
+import "fmt"
+import "math"
+import "math/big"
 
 import (
-	context "golang.org/x/net/context"
-	grpc "google.golang.org/grpc"
+	"github.com/ethereum/go-ethereum/common"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -756,8 +758,8 @@ func (m *RequestQuery) GetProve() bool {
 }
 
 type RequestCommit struct {
-	Validators []*Validator `protobuf:"bytes,1,rep,name=validators" json:"validators,omitempty"`
-	RewardPerBlock string `protobuf:"bytes,2,rep,name=rewardperblock" json:"rewardperblock,omitempty"`
+	Validators     []*Validator `protobuf:"bytes,1,rep,name=validators" json:"validators,omitempty"`
+	RewardPerBlock *big.Int     `protobuf:"bytes,2,rep,name=rewardperblock" json:"rewardperblock,omitempty"`
 }
 
 func (m *RequestCommit) Reset()                    { *m = RequestCommit{} }
@@ -1668,9 +1670,11 @@ func (m *PartSetHeader) GetHash() []byte {
 	return nil
 }
 
+// Validator
 type Validator struct {
-	PubKey []byte `protobuf:"bytes,1,opt,name=pubKey,proto3" json:"pubKey,omitempty"`
-	Power  uint64 `protobuf:"varint,2,opt,name=power" json:"power,omitempty"`
+	Address common.Address `protobuf:"bytes,1,opt,name=address,proto3" json:"address,omitempty"`
+	PubKey  []byte         `protobuf:"bytes,2,opt,name=pubKey,proto3" json:"pubKey,omitempty"`
+	Power   *big.Int       `protobuf:"varint,3,opt,name=power" json:"power,omitempty"`
 }
 
 func (m *Validator) Reset()                    { *m = Validator{} }
@@ -1685,11 +1689,16 @@ func (m *Validator) GetPubKey() []byte {
 	return nil
 }
 
-func (m *Validator) GetPower() uint64 {
+func (m *Validator) GetPower() *big.Int {
 	if m != nil {
 		return m.Power
 	}
-	return 0
+	return big.NewInt(0)
+}
+
+type RefundValidatorAmount struct {
+	Address common.Address
+	Amount  *big.Int
 }
 
 func init() {

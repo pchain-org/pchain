@@ -10,7 +10,7 @@ type broadcastAPI struct {
 }
 
 func (bapi *broadcastAPI) BroadcastTx(ctx context.Context, req *RequestBroadcastTx) (*ResponseBroadcastTx, error) {
-	res, err := core.BroadcastTxCommit(req.Tx)
+	res, err := core.BroadcastTxCommit(nil, req.Tx)
 	if err != nil {
 		return nil, err
 	}

@@ -64,7 +64,8 @@ type Node struct {
 func NewNodeDefault(config cfg.Config) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
-	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
+	keydir := config.GetString("keystore")
+	privValidator := types.LoadOrGenPrivValidator(privValidatorFile, keydir)
 	return NewNode(config, privValidator, proxy.DefaultClientCreator(config))
 }
 
@@ -147,19 +148,6 @@ func NewNode(config cfg.Config, privValidator *types.PrivValidator, clientCreato
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
-	nodeInfo := n.makeNodeInfo()
-
-//	fmt.Printf("node: nodeInfo %#v\n", nodeInfo)
-
-	consensusState.SetNodeInfo(nodeInfo)
-
-	if consensusState.nodeInfo != nil {
-		fmt.Println("consensusState.nodeInfo is %+v\n", consensusState.nodeInfo)
-	} else
-		fmt.Println("local nodeInfo is %+v\n", nodeInfo)
-		panic("consensusState.nodeInfo is Nil")
-	}
-
 	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
 
 	// Make p2p network switch
@@ -247,19 +235,8 @@ func (n *Node) OnStart() error {
 	l := p2p.NewDefaultListener(protocol, address, n.config.GetBool("skip_upnp"))
 	n.sw.AddListener(l)
 
-	// Set node info
-	// n.consensusReactor.conS.SetNodeInfo(n.makeNodeInfo())
-
-	nodeInfo := n.makeNodeInfo()
-	fmt.Printf("onstart(): nodeInfo %#v\n", nodeInfo)
-
-	n.consensusReactor.conS.SetNodeInfo(nodeInfo)
-
-	fmt.Printf("(n *Node) OnStart() - before start switch\n")
-
 	// Start the switch
-	//n.sw.SetNodeInfo(n.makeNodeInfo())
-	n.sw.SetNodeInfo(nodeInfo)
+	n.sw.SetNodeInfo(n.makeNodeInfo())
 	n.sw.SetNodePrivKey(n.privKey)
 	_, err := n.sw.Start()
 	if err != nil {
@@ -433,7 +410,6 @@ func (n *Node) makeNodeInfo() *p2p.NodeInfo {
 	}
 
 	if !n.sw.IsListening() {
-		logger.Debug("makeNodeInfo: return without listen addr")
 		return nodeInfo
 	}
 
@@ -447,9 +423,6 @@ func (n *Node) makeNodeInfo() *p2p.NodeInfo {
 	// except of course if the rpc is only bound to localhost
 	nodeInfo.ListenAddr = cmn.Fmt("%v:%v", p2pHost, p2pPort)
 	nodeInfo.Other = append(nodeInfo.Other, cmn.Fmt("rpc_addr=%v", rpcListenAddr))
-
-	fmt.Printf("makeNodeInfo: return listen addr %#v", nodeInfo)
-
 	return nodeInfo
 }
 

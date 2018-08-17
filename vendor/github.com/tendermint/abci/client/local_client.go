@@ -1,11 +1,13 @@
 package abcicli
 
 import (
-	"sync"
-
 	"github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/go-common"
+	"math/big"
+	"sync"
 )
+
+var _ Client = (*localClient)(nil)
 
 type localClient struct {
 	cmn.BaseService
@@ -83,10 +85,16 @@ func (app *localClient) CheckTxAsync(tx []byte, cb func(*types.Response)) *ReqRe
 	app.mtx.Lock()
 	res := app.Application.CheckTx(tx)
 	app.mtx.Unlock()
-	return app.callback(
+
+	reqres := app.callback(
 		types.ToRequestCheckTx(tx),
 		types.ToResponseCheckTx(res.Code, res.Data, res.Log),
 	)
+
+	if cb != nil {
+		reqres.SetCallback(cb)
+	}
+	return reqres
 }
 
 func (app *localClient) QueryAsync(reqQuery types.RequestQuery) *ReqRes {
@@ -101,10 +109,10 @@ func (app *localClient) QueryAsync(reqQuery types.RequestQuery) *ReqRes {
 
 func (app *localClient) CommitAsync(validators []*types.Validator) *ReqRes {
 	app.mtx.Lock()
-	res := app.Application.Commit(validators, "")
+	res := app.Application.Commit(validators, nil, nil)
 	app.mtx.Unlock()
 	return app.callback(
-		types.ToRequestCommit(validators, ""),
+		types.ToRequestCommit(validators, nil),
 		types.ToResponseCommit(res.Code, res.Data, res.Log),
 	)
 }
@@ -193,9 +201,9 @@ func (app *localClient) QuerySync(reqQuery types.RequestQuery) (resQuery types.R
 	return resQuery, nil
 }
 
-func (app *localClient) CommitSync(validators []*types.Validator, rewardPerBlock string) (res types.Result) {
+func (app *localClient) CommitSync(validators []*types.Validator, rewardPerBlock *big.Int, refund []*types.RefundValidatorAmount) (res types.Result) {
 	app.mtx.Lock()
-	res = app.Application.Commit(validators, rewardPerBlock)
+	res = app.Application.Commit(validators, rewardPerBlock, refund)
 	app.mtx.Unlock()
 	app.callback(
 		types.ToRequestCommit(validators, rewardPerBlock),

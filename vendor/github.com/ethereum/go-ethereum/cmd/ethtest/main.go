@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/pchain/common/plogger"
-	"github.com/pchain/common/plogger"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -151,7 +150,7 @@ func runSuite(test, file string) {
 			files, err = getFiles(file)
 		}
 		if err != nil {
-			logger.Error((err)
+			logger.Error(err)
 		}
 
 		if len(files) == 0 {
@@ -165,7 +164,7 @@ func runSuite(test, file string) {
 
 			r, err := os.Open(curFile)
 			if err != nil {
-				logger.Error((err)
+				logger.Error(err)
 			}
 			defer r.Close()
 
@@ -174,7 +173,7 @@ func runSuite(test, file string) {
 				if continueOnError {
 					logger.Error(err)
 				} else {
-					logger.Error((err)
+					logger.Error(err)
 				}
 			}
 		}
@@ -192,7 +191,7 @@ func setupApp(c *cli.Context) error {
 		runSuite(flagTest, flagFile)
 	} else {
 		if err := runTestWithReader(flagTest, os.Stdin); err != nil {
-			logger.Error((err)
+			logger.Error(err)
 		}
 	}
 	return nil
@@ -218,7 +217,7 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		logger.Error((err)
+		logger.Error(err)
 	}
 
 }

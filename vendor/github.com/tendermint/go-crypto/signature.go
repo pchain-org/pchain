@@ -7,7 +7,6 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
-	//"github.com/Nik-U/pbc"
 	"bls"
 )
 
@@ -163,101 +162,7 @@ func (sig *EthereumSignature) UnmarshalJSON(enc []byte) error {
 	return err
 }
 
-/*
 //-------------------------------------
-// Implements Signature
-type BLSSignature []byte
-
-func CreateBLSSignature() BLSSignature {
-	pubKey := pairing.NewG2().Rand()
-	return pubKey.Bytes()
-}
-
-func (sig BLSSignature) getElement() *pbc.Element {
-	return pairing.NewG2().SetBytes(sig)
-}
-
-func (sig BLSSignature) GetElement() *pbc.Element {
-	return pairing.NewG2().SetBytes(sig)
-}
-
-func (sig BLSSignature) Set1() {
-	copy(sig, pairing.NewG1().Set1().Bytes())
-}
-
-func BLSSignatureMul(l, r Signature) Signature {
-	lSign,lok := l.(BLSSignature);
-	rSign, rok := r.(BLSSignature);
-	if  lok&&rok {
-		el1 := lSign.getElement()
-		el2 := rSign.getElement()
-		rs := pairing.NewG2().Mul(el1, el2)
-		return BLSSignature(rs.Bytes())
-	} else {
-		return nil
-	}
-}
-
-func (sig BLSSignature) Mul(other Signature) bool {
-	if otherSign,ok := other.(BLSSignature); ok {
-		el1 := sig.getElement()
-		fmt.Println(el1.Bytes()[:3])
-		el2 := otherSign.getElement()
-		fmt.Println(el2.Bytes()[:3])
-		rs := el1.Mul(el1, el2)
-		fmt.Println("el1",el1.Bytes()[:3])
-		fmt.Println("rs", rs.Bytes()[:3])
-		copy(sig, rs.Bytes())
-		return true
-	} else {
-		return false
-	}
-}
-
-func (sig BLSSignature) MulWithSet1(other Signature) bool {
-	if otherSign,ok := other.(BLSSignature); ok {
-		el1 := sig.getElement()
-		el1.Set1()
-		fmt.Println(el1.Bytes()[:3])
-		el2 := otherSign.getElement()
-		fmt.Println(el2.Bytes()[:3])
-		rs := el1.Mul(el1, el2)
-		fmt.Println("el1",el1.Bytes()[:3])
-		fmt.Println("rs", rs.Bytes()[:3])
-		copy(sig, rs.Bytes())
-		return true
-	} else {
-		return false
-	}
-}
-
-func (sig BLSSignature) Bytes() []byte {
-	return sig
-}
-
-func (sig BLSSignature) IsZero() bool { return len(sig) == 0 }
-
-func (sig BLSSignature) String() string { return fmt.Sprintf("/%X.../", Fingerprint(sig)) }
-
-func (sig BLSSignature) Equals(other Signature) bool {
-	if otherBLS, ok := other.(BLSSignature); ok {
-		return sig.getElement().Equals(otherBLS.getElement())
-	} else {
-		return false
-	}
-}
-
-func (p BLSSignature) MarshalJSON() ([]byte, error) {
-	return data.Encoder.Marshal(p)
-}
-
-func (p *BLSSignature) UnmarshalJSON(enc []byte) error {
-	var ref []byte
-	err := data.Encoder.Unmarshal(&ref, enc)
-	copy(*p, ref)
-	return err
-}
-*/
 type BLSSignature []byte
 
 

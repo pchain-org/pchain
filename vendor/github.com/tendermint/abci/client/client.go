@@ -2,12 +2,18 @@ package abcicli
 
 import (
 	"fmt"
+	"math/big"
 	"sync"
 
 	"github.com/tendermint/abci/types"
 	cmn "github.com/tendermint/go-common"
 )
 
+// Client defines an interface for an ABCI client.
+// All `Async` methods return a `ReqRes` object.
+// All `Sync` methods return the appropriate protobuf ResponseXxx struct and an error.
+// Note these are client errors, eg. ABCI socket connectivity issues.
+// Application-related errors are reflected in response via ABCI error codes and logs.
 type Client interface {
 	cmn.Service
 
@@ -22,6 +28,9 @@ type Client interface {
 	CheckTxAsync(tx []byte, cb func(*types.Response)) *ReqRes
 	QueryAsync(reqQuery types.RequestQuery) *ReqRes
 	CommitAsync(validators []*types.Validator) *ReqRes
+	InitChainAsync(validators []*types.Validator) *ReqRes
+	BeginBlockAsync(hash []byte, header *types.Header) *ReqRes
+	EndBlockAsync(height uint64) *ReqRes
 
 	FlushSync() error
 	EchoSync(msg string) (res types.Result)
@@ -30,12 +39,7 @@ type Client interface {
 	DeliverTxSync(tx []byte) (res types.Result)
 	CheckTxSync(tx []byte) (res types.Result)
 	QuerySync(reqQuery types.RequestQuery) (resQuery types.ResponseQuery, err error)
-	CommitSync(validators []*types.Validator, rewardPerBlock string) (res types.Result)
-
-	InitChainAsync(validators []*types.Validator) *ReqRes
-	BeginBlockAsync(hash []byte, header *types.Header) *ReqRes
-	EndBlockAsync(height uint64) *ReqRes
-
+	CommitSync(validators []*types.Validator, rewardPerBlock *big.Int, refund []*types.RefundValidatorAmount) (res types.Result)
 	InitChainSync(validators []*types.Validator) (err error)
 	BeginBlockSync(hash []byte, header *types.Header) (err error)
 	EndBlockSync(height uint64) (resEndBlock types.ResponseEndBlock, err error)
@@ -45,7 +49,7 @@ type Client interface {
 
 func NewClient(addr, transport string, mustConnect bool) (client Client, err error) {
 	switch transport {
-	case "socket":
+	case "socket", "unix":
 		client, err = NewSocketClient(addr, mustConnect)
 	case "grpc":
 		client, err = NewGRPCClient(addr, mustConnect)

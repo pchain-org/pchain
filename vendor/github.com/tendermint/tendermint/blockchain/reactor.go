@@ -11,6 +11,7 @@ import (
 	"github.com/tendermint/go-p2p"
 	"github.com/tendermint/go-wire"
 	"github.com/tendermint/tendermint/proxy"
+	rpcTxHook "github.com/tendermint/tendermint/rpc/core/txhook"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
 	"fmt"
@@ -53,12 +54,13 @@ type BlockchainReactor struct {
 	requestsCh   chan BlockRequest
 	timeoutsCh   chan string
 	lastBlock    *types.Block
+	cch          rpcTxHook.CrossChainHelper
 
 	evsw types.EventSwitch
 }
 
 // NewBlockchainReactor returns new reactor instance.
-func NewBlockchainReactor(config cfg.Config, state *sm.State, proxyAppConn proxy.AppConnConsensus, store *BlockStore, fastSync bool) *BlockchainReactor {
+func NewBlockchainReactor(config cfg.Config, state *sm.State, proxyAppConn proxy.AppConnConsensus, store *BlockStore, fastSync bool, cch rpcTxHook.CrossChainHelper) *BlockchainReactor {
 	if state.LastBlockHeight == store.Height()-1 {
 		store.height-- // XXX HACK, make this better
 	}
@@ -138,7 +140,7 @@ func (bcR *BlockchainReactor) GetChannels() []*p2p.ChannelDescriptor {
 
 // AddPeer implements Reactor by sending our state to peer.
 func (bcR *BlockchainReactor) AddPeer(peer *p2p.Peer) {
-	if !peer.Send(BlockchainChannel, struct{ BlockchainMessage }{&bcStatusResponseMessage{bcR.store.Height()}}) {
+	if !peer.Send(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{&bcStatusResponseMessage{bcR.store.Height()}}) {
 		// doing nothing, will try later in `poolRoutine`
 	}
 }
@@ -158,8 +160,8 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 
 	logger.Debug("Receive", " src:", src, " chID:", chID, " msg:", msg)
 
-	var NON_ACCOUNT string = ""
-	var NON_EPOCH int = -1
+	//var NON_ACCOUNT string = ""
+	//var NON_EPOCH int = -1
 
 	switch msg := msg.(type) {
 	case *bcBlockRequestMessage:
@@ -167,7 +169,7 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 		block := bcR.store.LoadBlock(msg.Height)
 		if block != nil {
 			msg := &bcBlockResponseMessage{Block: block}
-			queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{msg})
+			queued := src.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{msg})
 			if !queued {
 				// queue is full, just ignore.
 			}
@@ -179,49 +181,50 @@ func (bcR *BlockchainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 		bcR.pool.AddBlock(src.Key, msg.Block, len(msgBytes))
 	case *bcStatusRequestMessage:
 		// Send peer our state.
-		queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{&bcStatusResponseMessage{bcR.store.Height()}})
+		queued := src.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{&bcStatusResponseMessage{bcR.store.Height()}})
 		if !queued {
 			// sorry
 		}
 	case *bcStatusResponseMessage:
 		// Got a peer status. Unverified.
 		bcR.pool.SetPeerHeight(src.Key, msg.Height)
-	case *bcValidatorRequestMessage:
+		/*
+			case *bcValidatorRequestMessage:
 
-		for epoch, v := range types.ValChangedEpoch {
-			for i:=0; i<len(v); i++ {
-				valMsg := &bcValidatorResponseMessage{Account: NON_ACCOUNT, Epoch: epoch, AcceptVotes: v[i]}
-				fmt.Println("sending bcValidatorResponseMessage")
-				fmt.Println("valMsg:", valMsg)
-				queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{valMsg})
-				if !queued {
-					fmt.Println("queue is full!!!")
+				for epoch, v := range types.ValChangedEpoch {
+					for i:=0; i<len(v); i++ {
+						valMsg := &bcValidatorResponseMessage{Account: NON_ACCOUNT, Epoch: epoch, AcceptVotes: v[i]}
+						fmt.Println("sending bcValidatorResponseMessage")
+						fmt.Println("valMsg:", valMsg)
+						queued := src.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{valMsg})
+						if !queued {
+							fmt.Println("queue is full!!!")
+						}
+					}
 				}
-			}
-		}
 
-		for account, acceptVote := range types.AcceptVoteSet {
-			valMsg := &bcValidatorResponseMessage{Account: account, Epoch: NON_EPOCH, AcceptVotes: acceptVote}
-			fmt.Println("sending bcValidatorResponseMessage")
-			fmt.Println("valMsg:", valMsg)
-			queued := src.TrySend(BlockchainChannel, struct{ BlockchainMessage }{valMsg})
-			if !queued {
-				fmt.Println("queue is full!!!")
-			}
-		}
+				for account, acceptVote := range types.AcceptVoteSet {
+					valMsg := &bcValidatorResponseMessage{Account: account, Epoch: NON_EPOCH, AcceptVotes: acceptVote}
+					fmt.Println("sending bcValidatorResponseMessage")
+					fmt.Println("valMsg:", valMsg)
+					queued := src.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{valMsg})
+					if !queued {
+						fmt.Println("queue is full!!!")
+					}
+				}
 
-	case *bcValidatorResponseMessage:
-		fmt.Println("received bcValidatorMessage!!!")
-		fmt.Println("bcValidatorMessage:", msg)
-		//TODO: here are bugs, may not handle here; should handle it in Consensus Reactor after catched up!!
-		if (msg.Account != NON_ACCOUNT && msg.Epoch != NON_EPOCH) || (msg.Account == NON_ACCOUNT && msg.Epoch == NON_EPOCH) {
-			fmt.Println("recevied wrong bcValidatorResponseMessage")
-		} else if msg.Account != NON_ACCOUNT {
-			types.ValChangedEpoch[msg.Epoch] = append(types.ValChangedEpoch[msg.Epoch], msg.AcceptVotes) //TODO validate???
-		} else {
-			types.AcceptVoteSet[msg.Account] = msg.AcceptVotes //TODO validate???
-		}
-
+			case *bcValidatorResponseMessage:
+				fmt.Println("received bcValidatorMessage!!!")
+				fmt.Println("bcValidatorMessage:", msg)
+				//TODO: here are bugs, may not handle here; should handle it in Consensus Reactor after catched up!!
+				if (msg.Account != NON_ACCOUNT && msg.Epoch != NON_EPOCH) || (msg.Account == NON_ACCOUNT && msg.Epoch == NON_EPOCH) {
+					fmt.Println("recevied wrong bcValidatorResponseMessage")
+				} else if msg.Account != NON_ACCOUNT {
+					types.ValChangedEpoch[msg.Epoch] = append(types.ValChangedEpoch[msg.Epoch], msg.AcceptVotes) //TODO validate???
+				} else {
+					types.AcceptVoteSet[msg.Account] = msg.AcceptVotes //TODO validate???
+				}
+		*/
 	default:
 		logger.Warn("Unknown message type ", reflect.TypeOf(msg))
 	}
@@ -246,7 +249,7 @@ FOR_LOOP:
 			}
 			msg := &bcBlockRequestMessage{request.Height}
 			//fmt.Printf("poolRoutine(), bcR.requestsCh with height & PeerID: %v, %v\n", request.Height, request.PeerID)
-			queued := peer.TrySend(BlockchainChannel, struct{ BlockchainMessage }{msg})
+			queued := peer.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{msg})
 			//fmt.Printf("poolRoutine(), queued is %v\n", queued);
 			if !queued {
 				// We couldn't make the request, send-queue full.
@@ -256,7 +259,7 @@ FOR_LOOP:
 
 			valMsg := &bcValidatorRequestMessage{}
 			//fmt.Printf("poolRoutine(), bcR.requestsCh with height & PeerID: %v, %v\n", request.Height, request.PeerID)
-			queued = peer.TrySend(BlockchainChannel, struct{ BlockchainMessage }{valMsg})
+			queued = peer.TrySend(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{valMsg})
 			//fmt.Printf("poolRoutine(), queued is %v\n", queued);
 			if !queued {
 				// We couldn't make the request, send-queue full.
@@ -288,7 +291,7 @@ FOR_LOOP:
 
 				_, val, _ := bcR.state.GetValidators()
 				fmt.Println("bcR.state.Validators:", val) //TODO
-				conR := bcR.Switch.Reactor("CONSENSUS").(consensusReactor)
+				conR := bcR.Switch.Reactor(bcR.state.ChainID, "CONSENSUS").(consensusReactor)
 				conR.SwitchToConsensus(bcR.state)
 
 				break FOR_LOOP
@@ -335,8 +338,7 @@ FOR_LOOP:
 					// NOTE: we could improve performance if we
 					// didn't make the app commit to disk every block
 					// ... but we would need a way to get the hash without it persisting
-					logger.Info(fmt.Sprintf("ApplyBlock:%+v", first))
-					err := bcR.state.ApplyBlock(bcR.evsw, bcR.proxyAppConn, first, firstPartsHeader, types.MockMempool{})
+					err := bcR.state.ApplyBlock(bcR.evsw, bcR.proxyAppConn, first, firstPartsHeader, types.MockMempool{}, bcR.cch)
 					if err != nil {
 						// TODO This is bad, are we zombie?
 						cmn.PanicQ(cmn.Fmt("Failed to process committed block (%d:%X): %v", first.Height, first.Hash(), err))
@@ -354,7 +356,7 @@ FOR_LOOP:
 
 // BroadcastStatusRequest broadcasts `BlockStore` height.
 func (bcR *BlockchainReactor) BroadcastStatusRequest() error {
-	bcR.Switch.Broadcast(BlockchainChannel, struct{ BlockchainMessage }{&bcStatusRequestMessage{bcR.store.Height()}})
+	bcR.Switch.Broadcast(bcR.state.ChainID, BlockchainChannel, struct{ BlockchainMessage }{&bcStatusRequestMessage{bcR.store.Height()}})
 	return nil
 }
 
@@ -368,12 +370,12 @@ func (bcR *BlockchainReactor) SetEventSwitch(evsw types.EventSwitch) {
 
 //modified by liaoyd
 const (
-	msgTypeBlockRequest   = byte(0x10)
-	msgTypeBlockResponse  = byte(0x11)
-	msgTypeStatusResponse = byte(0x20)
-	msgTypeStatusRequest  = byte(0x21)
-	msgTypeValidatorRequest      = byte(0x31)
-	msgTypeValidatorResponse     = byte(0x32)
+	msgTypeBlockRequest      = byte(0x10)
+	msgTypeBlockResponse     = byte(0x11)
+	msgTypeStatusResponse    = byte(0x20)
+	msgTypeStatusRequest     = byte(0x21)
+	msgTypeValidatorRequest  = byte(0x31)
+	msgTypeValidatorResponse = byte(0x32)
 )
 
 // BlockchainMessage is a generic message for this reactor.
@@ -456,8 +458,8 @@ func (m *bcValidatorRequestMessage) String() string {
 //liaoyd
 //send validators during fast sync from types.ValChangedHeight
 type bcValidatorResponseMessage struct {
-	Account string
-	Epoch   int
+	Account     string
+	Epoch       int
 	AcceptVotes *types.AcceptVotes
 	//the above tri-tuble to represent the following structures:
 	//ValChangedEpoch map[int][]*types.AcceptVotes

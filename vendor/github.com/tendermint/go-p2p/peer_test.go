@@ -89,7 +89,7 @@ func createOutboundPeerAndPerformHandshake(addr *NetAddress, config *PeerConfig)
 	err = p.HandshakeTimeout(&NodeInfo{
 		PubKey:  pk.PubKey().(crypto.PubKeyEd25519),
 		Moniker: "host_peer",
-		Network: "testing",
+		Networks: NetworkSet{"testing": {}},
 		Version: "123.123.123",
 	}, 1*time.Second)
 	if err != nil {
@@ -140,7 +140,7 @@ func (p *remotePeer) accept(l net.Listener) {
 		err = peer.HandshakeTimeout(&NodeInfo{
 			PubKey:  p.PrivKey.PubKey().(crypto.PubKeyEd25519),
 			Moniker: "remote_peer",
-			Network: "testing",
+			Networks: NetworkSet{"testing": {}},
 			Version: "123.123.123",
 		}, 1*time.Second)
 		if err != nil {

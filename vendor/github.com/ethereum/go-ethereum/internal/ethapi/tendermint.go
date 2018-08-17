@@ -1,18 +1,21 @@
 package ethapi
 
 import (
-	"github.com/ethereum/go-ethereum/rpc"
-	"golang.org/x/net/context"
+	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	st "github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core"
-	"strings"
+	st "github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb/errors"
-	"math/big"
+	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/tendermint/rpc/core/types"
+	"golang.org/x/net/context"
+	"math/big"
+	"strings"
 )
 
 var (
@@ -20,22 +23,31 @@ var (
 )
 
 const (
-	SVM_JOIN = "join"
+	VNEFuncName = "VoteNextEpoch"
+	REVFuncName = "RevealVote"
+
+	// Reveal Vote Parameters
+	REV_ARGS_FROM    = "from"
+	REV_ARGS_PUBKEY  = "pubkey"
+	REV_ARGS_DEPOSIT = "amount"
+	REV_ARGS_SALT    = "salt"
+
+	SVM_JOIN     = "join"
 	SVM_WITHDRAW = "withdraw"
-	SVM_ACCEPT = "accept"
+	SVM_ACCEPT   = "accept"
 )
 
 type PublicTendermintAPI struct {
-	am *accounts.Manager
-	b  Backend
+	am     *accounts.Manager
+	b      Backend
 	Client Client
 }
 
 // NewPublicEthereumAPI creates a new Etheruem protocol API.
 func NewPublicTendermintAPI(b Backend) *PublicTendermintAPI {
 	return &PublicTendermintAPI{
-		am: b.AccountManager(),
-		b:  b,
+		am:     b.AccountManager(),
+		b:      b,
 		Client: b.Client(),
 	}
 }
@@ -47,7 +59,7 @@ func (s *PublicTendermintAPI) GetBlock(ctx context.Context, blockNumber rpc.Bloc
 
 	//fmt.Printf("GetBlock() called with startBlock: %v\n", blockNumber)
 	params := map[string]interface{}{
-		"height":  blockNumber,
+		"height": blockNumber,
 	}
 
 	_, err := s.Client.Call("block", params, &result)
@@ -81,7 +93,7 @@ func (s *PublicTendermintAPI) GetEpoch(ctx context.Context, number uint64) (inte
 
 	//fmt.Printf("GetEpoch() called with address: %v\n", address)
 	params := map[string]interface{}{
-		"number":  number,
+		"number": number,
 	}
 	_, err := s.Client.Call("epoch", params, &result)
 	if err != nil {
@@ -100,8 +112,8 @@ func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string, 
 
 	//fmt.Printf("GetValidator() called with address: %v\n", address)
 	params := map[string]interface{}{
-		"address":  strings.ToLower(address),
-		"epoch": epoch,
+		"address": strings.ToLower(address),
+		"epoch":   epoch,
 	}
 
 	_, err := s.Client.Call("validator_epoch", params, &result)
@@ -113,7 +125,76 @@ func (s *PublicTendermintAPI) GetValidator(ctx context.Context, address string, 
 	//fmt.Printf("tdm_getValidator: %v\n", result)
 	return result.(*core_types.ResultValidatorEpoch), nil
 }
-func (s *PublicTendermintAPI) GetUnconfirmedValidatorsOperation(ctx context.Context) (interface{}, error){
+
+func (s *PublicTendermintAPI) VoteNextEpoch(ctx context.Context, from common.Address, voteHash common.Hash) (common.Hash, error) {
+
+	params := types.MakeKeyValueSet()
+	params.Set("from", from)
+	params.Set("voteHash", voteHash)
+
+	etd := &types.ExtendTxData{
+		FuncName: VNEFuncName,
+		Params:   params,
+	}
+
+	args := SendTxArgs{
+		From:         from,
+		To:           nil,
+		Gas:          nil,
+		GasPrice:     nil,
+		Value:        nil,
+		Data:         nil,
+		Nonce:        nil,
+		Type:         nil,
+		ExtendTxData: etd,
+	}
+
+	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
+}
+
+func (s *PublicTendermintAPI) RevealVote(ctx context.Context, from common.Address, pubkey string, amount *big.Int, salt string) (common.Hash, error) {
+
+	params := types.MakeKeyValueSet()
+	params.Set(REV_ARGS_FROM, from)
+	params.Set(REV_ARGS_PUBKEY, pubkey)
+	params.Set(REV_ARGS_DEPOSIT, amount)
+	params.Set(REV_ARGS_SALT, salt)
+
+	etd := &types.ExtendTxData{
+		FuncName: REVFuncName,
+		Params:   params,
+	}
+
+	args := SendTxArgs{
+		From:         from,
+		To:           nil,
+		Gas:          nil,
+		GasPrice:     nil,
+		Value:        nil,
+		Data:         nil,
+		Nonce:        nil,
+		Type:         nil,
+		ExtendTxData: etd,
+	}
+
+	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
+}
+
+func (s *PublicTendermintAPI) GetEpochVote(ctx context.Context) (interface{}, error) {
+
+	var result core_types.TMResult
+
+	_, err := s.Client.Call("epoch_votes", nil, &result)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+
+	return result.(*core_types.ResultEpochVotes), nil
+}
+
+// Deprecated
+func (s *PublicTendermintAPI) GetUnconfirmedValidatorsOperation(ctx context.Context) (interface{}, error) {
 
 	var result core_types.TMResult
 
@@ -129,7 +210,8 @@ func (s *PublicTendermintAPI) GetUnconfirmedValidatorsOperation(ctx context.Cont
 	return result.(*core_types.ResultValidatorsOperation), nil
 }
 
-func (s *PublicTendermintAPI) GetConfirmedValidatorsOperation(ctx context.Context, epoch uint64) (interface{}, error){
+// Deprecated
+func (s *PublicTendermintAPI) GetConfirmedValidatorsOperation(ctx context.Context, epoch uint64) (interface{}, error) {
 	var result core_types.TMResult
 
 	//fmt.Printf("GetValidator() called with address: %v\n", address)
@@ -147,8 +229,9 @@ func (s *PublicTendermintAPI) GetConfirmedValidatorsOperation(ctx context.Contex
 	return result.(*core_types.ResultValidatorsOperation), nil
 }
 
+// Deprecated
 func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from common.Address, epoch uint64, power uint64,
-						action string, hash string) (common.Hash, error) {
+	action string, hash string) (common.Hash, error) {
 	fmt.Println("in func (s *PublicTendermintAPI) SendValidatorMessage()")
 
 	action = strings.ToLower(action)
@@ -168,13 +251,13 @@ func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from com
 
 	fromStr := fmt.Sprintf("%X", from.Bytes())
 	/*
-	data := fmt.Sprintf("%s-%X-%X-%s-%s", fromStr, epoch, power, action, targetStr)
-	fmt.Printf("in func (s *PublicTendermintAPI) SendValidatorMessage(), data to sign is: %v\n", data)
+		data := fmt.Sprintf("%s-%X-%X-%s-%s", fromStr, epoch, power, action, targetStr)
+		fmt.Printf("in func (s *PublicTendermintAPI) SendValidatorMessage(), data to sign is: %v\n", data)
 
-	signature, err := s.Sign(ctx, from, data)
-	if err != nil {
-		return common.Hash{}, err
-	}
+		signature, err := s.Sign(ctx, from, data)
+		if err != nil {
+			return common.Hash{}, err
+		}
 	*/
 	/*params := map[string]interface{}{
 		"from": fromStr,
@@ -193,12 +276,12 @@ func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from com
 
 	fmt.Printf("params are : %s\n", params.String())
 
-	etd := &types.ExtendTxData {
-		FuncName:    SvmFuncName,
-		Params:      params,
+	etd := &types.ExtendTxData{
+		FuncName: SvmFuncName,
+		Params:   params,
 	}
 
-	args := SendTxArgs {
+	args := SendTxArgs{
 		From:         from,
 		To:           nil,
 		Gas:          nil,
@@ -210,7 +293,7 @@ func (s *PublicTendermintAPI) SendValidatorMessage(ctx context.Context, from com
 		ExtendTxData: etd,
 	}
 
-	return ApiBridge.SendTransaction(ctx, args)
+	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
 // SendTransaction creates a transaction for the given argument, sign it and submit it to the
@@ -248,13 +331,14 @@ func (s *PublicTendermintAPI) Sign(ctx context.Context, from common.Address, dat
 */
 
 func init() {
-
-	core.RegisterValidateCb(SvmFuncName, svm_ValidateCb)
-	core.RegisterApplyCb(SvmFuncName, svm_ApplyCb)
+	core.RegisterValidateCb(REVFuncName, revealVote_ValidateCb)
+	core.RegisterApplyCb(REVFuncName, revealVote_ApplyCb)
+	//core.RegisterValidateCb(SvmFuncName, svm_ValidateCb)
+	//core.RegisterApplyCb(SvmFuncName, svm_ApplyCb)
 }
 
-
-func svm_ValidateCb(tx *types.Transaction, state *st.StateDB) error{
+// Deprecated
+func svm_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 
 	fmt.Println("svm_ValidateCb")
 
@@ -287,9 +371,9 @@ func svm_ValidateCb(tx *types.Transaction, state *st.StateDB) error{
 	return nil
 }
 
-
 /*must not handle SVM_WITHDRAW here, need wait for 2 more epoch*/
-func svm_ApplyCb(tx *types.Transaction, state *st.StateDB) error{
+// Deprecated
+func svm_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
 
 	fmt.Println("svm_ApplyCb")
 
@@ -317,5 +401,56 @@ func svm_ApplyCb(tx *types.Transaction, state *st.StateDB) error{
 	fmt.Printf("balance for(%s) is : (%v, %v), biPower is %v\n",
 		from.Hex(), state.GetBalance(from), state.GetLockedBalance(from), biPower.String())
 
+	return nil
+}
+
+func revealVote_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
+	etd := tx.ExtendTxData()
+
+	fromVar, _ := etd.Params.Get(REV_ARGS_FROM)
+	from := fromVar.(common.Address)
+	pubkeyVar, _ := etd.Params.Get(REV_ARGS_PUBKEY)
+	pubkey := pubkeyVar.(string)
+	depositAmountVar, _ := etd.Params.Get(REV_ARGS_DEPOSIT)
+	depositAmount := depositAmountVar.(*big.Int)
+
+	// Check PubKey match the Address
+	pubkeySlice := ethcrypto.FromECDSAPub(ethcrypto.ToECDSAPub(common.FromHex(pubkey)))
+	if pubkeySlice == nil {
+		return errors.New("your Public Key is not valid, please provide a valid Public Key")
+	}
+
+	validatorPubkey := crypto.EthereumPubKey(pubkeySlice)
+	if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
+		return errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
+	}
+
+	// Check Balance (Available + Lock)
+	total := new(big.Int).Add(state.GetBalance(from), state.GetLockedBalance(from))
+
+	if total.Cmp(depositAmount) == -1 {
+		return core.ErrBalance
+	}
+	return nil
+}
+
+func revealVote_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
+	etd := tx.ExtendTxData()
+
+	fromVar, _ := etd.Params.Get(REV_ARGS_FROM)
+	from := common.BytesToAddress(fromVar.([]byte))
+	depositAmountVar, _ := etd.Params.Get(REV_ARGS_DEPOSIT)
+	depositAmount := new(big.Int).SetBytes(depositAmountVar.([]byte))
+
+	// if lock balance less than deposit amount, then add enough amount to locked balance
+	if state.GetLockedBalance(from).Cmp(depositAmount) == -1 {
+		difference := new(big.Int).Sub(depositAmount, state.GetLockedBalance(from))
+		if state.GetBalance(from).Cmp(difference) == -1 {
+			return core.ErrBalance
+		} else {
+			state.SubBalance(from, difference)
+			state.AddLockedBalance(from, difference)
+		}
+	}
 	return nil
 }
