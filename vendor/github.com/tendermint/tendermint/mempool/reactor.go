@@ -111,8 +111,19 @@ func (memR *MempoolReactor) broadcastTxRoutine(peer *p2p.Peer) {
 			// This happens because the CElement we were looking at got
 			// garbage collected (removed).  That is, .NextWait() returned nil.
 			// Go ahead and start from the beginning.
-			next = memR.Mempool.TxsFrontWait() // Wait until a tx is available
+
+			select {
+			case <-memR.Mempool.TxsWaitChan(): // Wait until a tx is available
+				if next = memR.Mempool.TxsFront(); next == nil {
+					continue
+				}
+			case <-peer.Quit:
+				return
+			case <-memR.Quit:
+				return
+			}
 		}
+
 		memTx := next.Value.(*mempoolTx)
 		// make sure the peer is up to date
 		height := memTx.Height()
