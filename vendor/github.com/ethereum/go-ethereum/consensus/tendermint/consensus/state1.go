@@ -25,8 +25,8 @@ func (bs *ConsensusState) GetChainReader() consss.ChainReader {
 func (cs *ConsensusState) StartNewHeight() {
 
 	//start locking
-	cs.nhMtx.Lock()
-	defer cs.nhMtx.Unlock()
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
 
 	//reload the block
 	cr := cs.backend.ChainReader()
@@ -39,7 +39,7 @@ func (cs *ConsensusState) StartNewHeight() {
 	cs.UpdateToStateAndEpoch(state, epoch)
 
 	cs.newStep()
-	cs.scheduleRound0(cs.GetRoundState())
+	cs.scheduleRound0(cs.getRoundState()) //not use cs.GetRoundState to avoid dead-lock
 }
 
 func (cs *ConsensusState) InitStateAndEpoch() (*sm.State, *ep.Epoch) {
