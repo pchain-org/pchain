@@ -145,18 +145,30 @@ func GenPrivValidator(keydir string) *PrivValidator {
 	}
 	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
 	privKey := crypto.EthereumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
-	fmt.Println(len(privKey), len(pubKey), len(pubKey.Address()))
+	keyPair := bls.GenerateKey()
+	blsPrivKey := crypto.BLSPrivKey(keyPair.Private().Marshal())
+	blsPubKey := blsPrivKey.PubKey()
+	fmt.Println("start")
+	fmt.Println(common.ToHex(blsPrivKey.Bytes()))
+	fmt.Println(common.ToHex(blsPrivKey.PubKey().Bytes()))
+	msg := "hello world"
+	sign := blsPrivKey.Sign([]byte(msg))
+	fmt.Println("verify:", blsPrivKey.PubKey().VerifyBytes([]byte(msg), sign))
+	fmt.Println(common.ToHex(blsPrivKey.PubKey().Bytes()))
 	return &PrivValidator{
-		Address:       pubKey.Address(),
-		PubKey:        pubKey,
-		PrivKey:       privKey,
+		Address:       blsPubKey.Address(),
+		PubKey:        blsPubKey,
+		PrivKey:       blsPrivKey,
+		EthereumAddress:    pubKey.Address(),
+		EthereumPrivKey:    privKey,
+		EthereumPubKey:     pubKey,
 		LastHeight:    0,
 		LastRound:     0,
 		LastStep:      stepNone,
 		LastSignature: nil,
 		LastSignBytes: nil,
 		filePath:      "",
-		Signer:        NewDefaultSigner(privKey),
+		Signer:        NewDefaultSigner(blsPrivKey),
 	}
 }
 

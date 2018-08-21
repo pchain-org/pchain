@@ -32,7 +32,7 @@ import (
 const (
 	newHeightChangeSleepDuration     = 2000 * time.Millisecond
 	sendPrecommitSleepDuration       = 100 * time.Millisecond
-	preProposeSleepDuration          = 60000 * time.Millisecond // Time to sleep before starting consensus.
+	preProposeSleepDuration          = 20000 * time.Millisecond // Time to sleep before starting consensus.
 )
 
 //-----------------------------------------------------------------------------

@@ -111,7 +111,7 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 		GasLimit:   "0x8000000",
 		Difficulty: "0x400",
 		Mixhash:    "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Coinbase:   common.ToHex((*validators[0]).Address),
+		Coinbase:   common.ToHex((*validators[0]).EthereumPubKey.Address()),
 		Alloc: map[string]struct {
 			Code    string
 			Storage map[string]string
@@ -126,7 +126,7 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 		otherConPub, l := validator.PubKey.(crypto.BLSPubKey)
 		otherEthPub, r := validator.EthereumPubKey.(crypto.EthereumPubKey)
 		if l && r {
-			coreGenesis.Alloc[common.ToHex(validator.Address)] = struct {
+			coreGenesis.Alloc[common.ToHex(validator.EthereumPubKey.Address())] = struct {
 				Code    string
 				Storage map[string]string
 				Balance string
