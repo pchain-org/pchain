@@ -352,7 +352,6 @@ func (n *Node) OnStart1() error {
 
 	//TODO: The node info may not be ready???
 	consensusState.SetNodeInfo(n.sw.NodeInfo())
-
 	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
 
 	// Add Reactor to P2P Switch

@@ -44,6 +44,7 @@ type ConsensusReactor struct {
 	fastSync bool
 	evsw     types.EventSwitch
 	peerStates    map[string]*PeerState
+	peers 		  []*p2p.Peer
 }
 
 func NewConsensusReactor(consensusState *ConsensusState, fastSync bool) *ConsensusReactor {
@@ -164,6 +165,7 @@ func (conR *ConsensusReactor) AddPeer(peer *p2p.Peer) {
 	peerKey := peer.PeerKey()
 	if peerKey != "" {
 		conR.peerStates[peerKey] = peerState
+		conR.peers = append(conR.peers, peer)
 	}
 	// go conR.GetDiffValidator()
 
@@ -412,8 +414,7 @@ func (conR *ConsensusReactor) broadcastNewRoundStep(rs *RoundState) {
 
 func (conR *ConsensusReactor) broadcastProposalBlockParts(proposal *types.Proposal, parts *types.PartSet) {
 	if proposal != nil && parts != nil {
-		peers := conR.Switch.Peers().List()
-		for _, peer := range peers {
+		for _, peer := range conR.peers {
 			go conR.sendProposalBlockParts(peer, proposal, parts)
 		}
 	}
@@ -465,8 +466,7 @@ func (conR *ConsensusReactor) sendProposalBlockParts(peer *p2p.Peer, proposal *t
 func (conR *ConsensusReactor) broadcastProposal(proposal *types.Proposal) {
 	if proposal != nil {
 		msg := &ProposalMessage{Proposal: proposal}
-		peers := conR.Switch.Peers().List()
-		for _, peer := range peers {
+		for _, peer := range conR.peers {
 			peerState, ok := conR.peerStates[peer.PeerKey()]
 			if ok {
 				go func(peer *p2p.Peer, peerState *PeerState) {
@@ -486,8 +486,7 @@ func (conR *ConsensusReactor) broadcastBlockPart(round, height int, part *types.
 			Round:  round,  // This tells peer that this part applies to us.
 			Part:   part,
 		}
-		peers := conR.Switch.Peers().List()
-		for _, peer := range peers {
+		for _, peer := range conR.peers {
 			peerState, ok := conR.peerStates[peer.PeerKey()]
 			if ok {
 				go func(peer *p2p.Peer, peerState *PeerState) {
@@ -503,8 +502,7 @@ func (conR *ConsensusReactor) broadcastBlockPart(round, height int, part *types.
 func (conR *ConsensusReactor) broadcastSignAggr(sign *types.SignAggr) {
 	if sign != nil {
 		msg := &Maj23SignAggrMessage{Maj23SignAggr: sign}
-		peers := conR.Switch.Peers().List()
-		for _, peer := range peers {
+		for _, peer := range conR.peers {
 			peerState, ok := conR.peerStates[peer.PeerKey()]
 			if ok {
 				go func(peer *p2p.Peer, peerState *PeerState) {

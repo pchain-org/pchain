@@ -345,8 +345,9 @@ func GetChildChainForLaunch(db dbm.DB, height uint64, stateDB *state.StateDB) []
 				stateDB.SubLockedBalance(jv.Address, jv.DepositAmount)
 				stateDB.AddBalance(jv.Address, jv.DepositAmount)
 			}
+
 			// remove it
-			DeletePendingChildChainData(db, v.ChainID)
+			db.DeleteSync(calcPendingChainInfoKey(v.ChainID))
 		} else {
 			// check condition
 			cci := GetPendingChildChainData(db, v.ChainID)

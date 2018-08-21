@@ -155,7 +155,7 @@ func revealTheVoteDeliverTxCb(tx *ethTypes.Transaction, ep *epoch.Epoch) error {
 
 	if exist {
 		// Update the Hash Vote with Real Data
-		vote.PubKey = crypto.EthereumPubKey(common.FromHex(pubkey))
+		vote.PubKey = crypto.BLSPubKey(common.FromHex(pubkey))
 		vote.Amount = amount
 		vote.Salt = salt
 		vote.TxHash = txhash
