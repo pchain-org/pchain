@@ -234,12 +234,8 @@ func (self *worker) stop() {
 		}
 	}
 
-	if istanbul, ok := self.engine.(consensus.Istanbul); ok {
-		istanbul.Stop()
-	}
-
-	if tendermint, ok := self.engine.(consensus.Tendermint); ok {
-		tendermint.Stop()
+	if stoppableEngine, ok := self.engine.(consensus.EngineStartStop); ok {
+		stoppableEngine.Stop()
 	}
 
 	atomic.StoreInt32(&self.mining, 0)
@@ -630,7 +626,6 @@ func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, c
 	return nil, receipt.Logs
 }
 
-
 func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.TransactionsByPriceAndNonce, bc *core.BlockChain,
 	coinbase common.Address, totalUsedMoney *big.Int, cch core.CrossChainHelper) {
 
@@ -671,7 +666,6 @@ func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.Transaction
 
 		// Start executing the transaction
 		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
-
 
 		//hash2 := env.state.IntermediateRoot(bc.Config().IsEIP158(big.NewInt(0)))
 		fmt.Printf("commitTransactionsEx loop:2\n")
@@ -752,7 +746,6 @@ func (env *Work) commitTransactionEx(tx *types.Transaction, bc *core.BlockChain,
 	env.receipts = append(env.receipts, receipt)
 
 	fmt.Printf("commitTransactionEx 2\n")
-
 
 	return nil, receipt.Logs
 }

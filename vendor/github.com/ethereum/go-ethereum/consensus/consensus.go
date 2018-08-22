@@ -55,7 +55,6 @@ type ChainReader interface {
 	// CurrentBlock retrieves the current head block of the canonical chain. The
 	// block is retrieved from the blockchain's internal cache.
 	CurrentBlock() *types.Block
-
 }
 
 // Engine is an algorithm agnostic consensus engine.
@@ -133,10 +132,7 @@ type PoW interface {
 	Hashrate() float64
 }
 
-// Istanbul is a consensus engine to avoid byzantine failure
-type Istanbul interface {
-	Engine
-
+type EngineStartStop interface {
 	// Start starts the engine
 	Start(chain ChainReader, currentBlock func() *types.Block, hasBadBlock func(hash common.Hash) bool) error
 
@@ -144,13 +140,16 @@ type Istanbul interface {
 	Stop() error
 }
 
+// Istanbul is a consensus engine to avoid byzantine failure
+type Istanbul interface {
+	Engine
+
+	EngineStartStop
+}
+
 // Tendermint is a consensus engine to avoid byzantine failure
 type Tendermint interface {
 	Engine
 
-	// Start starts the engine
-	Start(chain ChainReader, currentBlock func() *types.Block, hasBadBlock func(hash common.Hash) bool) error
-
-	// Stop stops the engine
-	Stop() error
+	EngineStartStop
 }

@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/golang-lru"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"math/big"
-	"runtime/debug"
 	"time"
 )
 
@@ -119,7 +118,7 @@ func (sb *backend) Stop() error {
 
 	logger.Info("Tendermint (backend) Stop, add logic here")
 
-	debug.PrintStack()
+	//debug.PrintStack()
 
 	sb.coreMu.Lock()
 	defer sb.coreMu.Unlock()
