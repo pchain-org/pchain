@@ -1,60 +1,61 @@
 package tendermint
 
 import (
-	"net/http"
-	"strings"
 	cmn "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-p2p"
+	"net/http"
+	"strings"
 
-	ethTypes  "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/logger"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 
-	_ "net/http/pprof"
 	"fmt"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
-	"io/ioutil"
-	"time"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/pchain/common/plogger"
+	"io/ioutil"
+	_ "net/http/pprof"
+	"time"
 )
 
+var logger = plogger.GetLogger("tendermint")
 
 type PChainP2P interface {
-	Switch()   *p2p.Switch
+	Switch() *p2p.Switch
 	AddrBook() *p2p.AddrBook
 }
 
 type Node struct {
 	cmn.BaseService
-						     // config
-	config        cfg.Config           // user config
+	// config
+	config cfg.Config // user config
 	//genesisDoc    *types.GenesisDoc    // initial validator set
 	privValidator *types.PrivValidator // local node's validator key
 
-	epochDB       dbm.DB
+	epochDB dbm.DB
 
-	sw       *p2p.Switch           // p2p connections
-	addrBook *p2p.AddrBook         // known peers
+	sw       *p2p.Switch   // p2p connections
+	addrBook *p2p.AddrBook // known peers
 
-						     // services
-	evsw             types.EventSwitch           // pub/sub for services
+	// services
+	evsw types.EventSwitch // pub/sub for services
 	//blockStore       *bc.BlockStore              // store the blockchain to disk
 	consensusState   *consensus.ConsensusState   // latest consensus state
 	consensusReactor *consensus.ConsensusReactor // for participating in the consensus
 	//txIndexer        txindex.TxIndexer
 
-	backend          *backend
-	cch              core.CrossChainHelper
+	backend *backend
+	cch     core.CrossChainHelper
 }
-
 
 func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, cch core.CrossChainHelper) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
-	privValidator := types.LoadOrGenPrivValidator(privValidatorFile)
+	keydir := config.GetString("keystore")
+	privValidator := types.LoadOrGenPrivValidator(privValidatorFile, keydir)
 
 	ep.VADB = dbm.NewDB("validatoraction", config.GetString("db_backend"), config.GetString("db_dir"))
 
@@ -65,7 +66,7 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
-	consensusReactor := consensus.NewConsensusReactor(consensusState/*, fastSync*/)
+	consensusReactor := consensus.NewConsensusReactor(consensusState /*, fastSync*/)
 
 	// Add Reactor to P2P Switch
 	sw.AddReactor(config.GetString("chain_id"), "CONSENSUS", consensusReactor)
@@ -80,59 +81,60 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 		config:        config,
 		privValidator: privValidator,
 
-		epochDB:       epochDB,
+		epochDB: epochDB,
 
-		sw:            sw,
-		addrBook:      addrBook,
+		sw:       sw,
+		addrBook: addrBook,
 
-		evsw:          eventSwitch,
+		evsw: eventSwitch,
 
-		backend:       backend,
-		cch:           cch,
+		backend: backend,
+		cch:     cch,
 
-		consensusState:		consensusState,
-		consensusReactor:	consensusReactor,
+		consensusState:   consensusState,
+		consensusReactor: consensusReactor,
 	}
-	node.BaseService = *cmn.NewBaseService(logger.Log, "Node", node)
+	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
 
 	consensusState.SetNode(node)
 
 	return node
 }
 
-
 func (n *Node) OnStart() error {
 
-	fmt.Printf("(n *Node) OnStart()\n")
+	logger.Infoln("(n *Node) OnStart()")
 
 	/*
-	state, epoch := n.consensusState.InitStateAndEpoch()
-	n.consensusState.Initialize()
-	n.consensusState.UpdateToStateAndEpoch(state, epoch)
+		state, epoch := n.consensusState.InitStateAndEpoch()
+		n.consensusState.Initialize()
+		n.consensusState.UpdateToStateAndEpoch(state, epoch)
 	*/
 	_, err := n.evsw.Start()
 	if err != nil {
 		cmn.Exit(cmn.Fmt("Failed to start switch: %v", err))
 	}
 
+	// Add ChainID to P2P Node Info
+	n.sw.NodeInfo().AddNetwork(n.config.GetString("chain_id"))
+
 	// Start the Reactors for this Chain
-	n.sw.StartChainReactor(n.config.GetString("chain_id")/*state.TdmExtra.ChainID*/)
+	n.sw.StartChainReactor(n.config.GetString("chain_id") /*state.TdmExtra.ChainID*/)
 
 	// run the profile server
 	profileHost := n.config.GetString("prof_laddr")
 	if profileHost != "" {
 
 		go func() {
-			logger.Log.Warn("Profile server", "error", http.ListenAndServe(profileHost, nil))
+			logger.Warn("Profile server", "error", http.ListenAndServe(profileHost, nil))
 		}()
 	}
 
 	return nil
 }
 
-
 func (n *Node) OnStop() {
-	fmt.Printf("(n *Node) OnStop() called\n")
+	logger.Infoln("(n *Node) OnStop() called")
 	n.BaseService.OnStop()
 
 	n.sw.StopChainReactor(n.consensusState.GetState().TdmExtra.ChainID)
@@ -294,7 +296,6 @@ func ProtocolAndAddress(listenAddr string) (string, string) {
 	return protocol, address
 }
 
-
 func MakeTendermintNode(backend *backend, config cfg.Config, pNode PChainP2P, cch core.CrossChainHelper) *Node {
 
 	genDocFile := config.GetString("genesis_file")
@@ -323,4 +324,3 @@ func MakeTendermintNode(backend *backend, config cfg.Config, pNode PChainP2P, cc
 
 	return NewNodeNotStart(backend, config, pNode.Switch(), pNode.AddrBook(), cch)
 }
-

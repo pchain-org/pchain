@@ -7,11 +7,11 @@ import (
 	"github.com/tendermint/go-p2p"
 	"strings"
 	//"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/null"
-	"github.com/tendermint/go-rpc"
-	"github.com/tendermint/go-wire"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
 	rpccore "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/version"
+	"github.com/tendermint/go-rpc"
+	"github.com/tendermint/go-wire"
 )
 
 type PChainP2P struct {
@@ -28,16 +28,16 @@ func StartP2P(p2pconfig cfg.Config) (*PChainP2P, error) {
 	// Make p2p network switch
 	sw := p2p.NewSwitch(p2pconfig.GetConfig("p2p"))
 
+	// add the chain reactor
+	chainReactor := NewChainReactor()
+	sw.AddReactor("pchain", "CHILDCHAIN", chainReactor)
+
 	// Optionally, start the pex reactor
 	var addrBook *p2p.AddrBook
 	if p2pconfig.GetBool("pex_reactor") {
 		addrBook = p2p.NewAddrBook(p2pconfig.GetString("addrbook_file"), p2pconfig.GetBool("addrbook_strict"))
 		pexReactor := p2p.NewPEXReactor(addrBook)
 		sw.AddReactor("pchain", "PEX", pexReactor)
-	} else { //add base reactor to keep p2p network alive
-		implReactor := &p2p.BaseReactor{}
-		baseReactor := p2p.NewBaseReactor(nil, "BaseReactor", implReactor)
-		sw.AddReactor("pchain", "BaseReactor", baseReactor)
 	}
 
 	// Filter peers by addr or pubkey with an ABCI query.
@@ -118,6 +118,15 @@ func (pNode *PChainP2P) Switch() *p2p.Switch {
 // AddrBook return the P2P Address Book
 func (pNode *PChainP2P) AddrBook() *p2p.AddrBook {
 	return pNode.addrBook
+}
+
+// BroadcastChildChainID broadcast the child chain id to all the peers
+func (pNode *PChainP2P) BroadcastChildChainID(childChainID string) {
+	// Find the right Reactor
+	chainRouter := pNode.sw.Reactor("pchain", "CHILDCHAIN").(*ChainReactor)
+
+	// Then send
+	chainRouter.broadcastNewChainIDRequest(childChainID)
 }
 
 func makeNodeInfo(p2pconfig cfg.Config, privKey crypto.PrivKeyEd25519, sw *p2p.Switch) *p2p.NodeInfo {

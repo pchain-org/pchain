@@ -1,15 +1,14 @@
 package node
 
 import (
+	"errors"
+	"fmt"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
-	"fmt"
-	"reflect"
 	"net/http"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"errors"
+	"reflect"
 )
-
 
 func (n *Node) Backend() ethapi.Backend {
 	return n.backend
@@ -28,26 +27,26 @@ func (n *Node) Start1() error {
 	}
 
 	// Short circuit if the node's already running
-	if n.p2pServer == nil{
+	if n.p2pServer == nil {
 		return ErrNodeStopped
 	}
 
 	/*
-	p2pConfig, protocols, err := n.GatherP2PConfigAndProtocols()
-	if err != nil {
-		return err
-	}
+		p2pConfig, protocols, err := n.GatherP2PConfigAndProtocols()
+		if err != nil {
+			return err
+		}
 	*/
 	//running := &p2p.Server{Config: n.serverConfig}
 	//n.log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
 	/*
-	for _, service := range services {
-		running.Protocols = append(running.Protocols, service.Protocols()...)
-	}
+		for _, service := range services {
+			running.Protocols = append(running.Protocols, service.Protocols()...)
+		}
 
-	if err := running.Start(); err != nil {
-		return convertFileLockError(err)
-	}
+		if err := running.Start(); err != nil {
+			return convertFileLockError(err)
+		}
 	*/
 
 	//service should be gathered before
@@ -86,7 +85,7 @@ func (n *Node) Start1() error {
 	return nil
 }
 
-func (n *Node)GatherServices() error {
+func (n *Node) GatherServices() error {
 
 	// Otherwise copy and specialize the P2P configuration
 	services := make(map[reflect.Type]Service)
@@ -118,7 +117,7 @@ func (n *Node)GatherServices() error {
 	return nil
 }
 
-func (n *Node)GatherP2PConfigAndProtocols() (p2p.Config, []p2p.Protocol, error) {
+func (n *Node) GatherP2PConfigAndProtocols() (p2p.Config, []p2p.Protocol, error) {
 
 	// Short circuit if the node's already running
 	if n.server != nil {
@@ -149,7 +148,7 @@ func (n *Node)GatherP2PConfigAndProtocols() (p2p.Config, []p2p.Protocol, error) 
 	n.log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
 
 	// Gather the protocols and start the freshly assembled P2P server
-	protocols := make([]p2p.Protocol,0)
+	protocols := make([]p2p.Protocol, 0)
 	for _, service := range n.services {
 		protocols = append(protocols, service.Protocols()...)
 	}
@@ -193,7 +192,6 @@ func (n *Node) GetRPCHandler() (http.Handler, error) {
 
 	return rpc.NewCorsHandler(handler, n.config.HTTPCors), nil
 }
-
 
 func (n *Node) startRPC1(services map[reflect.Type]Service) error {
 

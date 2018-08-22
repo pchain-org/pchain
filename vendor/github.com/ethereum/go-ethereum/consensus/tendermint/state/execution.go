@@ -4,12 +4,11 @@ import (
 	"errors"
 	//"fmt"
 
-	. "github.com/tendermint/go-common"
-	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	. "github.com/tendermint/go-common"
 )
-
 
 //--------------------------------------------------
 
@@ -43,13 +42,13 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 
 	// Validate block SeenCommit.
 	epoch := s.Epoch.GetEpochByBlockNumber(int(block.TdmExtra.Height))
-	if epoch == nil || epoch.Validators == nil{
+	if epoch == nil || epoch.Validators == nil {
 		return errors.New("no epoch for current block height")
 	}
 
 	valSet := epoch.Validators
 	err = valSet.VerifyCommit(block.TdmExtra.ChainID, block.TdmExtra.Height,
-								block.TdmExtra.SeenCommit)
+		block.TdmExtra.SeenCommit)
 	if err != nil {
 		return err
 	}
@@ -59,7 +58,7 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 
 //-----------------------------------------------------------------------------
 // ApplyBlock applies the epoch infor from last block
-func (s *State) ApplyBlock(block *ethTypes.Block, epoch *ep.Epoch) (*ep.Epoch) {
+func (s *State) ApplyBlock(block *ethTypes.Block, epoch *ep.Epoch) *ep.Epoch {
 
 	if block.NumberU64() == 0 {
 		return epoch
@@ -79,10 +78,10 @@ func (s *State) ApplyBlock(block *ethTypes.Block, epoch *ep.Epoch) (*ep.Epoch) {
 	ok, err := epoch.ShouldEnterNewEpoch(int(tdmExtra.Height))
 	if ok && err == nil {
 		// now update the block and validators
-		epoch, _ = epoch.EnterNewEpoch(int(tdmExtra.Height))
+		epoch, _, _ := epoch.EnterNewEpoch(int(tdmExtra.Height))
 		epoch.Save()
 	} else if err != nil {
-		log.Error(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
+		logger.Error(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
 			tdmExtra.Height, s.Epoch, err))
 		return nil
 	}

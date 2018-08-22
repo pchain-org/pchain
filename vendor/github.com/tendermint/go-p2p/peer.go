@@ -6,6 +6,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/pkg/errors"
 	cmn "github.com/tendermint/go-common"
 	crypto "github.com/tendermint/go-crypto"
@@ -20,10 +21,10 @@ import (
 type Peer struct {
 	cmn.BaseService
 
-	outbound bool
+	outbound   bool
 	persistent bool
 	config     *PeerConfig
-	conn  net.Conn     // source connection
+	conn       net.Conn // source connection
 
 	mconn *MConnection // multiplex connection
 
@@ -113,7 +114,7 @@ func newPeerFromConnAndConfig(rawConn net.Conn, outbound bool, switchChainRouter
 
 	p.mconn = createMConnection(conn, p, switchChainRouter, onPeerError, config.MConfig)
 
-	p.BaseService = *cmn.NewBaseService(log, "Peer", p)
+	p.BaseService = *cmn.NewBaseService(logger, "Peer", p)
 
 	return p, nil
 }
@@ -154,7 +155,7 @@ func (p *Peer) HandshakeTimeout(ourNodeInfo *NodeInfo, timeout time.Duration) er
 		func() {
 			var n int
 			wire.ReadBinary(peerNodeInfo, p.conn, maxNodeInfoSize, &n, &err2)
-			log.Notice("Peer handshake", "peerNodeInfo", peerNodeInfo)
+			logger.Info("Peer handshake", " peerNodeInfo:", peerNodeInfo)
 		})
 	if err1 != nil {
 		return errors.Wrap(err1, "Error during handshake/write")
@@ -297,6 +298,16 @@ func (p *Peer) GetSameNetwork(nodeNetwork NetworkSet) []string {
 		}
 	}
 	return sameNetwork
+}
+
+// AddChainChannelByChainID Add the Chain Channel into MConn
+// then add the peer to each Child Chain Reactor
+func (p *Peer) AddChainChannelByChainID(chainID string, chainRouter *ChainRouter) {
+	p.mconn.addChainChannelByChainID(chainID, chainRouter)
+
+	for _, reactor := range chainRouter.reactors {
+		reactor.AddPeer(p)
+	}
 }
 
 //------------------------------------------------------------------

@@ -212,7 +212,7 @@ type TxPool struct {
 
 	homestead bool
 
-	cch     CrossChainHelper
+	cch CrossChainHelper
 }
 
 var TxPoolSigner types.Signer = nil
@@ -235,7 +235,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		all:         make(map[common.Hash]*types.Transaction),
 		chainHeadCh: make(chan ChainHeadEvent, chainHeadChanSize),
 		gasPrice:    new(big.Int).SetUint64(config.PriceLimit),
-		cch:          cch,
+		cch:         cch,
 	}
 	pool.locals = newAccountSet(pool.signer)
 	pool.priced = newTxPricedList(&pool.all)
@@ -252,9 +252,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 			log.Warn("Failed to rotate transaction journal", "err", err)
 		}
 	}
-	
+
 	TxPoolSigner = pool.signer
-	
+
 	// Subscribe events from blockchain
 	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
 

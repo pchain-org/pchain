@@ -1,21 +1,20 @@
 package tendermint
 
 import (
-	"sync"
-	"github.com/hashicorp/golang-lru"
-	"github.com/ethereum/go-ethereum/event"
 	"crypto/ecdsa"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/hashicorp/golang-lru"
 	"gopkg.in/urfave/cli.v1"
+	"sync"
 )
 
-
-// New creates an Ethereum backend for Istanbul core engine.
+// New creates an Ethereum backend for Tendermint core engine.
 func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 	privateKey *ecdsa.PrivateKey, db ethdb.Database,
 	pNode PChainP2P, cch core.CrossChainHelper) consensus.Tendermint {
@@ -30,15 +29,15 @@ func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 		//config:           config,
 		chainConfig:        chainConfig,
 		tendermintEventMux: new(event.TypeMux),
-		privateKey:       privateKey,
+		privateKey:         privateKey,
 		//address:          crypto.PubkeyToAddress(privateKey.PublicKey),
 		//core:             node,
 		//logger:           log.New(),
-		db:               db,
-		commitCh:         make(chan *types.Block, 1),
+		db:       db,
+		commitCh: make(chan *types.Block, 1),
 		//recents:          recents,
-		candidates:       make(map[common.Address]bool),
-		coreStarted:      false,
+		candidates:  make(map[common.Address]bool),
+		coreStarted: false,
 		//recentMessages:   recentMessages,
 		//knownMessages:    knownMessages,
 	}
@@ -50,14 +49,14 @@ type backend struct {
 	//config           *istanbul.Config
 	chainConfig        *params.ChainConfig
 	tendermintEventMux *event.TypeMux
-	privateKey       *ecdsa.PrivateKey
-	address          common.Address
-	core             *Node
+	privateKey         *ecdsa.PrivateKey
+	address            common.Address
+	core               *Node
 	//logger           log.Logger
-	db               ethdb.Database
-	chain            consensus.ChainReader
-	currentBlock     func() *types.Block
-	hasBadBlock      func(hash common.Hash) bool
+	db           ethdb.Database
+	chain        consensus.ChainReader
+	currentBlock func() *types.Block
+	hasBadBlock  func(hash common.Hash) bool
 
 	// the channels for istanbul engine notifications
 	commitCh          chan *types.Block
@@ -79,4 +78,3 @@ type backend struct {
 	recentMessages *lru.ARCCache // the cache of peer's messages
 	knownMessages  *lru.ARCCache // the cache of self messages
 }
-

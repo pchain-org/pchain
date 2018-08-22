@@ -2,15 +2,13 @@ package p2p
 
 import (
 	"errors"
-	//"fmt"
+	. "github.com/tendermint/go-common"
+	cfg "github.com/tendermint/go-config"
+	"github.com/tendermint/go-crypto"
 	"math/rand"
 	"net"
 	"sync"
 	"time"
-
-	. "github.com/tendermint/go-common"
-	cfg "github.com/tendermint/go-config"
-	"github.com/tendermint/go-crypto"
 )
 
 const (
@@ -29,24 +27,24 @@ incoming messages are received on the reactor.
 type Switch struct {
 	BaseService
 
-	config       cfg.Config
-	listeners    []Listener
+	config    cfg.Config
+	listeners []Listener
 	//reactors     map[string]Reactor
 	//chDescs      []*ChannelDescriptor
 	//reactorsByCh map[byte]Reactor
 	reactorsByChainId map[string]*ChainRouter
 
-	peers        *PeerSet
-	dialing      *CMap
-	nodeInfo     *NodeInfo             // our node info
-	nodePrivKey  crypto.PrivKeyEd25519 // our node privkey
+	peers       *PeerSet
+	dialing     *CMap
+	nodeInfo    *NodeInfo             // our node info
+	nodePrivKey crypto.PrivKeyEd25519 // our node privkey
 
 	filterConnByAddr   func(net.Addr) error
 	filterConnByPubKey func(crypto.PubKeyEd25519) error
 }
 
 var (
-	ErrSwitchDuplicatePeer      = errors.New("Duplicate peer")
+	ErrSwitchDuplicatePeer = errors.New("Duplicate peer")
 	//ErrSwitchMaxPeersPerIPRange = errors.New("IP range has too many peers")
 )
 
@@ -55,16 +53,16 @@ func NewSwitch(config cfg.Config) *Switch {
 	setConfigDefaults(config)
 
 	sw := &Switch{
-		config:       config,
+		config:            config,
 		reactorsByChainId: make(map[string]*ChainRouter),
 		//reactors:     make(map[string]Reactor),
 		//chDescs:      make([]*ChannelDescriptor, 0),
 		//reactorsByCh: make(map[byte]Reactor),
-		peers:        NewPeerSet(),
-		dialing:      NewCMap(),
-		nodeInfo:     nil,
+		peers:    NewPeerSet(),
+		dialing:  NewCMap(),
+		nodeInfo: nil,
 	}
-	sw.BaseService = *NewBaseService(log, "P2P Switch", sw)
+	sw.BaseService = *NewBaseService(logger, "P2P Switch", sw)
 	return sw
 }
 
@@ -97,8 +95,14 @@ func (sw *Switch) Reactors(chainID string) map[string]Reactor {
 
 // Reactor returns the reactor with the given name.
 // NOTE: Not goroutine safe.
-func (sw *Switch) Reactor(chainId, name string) Reactor {
-	return sw.reactorsByChainId[chainId].reactors[name]
+func (sw *Switch) Reactor(chainID, name string) Reactor {
+	return sw.reactorsByChainId[chainID].reactors[name]
+}
+
+// ChainRouter returns the Chain Router with the Chain ID.
+// NOTE: Not goroutine safe.
+func (sw *Switch) ChainRouter(chainID string) *ChainRouter {
+	return sw.reactorsByChainId[chainID]
 }
 
 // AddListener adds the given listener to the switch for listening to incoming peer connections.
@@ -208,12 +212,11 @@ func (sw *Switch) StartChainReactor(chainID string) error {
 	return nil
 }
 
-// StartChainReactor starts Reactors from specificed Chain ID
 func (sw *Switch) StopChainReactor(chainID string) error {
 
 	chainRouter, ok := sw.reactorsByChainId[chainID]
 	if ok {
-		// Start reactors
+		// Stop reactors
 		for _, reactor := range chainRouter.reactors {
 			ok := reactor.Stop()
 			if !ok {
@@ -221,7 +224,7 @@ func (sw *Switch) StopChainReactor(chainID string) error {
 			}
 		}
 
-		// Start peers for this Chain
+		// remove peers for this Chain
 		for _, peer := range sw.peers.List() {
 			sw.removePeer(peer)
 		}
@@ -271,12 +274,12 @@ func (sw *Switch) AddPeer(peer *Peer) error {
 	// We start it first so that a peer in the list is safe to Stop.
 	// It should not err since we already checked peers.Has().
 	if err := sw.peers.Add(peer); err != nil {
-		log.Notice("Ignoring peer", "error", err, "peer", peer)
+		logger.Info("Ignoring peer", " error:", err, " peer:", peer)
 		peer.Stop()
 		return err
 	}
 
-	log.Notice("Added peer", "peer", peer)
+	logger.Infoln("Added peer", "peer", peer)
 	return nil
 }
 
@@ -308,20 +311,7 @@ func (sw *Switch) startInitPeer(peer *Peer) {
 
 	sameNetwork := peer.GetSameNetwork(sw.nodeInfo.Networks)
 	for _, chainId := range sameNetwork {
-
-		_, ok := sw.reactorsByChainId[chainId]
-		if !ok {
-			log.Error("should not happen, no chain router", "chain id", chainId)
-			continue
-		}
-
 		for _, reactor := range sw.reactorsByChainId[chainId].reactors {
-
-			if reactor == nil {
-				log.Error("should not happen, reactor is nil", "chain id", chainId)
-				continue
-			}
-
 			reactor.AddPeer(peer)
 		}
 	}
@@ -375,10 +365,10 @@ func (sw *Switch) DialSeeds(addrBook *AddrBook, seeds []string) error {
 func (sw *Switch) dialSeed(addr *NetAddress) {
 	peer, err := sw.DialPeerWithAddress(addr, true)
 	if err != nil {
-		log.Error("Error dialing seed", "error", err)
+		logger.Error("Error dialing seed", " error:", err)
 		return
 	} else {
-		log.Notice("Connected to seed", "peer", peer)
+		logger.Info("Connected to seed", " peer:", peer)
 	}
 }
 
@@ -390,7 +380,7 @@ func (sw *Switch) DialPeerWithAddress(addr *NetAddress, persistent bool) (*Peer,
 
 	peer, err := newOutboundPeerWithConfig(addr, sw.reactorsByChainId, sw.StopPeerForError, sw.nodePrivKey, peerConfigFromGoConfig(sw.config))
 	if err != nil {
-		log.Info("Failed dialing peer", "address", addr, "error", err)
+		logger.Info("Failed dialing peer", " address:", addr, " error:", err)
 		return nil, err
 	}
 	if persistent {
@@ -398,11 +388,11 @@ func (sw *Switch) DialPeerWithAddress(addr *NetAddress, persistent bool) (*Peer,
 	}
 	err = sw.AddPeer(peer)
 	if err != nil {
-		log.Info("Failed adding peer", "address", addr, "error", err)
+		logger.Info("Failed adding peer", " address:", addr, " error:", err)
 		peer.CloseConn()
 		return nil, err
 	}
-	log.Notice("Dialed and added peer", "address", addr, "peer", peer)
+	logger.Info("Dialed and added peer", " address:", addr, " peer:", peer)
 	return peer, nil
 }
 
@@ -422,7 +412,7 @@ func (sw *Switch) IsDialing(addr *NetAddress) bool {
 // NOTE: Broadcast uses goroutines, so order of broadcast may not be preserved.
 func (sw *Switch) Broadcast(chainID string, chID byte, msg interface{}) chan bool {
 	successChan := make(chan bool, len(sw.peers.List()))
-	log.Debug("Broadcast", "channel", chID, "msg", msg)
+	logger.Debug("Broadcast", "channel", chID, "msg", msg)
 	var wg sync.WaitGroup
 	for _, peer := range sw.peers.List() {
 		// Bypass the Peer who are not in the same network
@@ -468,12 +458,12 @@ func (sw *Switch) Peers() IPeerSet {
 // TODO: make record depending on reason.
 func (sw *Switch) StopPeerForError(peer *Peer, reason interface{}) {
 	addr := NewNetAddress(peer.Addr())
-	log.Notice("Stopping peer for error", "peer", peer, "error", reason)
+	logger.Info("Stopping peer for error", " peer:", peer, " error:", reason)
 	sw.stopAndRemovePeer(peer, reason)
 
 	if peer.IsPersistent() {
 		go func() {
-			log.Notice("Reconnecting to peer", "peer", peer)
+			logger.Info("Reconnecting to peer", " peer:", peer)
 			for i := 1; i < reconnectAttempts; i++ {
 				if !sw.IsRunning() {
 					return
@@ -482,15 +472,15 @@ func (sw *Switch) StopPeerForError(peer *Peer, reason interface{}) {
 				peer, err := sw.DialPeerWithAddress(addr, true)
 				if err != nil {
 					if i == reconnectAttempts {
-						log.Notice("Error reconnecting to peer. Giving up", "tries", i, "error", err)
+						logger.Info("Error reconnecting to peer. Giving up", " tries:", i, " error:", err)
 						return
 					}
-					log.Notice("Error reconnecting to peer. Trying again", "tries", i, "error", err)
+					logger.Info("Error reconnecting to peer. Trying again", " tries:", i, " error:", err)
 					time.Sleep(reconnectInterval)
 					continue
 				}
 
-				log.Notice("Reconnected to peer", "peer", peer)
+				logger.Info("Reconnected to peer", " peer:", peer)
 				return
 			}
 		}()
@@ -500,7 +490,7 @@ func (sw *Switch) StopPeerForError(peer *Peer, reason interface{}) {
 // StopPeerGracefully disconnects from a peer gracefully.
 // TODO: handle graceful disconnects.
 func (sw *Switch) StopPeerGracefully(peer *Peer) {
-	log.Notice("Stopping peer gracefully")
+	logger.Info("Stopping peer gracefully")
 	sw.stopAndRemovePeer(peer, nil)
 }
 
@@ -524,14 +514,14 @@ func (sw *Switch) listenerRoutine(l Listener) {
 		// ignore connection if we already have enough
 		maxPeers := sw.config.GetInt(configKeyMaxNumPeers)
 		if maxPeers <= sw.peers.Size() {
-			log.Info("Ignoring inbound connection: already have enough peers", "address", inConn.RemoteAddr().String(), "numPeers", sw.peers.Size(), "max", maxPeers)
+			logger.Info("Ignoring inbound connection: already have enough peers", " address:", inConn.RemoteAddr().String(), "numPeers", sw.peers.Size(), "max", maxPeers)
 			continue
 		}
 
 		// New inbound connection!
 		err := sw.addPeerWithConnectionAndConfig(inConn, peerConfigFromGoConfig(sw.config))
 		if err != nil {
-			log.Notice("Ignoring inbound connection: error while adding peer", "address", inConn.RemoteAddr().String(), "error", err)
+			logger.Info("Ignoring inbound connection: error while adding peer", " address:", inConn.RemoteAddr().String(), " error:", err)
 			continue
 		}
 

@@ -11,6 +11,7 @@ import (
 
 	abci "github.com/tendermint/abci/types"
 	// crypto "github.com/tendermint/go-crypto"
+	"math/big"
 )
 
 var (
@@ -19,7 +20,7 @@ var (
 )
 
 type Proposal struct {
-	Height           uint64              `json:"height"`
+	Height           uint64           `json:"height"`
 	Round            int              `json:"round"`
 	BlockPartsHeader PartSetHeader    `json:"block_parts_header"`
 	POLRound         int              `json:"pol_round"`    // -1 if null.
@@ -87,14 +88,14 @@ func (e *ValidatorMsg) WriteSignBytes(chainID string, w io.Writer, n *int, err *
 }
 
 type AcceptVotes struct {
-	Epoch  int           `json:"epoch"`
-	Key    string        `json:"key"`
-	PubKey crypto.PubKey `json:"pub_key"`
-	Power  uint64        `"power"`
-	Action string        `"action"`
-	Sum    int64         `"sum"`
-	Votes  []*ValidatorMsg      `votes`
-	Maj23  bool          `"maj23"`
+	Epoch  int             `json:"epoch"`
+	Key    string          `json:"key"`
+	PubKey crypto.PubKey   `json:"pub_key"`
+	Power  uint64          `"power"`
+	Action string          `"action"`
+	Sum    *big.Int        `"sum"`
+	Votes  []*ValidatorMsg `votes`
+	Maj23  bool            `"maj23"`
 }
 
 type PreVal struct {

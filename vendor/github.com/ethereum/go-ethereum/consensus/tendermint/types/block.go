@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/tendermint/go-common"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
 	//"github.com/tendermint/go-data"
@@ -17,10 +17,9 @@ import (
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 
-
 type TdmBlock struct {
-	Block   *ethTypes.Block            `json:"block"`
-	TdmExtra *TendermintExtra   `json:"tdmexdata"`
+	Block    *ethTypes.Block  `json:"block"`
+	TdmExtra *TendermintExtra `json:"tdmexdata"`
 }
 
 func MakeBlock(height uint64, chainID string, commit *Commit,
@@ -31,12 +30,12 @@ func MakeBlock(height uint64, chainID string, commit *Commit,
 		Height:         uint64(height),
 		Time:           time.Now(),
 		ValidatorsHash: valHash,
-		SeenCommit: commit,
-		EpochBytes: epochBytes,
+		SeenCommit:     commit,
+		EpochBytes:     epochBytes,
 	}
 
 	tdmBlock := &TdmBlock{
-		Block: block,
+		Block:    block,
 		TdmExtra: TdmExtra,
 	}
 
@@ -55,17 +54,17 @@ func (b *TdmBlock) ValidateBasic(tdmExtra *TendermintExtra) error {
 	}
 
 	/*
-	if !b.TdmExtra.BlockID.Equals(blockID) {
-		return errors.New(Fmt("Wrong Block.Header.LastBlockID.  Expected %v, got %v", blockID, b.TdmExtra.BlockID))
-	}
-	if !bytes.Equal(b.TdmExtra.SeenCommitHash, b.TdmExtra.SeenCommit.Hash()) {
-		return errors.New(Fmt("Wrong Block.Header.LastCommitHash.  Expected %X, got %X", b.TdmExtra.SeenCommitHash, b.TdmExtra.SeenCommit.Hash()))
-	}
-	if b.TdmExtra.Height != 1 {
-		if err := b.TdmExtra.SeenCommit.ValidateBasic(); err != nil {
-			return err
+		if !b.TdmExtra.BlockID.Equals(blockID) {
+			return errors.New(Fmt("Wrong Block.Header.LastBlockID.  Expected %v, got %v", blockID, b.TdmExtra.BlockID))
 		}
-	}
+		if !bytes.Equal(b.TdmExtra.SeenCommitHash, b.TdmExtra.SeenCommit.Hash()) {
+			return errors.New(Fmt("Wrong Block.Header.LastCommitHash.  Expected %X, got %X", b.TdmExtra.SeenCommitHash, b.TdmExtra.SeenCommit.Hash()))
+		}
+		if b.TdmExtra.Height != 1 {
+			if err := b.TdmExtra.SeenCommit.ValidateBasic(); err != nil {
+				return err
+			}
+		}
 	*/
 	return nil
 }
@@ -75,7 +74,6 @@ func (b *TdmBlock) FillSeenCommitHash() {
 		b.TdmExtra.SeenCommitHash = b.TdmExtra.SeenCommit.Hash()
 	}
 }
-
 
 // Computes and returns the block hash.
 // If the block is incomplete, block hash is nil for safety.
@@ -88,7 +86,6 @@ func (b *TdmBlock) Hash() []byte {
 	return b.TdmExtra.Hash()
 }
 
-
 func (b *TdmBlock) MakePartSet(partSize int) *PartSet {
 
 	return NewPartSetFromData(b.ToBytes(), partSize)
@@ -98,7 +95,7 @@ func (b *TdmBlock) ToBytes() []byte {
 
 	type TmpBlock struct {
 		BlockData []byte
-		TdmExtra *TendermintExtra
+		TdmExtra  *TendermintExtra
 	}
 	//fmt.Printf("TdmBlock.toBytes 0 with block: %v\n", b)
 
@@ -108,12 +105,12 @@ func (b *TdmBlock) ToBytes() []byte {
 	}
 	//fmt.Printf("TdmBlock.toBytes 1 with blockbyte: %v\n", blockByte)
 	bb := &TmpBlock{
-		BlockData:   blockByte,
-		TdmExtra:    b.TdmExtra,
+		BlockData: blockByte,
+		TdmExtra:  b.TdmExtra,
 	}
 	//fmt.Printf("TdmBlock.toBytes 1 with tdmblock: %v\n", bb)
 
-	ret :=  wire.BinaryBytes(bb)
+	ret := wire.BinaryBytes(bb)
 	//fmt.Printf("TdmBlock.toBytes 1 with ret:%v\n", ret)
 	return ret
 }
@@ -122,7 +119,7 @@ func (b *TdmBlock) FromBytes(reader io.Reader) (*TdmBlock, error) {
 
 	type TmpBlock struct {
 		BlockData []byte
-		TdmExtra *TendermintExtra
+		TdmExtra  *TendermintExtra
 	}
 
 	//fmt.Printf("TdmBlock.FromBytes \n")
@@ -143,7 +140,7 @@ func (b *TdmBlock) FromBytes(reader io.Reader) (*TdmBlock, error) {
 	}
 
 	tdmBlock := &TdmBlock{
-		Block: block,
+		Block:    block,
 		TdmExtra: bb.TdmExtra,
 	}
 

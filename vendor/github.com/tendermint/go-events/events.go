@@ -45,7 +45,7 @@ type eventSwitch struct {
 
 func NewEventSwitch() EventSwitch {
 	evsw := &eventSwitch{}
-	evsw.BaseService = *NewBaseService(log, "EventSwitch", evsw)
+	evsw.BaseService = *NewBaseService(logger, "EventSwitch", evsw)
 	return evsw
 }
 

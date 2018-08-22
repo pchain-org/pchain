@@ -2,37 +2,20 @@ package main
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/cmd/geth"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/pchain/chain"
+	"github.com/pchain/common/plogger"
 	"github.com/pchain/version"
+	"github.com/sirupsen/logrus"
+	"gopkg.in/urfave/cli.v1"
 	"os"
 	"path/filepath"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
-	"gopkg.in/urfave/cli.v1"
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	chain "github.com/pchain/chain"
-	"github.com/ethereum/go-ethereum/cmd/geth"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/log/term"
-	"io"
-	"github.com/mattn/go-colorable"
 )
-
-var glogger *log.GlogHandler
-
-func init() {
-	usecolor := term.IsTty(os.Stderr.Fd()) && os.Getenv("TERM") != "dumb"
-	output := io.Writer(os.Stdout)
-	if usecolor {
-		output = colorable.NewColorableStderr()
-	}
-	glogger = log.NewGlogHandler(log.StreamHandler(output, log.TerminalFormat(usecolor)))
-}
 
 func main() {
 
-	glog.V(logger.Info).Infof("Starting pchain")
-
-	cliApp := newCliApp(version.Version, "the ethermint command line interface")
+	cliApp := newCliApp(version.Version, "the pchain command line interface")
 	cliApp.Action = pchainCmd
 	cliApp.Commands = []cli.Command{
 
@@ -44,9 +27,9 @@ func main() {
 		},
 
 		{
-			Action:		chain.InitEthGenesis,
-			Name:		"init_eth_genesis",
-			Usage:		"init_eth_genesis balance:\"10,10,10\"",
+			Action:      chain.InitEthGenesis,
+			Name:        "init_eth_genesis",
+			Usage:       "init_eth_genesis balance:\"10,10,10\"",
 			Description: "Initialize the balance of accounts",
 		},
 
@@ -75,14 +58,23 @@ func main() {
 	cliApp.HideVersion = true // we have a command to print the version
 
 	cliApp.Before = func(ctx *cli.Context) error {
+		// Log Folder
+		logFolderFlag := ctx.GlobalString(chain.LogDirFlag.Name)
+		plogger.SetLogFolder(logFolderFlag)
+
+		// Log Level
+		logLevelFlag := ctx.GlobalString(chain.LogLevelFlag.Name)
+		logLevel, err := logrus.ParseLevel(logLevelFlag)
+		if err != nil {
+			fmt.Println("unknown log level, default level should be info")
+			return err
+		}
+		plogger.SetVerbosity(logLevel)
+
+		plogger.InitLogWriter()
+
+		// Tendermint Config
 		chain.Config = chain.GetTendermintConfig(chain.MainChain, ctx)
-
-		log.PrintOrigins(ctx.GlobalBool(chain.DebugFlag.Name))
-		glogger.Verbosity(log.Lvl(ctx.GlobalInt(chain.VerbosityFlag.Name)))
-		glogger.Vmodule(ctx.GlobalString(chain.VmoduleFlag.Name))
-		glogger.BacktraceAt(ctx.GlobalString(chain.BacktraceAtFlag.Name))
-		log.Root().SetHandler(glogger)
-
 		return nil
 	}
 
@@ -185,19 +177,19 @@ func newCliApp(version, usage string) *cli.App {
 		utils.WSAllowedOriginsFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
-		
+
 		utils.WhisperEnabledFlag,
 		utils.SolcPathFlag,
 		utils.WhisperMaxMessageSizeFlag,
 		utils.WhisperMinPOWFlag,
-		
-		chain.VerbosityFlag, // not exposed by go-ethereum
-		chain.DataDirFlag,   // so we control defaults
+
+		chain.LogLevelFlag,
+		chain.LogDirFlag,
+		chain.DataDirFlag, // so we control defaults
 
 		//ethermint flags
 		chain.MonikerFlag,
 		chain.NodeLaddrFlag,
-		chain.LogLevelFlag,
 		chain.SeedsFlag,
 		chain.FastSyncFlag,
 		chain.SkipUpnpFlag,
@@ -212,5 +204,3 @@ func versionCmd(ctx *cli.Context) error {
 	fmt.Println(version.Version)
 	return nil
 }
-
-

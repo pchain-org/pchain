@@ -40,7 +40,7 @@ func NewTimeoutTicker() TimeoutTicker {
 		tockChan: make(chan timeoutInfo, tickTockBufferSize),
 	}
 	tt.stopTimer() // don't want to fire until the first scheduled timeout
-	tt.BaseService = *NewBaseService(log, "TimeoutTicker", tt)
+	tt.BaseService = *NewBaseService(logger, "TimeoutTicker", tt)
 	return tt
 }
 
@@ -75,7 +75,7 @@ func (t *timeoutTicker) stopTimer() {
 		select {
 		case <-t.timer.C:
 		default:
-			log.Debug("Timer already stopped")
+			logger.Debug("Timer already stopped")
 		}
 	}
 }
@@ -84,26 +84,26 @@ func (t *timeoutTicker) stopTimer() {
 // timers are interupted and replaced by new ticks from later steps
 // timeouts of 0 on the tickChan will be immediately relayed to the tockChan
 func (t *timeoutTicker) timeoutRoutine() {
-	log.Info("Starting timeout routine")
+	logger.Info("Starting timeout routine")
 	var ti timeoutInfo
 	for {
 		select {
 		case newti := <-t.tickChan:
-			log.Info("Received tick", "old_ti", ti, "new_ti", newti)
+			logger.Infof("Received tick. old_ti: %v, new_ti: %v", ti, newti)
 
 			// ignore tickers for old height/round/step
 			/*
-			if newti.Height < ti.Height {
-				continue
-			} else if newti.Height == ti.Height {
-				if newti.Round < ti.Round {
+				if newti.Height < ti.Height {
 					continue
-				} else if newti.Round == ti.Round {
-					if ti.Step > 0 && newti.Step <= ti.Step {
+				} else if newti.Height == ti.Height {
+					if newti.Round < ti.Round {
 						continue
+					} else if newti.Round == ti.Round {
+						if ti.Step > 0 && newti.Step <= ti.Step {
+							continue
+						}
 					}
 				}
-			}
 			*/
 			// stop the last timer
 			t.stopTimer()
@@ -112,9 +112,9 @@ func (t *timeoutTicker) timeoutRoutine() {
 			// NOTE time.Timer allows duration to be non-positive
 			ti = newti
 			t.timer.Reset(ti.Duration)
-			log.Info("Scheduled timeout", "dur", ti.Duration, "height", ti.Height, "round", ti.Round, "step", ti.Step)
+			logger.Infof("Scheduled timeout. dur: %v, height: %v, round: %v, step: %v", ti.Duration, ti.Height, ti.Round, ti.Step)
 		case <-t.timer.C:
-			log.Info("Timed out", "dur", ti.Duration, "height", ti.Height, "round", ti.Round, "step", ti.Step)
+			logger.Infof("Timed out. dur: %v, height: %v, round: %v, step: %v", ti.Duration, ti.Height, ti.Round, ti.Step)
 			// go routine here gaurantees timeoutRoutine doesn't block.
 			// Determinism comes from playback in the receiveRoutine.
 			// We can eliminate it by merging the timeoutRoutine into receiveRoutine

@@ -105,7 +105,7 @@ type Config struct {
 	GasPrice     *big.Int
 
 	// Solidity compiler path
-	SolcPath     string
+	SolcPath string
 
 	// Ethash options
 	Ethash ethash.Config
@@ -122,7 +122,7 @@ type Config struct {
 	// Istanbul options
 	Istanbul istanbul.Config
 
-	// Istanbul options
+	// Tendermint options
 	Tendermint tendermint.Config
 
 	// Miscellaneous options

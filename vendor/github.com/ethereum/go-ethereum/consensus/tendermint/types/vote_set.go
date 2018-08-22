@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	. "github.com/tendermint/go-common"
+	"math/big"
 )
 
 /*
@@ -53,7 +54,7 @@ type VoteSet struct {
 	valSet        *ValidatorSet
 	votesBitArray *BitArray
 	votes         []*Vote                // Primary votes to share
-	sum           int64                  // Sum of voting power for seen votes, discounting conflicts
+	sum           *big.Int               // Sum of voting power for seen votes, discounting conflicts
 	maj23         *BlockID               // First 2/3 majority seen
 	votesByBlock  map[string]*blockVotes // string(blockHash|blockParts) -> blockVotes
 	peerMaj23s    map[string]BlockID     // Maj23 for each peer
@@ -72,7 +73,7 @@ func NewVoteSet(chainID string, height uint64, round int, type_ byte, valSet *Va
 		valSet:        valSet,
 		votesBitArray: NewBitArray(uint64(valSet.Size())),
 		votes:         make([]*Vote, valSet.Size()),
-		sum:           0,
+		sum:           big.NewInt(0),
 		maj23:         nil,
 		votesByBlock:  make(map[string]*blockVotes, valSet.Size()),
 		peerMaj23s:    make(map[string]BlockID),
@@ -206,7 +207,7 @@ func (voteSet *VoteSet) getVote(valIndex int, blockKey string) (vote *Vote, ok b
 
 // Assumes signature is valid.
 // If conflicting vote exists, returns it.
-func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower int64) (added bool, conflicting *Vote) {
+func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower *big.Int) (added bool, conflicting *Vote) {
 	valIndex := vote.ValidatorIndex
 
 	// Already exists in voteSet.votes?
@@ -226,7 +227,7 @@ func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower
 		// Add to voteSet.votes and incr .sum
 		voteSet.votes[valIndex] = vote
 		voteSet.votesBitArray.SetIndex(valIndex, true)
-		voteSet.sum += votingPower
+		voteSet.sum.Add(voteSet.sum, votingPower)
 	}
 
 	votesByBlock, ok := voteSet.votesByBlock[blockKey]
@@ -252,14 +253,18 @@ func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower
 	}
 
 	// Before adding to votesByBlock, see if we'll exceed quorum
-	origSum := votesByBlock.sum
-	quorum := voteSet.valSet.TotalVotingPower()*2/3 + 1
+	origSum := new(big.Int).Set(votesByBlock.sum)
+
+	twoThird := new(big.Int).Mul(voteSet.valSet.TotalVotingPower(), big.NewInt(2))
+	twoThird.Div(twoThird, big.NewInt(3))
+	quorum := new(big.Int).Add(twoThird, big.NewInt(1))
 
 	// Add vote to votesByBlock
 	votesByBlock.addVerifiedVote(vote, votingPower)
 
 	// If we just crossed the quorum threshold and have 2/3 majority...
-	if origSum < quorum && quorum <= votesByBlock.sum {
+	// if origSum < quorum && quorum <= votesByBlock.sum {
+	if origSum.Cmp(quorum) == -1 && quorum.Cmp(votesByBlock.sum) <= 0 {
 		// Only consider the first quorum reached
 		if voteSet.maj23 == nil {
 			maj23BlockID := vote.BlockID
@@ -388,7 +393,11 @@ func (voteSet *VoteSet) HasTwoThirdsAny() bool {
 	}
 	voteSet.mtx.Lock()
 	defer voteSet.mtx.Unlock()
-	return voteSet.sum > voteSet.valSet.TotalVotingPower()*2/3
+
+	twoThird := new(big.Int).Mul(voteSet.valSet.TotalVotingPower(), big.NewInt(2))
+	twoThird.Div(twoThird, big.NewInt(3))
+
+	return voteSet.sum.Cmp(twoThird) == 1
 }
 
 func (voteSet *VoteSet) HasAll() bool {
@@ -485,7 +494,7 @@ type blockVotes struct {
 	peerMaj23 bool      // peer claims to have maj23
 	bitArray  *BitArray // valIndex -> hasVote?
 	votes     []*Vote   // valIndex -> *Vote
-	sum       int64     // vote sum
+	sum       *big.Int  // vote sum
 }
 
 func newBlockVotes(peerMaj23 bool, numValidators int) *blockVotes {
@@ -493,16 +502,16 @@ func newBlockVotes(peerMaj23 bool, numValidators int) *blockVotes {
 		peerMaj23: peerMaj23,
 		bitArray:  NewBitArray(uint64(numValidators)),
 		votes:     make([]*Vote, numValidators),
-		sum:       0,
+		sum:       big.NewInt(0),
 	}
 }
 
-func (vs *blockVotes) addVerifiedVote(vote *Vote, votingPower int64) {
+func (vs *blockVotes) addVerifiedVote(vote *Vote, votingPower *big.Int) {
 	valIndex := vote.ValidatorIndex
 	if existing := vs.votes[valIndex]; existing == nil {
 		vs.bitArray.SetIndex(valIndex, true)
 		vs.votes[valIndex] = vote
-		vs.sum += votingPower
+		vs.sum.Add(vs.sum, votingPower)
 	}
 }
 

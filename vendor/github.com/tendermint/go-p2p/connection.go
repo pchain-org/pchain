@@ -3,16 +3,16 @@ package p2p
 import (
 	"bufio"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
+	cmn "github.com/tendermint/go-common"
+	flow "github.com/tendermint/go-flowrate/flowrate"
+	"github.com/tendermint/go-wire"
 	"io"
 	"math"
 	"net"
 	"runtime/debug"
 	"sync/atomic"
 	"time"
-
-	cmn "github.com/tendermint/go-common"
-	flow "github.com/tendermint/go-flowrate/flowrate"
-	"github.com/tendermint/go-wire"
 )
 
 const (
@@ -62,20 +62,20 @@ Inbound message bytes are handled with an onReceive callback function.
 type MConnection struct {
 	cmn.BaseService
 
-	conn        net.Conn
-	bufReader   *bufio.Reader
-	bufWriter   *bufio.Writer
-	sendMonitor *flow.Monitor
-	recvMonitor *flow.Monitor
-	send        chan struct{}
-	pong        chan struct{}
+	conn              net.Conn
+	bufReader         *bufio.Reader
+	bufWriter         *bufio.Writer
+	sendMonitor       *flow.Monitor
+	recvMonitor       *flow.Monitor
+	send              chan struct{}
+	pong              chan struct{}
 	channelsByChainId map[string]*ChainChannel
 	//channels    []*Channel
 	//channelsIdx map[byte]*Channel
-	onReceive   receiveCbFunc
-	onError     errorCbFunc
-	errored     uint32
-	config      *MConnConfig
+	onReceive receiveCbFunc
+	onError   errorCbFunc
+	errored   uint32
+	config    *MConnConfig
 
 	quit         chan struct{}
 	flushTimer   *cmn.ThrottleTimer // flush writes as necessary but throttled.
@@ -113,17 +113,17 @@ func NewMConnection(conn net.Conn, reactorsByChainId map[string]*ChainRouter, on
 // NewMConnectionWithConfig wraps net.Conn and creates multiplex connection with a config
 func NewMConnectionWithConfig(conn net.Conn, reactorsByChainId map[string]*ChainRouter, onReceive receiveCbFunc, onError errorCbFunc, config *MConnConfig) *MConnection {
 	mconn := &MConnection{
-		conn:        conn,
-		bufReader:   bufio.NewReaderSize(conn, minReadBufferSize),
-		bufWriter:   bufio.NewWriterSize(conn, minWriteBufferSize),
-		sendMonitor: flow.New(0, 0),
-		recvMonitor: flow.New(0, 0),
-		send:        make(chan struct{}, 1),
-		pong:        make(chan struct{}),
+		conn:              conn,
+		bufReader:         bufio.NewReaderSize(conn, minReadBufferSize),
+		bufWriter:         bufio.NewWriterSize(conn, minWriteBufferSize),
+		sendMonitor:       flow.New(0, 0),
+		recvMonitor:       flow.New(0, 0),
+		send:              make(chan struct{}, 1),
+		pong:              make(chan struct{}),
 		channelsByChainId: make(map[string]*ChainChannel),
-		onReceive:   onReceive,
-		onError:     onError,
-		config:      config,
+		onReceive:         onReceive,
+		onError:           onError,
+		config:            config,
 
 		LocalAddress:  NewNetAddress(conn.LocalAddr()),
 		RemoteAddress: NewNetAddress(conn.RemoteAddr()),
@@ -150,9 +150,33 @@ func NewMConnectionWithConfig(conn net.Conn, reactorsByChainId map[string]*Chain
 		mconn.channelsByChainId[chainId] = chainChannel
 	}
 
-	mconn.BaseService = *cmn.NewBaseService(log, "MConnection", mconn)
+	mconn.BaseService = *cmn.NewBaseService(logger, "MConnection", mconn)
 
 	return mconn
+}
+
+// AddChainChannelByChainID add the channels by chain id from Chain Router into MConnection
+// after the MConnection already connected
+func (c *MConnection) addChainChannelByChainID(chainID string, chainRouter *ChainRouter) {
+	if _, exist := c.channelsByChainId[chainID]; !exist {
+		// Create channels
+		var channelsIdx = map[byte]*Channel{}
+		var channels = []*Channel{}
+
+		for _, desc := range chainRouter.chDescs {
+			descCopy := *desc // copy the desc else unsafe access across connections
+			channel := newChannel(c, &descCopy)
+			channelsIdx[channel.id] = channel
+			channels = append(channels, channel)
+		}
+
+		// Create Chain Channel
+		chainChannel := &ChainChannel{
+			channels:    channels,
+			channelsIdx: channelsIdx,
+		}
+		c.channelsByChainId[chainID] = chainChannel
+	}
 }
 
 func (c *MConnection) OnStart() error {
@@ -465,22 +489,33 @@ FOR_LOOP:
 			// do nothing
 			log.Debug("Receive Pong")
 		case packetTypeMsg:
-			pkt, n, err := msgPacket{}, int(0), error(nil)
-			//wire.ReadBinaryPtr(&pkt, c.bufReader, maxMsgPacketTotalSize, &n, &err)
-			wire.ReadBinaryPtr(&pkt, c.bufReader, 0, &n, &err)
+			// Read the Chain ID from connection first
+			n, err := int(0), error(nil)
+			chainID := wire.ReadString(c.bufReader, 0, &n, &err)
 			c.recvMonitor.Update(int(n))
 			if err != nil {
 				if c.IsRunning() {
-					log.Warn("Connection failed @ recvRoutine", "conn", c, "error", err)
+					logger.Warn("Connection failed @ recvRoutine msg Chain ID", "conn", c, "error", err)
 					c.stopForError(err)
 				}
 				break FOR_LOOP
 			}
 
-			chainID := string(pkt.ChainID)
 			chainChannel, ok := c.channelsByChainId[chainID]
 			if !ok || chainChannel == nil {
 				cmn.PanicQ(cmn.Fmt("Unknown chain %s", chainID))
+			}
+
+			// Now read the Packet from connection
+			pkt, n, err := msgPacket{}, int(0), error(nil)
+			wire.ReadBinaryPtr(&pkt, c.bufReader, maxMsgPacketTotalSize, &n, &err)
+			c.recvMonitor.Update(int(n))
+			if err != nil {
+				if c.IsRunning() {
+					logger.Warn("Connection failed @ recvRoutine", " conn:", c, " error:", err)
+					c.stopForError(err)
+				}
+				break FOR_LOOP
 			}
 
 			channel, ok := chainChannel.channelsIdx[pkt.ChannelID]
@@ -490,13 +525,13 @@ FOR_LOOP:
 			msgBytes, err := channel.recvMsgPacket(pkt)
 			if err != nil {
 				if c.IsRunning() {
-					log.Warn("Connection failed @ recvRoutine", "conn", c, "error", err)
+					logger.Warn("Connection failed @ recvRoutine", " conn:", c, " error:", err)
 					c.stopForError(err)
 				}
 				break FOR_LOOP
 			}
 			if msgBytes != nil {
-				log.Debug("Received bytes", "chain", chainID, "chID", pkt.ChannelID, "msgBytes", msgBytes)
+				logger.Debug("Received bytes", "chain", chainID, "chID", pkt.ChannelID, "msgBytes", msgBytes)
 				c.onReceive(chainID, pkt.ChannelID, msgBytes)
 			}
 		default:
@@ -516,8 +551,8 @@ FOR_LOOP:
 }
 
 type ConnectionStatus struct {
-	SendMonitor flow.Status
-	RecvMonitor flow.Status
+	SendMonitor     flow.Status
+	RecvMonitor     flow.Status
 	ChannelsByChain map[string][]ChannelStatus
 	//Channels    []ChannelStatus
 }
@@ -656,9 +691,8 @@ func (ch *Channel) isSendPending() bool {
 
 // Creates a new msgPacket to send.
 // Not goroutine-safe
-func (ch *Channel) nextMsgPacket(chainID string) msgPacket {
+func (ch *Channel) nextMsgPacket() msgPacket {
 	packet := msgPacket{}
-	packet.ChainID = []byte(chainID)
 	packet.ChannelID = byte(ch.id)
 	packet.Bytes = ch.sending[:cmn.MinInt(maxMsgPacketPayloadSize, len(ch.sending))]
 	if len(ch.sending) <= maxMsgPacketPayloadSize {
@@ -675,9 +709,10 @@ func (ch *Channel) nextMsgPacket(chainID string) msgPacket {
 // Writes next msgPacket to w.
 // Not goroutine-safe
 func (ch *Channel) writeMsgPacketTo(w io.Writer, chainID string) (n int, err error) {
-	packet := ch.nextMsgPacket(chainID)
+	packet := ch.nextMsgPacket()
 	log.Debug("Write Msg Packet", "conn", ch.conn, "packet", packet)
 	wire.WriteByte(packetTypeMsg, w, &n, &err)
+	wire.WriteString(chainID, w, &n, &err)
 	wire.WriteBinary(packet, w, &n, &err)
 	if err == nil {
 		ch.recentlySent += int64(n)
@@ -689,8 +724,9 @@ func (ch *Channel) writeMsgPacketTo(w io.Writer, chainID string) (n int, err err
 // Not goroutine-safe
 func (ch *Channel) recvMsgPacket(packet msgPacket) ([]byte, error) {
 	// log.Debug("Read Msg Packet", "conn", ch.conn, "packet", packet)
-	if ch.desc.RecvMessageCapacity < len(ch.recving)+len(packet.Bytes) {
-		return nil, wire.ErrBinaryReadOverflow
+	var recvCap, recvReceived = ch.desc.RecvMessageCapacity, len(ch.recving) + len(packet.Bytes)
+	if recvCap < recvReceived {
+		return nil, fmt.Errorf("Received message exceeds available capacity: %v < %v", recvCap, recvReceived)
 	}
 	ch.recving = append(ch.recving, packet.Bytes...)
 	if packet.EOF == byte(0x01) {

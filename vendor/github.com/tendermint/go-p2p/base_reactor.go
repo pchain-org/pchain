@@ -1,8 +1,8 @@
 package p2p
 
 import (
+	"github.com/sirupsen/logrus"
 	cmn "github.com/tendermint/go-common"
-	"github.com/tendermint/log15"
 )
 
 type Reactor interface {
@@ -34,12 +34,12 @@ type Reactor interface {
 
 type BaseReactor struct {
 	cmn.BaseService // Provides Start, Stop, .Quit
-	Switch *Switch
+	Switch          *Switch
 }
 
-func NewBaseReactor(log log15.Logger, name string, impl Reactor) *BaseReactor {
+func NewBaseReactor(logger *logrus.Logger, name string, impl Reactor) *BaseReactor {
 	return &BaseReactor{
-		BaseService: *cmn.NewBaseService(log, name, impl),
+		BaseService: *cmn.NewBaseService(logger, name, impl),
 		Switch:      nil,
 	}
 }

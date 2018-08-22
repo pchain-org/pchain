@@ -1,7 +1,5 @@
 package p2p
 
-import (
-	"github.com/tendermint/go-logger"
-)
+import "github.com/pchain/common/plogger"
 
-var log = logger.New("module", "p2p")
+var logger = plogger.GetLogger("p2p")

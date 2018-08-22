@@ -1,12 +1,29 @@
 package chain
 
 import (
-	"gopkg.in/urfave/cli.v1"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"gopkg.in/urfave/cli.v1"
 	"runtime"
 )
 
 var (
+	// ----------------------------
+	// PChain Flags
+
+	// Log Level, default info
+	LogLevelFlag = cli.StringFlag{
+		Name:  "logLevel",
+		Usage: "PChain Log level",
+		Value: "info",
+	}
+
+	// Log Folder
+	LogDirFlag = utils.DirectoryFlag{
+		Name:  "logDir",
+		Usage: "PChain Log Data directory",
+		Value: utils.DirectoryString{defaultLogDir()},
+	}
+
 	// ----------------------------
 	// go-ethereum flags
 
@@ -30,12 +47,6 @@ var (
 		Name:  "node_laddr",
 		Value: "tcp://0.0.0.0:46656",
 		Usage: "Node listen address. (0.0.0.0:0 means any interface, any port)",
-	}
-
-	LogLevelFlag = cli.StringFlag{
-		Name:  "log_level",
-		Value: "info",
-		Usage: "Tendermint Log level",
 	}
 
 	SeedsFlag = cli.StringFlag{
@@ -74,11 +85,6 @@ var (
 
 	//from debug module
 	// Not exposed by go-ethereum
-	VerbosityFlag = cli.IntFlag{
-		Name:  "verbosity",
-		Usage: "Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail",
-		Value: 5,
-	}
 	VmoduleFlag = cli.StringFlag{
 		Name:  "vmodule",
 		Usage: "Per-module verbosity: comma-separated list of <pattern>=<level> (e.g. eth/*=5,p2p=4)",
@@ -125,5 +131,3 @@ var (
 		Usage: "Write execution trace to the given file",
 	}
 )
-
-

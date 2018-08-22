@@ -1,7 +1,9 @@
 package state
 
 import (
-	"github.com/tendermint/go-logger"
+	"github.com/pchain/common/plogger"
 )
 
-var log = logger.New("module", "state")
+var logger = plogger.GetLogger("consensus")
+
+//var log = logger.New("module", "state")

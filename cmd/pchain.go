@@ -1,50 +1,53 @@
 package main
 
 import (
-	"gopkg.in/urfave/cli.v1"
 	"github.com/pchain/chain"
-	"fmt"
+	"github.com/pchain/common/plogger"
+	"gopkg.in/urfave/cli.v1"
 )
+
+var logger = plogger.GetLogger("main")
 
 func pchainCmd(ctx *cli.Context) error {
 
 	if ctx == nil {
-		fmt.Printf("oh, ctx is null, how pchain works?\n")
+		logger.Errorln("oh, ctx is null, how pchain works?")
 		return nil
 	}
 
-	fmt.Printf("pchain supports large scale block-chain applicaitons with multi-chain\n")
+	logger.Infoln("Starting PChain...")
+	logger.Infoln("PChain supports large scale block-chain applications with multi-chain")
 
 	chainMgr := chain.GetCMInstance(ctx)
 
 	err := chainMgr.StartP2P()
 	if err != nil {
-		fmt.Printf("start p2p failed\n")
+		logger.Errorln("start p2p failed")
 		return err
 	}
 
-	// Load PChain Node
+	err = chainMgr.LoadAndStartMainChain(ctx)
+	if err != nil {
+		logger.Errorf("Load and start main chain failed. %v", err)
+		return nil
+	}
+
+	// Load PChain Child Node
 	err = chainMgr.LoadChains()
 	if err != nil {
-		fmt.Printf("load chains failed\n")
-		return err
-	}
-
-	err = chainMgr.StartEthP2P()
-	if err != nil {
-		fmt.Printf("start eth p2p failed\n")
+		logger.Errorln("load chains failed")
 		return err
 	}
 
 	err = chainMgr.StartChains()
 	if err != nil {
-		fmt.Printf("start chains failed\n")
+		logger.Errorln("start chains failed")
 		return err
 	}
 
 	err = chainMgr.StartRPC()
 	if err != nil {
-		fmt.Printf("start rpc failed\n")
+		logger.Errorln("start rpc failed")
 		return err
 	}
 
@@ -56,4 +59,3 @@ func pchainCmd(ctx *cli.Context) error {
 
 	return nil
 }
-

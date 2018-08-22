@@ -8,13 +8,13 @@ import (
 	"os"
 	"sync"
 
+	crand "crypto/rand"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
-	crand "crypto/rand"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/accounts"
 )
 
 const (
@@ -37,8 +37,8 @@ func voteToStep(vote *Vote) int8 {
 }
 
 type PrivValidator struct {
-	Address       []byte           `json:"address"`
-	PubKey        crypto.PubKey    `json:"pub_key"`
+	Address []byte        `json:"address"`
+	PubKey  crypto.PubKey `json:"pub_key"`
 
 	// PrivKey should be empty if a Signer other than the default is being used.
 	PrivKey crypto.PrivKey `json:"priv_key"`
@@ -83,26 +83,26 @@ func NewKeyStore(keydir string, scryptN, scryptP int) *keystore.KeyStorePassphra
 func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 	newKey, err := keystore.NewKey(crand.Reader)
 	if err != nil {
-		return nil,nil
+		return nil, nil
 	}
 	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
-	privKey := crypto.EtherumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
+	privKey := crypto.EtherumPrivKey(ethcrypto.FromECDSA(newKey.PrivateKey))
 	return &PrivValidator{
-		Address:       pubKey.Address(),
-		PubKey:        pubKey,
-		PrivKey:       privKey,
-		filePath:      "",
-		Signer:        NewDefaultSigner(privKey),
+		Address:  pubKey.Address(),
+		PubKey:   pubKey,
+		PrivKey:  privKey,
+		filePath: "",
+		Signer:   NewDefaultSigner(privKey),
 	}, newKey
 
 }
 
 // Generates a new validator with private key.
-func GenPrivValidator() *PrivValidator {
+func GenPrivValidator(keydir string) *PrivValidator {
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP
 	//password := getPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true)
-	ks := keystore.NewKeyStoreByTenermint("", scryptN, scryptP)
+	ks := keystore.NewKeyStoreByTenermint(keydir, scryptN, scryptP)
 	newKey, err := keystore.NewKey(crand.Reader)
 	if err != nil {
 		return nil
@@ -112,14 +112,14 @@ func GenPrivValidator() *PrivValidator {
 		return nil
 	}
 	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
-	privKey := crypto.EtherumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
+	privKey := crypto.EtherumPrivKey(ethcrypto.FromECDSA(newKey.PrivateKey))
 	fmt.Println(len(privKey), len(pubKey), len(pubKey.Address()))
 	return &PrivValidator{
-		Address:       pubKey.Address(),
-		PubKey:        pubKey,
-		PrivKey:       privKey,
-		filePath:      "",
-		Signer:        NewDefaultSigner(privKey),
+		Address:  pubKey.Address(),
+		PubKey:   pubKey,
+		PrivKey:  privKey,
+		filePath: "",
+		Signer:   NewDefaultSigner(privKey),
 	}
 }
 
@@ -137,14 +137,14 @@ func LoadPrivValidator(filePath string) *PrivValidator {
 	return privVal
 }
 
-func LoadOrGenPrivValidator(filePath string) *PrivValidator {
+func LoadOrGenPrivValidator(filePath, keydir string) *PrivValidator {
 	var privValidator *PrivValidator
 	if _, err := os.Stat(filePath); err == nil {
 		privValidator = LoadPrivValidator(filePath)
 		log.Notice("Loaded PrivValidator",
 			"file", filePath, "privValidator", privValidator)
 	} else {
-		privValidator = GenPrivValidator()
+		privValidator = GenPrivValidator(keydir)
 		privValidator.SetFile(filePath)
 		privValidator.Save()
 		log.Notice("Generated PrivValidator", "file", filePath)
