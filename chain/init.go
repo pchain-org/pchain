@@ -137,7 +137,7 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 func init_eth_blockchain(chainId string, ethGenesisPath string, ctx *cli.Context) {
 
 	dbPath := filepath.Join(utils.MakeDataDir(ctx), chainId, "geth/chaindata")
-	logger.Infof("init_eth_blockchain 0 with dbPath: %s\n", dbPath)
+	logger.Infof("init_eth_blockchain 0 with dbPath: %s", dbPath)
 
 	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MakeDataDir(ctx), chainId, gethmain.ClientIdentifier, "chaindata"), 0, 0)
 	if err != nil {
@@ -307,9 +307,9 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, *big.Int, error) {
 	amount := big.NewInt(10)
 	balance := big.NewInt(-1)
 	found := false
-	logger.Infof("checkAccount(), coinbase is %x\n", coinbase)
+	logger.Infof("checkAccount(), coinbase is %x", coinbase)
 	for address, account := range coreGenesis.Alloc {
-		logger.Infof("checkAccount(), address is %x, balance is %v, amount is %v\n", address, account.Balance, account.Amount)
+		logger.Infof("checkAccount(), address is %x, balance is %v, amount is %v", address, account.Balance, account.Amount)
 		if coinbase == address {
 			balance = account.Balance
 			amount = account.Amount
@@ -319,13 +319,12 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, *big.Int, error) {
 	}
 
 	if !found {
-		logger.Infof("invalidate eth_account\n")
+		logger.Error("invalidate eth_account")
 		return common.Address{}, nil, errors.New("invalidate eth_account")
 	}
 
-	if balance.Cmp(amount) < 0 {
-		logger.Infof("balance is not enough to be support validator's amount, balance is %v, amount is %v\n",
-			balance, amount)
+	if balance.Sign() == -1 || amount.Sign() == -1 {
+		logger.Errorf("balance / amount can't be negative integer, balance is %v, amount is %v", balance, amount)
 		return common.Address{}, nil, errors.New("no enough balance")
 	}
 

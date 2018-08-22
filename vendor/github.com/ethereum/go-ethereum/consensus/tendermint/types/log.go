@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/tendermint/go-logger"
+	"github.com/pchain/common/plogger"
 )
 
-var log = logger.New("module", "types")
+var logger = plogger.GetLogger("Tendermint Types")
