@@ -423,6 +423,12 @@ func jcc_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChai
 }
 
 func jcc_ApplyCb(tx *types.Transaction, state *st.StateDB, cch core.CrossChainHelper) error {
+
+	valerr := jcc_ValidateCb(tx, state, cch)
+	if valerr != nil {
+		return valerr
+	}
+
 	etd := tx.ExtendTxData()
 
 	from, _ := etd.GetAddress(JCC_ARGS_FROM)
