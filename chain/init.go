@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
@@ -115,8 +116,8 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 	}
 	for i, validator := range validators {
 		coreGenesis.Alloc[common.BytesToAddress(validator.Address)] = core.GenesisAccount{
-			Balance: string2Big(balanceAmounts[i].balance),
-			Amount:  string2Big(balanceAmounts[i].amount),
+			Balance: math.MustParseBig256(balanceAmounts[i].balance),
+			Amount:  math.MustParseBig256(balanceAmounts[i].amount),
 		}
 	}
 
@@ -362,10 +363,4 @@ func initEthGenesisFromExistValidator(childConfig cfg.Config, validators []types
 		return err
 	}
 	return nil
-}
-
-func string2Big(num string) *big.Int {
-	n := new(big.Int)
-	n.SetString(num, 0)
-	return n
 }
