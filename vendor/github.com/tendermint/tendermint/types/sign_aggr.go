@@ -31,7 +31,6 @@ type SignAggr struct {
 	// BLS signature aggregation to be added here
 	SignatureAggr	crypto.BLSSignature	`json:"SignatureAggr"`
 	SignBytes 		[]byte 	`json:"sign_bytes"`
-
 }
 
 func (sa *SignAggr) WriteSignBytes(chainID string, w io.Writer, n *int, err *error) {

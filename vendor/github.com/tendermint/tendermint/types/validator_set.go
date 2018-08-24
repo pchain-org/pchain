@@ -29,8 +29,6 @@ import (
 type ValidatorSet struct {
 	// NOTE: persisted via reflect, must be exported.
 	Validators []*Validator `json:"validators"`
-	Proposer   *Validator   `json:"proposer"`
-
 	// cached (unexported)
 	totalVotingPower *big.Int
 }
@@ -45,33 +43,9 @@ func NewValidatorSet(vals []*Validator) *ValidatorSet {
 		Validators: validators,
 	}
 
-	if vals != nil {
-		vs.IncrementAccum(1)
-	}
-
 	return vs
 }
 
-// incrementAccum and update the proposer
-// TODO: mind the overflow when times and votingPower shares too large.
-func (valSet *ValidatorSet) IncrementAccum(times int) {
-	// Add VotingPower * times to each validator and order into heap.
-	validatorsHeap := cmn.NewHeap()
-	for _, val := range valSet.Validators {
-		val.Accum.Add(val.Accum, new(big.Int).Mul(val.VotingPower, big.NewInt(int64(times)))) // TODO: mind overflow
-		validatorsHeap.Push(val, accumComparable{val})
-	}
-
-	// Decrement the validator with most accum times times
-	for i := 0; i < times; i++ {
-		mostest := validatorsHeap.Peek().(*Validator)
-		if i == times-1 {
-			valSet.Proposer = mostest
-		}
-		mostest.Accum.Sub(mostest.Accum, valSet.TotalVotingPower())
-		validatorsHeap.Update(mostest, accumComparable{mostest})
-	}
-}
 
 func (valSet *ValidatorSet) Copy() *ValidatorSet {
 	validators := make([]*Validator, len(valSet.Validators))
@@ -81,7 +55,6 @@ func (valSet *ValidatorSet) Copy() *ValidatorSet {
 	}
 	return &ValidatorSet{
 		Validators:       validators,
-		Proposer:         valSet.Proposer,
 		totalVotingPower: valSet.totalVotingPower,
 	}
 }
@@ -124,7 +97,6 @@ func (valSet *ValidatorSet) TalliedVotingPower(bitMap *cmn.BitArray) (*big.Int, 
 func (valSet *ValidatorSet) Equals(other *ValidatorSet) bool {
 
 	if valSet.totalVotingPower.Cmp(other.totalVotingPower) != 0 ||
-		!valSet.Proposer.Equals(other.Proposer) ||
 		len(valSet.Validators) != len(other.Validators) {
 		return false
 	}
@@ -179,16 +151,6 @@ func (valSet *ValidatorSet) TotalVotingPower() *big.Int {
 	return valSet.totalVotingPower
 }
 
-func (valSet *ValidatorSet) GetProposer() (proposer *Validator) {
-	if len(valSet.Validators) == 0 {
-		return nil
-	}
-	if valSet.Proposer == nil {
-		valSet.Proposer = valSet.findProposer()
-	}
-	return valSet.Proposer.Copy()
-}
-
 func (valSet *ValidatorSet) findProposer() *Validator {
 	var proposer *Validator
 	for _, val := range valSet.Validators {
@@ -218,7 +180,6 @@ func (valSet *ValidatorSet) Add(val *Validator) (added bool) {
 	if idx == len(valSet.Validators) {
 		valSet.Validators = append(valSet.Validators, val)
 		// Invalidate cache
-		valSet.Proposer = nil
 		valSet.totalVotingPower = nil
 		return true
 	} else if bytes.Compare(valSet.Validators[idx].Address, val.Address) == 0 {
@@ -230,7 +191,6 @@ func (valSet *ValidatorSet) Add(val *Validator) (added bool) {
 		copy(newValidators[idx+1:], valSet.Validators[idx:])
 		valSet.Validators = newValidators
 		// Invalidate cache
-		valSet.Proposer = nil
 		valSet.totalVotingPower = nil
 		return true
 	}
@@ -243,7 +203,6 @@ func (valSet *ValidatorSet) Update(val *Validator) (updated bool) {
 	} else {
 		valSet.Validators[index] = val.Copy()
 		// Invalidate cache
-		valSet.Proposer = nil
 		valSet.totalVotingPower = nil
 		return true
 	}
@@ -263,7 +222,6 @@ func (valSet *ValidatorSet) Remove(address []byte) (val *Validator, removed bool
 		}
 		valSet.Validators = newValidators
 		// Invalidate cache
-		valSet.Proposer = nil
 		valSet.totalVotingPower = nil
 		return removedVal, true
 	}
@@ -433,11 +391,9 @@ func (valSet *ValidatorSet) StringIndented(indent string) string {
 		return false
 	})
 	return fmt.Sprintf(`ValidatorSet{
-%s  Proposer: %v
 %s  Validators:
 %s    %v
 %s}`,
-		indent, valSet.GetProposer().String(),
 		indent,
 		indent, strings.Join(valStrings, "\n"+indent+"    "),
 		indent)

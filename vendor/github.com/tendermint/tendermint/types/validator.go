@@ -92,6 +92,8 @@ func (v *Validator) ToAbciValidator() *abciTypes.Validator {
 	}
 }
 
+
+
 //-------------------------------------
 
 var ValidatorCodec = validatorCodec{}

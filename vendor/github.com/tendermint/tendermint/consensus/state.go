@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
 	//"runtime/debug"
 
 	"github.com/ebuchman/fail-test"
-	p2p "github.com/tendermint/go-p2p"
+	"github.com/tendermint/go-p2p"
 
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
@@ -27,6 +26,8 @@ import (
 	"golang.org/x/net/context"
 	"math/big"
 	"runtime/debug"
+	"path/filepath"
+	"encoding/binary"
 )
 
 const (
@@ -82,6 +83,21 @@ func InitTimeoutParamsFromConfig(config cfg.Config) *TimeoutParams {
 		PrecommitDelta:    config.GetInt("timeout_precommit_delta"),
 		Commit0:           config.GetInt("timeout_commit"),
 		SkipTimeoutCommit: config.GetBool("skip_timeout_commit"),
+	}
+}
+
+//-------------------------------------
+type VRFProposer  struct {
+	Height int
+	Round int
+	Proposer *types.Validator
+}
+
+func (propser *VRFProposer) Validate(height, round int) bool {
+	if propser.Height == height && propser.Round == round {
+		return true
+	} else {
+		return false
 	}
 }
 
@@ -171,6 +187,8 @@ type RoundState struct {
 	// Following fields are used for BLS signature aggregation
 	PrevoteMaj23SignAggr	*types.SignAggr
 	PrecommitMaj23SignAggr	*types.SignAggr
+
+	proposer 	  *VRFProposer  //proposer for current height||round
 }
 
 func (rs *RoundState) RoundStateEvent() types.EventDataRoundState {
@@ -368,14 +386,37 @@ func (cs *ConsensusState) SetPrivValidator(priv PrivValidator) {
 	cs.privValidator = priv
 }
 
+func (cs *ConsensusState) updateProposer() {
+	if cs.proposer == nil {
+		cs.proposer = &VRFProposer{}
+	}
+	cs.proposer.Height = cs.Height
+	cs.proposer.Round = cs.Round
+	var roundBytes = make([]byte, 8)
+	binary.BigEndian.PutUint64(roundBytes, uint64(cs.proposer.Round))
+	vrfBytes := append(cs.LastCommit.SignBytes, roundBytes...)
+	hash := types.BytesToHash160(vrfBytes).Big()
+	n := big.NewInt(0)
+	n.Mod(hash, big.NewInt(int64(cs.Validators.Size())))
+	idx := int(n.Int64())
+	if idx >= cs.Validators.Size() {
+		cs.proposer.Proposer = nil
+	} else {
+		cs.proposer.Proposer =  cs.Validators.Validators[idx]
+	}
+}
+
 // Sets our private validator account for signing votes.
 func (cs *ConsensusState) GetProposer() (*types.Validator) {
-	return cs.Validators.GetProposer()
+	if cs.proposer == nil || cs.proposer.Proposer == nil || cs.Height != cs.proposer.Height || cs.Round != cs.proposer.Round {
+		cs.updateProposer()
+	}
+	return cs.proposer.Proposer
 }
 
 // Returns true if this validator is the proposer.
 func (cs *ConsensusState) IsProposer() bool {
-	if bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
+	if bytes.Equal(cs.GetProposer().Address, cs.privValidator.GetAddress()) {
 		return true
 	} else {
 		return false
@@ -917,7 +958,6 @@ func (cs *ConsensusState) enterNewRound(height int, round int) {
 	validators := cs.Validators
 	if cs.Round < round {
 		validators = validators.Copy()
-		validators.IncrementAccum(round - cs.Round)
 	}
 
 	// Setup new round
@@ -978,12 +1018,12 @@ func (cs *ConsensusState) enterPropose(height int, round int) {
 		return
 	}
 
-	if !bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
+	if !bytes.Equal(cs.GetProposer().Address, cs.privValidator.GetAddress()) {
 		fmt.Println("we are not proposer!!!")
-		logger.Info("enterPropose: Not our turn to propose", "proposer", cs.Validators.GetProposer().Address, "privValidator", cs.privValidator)
+		logger.Info("enterPropose: Not our turn to propose", "proposer", cs.GetProposer().Address, "privValidator", cs.privValidator)
 	} else {
 		fmt.Println("we are proposer!!!")
-		logger.Info("enterPropose: Our turn to propose", "proposer", cs.Validators.GetProposer().Address, "privValidator", cs.privValidator)
+		logger.Info("enterPropose: Our turn to propose", "proposer", cs.GetProposer().Address, "privValidator", cs.privValidator)
 		cs.decideProposal(height, round)
 
 		// only the proposer will send data from child chain to main chain.
@@ -1605,7 +1645,7 @@ func (cs *ConsensusState) newSetProposal(proposal *types.Proposal) error {
 	}
 
 	// Verify signature
-	if !cs.Validators.GetProposer().PubKey.VerifyBytes(types.SignBytes(cs.state.ChainID, proposal), proposal.Signature) {
+	if !cs.GetProposer().PubKey.VerifyBytes(types.SignBytes(cs.state.ChainID, proposal), proposal.Signature) {
 		return ErrInvalidProposalSignature
 	}
 
@@ -1641,7 +1681,7 @@ func (cs *ConsensusState) defaultSetProposal(proposal *types.Proposal) error {
 	}
 
 	// Verify signature
-	if !cs.Validators.GetProposer().PubKey.VerifyBytes(types.SignBytes(cs.state.ChainID, proposal), proposal.Signature) {
+	if !cs.GetProposer().PubKey.VerifyBytes(types.SignBytes(cs.state.ChainID, proposal), proposal.Signature) {
 		return ErrInvalidProposalSignature
 	}
 
