@@ -165,7 +165,7 @@ func saveEpoch(db dbm.DB, epoch *ep.Epoch, chainId string) error {
 	return nil
 }
 
-func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber int) *ep.Epoch {
+func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
 
 	if blockNumber < 0 {
 		return ci.Epoch

@@ -22,6 +22,7 @@ import (
 	dbm "github.com/tendermint/go-db"
 	"math/big"
 	"sync"
+	"time"
 )
 
 const (
@@ -209,7 +210,6 @@ func (cch *CrossChainHelper) ReadyForLaunchChildChain(height *big.Int, stateDB *
 	logger.Debugln("ReadyForLaunchChildChain - end")
 }
 
-//should return verified transaction
 func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Transaction {
 
 	chainMgr := GetCMInstance(nil)
@@ -220,7 +220,6 @@ func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Trans
 	return tx
 }
 
-//should return verified transaction
 func (cch *CrossChainHelper) GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction {
 
 	chainMgr := GetCMInstance(nil)
@@ -231,7 +230,8 @@ func (cch *CrossChainHelper) GetTxFromChildChain(txHash common.Hash, chainId str
 	return tx
 }
 
-//verify the signature of validators who voted for the block
+// verify the signature of validators who voted for the block
+// most of the logic here is from 'VerifyHeader'
 func (cch *CrossChainHelper) VerifyChildChainBlock(from common.Address, bs []byte) error {
 
 	logger.Debugln("VerifyChildChainBlock - start")
@@ -242,7 +242,13 @@ func (cch *CrossChainHelper) VerifyChildChainBlock(from common.Address, bs []byt
 		return err
 	}
 
-	tdmExtra, err := tdmTypes.ExtractTendermintExtra(block.Header())
+	header := block.Header()
+	// Don't waste time checking blocks from the future
+	if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
+		return errors.New("block in the future")
+	}
+
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
 	if err != nil {
 		return err
 	}
@@ -252,7 +258,43 @@ func (cch *CrossChainHelper) VerifyChildChainBlock(from common.Address, bs []byt
 		return fmt.Errorf("invalid child chain id: %s", chainId)
 	}
 
-	// TODO： add verify logic here
+	if header.Nonce != (types.TendermintEmptyNonce) && !bytes.Equal(header.Nonce[:], types.TendermintNonce) {
+		return errors.New("invalid nonce")
+	}
+
+	if header.MixDigest != types.TendermintDigest {
+		return errors.New("invalid mix digest")
+	}
+
+	if header.UncleHash != types.TendermintNilUncleHash {
+		return errors.New("invalid uncle Hash")
+	}
+
+	if header.Difficulty == nil || header.Difficulty.Cmp(types.TendermintDefaultDifficulty) != 0 {
+		return errors.New("invalid difficulty")
+	}
+
+	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
+	if ci == nil {
+		return fmt.Errorf("chain info %s not found", chainId)
+	}
+	epoch := ci.GetEpochByBlockNumber(tdmExtra.Height)
+	if epoch == nil {
+		return fmt.Errorf("could not get epoch for block height %v", tdmExtra.Height)
+	}
+	valSet := epoch.Validators
+	if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
+		return errors.New("inconsistent validator set")
+	}
+
+	seenCommit := tdmExtra.SeenCommit
+	if !bytes.Equal(tdmExtra.SeenCommitHash, seenCommit.Hash()) {
+		return errors.New("invalid committed seals")
+	}
+
+	if err = valSet.VerifyCommit(tdmExtra.ChainID, tdmExtra.Height, seenCommit); err != nil {
+		return err
+	}
 
 	logger.Debugln("VerifyChildChainBlock - end")
 	return nil

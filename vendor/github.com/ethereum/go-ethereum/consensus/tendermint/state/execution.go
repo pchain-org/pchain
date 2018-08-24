@@ -41,7 +41,7 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 	}
 
 	// Validate block SeenCommit.
-	epoch := s.Epoch.GetEpochByBlockNumber(int(block.TdmExtra.Height))
+	epoch := s.Epoch.GetEpochByBlockNumber(block.TdmExtra.Height)
 	if epoch == nil || epoch.Validators == nil {
 		return errors.New("no epoch for current block height")
 	}
@@ -75,10 +75,10 @@ func (s *State) ApplyBlock(block *ethTypes.Block, epoch *ep.Epoch) *ep.Epoch {
 	}
 
 	//here handles if need to enter next epoch
-	ok, err := epoch.ShouldEnterNewEpoch(int(tdmExtra.Height))
+	ok, err := epoch.ShouldEnterNewEpoch(tdmExtra.Height)
 	if ok && err == nil {
 		// now update the block and validators
-		epoch, _, _ := epoch.EnterNewEpoch(int(tdmExtra.Height))
+		epoch, _, _ := epoch.EnterNewEpoch(tdmExtra.Height)
 		epoch.Save()
 	} else if err != nil {
 		logger.Error(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",

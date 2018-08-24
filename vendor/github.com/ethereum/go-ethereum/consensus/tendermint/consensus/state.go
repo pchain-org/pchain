@@ -875,9 +875,9 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 		*/
 
 		var epochBytes []byte = []byte{}
-		shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(int(cs.Height))
+		shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
 		if shouldProposeEpoch {
-			cs.Epoch.SetNextEpoch(cs.Epoch.ProposeNextEpoch(int(cs.Height)))
+			cs.Epoch.SetNextEpoch(cs.Epoch.ProposeNextEpoch(cs.Height))
 			epochBytes = cs.Epoch.NextEpoch.Bytes()
 		}
 
@@ -955,7 +955,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	// Valdiate proposal block
 	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.TdmExtra.EpochBytes)
 	if proposedNextEpoch != nil {
-		err = cs.RoundState.Epoch.ValidateNextEpoch(proposedNextEpoch, int(height))
+		err = cs.RoundState.Epoch.ValidateNextEpoch(proposedNextEpoch, height)
 		if err != nil {
 			// ProposalBlock is invalid, prevote nil.
 			logger.Warnf("enterPrevote: Proposal reward scheme is invalid, error: %v", err)

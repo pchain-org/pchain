@@ -45,8 +45,8 @@ type Epoch struct {
 
 	Number         int
 	RewardPerBlock *big.Int
-	StartBlock     int
-	EndBlock       int
+	StartBlock     uint64
+	EndBlock       uint64
 	StartTime      time.Time
 	EndTime        time.Time //not accurate for current epoch
 	BlockGenerated int       //agreed in which block
@@ -166,8 +166,8 @@ func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc) *Epoch {
 
 	number, _ := strconv.Atoi(oneEpoch.Number)
 	RewardPerBlock, _ := new(big.Int).SetString(oneEpoch.RewardPerBlock, 10)
-	StartBlock, _ := strconv.Atoi(oneEpoch.StartBlock)
-	EndBlock, _ := strconv.Atoi(oneEpoch.EndBlock)
+	StartBlock, _ := strconv.ParseUint(oneEpoch.StartBlock, 0, 64)
+	EndBlock, _ := strconv.ParseUint(oneEpoch.EndBlock, 0, 64)
 	StartTime, _ := time.Parse(time.RFC3339Nano, oneEpoch.StartTime)
 	EndTime, _ := time.Parse(time.RFC3339Nano, oneEpoch.EndTime)
 	BlockGenerated, _ := strconv.Atoi(oneEpoch.BlockGenerated)
@@ -301,7 +301,7 @@ func (epoch *Epoch) Bytes() []byte {
 	return buf.Bytes()
 }
 
-func (epoch *Epoch) ValidateNextEpoch(next *Epoch, height int) error {
+func (epoch *Epoch) ValidateNextEpoch(next *Epoch, height uint64) error {
 
 	if epoch.NextEpoch == nil {
 		epoch.NextEpoch = epoch.ProposeNextEpoch(height)
@@ -315,7 +315,7 @@ func (epoch *Epoch) ValidateNextEpoch(next *Epoch, height int) error {
 }
 
 //check if need propose next epoch
-func (epoch *Epoch) ShouldProposeNextEpoch(curBlockHeight int) bool {
+func (epoch *Epoch) ShouldProposeNextEpoch(curBlockHeight uint64) bool {
 	// If next epoch already proposed, then no need propose again
 	if epoch.NextEpoch != nil {
 		return false
@@ -333,7 +333,7 @@ func (epoch *Epoch) ShouldProposeNextEpoch(curBlockHeight int) bool {
 	return shouldPropose
 }
 
-func (epoch *Epoch) ProposeNextEpoch(curBlockHeight int) *Epoch {
+func (epoch *Epoch) ProposeNextEpoch(curBlockHeight uint64) *Epoch {
 
 	if epoch != nil {
 
@@ -365,28 +365,28 @@ func (epoch *Epoch) ProposeNextEpoch(curBlockHeight int) *Epoch {
 	return nil
 }
 
-func (epoch *Epoch) GetVoteStartHeight() int {
+func (epoch *Epoch) GetVoteStartHeight() uint64 {
 	percent := float64(epoch.EndBlock-epoch.StartBlock) * NextEpochProposeStartPercent
-	return int(math.Ceil(percent)) + epoch.StartBlock
+	return uint64(math.Ceil(percent)) + epoch.StartBlock
 }
 
-func (epoch *Epoch) GetVoteEndHeight() int {
+func (epoch *Epoch) GetVoteEndHeight() uint64 {
 	percent := float64(epoch.EndBlock-epoch.StartBlock) * NextEpochHashVoteEndPercent
 	if _, frac := math.Modf(percent); frac == 0 {
-		return int(percent) - 1 + epoch.StartBlock
+		return uint64(percent) - 1 + epoch.StartBlock
 	} else {
-		return int(math.Floor(percent)) + epoch.StartBlock
+		return uint64(math.Floor(percent)) + epoch.StartBlock
 	}
 }
 
-func (epoch *Epoch) GetRevealVoteStartHeight() int {
+func (epoch *Epoch) GetRevealVoteStartHeight() uint64 {
 	percent := float64(epoch.EndBlock-epoch.StartBlock) * NextEpochHashVoteEndPercent
-	return int(math.Ceil(percent)) + epoch.StartBlock
+	return uint64(math.Ceil(percent)) + epoch.StartBlock
 }
 
-func (epoch *Epoch) GetRevealVoteEndHeight() int {
+func (epoch *Epoch) GetRevealVoteEndHeight() uint64 {
 	percent := float64(epoch.EndBlock-epoch.StartBlock) * NextEpochRevealVoteEndPercent
-	return int(math.Floor(percent)) + epoch.StartBlock
+	return uint64(math.Floor(percent)) + epoch.StartBlock
 }
 
 func (epoch *Epoch) CheckInHashVoteStage(height int) bool {
@@ -420,7 +420,7 @@ func (epoch *Epoch) SetNextEpoch(next *Epoch) {
 	}
 }
 
-func (epoch *Epoch) ShouldEnterNewEpoch(height int) (bool, error) {
+func (epoch *Epoch) ShouldEnterNewEpoch(height uint64) (bool, error) {
 
 	if height == epoch.EndBlock {
 		if epoch.NextEpoch != nil {
@@ -433,7 +433,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height int) (bool, error) {
 }
 
 // Move to New Epoch
-func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, []*abciTypes.RefundValidatorAmount, error) {
+func (epoch *Epoch) EnterNewEpoch(height uint64) (*Epoch, []*abciTypes.RefundValidatorAmount, error) {
 
 	if height == epoch.EndBlock {
 		if epoch.NextEpoch != nil {
@@ -543,7 +543,7 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 	return refund, nil
 }
 
-func (epoch *Epoch) GetEpochByBlockNumber(blockNumber int) *Epoch {
+func (epoch *Epoch) GetEpochByBlockNumber(blockNumber uint64) *Epoch {
 
 	if blockNumber >= epoch.StartBlock && blockNumber <= epoch.EndBlock {
 		return epoch
@@ -603,7 +603,7 @@ func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
 	}
 }
 
-func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock *big.Int, blocksOfNextEpoch int) {
+func (epoch *Epoch) estimateForNextEpoch(curBlockHeight uint64) (rewardPerBlock *big.Int, blocksOfNextEpoch uint64) {
 
 	//var totalReward          = 210000000e+18
 	//var preAllocated         = 100000000e+18
@@ -636,7 +636,7 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock *bi
 
 		epochTimePerEpochLeftNextYear := timeLeftNextYear.Nanoseconds() / int64(epochLeftNextYear)
 
-		blocksOfNextEpoch = int(epochTimePerEpochLeftNextYear / timePerBlockThisEpoch)
+		blocksOfNextEpoch = uint64(epochTimePerEpochLeftNextYear / timePerBlockThisEpoch)
 		if blocksOfNextEpoch == 0 {
 			plog.Panicln("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
 		}
@@ -653,7 +653,7 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight int) (rewardPerBlock *bi
 
 		epochTimePerEpochLeftThisYear := timeLeftThisYear.Nanoseconds() / int64(epochLeftThisYear)
 
-		blocksOfNextEpoch = int(epochTimePerEpochLeftThisYear / timePerBlockThisEpoch)
+		blocksOfNextEpoch = uint64(epochTimePerEpochLeftThisYear / timePerBlockThisEpoch)
 		if blocksOfNextEpoch == 0 {
 			plog.Panicln("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
 		}
@@ -701,7 +701,7 @@ func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool {
 	return true
 }
 
-func (epoch *Epoch) ProposeTransactions(sender string, blockHeight int) (tmTypes.Txs, error) {
+func (epoch *Epoch) ProposeTransactions(sender string, blockHeight uint64) (tmTypes.Txs, error) {
 
 	txs := make([]tmTypes.Tx, 0)
 

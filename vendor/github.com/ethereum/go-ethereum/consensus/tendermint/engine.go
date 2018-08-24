@@ -3,7 +3,6 @@ package tendermint
 import (
 	"bytes"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -37,13 +36,13 @@ var (
 	// errInvalidExtraDataFormat is returned when the extra data format is incorrect
 	errInvalidExtraDataFormat = errors.New("invalid extra data format")
 	// errInvalidMixDigest is returned if a block's mix digest is not Istanbul digest.
-	errInvalidMixDigest = errors.New("invalid Istanbul mix digest")
+	errInvalidMixDigest = errors.New("invalid Tendermint mix digest")
 	// errInvalidNonce is returned if a block's nonce is invalid
 	errInvalidNonce = errors.New("invalid nonce")
 	// errInvalidUncleHash is returned if a block contains an non-empty uncle list.
 	errInvalidUncleHash = errors.New("non empty uncle hash")
 	// errInconsistentValidatorSet is returned if the validator set is inconsistent
-	errInconsistentValidatorSet = errors.New("non empty uncle hash")
+	errInconsistentValidatorSet = errors.New("inconsistent validator set")
 	// errInvalidTimestamp is returned if the timestamp of a block is lower than the previous block's timestamp + the minimum block period.
 	errInvalidTimestamp = errors.New("invalid timestamp")
 	// errInvalidVotingChain is returned if an authorization list is attempted to
@@ -61,12 +60,7 @@ var (
 )
 
 var (
-	defaultDifficulty = big.NewInt(1)
-	nilUncleHash      = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
-	emptyNonce        = types.BlockNonce{}
-	now               = time.Now
-
-	nonceTendermint = hexutil.MustDecode("0x88ff88ff88ff88ff") // Magic nonce number to vote on adding a new validator
+	now = time.Now
 
 	inmemoryAddresses  = 20 // Number of recent addresses from ecrecover
 	recentAddresses, _ = lru.NewARC(inmemoryAddresses)
@@ -175,7 +169,7 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	}
 
 	// Ensure that the coinbase is valid
-	if header.Nonce != (emptyNonce) && !bytes.Equal(header.Nonce[:], nonceTendermint) {
+	if header.Nonce != (types.TendermintEmptyNonce) && !bytes.Equal(header.Nonce[:], types.TendermintNonce) {
 		return errInvalidNonce
 	}
 	// Ensure that the mix digest is zero as we don't have fork protection currently
@@ -183,11 +177,11 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		return errInvalidMixDigest
 	}
 	// Ensure that the block doesn't contain any uncles which are meaningless in Istanbul
-	if header.UncleHash != nilUncleHash {
+	if header.UncleHash != types.TendermintNilUncleHash {
 		return errInvalidUncleHash
 	}
 	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
-	if header.Difficulty == nil || header.Difficulty.Cmp(defaultDifficulty) != 0 {
+	if header.Difficulty == nil || header.Difficulty.Cmp(types.TendermintDefaultDifficulty) != 0 {
 		return errInvalidDifficulty
 	}
 
@@ -292,7 +286,7 @@ func (sb *backend) verifyCommittedSeals(chain consensus.ChainReader, header *typ
 		return errInvalidExtraDataFormat
 	}
 
-	epoch := sb.core.consensusState.Epoch.GetEpochByBlockNumber(int(tdmExtra.Height))
+	epoch := sb.core.consensusState.Epoch.GetEpochByBlockNumber(tdmExtra.Height)
 	if epoch == nil || epoch.Validators == nil {
 		return errInconsistentValidatorSet
 	}
@@ -324,7 +318,7 @@ func (sb *backend) VerifySeal(chain consensus.ChainReader, header *types.Header)
 	}
 
 	// ensure that the difficulty equals to defaultDifficulty
-	if header.Difficulty.Cmp(defaultDifficulty) != 0 {
+	if header.Difficulty.Cmp(types.TendermintDefaultDifficulty) != 0 {
 		return errInvalidDifficulty
 	}
 
@@ -338,7 +332,7 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	logger.Info("Tendermint (backend) Prepare, add logic here")
 
 	header.Coinbase = common.Address{}
-	header.Nonce = emptyNonce
+	header.Nonce = types.TendermintEmptyNonce
 	header.MixDigest = types.TendermintDigest
 
 	// copy the parent extra data as the header extra data
@@ -348,7 +342,7 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 		return consensus.ErrUnknownAncestor
 	}
 	// use the same difficulty for all blocks
-	header.Difficulty = defaultDifficulty
+	header.Difficulty = types.TendermintDefaultDifficulty
 
 	/*
 		// Assemble the voting snapshot
@@ -411,7 +405,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	// No block rewards in Istanbul, so the state remains as is and uncles are dropped
 	// TODO: we need consider reward here
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-	header.UncleHash = nilUncleHash
+	header.UncleHash = types.TendermintNilUncleHash
 
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts), nil
@@ -497,7 +491,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 // current signer.
 func (sb *backend) CalcDifficulty(chain consensus.ChainReader, time uint64, parent *types.Header) *big.Int {
 
-	return defaultDifficulty
+	return types.TendermintDefaultDifficulty
 }
 
 // Commit implements istanbul.Backend.Commit

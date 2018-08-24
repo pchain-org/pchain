@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	//"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"math/big"
 )
 
 var (
@@ -16,10 +17,15 @@ var (
 	TendermintExtraVanity = 32 // Fixed number of extra-data bytes reserved for validator vanity
 	TendermintExtraSeal   = 65 // Fixed number of extra-data bytes reserved for validator seal
 
-	// ErrInvalidIstanbulHeaderExtra is returned if the length of extra-data is less than 32 bytes
-	ErrInvalidTendermintHeaderExtra = errors.New("invalid istanbul header extra-data")
+	TendermintDefaultDifficulty = big.NewInt(1)
+	TendermintNilUncleHash      = CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
+	TendermintEmptyNonce        = BlockNonce{}
+	TendermintNonce             = hexutil.MustDecode("0x88ff88ff88ff88ff") // Magic nonce number to vote on adding a new validator
 
 	MagicExtra = []byte("pchain_tmp_extra")
+
+	// ErrInvalidIstanbulHeaderExtra is returned if the length of extra-data is less than 32 bytes
+	ErrInvalidTendermintHeaderExtra = errors.New("invalid istanbul header extra-data")
 )
 
 // TendermintFilteredHeader returns a filtered header which some information (like seal, committed seals)
@@ -29,20 +35,19 @@ func TendermintFilteredHeader(h *Header, keepSeal bool) *Header {
 	newHeader := CopyHeader(h)
 
 	/*
-	tdmExtra, err := ExtractTendermintExtra(newHeader)
+		tdmExtra, err := ExtractTendermintExtra(newHeader)
 
-	if err != nil {
-		return nil
-	}
+		if err != nil {
+			return nil
+		}
 
-	payload, err := rlp.EncodeToBytes(&tdmExtra)
-	if err != nil {
-		return nil
-	}
+		payload, err := rlp.EncodeToBytes(&tdmExtra)
+		if err != nil {
+			return nil
+		}
 	*/
 	payload := MagicExtra
 	newHeader.Extra = payload
 	fmt.Printf("TendermintFilteredHeader， newHeader.Extra is %x\n", newHeader.Extra)
 	return newHeader
 }
-
