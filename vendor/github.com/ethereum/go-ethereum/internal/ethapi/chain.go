@@ -1,6 +1,7 @@
 package ethapi
 
 import (
+	"context"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -9,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 	"strings"
 )
 
