@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
-	"bytes"
 )
 
 var (
@@ -291,30 +290,6 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 		Txs:    b.transactions,
 		Uncles: b.uncles,
 	})
-}
-
-
-// DecodeRLP decodes the Ethereum
-func (b *Block) DecodeRLP1(blockBytes []byte) (*Block, error) {
-
-	s := rlp.NewStream(bytes.NewBuffer(blockBytes), 0)
-
-	var blk *Block = &Block{}
-	if err := s.Decode(blk); err != nil {
-		return nil, err
-	}
-	return blk, nil
-}
-
-// EncodeRLP serializes b into the Ethereum RLP block format.
-func (b *Block) EncodeRLP1() ([]byte, error) {
-
-	buf := new(bytes.Buffer)
-	if err := b.EncodeRLP(buf); err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
 }
 
 // [deprecated by eth/63]

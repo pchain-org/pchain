@@ -22,168 +22,201 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
-	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	"io"
+)
+
+type CrossChainTxType int
+
+const (
+	MainChainToChildChain CrossChainTxType = iota
+	ChildChainToMainChain
 )
 
 var (
-	//the prefix must not conflict with variables in database_util.go
-	blockPrefix = []byte("cc-block") //child-chain block
-	txPrefix  = []byte("cc-tx")	//child-chain tx
-	extraDataPrefix   = []byte("cc-ex") //child-chain extra data
-	blockPartSizePrefix = []byte("cc-bps") //child-chain blockPartSize
-	commitPrefix = []byte("cc-cm") //child-chain commits
+	// the prefix must not conflict with variables in database_util.go
+	txPrefix               = []byte("cc-tx")   // child-chain tx
+	toChildChainTxPrefix   = []byte("cc-to")   // txHash that deposit to child chain
+	fromChildChainTxPrefix = []byte("cc-from") // txHash that withdraw from child chain
+	usedChildChainTxPrefix = []byte("cc-used") // txHash that has been used in child chain
 
+	// errors
 	NotFoundErr = errors.New("not found") // general not found error
 )
 
-func GetChildBlockByNumber(db ethdb.Database, blockNumber int64, chainId string) (*types.Block, error) {
+func GetChildChainTransactionByHash(db ethdb.Database, chainId string, txHash common.Hash) (*types.Transaction, error) {
 
-	key := calBlockKeyByNumber(blockNumber, chainId)
-
-	value, err := db.Get(key)
-	if err != nil {
-		return nil, err
+	key := calcChildChainTxKey(chainId, txHash)
+	bs, err := db.Get(key)
+	if bs == nil || err != nil {
+		return nil, NotFoundErr
 	}
 
-	block := &types.Block{}
-	return block.DecodeRLP1(value)
+	return decodeTx(bs)
 }
 
-func GetChildBlockByHash(db ethdb.Database, blockHash []byte, chainId string) (*types.Block, error) {
-
-	key := calBlockKeyByHash(blockHash, chainId)
-
-	value, err := db.Get(key)
-	if err != nil {
-		return nil, err
-	}
-
-	block := &types.Block{}
-	return block.DecodeRLP1(value)
-}
-
-//notice: the 'txHash' is the hash format of ethereum, not tendermint
-func GetChildTransactionByHash(db ethdb.Database, txHash common.Hash, chainId string) (*types.Transaction, error) {
-
-	key := calTxKey(txHash, chainId)
-
-	value, err := db.Get(key)
-	if err != nil {
-		return nil, err
-	}
-
-	return decodeTx(value)
-}
-
-func DeleteChildBlockWithDetail(db ethdb.Database, number int64, chainId string) error {
-
-	block, err := GetChildBlockByNumber(db, number, chainId)
-	if err != nil {return err}
-
-	DeleteChildBlock(db, number, chainId)
-	if err != nil {return err}
-
-	for _, tx := range block.Transactions() {
-
-		err = DeleteChildTransaction(db, tx.Hash(), chainId)
-		if err != nil {return err}
-	}
-
-	return nil
-}
-
-func DeleteChildBlock(db ethdb.Database, number int64, chainId string) error {
-
-	return db.Delete(calBlockKeyByNumber(number, chainId))
-}
-
-func DeleteChildTransaction(db ethdb.Database, txHash common.Hash, chainId string) error {
-
-	return db.Delete(calTxKey(txHash, chainId))
-}
-
-func WriteChildBlockWithDetail(db ethdb.Database, block *types.Block) error {
-
-	WriteChildBlock(db, block)
-	WriteChildTransactions(db, block)
-
-	return nil
-}
-
-func WriteChildBlock(db ethdb.Database, block *types.Block) error {
+func WriteChildChainBlock(db ethdb.Database, block *types.Block) error {
 
 	tdmExtra, err := tdmTypes.ExtractTendermintExtra(block.Header())
 	if err != nil {
 		return err
 	}
 
-	blockByte, err := block.EncodeRLP1()
-	if err != nil {
-		return err
-	}
+	txs := block.Transactions()
+	for _, tx := range txs {
+		etd := tx.ExtendTxData()
+		if etd.FuncName == "WithdrawFromChildChain" {
+			from, _ := etd.GetAddress("from")
+			// write the entire tx
+			bs, err := rlp.EncodeToBytes(tx)
+			if err != nil {
+				return err
+			}
+			txHash := tx.Hash()
+			key := calcChildChainTxKey(tdmExtra.ChainID, txHash)
+			err = db.Put(key, bs)
+			if err != nil {
+				return err
+			}
 
-	chainId := tdmExtra.ChainID
-	key := calBlockKeyByHash(block.Hash().Bytes(), chainId)
-	err = db.Put(key, blockByte)
-	if err != nil {
-		return err
-	}
-
-	key = calBlockKeyByNumber(block.Number().Int64(), chainId)
-	return db.Put(key, blockByte)
-}
-
-func WriteChildTransactions(db ethdb.Database, block *types.Block) error {
-
-	tdmExtra, err := tdmTypes.ExtractTendermintExtra(block.Header())
-	if err != nil {
-		return err
-	}
-
-	chainId := tdmExtra.ChainID
-
-	if len(block.Transactions()) == 0 {
-		return nil
-	}
-
-	for _, tx := range block.Transactions() {
-
-		key := calTxKey(tx.Hash(), chainId)//tdmBlock.ChainID
-
-		err := db.Put(key, tx.Data())
-		if err != nil {
-			return err
+			// add 'child chain to main chain' tx.
+			err = AddCrossChainTx(db, ChildChainToMainChain, tdmExtra.ChainID, from, txHash)
+			if err != nil {
+				return err
+			}
+		} else if etd.FuncName == "DepositInChildChain" {
+			from, _ := etd.GetAddress("from")
+			// remove 'main chain to child chain' tx.
+			err = RemoveCrossChainTx(db, MainChainToChildChain, tdmExtra.ChainID, from, tx.Hash())
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	return nil
 }
 
-func calBlockKeyByNumber(number int64, chainId string) []byte {
+func AddCrossChainTx(db ethdb.Database, t CrossChainTxType, chainId string, account common.Address, txHash common.Hash) error {
 
-	return append(blockPrefix, []byte(fmt.Sprintf("-%v-%s", number, chainId))...)
-}
-
-func calBlockKeyByHash(hash []byte, chainId string) []byte {
-
-	return append(blockPrefix, []byte(fmt.Sprintf("-%x-%s", hash, chainId))...)
-}
-
-func calTxKey(hash common.Hash, chainId string) []byte {
-
-	return append(txPrefix, []byte(fmt.Sprintf("-%x-%s", hash, chainId))...)
-}
-
-func getReader(db ethdb.Database, key []byte) io.Reader {
-	bytez, err := db.Get(key)
-	if bytez == nil || err != nil{
-		return nil
+	var hashes []common.Hash
+	key := calcCrossChainTxKey(t, chainId, account)
+	bs, err := db.Get(key)
+	if err == nil { // already exists
+		err = rlp.DecodeBytes(bs, &hashes)
+		if err != nil {
+			return err
+		}
 	}
-	return bytes.NewReader(bytez)
+	hashes = append(hashes, txHash)
+	bs, err = rlp.EncodeToBytes(hashes)
+	if err != nil {
+		return err
+	}
+	return db.Put(key, bs)
+}
+
+func RemoveCrossChainTx(db ethdb.Database, t CrossChainTxType, chainId string, account common.Address, txHash common.Hash) error {
+
+	var hashes []common.Hash
+	key := calcCrossChainTxKey(t, chainId, account)
+	bs, err := db.Get(key)
+	if err != nil {
+		return err
+	}
+	err = rlp.DecodeBytes(bs, &hashes)
+	if err != nil {
+		return err
+	}
+	for i := range hashes {
+		if hashes[i] == txHash {
+			// remove element at index i
+			hashes[i] = hashes[len(hashes)-1]
+			hashes = hashes[:len(hashes)-1]
+
+			bs, err = rlp.EncodeToBytes(hashes)
+			if err != nil {
+				return err
+			}
+
+			return db.Put(key, bs)
+		}
+	}
+	return fmt.Errorf("tx not found: %x", txHash)
+}
+
+func HasCrossChainTx(db ethdb.Database, t CrossChainTxType, chainId string, account common.Address, txHash common.Hash) bool {
+	var hashes []common.Hash
+	key := calcCrossChainTxKey(t, chainId, account)
+	bs, err := db.Get(key)
+	if err != nil {
+		return false
+	}
+	err = rlp.DecodeBytes(bs, &hashes)
+	if err != nil {
+		return false
+	}
+	for i := range hashes {
+		if hashes[i] == txHash {
+			return true
+		}
+	}
+	return false
+}
+
+func AppendUsedChildChainTx(db ethdb.Database, chainId string, account common.Address, txHash common.Hash) error {
+	var hashes []common.Hash
+	key := calcUsedChildChainTxKey(chainId, account)
+	bs, err := db.Get(key)
+	if err == nil { // already exists
+		err = rlp.DecodeBytes(bs, &hashes)
+		if err != nil {
+			return err
+		}
+	}
+	hashes = append(hashes, txHash)
+	bs, err = rlp.EncodeToBytes(hashes)
+	if err != nil {
+		return err
+	}
+	return db.Put(key, bs)
+}
+
+func HasUsedChildChainTx(db ethdb.Database, chainId string, account common.Address, txHash common.Hash) bool {
+	var hashes []common.Hash
+	key := calcUsedChildChainTxKey(chainId, account)
+	bs, err := db.Get(key)
+	if err != nil {
+		return false
+	}
+	err = rlp.DecodeBytes(bs, &hashes)
+	if err != nil {
+		return false
+	}
+	for i := range hashes {
+		if hashes[i] == txHash {
+			return true
+		}
+	}
+	return false
+}
+
+func calcChildChainTxKey(chainId string, hash common.Hash) []byte {
+	return append(txPrefix, []byte(fmt.Sprintf("-%s-%x", chainId, hash))...)
+}
+
+func calcUsedChildChainTxKey(chainId string, account common.Address) []byte {
+	return append(usedChildChainTxPrefix, []byte(fmt.Sprintf("-%s-%x", chainId, account))...)
+}
+
+func calcCrossChainTxKey(t CrossChainTxType, chainId string, account common.Address) []byte {
+	if t == MainChainToChildChain {
+		return append(toChildChainTxPrefix, []byte(fmt.Sprintf("-%s-%x", chainId, account))...)
+	} else { // ChildChainToMainChain
+		return append(fromChildChainTxPrefix, []byte(fmt.Sprintf("-%s-%x", chainId, account))...)
+	}
 }
 
 func decodeTx(txBytes []byte) (*types.Transaction, error) {

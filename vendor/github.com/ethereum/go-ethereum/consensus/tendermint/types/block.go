@@ -8,22 +8,22 @@ import (
 	"strings"
 	"time"
 
-	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
-	//"github.com/tendermint/go-data"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 
 type TdmBlock struct {
-	Block    *ethTypes.Block  `json:"block"`
+	Block    *types.Block  `json:"block"`
 	TdmExtra *TendermintExtra `json:"tdmexdata"`
 }
 
 func MakeBlock(height uint64, chainID string, commit *Commit,
-	block *ethTypes.Block, valHash []byte, epochBytes []byte, partSize int) (*TdmBlock, *PartSet) {
+	block *types.Block, valHash []byte, epochBytes []byte, partSize int) (*TdmBlock, *PartSet) {
 
 	TdmExtra := &TendermintExtra{
 		ChainID:        chainID,
@@ -99,13 +99,13 @@ func (b *TdmBlock) ToBytes() []byte {
 	}
 	//fmt.Printf("TdmBlock.toBytes 0 with block: %v\n", b)
 
-	blockByte, err := b.Block.EncodeRLP1()
+	bs, err := rlp.EncodeToBytes(b.Block)
 	if err != nil {
 		fmt.Printf("TdmBlock.toBytes error\n")
 	}
 	//fmt.Printf("TdmBlock.toBytes 1 with blockbyte: %v\n", blockByte)
 	bb := &TmpBlock{
-		BlockData: blockByte,
+		BlockData: bs,
 		TdmExtra:  b.TdmExtra,
 	}
 	//fmt.Printf("TdmBlock.toBytes 1 with tdmblock: %v\n", bb)
@@ -132,15 +132,15 @@ func (b *TdmBlock) FromBytes(reader io.Reader) (*TdmBlock, error) {
 		return nil, err
 	}
 
-	block := &ethTypes.Block{}
-	block, err = block.DecodeRLP1(bb.BlockData)
+	var block types.Block
+	err = rlp.DecodeBytes(bb.BlockData, &block)
 	if err != nil {
 		fmt.Printf("TdmBlock.FromBytes 1 error: %v\n", err)
 		return nil, err
 	}
 
 	tdmBlock := &TdmBlock{
-		Block:    block,
+		Block:    &block,
 		TdmExtra: bb.TdmExtra,
 	}
 

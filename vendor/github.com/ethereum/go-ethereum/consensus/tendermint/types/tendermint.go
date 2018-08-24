@@ -1,25 +1,21 @@
 package types
 
-
 import (
-	"time"
-	"fmt"
-
-	"github.com/ethereum/go-ethereum/rlp"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/tendermint/go-merkle"
+	"time"
 )
-
 
 type TendermintExtra struct {
 	ChainID        string    `json:"chain_id"`
-	Height         uint64     `json:"height"`
+	Height         uint64    `json:"height"`
 	Time           time.Time `json:"time"`
 	NeedToSave     bool      `json:"need_to_save"`
 	EpochNumber    uint64    `json:"epoch_number"`
 	SeenCommitHash []byte    `json:"last_commit_hash"` // commit from validators from the last block
 	ValidatorsHash []byte    `json:"validators_hash"`  // validators for the current block
-	SeenCommit *Commit       `json:"seen_commit"`
+	SeenCommit     *Commit   `json:"seen_commit"`
 	EpochBytes     []byte    `json:"epoch_bytes"`
 }
 
@@ -48,22 +44,21 @@ func (te *TendermintExtra) DecodeRLP(s *rlp.Stream) error {
 }
 */
 
-
 //be careful, here not deep copy because just reference to SeenCommit
 func (te *TendermintExtra) Copy() *TendermintExtra {
 	//fmt.Printf("State.Copy(), s.LastValidators are %v\n",s.LastValidators)
 	//debug.PrintStack()
 
 	return &TendermintExtra{
-		ChainID:         te.ChainID,
-		Height:			 te.Height,
-		Time: 		     te.Time,
-		NeedToSave:      te.NeedToSave,
-		EpochNumber:     te.EpochNumber,
-		SeenCommitHash:  te.SeenCommitHash,
-		ValidatorsHash:  te.ValidatorsHash,
-		SeenCommit:      te.SeenCommit,
-		EpochBytes:      te.EpochBytes,
+		ChainID:        te.ChainID,
+		Height:         te.Height,
+		Time:           te.Time,
+		NeedToSave:     te.NeedToSave,
+		EpochNumber:    te.EpochNumber,
+		SeenCommitHash: te.SeenCommitHash,
+		ValidatorsHash: te.ValidatorsHash,
+		SeenCommit:     te.SeenCommit,
+		EpochBytes:     te.EpochBytes,
 	}
 }
 
@@ -73,13 +68,13 @@ func (te *TendermintExtra) Hash() []byte {
 		return nil
 	}
 	return merkle.SimpleHashFromMap(map[string]interface{}{
-		"ChainID":     te.ChainID,
-		"Height":      te.Height,
-		"Time":         te.Time,
-		"SeenCommit":  te.SeenCommitHash,
-		"Validators":  te.ValidatorsHash,
-		"NeedToSave":  te.NeedToSave,
-		"EpochBytes":  te.EpochBytes,
+		"ChainID":    te.ChainID,
+		"Height":     te.Height,
+		"Time":       te.Time,
+		"SeenCommit": te.SeenCommitHash,
+		"Validators": te.ValidatorsHash,
+		"NeedToSave": te.NeedToSave,
+		"EpochBytes": te.EpochBytes,
 	})
 }
 
@@ -93,7 +88,6 @@ func ExtractTendermintExtra(h *ethTypes.Header) (*TendermintExtra, error) {
 	}
 
 	var tdmExtra = TendermintExtra{}
-	fmt.Printf("ExtractTendermintExtra, h.Extra[:] is %x\n", h.Extra[:])
 	err := rlp.DecodeBytes(h.Extra[:], &tdmExtra)
 	if err != nil {
 		return nil, err

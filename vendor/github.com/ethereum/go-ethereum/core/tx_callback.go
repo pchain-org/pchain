@@ -1,48 +1,58 @@
 package core
 
 import (
-
 	"errors"
-	st "github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/types"
-	"sync"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
 	dbm "github.com/tendermint/go-db"
-	"github.com/ethereum/go-ethereum/ethclient"
+	"math/big"
+	"sync"
 )
-
 
 type CrossChainHelper interface {
 	GetMutex() *sync.Mutex
 	GetTypeMutex() *event.TypeMux
-	CanCreateChildChain(from common.Address, chainId string) error
-	CreateChildChain(from common.Address, chainId string) error
-	GetChainInfoDB() dbm.DB
 	GetClient() *ethclient.Client
-	GetTxFromMainChain(txHash common.Hash) *types.Transaction	//should return varified transaction
-	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction	//should return varified transaction
-	VerifyBlock(from common.Address, block string) error
-	SaveBlock2MainBlock(block string) error
-	GetChildBlockByNumber(number int64, chainId string) *types.Block	//get one chain's block by number
-	GetChildBlockByHash(hash []byte, chainId string) *types.Block	//get one chain's block by hash
+	GetChainInfoDB() dbm.DB
+
+	CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error
+	CreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error
+	ValidateJoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error
+	JoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error
+	ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB)
+
+	GetTxFromMainChain(txHash common.Hash) *types.Transaction
+	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction
+	VerifyChildChainBlock(from common.Address, bs []byte) error
+	SaveChildChainBlockToMainChain(bs []byte) error
+
+	// these should operate on the main chain db
+	AddToChildChainTx(chainId string, account common.Address, txHash common.Hash) error
+	RemoveToChildChainTx(chainId string, account common.Address, txHash common.Hash) error
+	HasToChildChainTx(chainId string, account common.Address, txHash common.Hash) bool
+	AddFromChildChainTx(chainId string, account common.Address, txHash common.Hash) error
+	RemoveFromChildChainTx(chainId string, account common.Address, txHash common.Hash) error
+	HasFromChildChainTx(chainId string, account common.Address, txHash common.Hash) bool
+	// these should operate on the child chain db
+	AppendUsedChildChainTx(chainId string, account common.Address, txHash common.Hash) error
+	HasUsedChildChainTx(chainId string, account common.Address, txHash common.Hash) bool
 }
 
-
-type EtdValidateCb func(tx *types.Transaction, state *st.StateDB, cch CrossChainHelper) error
-type EtdApplyCb func(tx *types.Transaction, state *st.StateDB, cch CrossChainHelper) error
+type EtdValidateCb func(tx *types.Transaction, state *state.StateDB, cch CrossChainHelper) error
+type EtdApplyCb func(tx *types.Transaction, state *state.StateDB, cch CrossChainHelper) error
 type EtdInsertBlockCb func(block *types.Block)
 
-var validateCbMap 		map[string]EtdValidateCb = make(map[string]EtdValidateCb)
-var applyCbMap    		map[string]EtdApplyCb = make(map[string]EtdApplyCb)
-var insertBlockCbMap    map[string]EtdInsertBlockCb = make(map[string]EtdInsertBlockCb)
+var validateCbMap = make(map[string]EtdValidateCb)
+var applyCbMap = make(map[string]EtdApplyCb)
+var insertBlockCbMap = make(map[string]EtdInsertBlockCb)
 
 func RegisterValidateCb(name string, validateCb EtdValidateCb) error {
 
-	//fmt.Printf("RegisterValidateCb (name, validateCb) = (%s, %v)\n", name, validateCb)
 	_, ok := validateCbMap[name]
 	if ok {
-		//fmt.Printf("RegisterValidateCb return (%v, %v)\n", cb, ok)
 		return errors.New("the name has registered in validateCbMap")
 	}
 
@@ -82,7 +92,6 @@ func GetApplyCb(name string) EtdApplyCb {
 	return nil
 }
 
-
 func RegisterInsertBlockCb(name string, insertBlockCb EtdInsertBlockCb) error {
 
 	_, ok := insertBlockCbMap[name]
@@ -109,4 +118,3 @@ func GetInsertBlockCbMap() map[string]EtdInsertBlockCb {
 
 	return insertBlockCbMap
 }
-

@@ -25,8 +25,8 @@ type CoreChainInfo struct {
 	// Setup Info
 	MinValidators    uint16
 	MinDepositAmount *big.Int
-	StartBlock       uint64
-	EndBlock         uint64
+	StartBlock       *big.Int
+	EndBlock         *big.Int
 
 	//joined - during creation phase
 	JoinedValidators []JoinedValidator
@@ -260,8 +260,8 @@ func calcPendingChainInfoKey(chainId string) []byte {
 
 type pendingIdxData struct {
 	ChainID string
-	Start   uint64
-	End     uint64
+	Start   *big.Int
+	End     *big.Int
 }
 
 // GetPendingChildChainData get the pending child chain data from db with key pending chain
@@ -316,7 +316,7 @@ func DeletePendingChildChainData(db dbm.DB, chainId string) {
 }
 
 // GetChildChainForLaunch get the child chain for pending db for launch
-func GetChildChainForLaunch(db dbm.DB, height uint64, stateDB *state.StateDB) []string {
+func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) []string {
 	pendingChainMtx.Lock()
 	defer pendingChainMtx.Unlock()
 
@@ -335,10 +335,10 @@ func GetChildChainForLaunch(db dbm.DB, height uint64, stateDB *state.StateDB) []
 	readyForLaunch := make([]string, 0)
 
 	for _, v := range idx {
-		if v.Start > height {
+		if v.Start.Cmp(height) > 0 {
 			// skip it
 			newPendingIdx = append(newPendingIdx, v)
-		} else if v.End < height {
+		} else if v.End.Cmp(height) < 0 {
 			// Refund the Lock Balance
 			cci := GetPendingChildChainData(db, v.ChainID)
 			for _, jv := range cci.JoinedValidators {

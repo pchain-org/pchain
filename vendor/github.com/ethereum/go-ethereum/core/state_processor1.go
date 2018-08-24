@@ -2,23 +2,22 @@ package core
 
 import (
 	"fmt"
-	"math/big"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"math/big"
 )
-
 
 // ApplyTransactionEx attempts to apply a transaction to the given state database
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
 func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB,
-			header *types.Header, tx *types.Transaction, usedGas *uint64, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper) (*types.Receipt, uint64, error) {
+	header *types.Header, tx *types.Transaction, usedGas *uint64, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper) (*types.Receipt, uint64, error) {
 
 	fmt.Printf("ApplyTransactionEx 0\n")
 
@@ -28,7 +27,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 	}
 
 	etd := tx.ExtendTxData()
-	if  etd == nil || etd.FuncName == "" {
+	if etd == nil || etd.FuncName == "" {
 
 		fmt.Printf("ApplyTransactionEx 1\n")
 
@@ -45,7 +44,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		if err != nil {
 			return nil, 0, err
 		}
-		
+
 		fmt.Printf("ApplyTransactionEx 3\n")
 		// Update the state with pending changes
 		var root []byte
@@ -111,4 +110,3 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		return receipt, 0, nil
 	}
 }
-
