@@ -9,16 +9,16 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 
 type TdmBlock struct {
-	Block    *types.Block  `json:"block"`
+	Block    *types.Block     `json:"block"`
 	TdmExtra *TendermintExtra `json:"tdmexdata"`
 }
 
@@ -45,7 +45,6 @@ func MakeBlock(height uint64, chainID string, commit *Commit,
 // Basic validation that doesn't involve state data.
 func (b *TdmBlock) ValidateBasic(tdmExtra *TendermintExtra) error {
 
-	fmt.Printf("b.TdmExtra is %v, tdmExtra is %v", b.TdmExtra, tdmExtra)
 	if b.TdmExtra.ChainID != tdmExtra.ChainID {
 		return errors.New(Fmt("Wrong Block.Header.ChainID. Expected %v, got %v", tdmExtra.ChainID, b.TdmExtra.ChainID))
 	}

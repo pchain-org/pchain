@@ -229,11 +229,7 @@ func GetChildChainIds(db dbm.DB) []string {
 		return []string{}
 	}
 
-	strIdArr := strings.Split(string(buf), specialSep)
-
-	fmt.Printf("GetChildChainIds 1, strIdArr is %v, len is %d\n", strIdArr, len(strIdArr))
-
-	return strIdArr
+	return strings.Split(string(buf), specialSep)
 }
 
 func CheckChildChainRunning(db dbm.DB, chainId string) bool {

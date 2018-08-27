@@ -93,7 +93,7 @@ type Ethereum struct {
 	miner     *miner.Miner
 	gasPrice  *big.Int
 	etherbase common.Address
-	solcPath     string
+	solcPath  string
 
 	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI
@@ -109,7 +109,7 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
-          pNode tendermintBackend.PChainP2P, cch core.CrossChainHelper) (*Ethereum, error) {
+	pNode tendermintBackend.PChainP2P, cch core.CrossChainHelper) (*Ethereum, error) {
 
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -232,7 +232,7 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
 func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig *params.ChainConfig, db ethdb.Database,
-                           cliCtx *cli.Context, pNode tendermintBackend.PChainP2P, cch core.CrossChainHelper) consensus.Engine {
+	cliCtx *cli.Context, pNode tendermintBackend.PChainP2P, cch core.CrossChainHelper) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
@@ -284,12 +284,9 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
 
-	fmt.Printf("(s *Ethereum) APIs() 0\n")
 	apis := ethapi.GetAPIs(s.ApiBackend, s.solcPath)
-	fmt.Printf("(s *Ethereum) APIs() 1\n")
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
-	fmt.Printf("(s *Ethereum) APIs() 2\n")
 	// Append all the local APIs and return
 	apis = append(apis, []rpc.API{
 		{
@@ -337,7 +334,6 @@ func (s *Ethereum) APIs() []rpc.API {
 			Public:    true,
 		},*/
 	}...)
-	fmt.Printf("(s *Ethereum) APIs() 3\n")
 	return apis
 }
 

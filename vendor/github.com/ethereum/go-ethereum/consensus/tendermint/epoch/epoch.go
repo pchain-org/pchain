@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-var plog = plogger.GetLogger("Epoch")
+var logger = plogger.GetLogger("Epoch")
 
 var NextEpochNotExist = errors.New("next epoch parameters do not exist, fatal error")
 var NextEpochNotEXPECTED = errors.New("next epoch parameters are not excepted, fatal error")
@@ -79,26 +79,20 @@ func GetEpoch(config cfg.Config, epochDB dbm.DB, number int) *Epoch {
 		epoch = MakeEpochFromFile(epochDB, config.GetString("epoch_file"))
 		if epoch != nil {
 			epoch.Save()
-			fmt.Printf("GetEpoch() 0, epoch is: %v\n", epoch)
 		} else {
-			fmt.Printf("GetEpoch() 1, epoch read from file failed\n")
 			os.Exit(1)
 		}
 	}
 
 	if epoch.Number < 0 {
-		fmt.Printf("GetEpoch() 2, epoch checked failed\n")
 		os.Exit(1)
 	}
 
 	rewardScheme := GetRewardScheme(config, epochDB)
 	if rewardScheme == nil {
-		fmt.Printf("GetEpoch() 3, reward scheme failed\n")
 		os.Exit(1)
 	}
 	epoch.RS = rewardScheme
-
-	fmt.Printf("GetEpoch() 4, epoch is: %v\n", epoch)
 
 	return epoch
 }
@@ -136,12 +130,12 @@ func loadOneEpoch(db dbm.DB, epochNumber int) *Epoch {
 		wire.ReadBinaryPtr(&oneEpoch, r, 0, n, err)
 		if *err != nil {
 			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
-			fmt.Printf("LoadState: Data has been corrupted or its spec has changed: %v\n", *err)
+			logger.Errorf("LoadState: Data has been corrupted or its spec has changed: %v", *err)
 			os.Exit(1)
 		}
 		// TODO: ensure that buf is completely read.
 		ts := MakeOneEpoch(db, oneEpoch)
-		fmt.Printf("loadEpoch(), reward scheme is: %v\n", ts)
+		logger.Infof("loadOneEpoch. epoch is: %v", ts)
 		return ts
 	}
 }
@@ -150,12 +144,12 @@ func loadOneEpoch(db dbm.DB, epochNumber int) *Epoch {
 func MakeEpochFromFile(db dbm.DB, genesisFile string) *Epoch {
 	epochJSON, err := ioutil.ReadFile(genesisFile)
 	if err != nil {
-		fmt.Printf("Couldn't read GenesisDoc file: %v\n", err)
+		logger.Errorf("Couldn't read GenesisDoc file: %v\n", err)
 		os.Exit(1)
 	}
 	genDoc, err := tmTypes.GenesisDocFromJSON(epochJSON)
 	if err != nil {
-		fmt.Printf("Error reading GenesisDoc: %v\n", err)
+		logger.Errorf("Error reading GenesisDoc: %v\n", err)
 		os.Exit(1)
 	}
 	return MakeOneEpoch(db, &genDoc.CurrentEpoch)
@@ -276,12 +270,12 @@ func FromBytes(buf []byte) *Epoch {
 		wire.ReadBinaryPtr(&oneEpoch, r, 0, n, err)
 		if *err != nil {
 			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
-			fmt.Printf("LoadState: Data has been corrupted or its spec has changed: %v\n", *err)
+			logger.Errorf("LoadState: Data has been corrupted or its spec has changed: %v", *err)
 			os.Exit(1)
 		}
 		// TODO: ensure that buf is completely read.
 		ts := MakeOneEpoch(nil, oneEpoch)
-		fmt.Printf("loadEpoch(), reward scheme is: %v\n", ts)
+		logger.Infof("FromBytes. epoch is: %v", ts)
 		return ts
 	}
 }
@@ -294,7 +288,7 @@ func (epoch *Epoch) Bytes() []byte {
 	epochDoc := epoch.MakeOneEpochDoc()
 	wire.WriteBinary(epochDoc, buf, n, err)
 	if *err != nil {
-		fmt.Printf("Epoch get bytes error: %v", err)
+		logger.Errorf("Epoch get bytes error: %v", err)
 		return nil
 	}
 	//fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
@@ -452,14 +446,14 @@ func (epoch *Epoch) EnterNewEpoch(height uint64) (*Epoch, []*abciTypes.RefundVal
 			// update the validator set with the latest abciResponses
 			refund, err := updateEpochValidatorSet(nextEpoch.Validators, nextEpoch.validatorVoteSet)
 			if err != nil {
-				plog.Warnln("Error changing validator set", "error", err)
+				logger.Warnln("Error changing validator set", "error", err)
 				return nil, nil, err
 			}
 			// Update validator accums and set state variables
 			nextEpoch.Validators.IncrementAccum(1)
 
 			nextEpoch.NextEpoch = nil //suppose we will not generate a more epoch after next-epoch
-			plog.Infof("Enter into New Epoch %v", nextEpoch)
+			logger.Infof("Enter into New Epoch %v", nextEpoch)
 			return nextEpoch, refund, nil
 		} else {
 			return nil, nil, NextEpochNotExist
@@ -492,7 +486,7 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 			// Add the new validator
 			added := validators.Add(tmTypes.NewValidator(v.PubKey, v.Amount))
 			if !added {
-				return nil, errors.New(fmt.Sprintf("Failed to add new validator %x with voting power %d", v.Address, v.Amount))
+				return nil, fmt.Errorf("Failed to add new validator %x with voting power %d", v.Address, v.Amount)
 			}
 			newValSize++
 		} else if v.Amount.Sign() == 0 {
@@ -500,7 +494,7 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 			// Remove the Validator
 			_, removed := validators.Remove(validator.Address)
 			if !removed {
-				return nil, errors.New(fmt.Sprintf("Failed to remove validator %x", validator.Address))
+				return nil, fmt.Errorf("Failed to remove validator %x", validator.Address)
 			}
 		} else {
 			//refund if new amount less than the voting power
@@ -513,7 +507,7 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 			validator.VotingPower = v.Amount
 			updated := validators.Update(validator)
 			if !updated {
-				return nil, errors.New(fmt.Sprintf("Failed to update validator %x with voting power %d", validator.Address, v.Amount))
+				return nil, fmt.Errorf("Failed to update validator %x with voting power %d", validator.Address, v.Amount)
 			}
 		}
 	}
@@ -638,7 +632,7 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight uint64) (rewardPerBlock 
 
 		blocksOfNextEpoch = uint64(epochTimePerEpochLeftNextYear / timePerBlockThisEpoch)
 		if blocksOfNextEpoch == 0 {
-			plog.Panicln("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
+			logger.Panicln("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
 		}
 
 		rewardPerEpochNextYear := calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear, int64(nextYear), int64(epochNumberPerYear))
@@ -655,7 +649,7 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight uint64) (rewardPerBlock 
 
 		blocksOfNextEpoch = uint64(epochTimePerEpochLeftThisYear / timePerBlockThisEpoch)
 		if blocksOfNextEpoch == 0 {
-			plog.Panicln("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
+			logger.Panicln("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
 		}
 
 		rewardPerEpochThisYear := calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear, int64(thisYear), int64(epochNumberPerYear))

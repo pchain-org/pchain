@@ -2,8 +2,6 @@ package types
 
 import (
 	"errors"
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/big"
@@ -48,6 +46,5 @@ func TendermintFilteredHeader(h *Header, keepSeal bool) *Header {
 	*/
 	payload := MagicExtra
 	newHeader.Extra = payload
-	fmt.Printf("TendermintFilteredHeader， newHeader.Extra is %x\n", newHeader.Extra)
 	return newHeader
 }

@@ -1226,18 +1226,19 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 			if len(block.TdmExtra.EpochBytes) > 0 {
 				block.TdmExtra.NeedToSave = true
 				logger.Infof("NeedToSave set to true due to epoch. Chain: %s, Height: %v", block.TdmExtra.ChainID, block.TdmExtra.Height)
-			}
-			// special tx
-			txs := block.Block.Transactions()
-			for _, tx := range txs {
-				etd := tx.ExtendTxData()
-				if etd == nil {
-					continue
-				}
-				if etd.FuncName == "WithdrawFromChildChain" || etd.FuncName == "DepositInChildChain" {
-					block.TdmExtra.NeedToSave = true
-					logger.Infof("NeedToSave set to true due to tx. Tx: %s, Chain: %s, Height: %v", etd.FuncName, block.TdmExtra.ChainID, block.TdmExtra.Height)
-					break
+			} else {
+				// special tx
+				txs := block.Block.Transactions()
+				for _, tx := range txs {
+					etd := tx.ExtendTxData()
+					if etd == nil {
+						continue
+					}
+					if etd.FuncName == "WithdrawFromChildChain" || etd.FuncName == "DepositInChildChain" {
+						block.TdmExtra.NeedToSave = true
+						logger.Infof("NeedToSave set to true due to tx. Tx: %s, Chain: %s, Height: %v", etd.FuncName, block.TdmExtra.ChainID, block.TdmExtra.Height)
+						break
+					}
 				}
 			}
 		}

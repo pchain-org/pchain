@@ -21,9 +21,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/p2p"
-	"fmt"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/p2p"
 )
 
 const (
@@ -38,7 +37,7 @@ var (
 // Protocol implements consensus.Engine.Protocol
 func (sb *backend) Protocol() consensus.Protocol {
 
-	fmt.Printf("Tendermint: (sb *backend) Protocol, add logic here\n")
+	logger.Info("Tendermint (backend) Protocol, add logic here")
 
 	return consensus.Protocol{
 		Name:     "pchain" + sb.chainConfig.PChainId,
@@ -52,7 +51,7 @@ func (sb *backend) HandleMsg(addr common.Address, msg p2p.Msg) (bool, error) {
 	sb.coreMu.Lock()
 	defer sb.coreMu.Unlock()
 
-	fmt.Printf("Tendermint: (sb *backend) HandleMsg, add logic here\n")
+	logger.Info("Tendermint (backend) HandleMsg, add logic here")
 
 	return false, nil
 }
@@ -60,13 +59,13 @@ func (sb *backend) HandleMsg(addr common.Address, msg p2p.Msg) (bool, error) {
 // SetBroadcaster implements consensus.Handler.SetBroadcaster
 func (sb *backend) SetBroadcaster(broadcaster consensus.Broadcaster) {
 
-	fmt.Printf("Tendermint: (sb *backend) SetBroadcaster with %p\n", broadcaster)
+	logger.Infof("Tendermint (backend) SetBroadcaster: %p", broadcaster)
 	sb.broadcaster = broadcaster
 }
 
 func (sb *backend) GetBroadcaster() consensus.Broadcaster {
 
-	fmt.Printf("Tendermint: (sb *backend) GetBroadcaster with %p\n", sb.broadcaster)
+	logger.Infof("Tendermint (backend) GetBroadcaster: %p", sb.broadcaster)
 	return sb.broadcaster
 }
 

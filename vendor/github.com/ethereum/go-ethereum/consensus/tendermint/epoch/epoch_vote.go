@@ -72,7 +72,7 @@ func LoadEpochVoteSet(epochDB db.DB, epochNumber int) *EpochValidatorVoteSet {
 		var voteSet EpochValidatorVoteSet
 		err := wire.ReadBinaryBytes(data, &voteSet)
 		if err != nil {
-			plog.Errorln(err)
+			logger.Errorln(err)
 			return nil
 		}
 		// Fulfill the Vote Map

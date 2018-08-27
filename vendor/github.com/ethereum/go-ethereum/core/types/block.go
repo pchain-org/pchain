@@ -108,6 +108,8 @@ func (h *Header) Hash() common.Hash {
 			return rlpHash(istanbulHeader)
 		}
 	}
+	// If the mix digest is equivalent to the predefined Tendermint digest, use Tendermint
+	// specific hash calculation.
 	if h.MixDigest == TendermintDigest {
 		// Seal is reserved in extra-data. To prove block is signed by the proposer.
 		if tdmHeader := TendermintFilteredHeader(h, true); tdmHeader != nil {

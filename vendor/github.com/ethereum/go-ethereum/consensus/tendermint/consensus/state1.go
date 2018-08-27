@@ -1,12 +1,11 @@
 package consensus
 
 import (
-	"fmt"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	consss "github.com/ethereum/go-ethereum/consensus"
-	//"github.com/ethereum/go-ethereum/common"
-	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	cmn "github.com/tendermint/go-common"
 	"io/ioutil"
 	"time"
@@ -17,7 +16,6 @@ import (
 func (bs *ConsensusState) GetChainReader() consss.ChainReader {
 	return bs.backend.ChainReader()
 }
-
 
 //this function is called when the system starts or a block has been inserted into
 //the insert could be self/other triggered
@@ -32,7 +30,7 @@ func (cs *ConsensusState) StartNewHeight() {
 	cr := cs.backend.ChainReader()
 	curEthBlock := cr.CurrentBlock()
 	curHeight := curEthBlock.NumberU64()
-	fmt.Printf("(cs *ConsensusState) StartNewHeight, current block height is %v\n", curHeight)
+	logger.Infof("StartNewHeight. current block height is %v", curHeight)
 
 	state, epoch := cs.InitStateAndEpoch()
 	epoch = state.ApplyBlock(curEthBlock, epoch)
@@ -67,31 +65,31 @@ func (cs *ConsensusState) InitStateAndEpoch() (*sm.State, *ep.Epoch) {
 			cmn.PanicSanity(cmn.Fmt("InitStateAndEpoch(), Genesis doc parse json error: %v", err))
 		}
 
-		state = sm.MakeGenesisState(/*stateDB, */genDoc)
+		state = sm.MakeGenesisState( /*stateDB, */ genDoc)
 		//state.Save()
 
 		rewardScheme := ep.MakeRewardScheme(epochDB, &genDoc.RewardScheme)
 		epoch = ep.MakeOneEpoch(epochDB, &genDoc.CurrentEpoch)
 		epoch.RS = rewardScheme
-		fmt.Printf("0 epoch.Validators: %v\n", epoch.Validators)
 
 		if state.TdmExtra.EpochNumber != uint64(epoch.Number) {
 			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), initial state error"))
 		}
 		state.Epoch = epoch
-		fmt.Printf("0 state.Epoch.Validators: %v\n", state.Epoch.Validators)
 		rewardScheme.Save()
 		epoch.Save()
 
+		logger.Infof("InitStateAndEpoch. genesis state extra: %#v, epoch validators: %v", state.TdmExtra, epoch.Validators)
 	} else {
 		epoch = ep.LoadOneEpoch(epochDB, int(state.TdmExtra.EpochNumber))
 		state.Epoch = epoch
 		cs.ReconstructLastCommit(state)
+
+		logger.Infof("InitStateAndEpoch. state extra: %#v, epoch validators: %v", state.TdmExtra, epoch.Validators)
 	}
 
 	return state, epoch
 }
-
 
 func (cs *ConsensusState) Initialize() {
 
@@ -180,7 +178,7 @@ func (bs *ConsensusState) LoadBlock(height uint64) *types.TdmBlock {
 	}
 
 	return &types.TdmBlock{
-		Block: ethBlock,
+		Block:    ethBlock,
 		TdmExtra: TdmExtra,
 	}
 }
@@ -191,7 +189,6 @@ func (bs *ConsensusState) LoadLastTendermintExtra() (*types.TendermintExtra, uin
 
 	curEthBlock := cr.CurrentBlock()
 	curHeight := curEthBlock.NumberU64()
-	fmt.Printf("(cs *ConsensusState) LoadSeenCommit, current block height is %v\n", curHeight)
 	if curHeight == 0 {
 		return nil, 0
 	}
@@ -203,21 +200,18 @@ func (bs *ConsensusState) LoadTendermintExtra(height uint64) (*types.TendermintE
 
 	cr := bs.backend.ChainReader()
 
-	fmt.Printf("(cs *ConsensusState) LoadSeenCommit height is %v\n", height)
 	ethBlock := cr.GetBlockByNumber(height)
 	if ethBlock == nil {
-		fmt.Printf("(cs *ConsensusState) LoadSeenCommit nil block\n")
+		logger.Warn("LoadTendermintExtra. nil block")
 		return nil, 0
 	}
 
 	header := cr.GetHeader(ethBlock.Hash(), ethBlock.NumberU64())
-	fmt.Printf("(cs *ConsensusState) LoadSeenCommit header is %v\n", header)
 	tdmExtra, err := types.ExtractTendermintExtra(header)
 	if err != nil {
-		fmt.Printf("(cs *ConsensusState) LoadSeenCommit got error: %v\n", err)
+		logger.Warnf("LoadTendermintExtra. error: %v", err)
 		return nil, 0
 	}
-	fmt.Printf("(cs *ConsensusState) LoadSeenCommit got error: %v\n", err)
 
 	return tdmExtra, tdmExtra.Height
 }
