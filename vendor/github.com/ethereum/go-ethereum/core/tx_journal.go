@@ -86,6 +86,12 @@ func (journal *txJournal) load(add func(*types.Transaction) error) error {
 			}
 			break
 		}
+		// TODO: make our own tx to work.
+		// can't pass custom validate logic since Ethereum is still initializing.
+		etd := tx.ExtendTxData()
+		if etd != nil {
+			continue
+		}
 		// Import the transaction and bump the appropriate progress counters
 		total++
 		if err = add(tx); err != nil {
