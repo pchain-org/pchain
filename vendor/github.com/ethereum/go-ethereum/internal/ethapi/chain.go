@@ -370,6 +370,10 @@ func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChai
 	startBlock, _ := etd.GetBigInt(CCC_ARGS_START_BLOCK)
 	endBlock, _ := etd.GetBigInt(CCC_ARGS_END_BLOCK)
 
+	if err := cch.CanCreateChildChain(from, chainId, uint16(minValidators), minDepositAmount, startBlock, endBlock); err != nil {
+		return err
+	}
+
 	err := cch.CreateChildChain(from, chainId, uint16(minValidators), minDepositAmount, startBlock, endBlock)
 	if err != nil {
 		return err
@@ -410,6 +414,11 @@ func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChai
 	if state.GetBalance(from).Cmp(depositAmount) == -1 {
 		return core.ErrInsufficientFunds
 	}
+
+	if err := cch.ValidateJoinChildChain(from, pubkey, chainId, depositAmount); err != nil {
+		return err
+	}
+
 	// Add the validator into Chain DB
 	err := cch.JoinChildChain(from, pubkey, chainId, depositAmount)
 	if err != nil {
