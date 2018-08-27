@@ -188,7 +188,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
-	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine)
+	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine, cch)
 	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
 	eth.ApiBackend = &EthApiBackend{eth, nil, nil, cch}

@@ -127,9 +127,11 @@ type worker struct {
 	atWork int32
 
 	totalUsedMoney *big.Int
+
+	cch core.CrossChainHelper
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux) *worker {
+func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux, cch core.CrossChainHelper) *worker {
 	worker := &worker{
 		config:         config,
 		engine:         engine,
@@ -147,6 +149,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		agents:         make(map[Agent]struct{}),
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
 		totalUsedMoney: big.NewInt(0),
+		cch:            cch,
 	}
 	// Subscribe TxPreEvent for tx pool
 	worker.txSub = eth.TxPool().SubscribeTxPreEvent(worker.txCh)
@@ -477,7 +480,7 @@ func (self *worker) commitNewWork() {
 	fmt.Printf("before commitTransactionsEx\n")
 
 	//work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
-	work.commitTransactionsEx(self.mux, txs, self.chain, self.coinbase, self.totalUsedMoney, nil)
+	work.commitTransactionsEx(self.mux, txs, self.chain, self.coinbase, self.totalUsedMoney, self.cch)
 
 	// compute uncles for the new block.
 	var (

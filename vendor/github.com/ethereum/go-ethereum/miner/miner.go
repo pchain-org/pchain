@@ -60,15 +60,18 @@ type Miner struct {
 
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
+
+	cch core.CrossChainHelper
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, cch core.CrossChainHelper) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
-		worker:   newWorker(config, engine, common.Address{}, eth, mux),
+		worker:   newWorker(config, engine, common.Address{}, eth, mux, cch),
 		canStart: 1,
+		cch:      cch,
 	}
 	miner.Register(NewCpuAgent(eth.BlockChain(), engine))
 	go miner.update()
