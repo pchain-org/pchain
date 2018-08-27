@@ -698,8 +698,17 @@ func (e *ExtendTxData) GetUInt64(key string) (uint64, error) {
 
 	switch vv := v.(type) {
 	case string:
+		var bs []byte
+		if vv[0] != '"' {
+			bs = make([]byte, 0, len(vv)+2)
+			bs = append(bs, '"')
+			bs = append(bs, []byte(vv)...)
+			bs = append(bs, '"')
+		} else {
+			bs = []byte(vv)
+		}
 		var vvv hexutil.Uint64
-		err := json.Unmarshal([]byte(vv), &vvv)
+		err := json.Unmarshal(bs, &vvv)
 		if err != nil {
 			return 0, err
 		}
@@ -719,8 +728,17 @@ func (e *ExtendTxData) GetUInt(key string) (uint, error) {
 
 	switch vv := v.(type) {
 	case string:
+		var bs []byte
+		if vv[0] != '"' {
+			bs = make([]byte, 0, len(vv)+2)
+			bs = append(bs, '"')
+			bs = append(bs, []byte(vv)...)
+			bs = append(bs, '"')
+		} else {
+			bs = []byte(vv)
+		}
 		var vvv hexutil.Uint
-		err := json.Unmarshal([]byte(vv), &vvv)
+		err := json.Unmarshal(bs, &vvv)
 		if err != nil {
 			return 0, err
 		}
