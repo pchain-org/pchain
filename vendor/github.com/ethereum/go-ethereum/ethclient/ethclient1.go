@@ -2,9 +2,9 @@ package ethclient
 
 import (
 	"context"
-	"math/big"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"math/big"
 )
 
 func (ec *Client) BlockNumber(ctx context.Context) (*big.Int, error) {
@@ -19,21 +19,16 @@ func (ec *Client) BlockNumber(ctx context.Context) (*big.Int, error) {
 }
 
 // SaveBlockToMainChain save a block to main chain
-//
-// be careful, this method just work for main chain
-func (ec *Client) SaveBlockToMainChain(ctx context.Context, from common.Address, block string) (common.Hash, error) {
+func (ec *Client) SaveBlockToMainChain(ctx context.Context, from common.Address, data []byte) (common.Hash, error) {
 
-	type result struct {
-		hash common.Hash
-		err  error
-	}
+	var res common.Hash
 
-	var res result
-
-	err := ec.c.CallContext(ctx, &res, "pchain_saveBlockToMainChain", from, block)
+	// 'from' here is the validator of child-chain, we need to ensure this account exists&unlocked in main-chain because we use this account to sign tx in main-chain.
+	// TODO: Consider to send raw tx to main-chain.
+	err := ec.c.CallContext(ctx, &res, "chain_saveBlockToMainChain", from, data)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	return res.hash, res.err
+	return res, nil
 }

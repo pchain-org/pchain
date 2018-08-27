@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
 	consss "github.com/ethereum/go-ethereum/consensus"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
@@ -16,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
@@ -761,16 +761,14 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		// else, we'll enterPrevote when the rest of the proposal is received (in AddProposalBlockPart),
 		// or else after timeoutPropose
 		if cs.isProposalComplete() {
+			cs.enterPrevote(height, cs.Round)
+		}
 
-			var err error = nil
-			if cs.state.TdmExtra.NeedToSave {
-				//lastBlock := cs.blockStore.LoadBlock(height - 1)
-				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
-				err = cs.saveBlockToMainChain(lastBlock)
-			}
-			if err == nil {
-				cs.enterPrevote(height, cs.Round)
-			}
+		// Save block to main chain.
+		// TODO: what if there're more than one round for a height? 'saveBlockToMainChain' would be called more than once?
+		if cs.state.TdmExtra.NeedToSave && bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
+			lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
+			cs.saveBlockToMainChain(lastBlock)
 		}
 	}()
 
@@ -1222,6 +1220,28 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 		block.TdmExtra.SeenCommit = seenCommit
 		block.TdmExtra.SeenCommitHash = seenCommit.Hash()
 
+		// update 'NeedToSave' field here
+		if block.TdmExtra.ChainID != "pchain" {
+			// epoch
+			if len(block.TdmExtra.EpochBytes) > 0 {
+				block.TdmExtra.NeedToSave = true
+				logger.Infof("NeedToSave set to true due to epoch. Chain: %s, Height: %v", block.TdmExtra.ChainID, block.TdmExtra.Height)
+			}
+			// special tx
+			txs := block.Block.Transactions()
+			for _, tx := range txs {
+				etd := tx.ExtendTxData()
+				if etd == nil {
+					continue
+				}
+				if etd.FuncName == "WithdrawFromChildChain" || etd.FuncName == "DepositInChildChain" {
+					block.TdmExtra.NeedToSave = true
+					logger.Infof("NeedToSave set to true due to tx. Tx: %s, Chain: %s, Height: %v", etd.FuncName, block.TdmExtra.ChainID, block.TdmExtra.Height)
+					break
+				}
+			}
+		}
+
 		// Fire event for new block.
 		types.FireEventNewBlock(cs.evsw, types.EventDataNewBlock{block})
 		types.FireEventNewBlockHeader(cs.evsw, types.EventDataNewBlockHeader{int(block.TdmExtra.Height)})
@@ -1490,43 +1510,54 @@ func CompareHRS(h1 uint64, r1 int, s1 RoundStepType, h2 uint64, r2 int, s2 Round
 	return 0
 }
 
-func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) error {
+func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 
 	client := cs.cch.GetClient()
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	number, err := client.BlockNumber(ctx)
 	if err != nil {
-		return err
+		logger.Error("saveBlockToMainChain: failed to get BlockNumber at the beginning.")
+		return
 	}
 
-	jsonBlock, err := json.Marshal(block)
+	bs, err := rlp.EncodeToBytes(block)
 	if err != nil {
-		return err
-	}
-	hash, err := client.SaveBlockToMainChain(ctx, common.BytesToAddress(cs.privValidator.GetAddress()), string(jsonBlock))
-	if err != nil {
-		return err
+		logger.Errorf("saveBlockToMainChain: failed to encode the block: %v", block)
+		return
 	}
 
+	hash, err := client.SaveBlockToMainChain(ctx, common.BytesToAddress(cs.privValidator.GetAddress()), bs)
+	if err != nil {
+		logger.Errorf("saveBlockToMainChain(rpc) failed, err: %v", err)
+		return
+	} else {
+		logger.Infof("saveBlockToMainChain(rpc) success, hash: %v", hash)
+	}
+
+	//we wait for 3 blocks, if not write to main chain, just return
 	curNumber := number
-	//we wait for 3 blocks, if not write to main chain, just return error
 	for new(big.Int).Sub(curNumber, number).Int64() < 3 {
 
 		tmpNumber, err := client.BlockNumber(ctx)
 		if err != nil {
-			return err
+			logger.Error("saveBlockToMainChain: failed to get BlockNumber, abort to wait for 3 blocks")
+			return
 		}
 
 		if tmpNumber.Cmp(curNumber) > 0 {
 			_, isPending, err := client.TransactionByHash(ctx, hash)
 			if !isPending && err == nil {
-				return nil
+				logger.Info("saveBlockToMainChain: tx packaged in block in main chain")
+				return
 			}
 
 			curNumber = tmpNumber
+		} else {
+			// we don't want to make too many rpc calls
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 
-	return errors.New("block not saved after 3 main chain block generated")
+	logger.Error("saveBlockToMainChain: tx not packaged in any block after 3 blocks in main chain")
 }
