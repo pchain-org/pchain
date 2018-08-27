@@ -1,17 +1,14 @@
 package p2p
 
 import (
+	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/version"
 	cmn "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-p2p"
-	"strings"
-	//"github.com/ethereum/go-ethereum/consensus/tendermint/state/txindex/null"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
-	rpccore "github.com/ethereum/go-ethereum/consensus/tendermint/rpc/core"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/version"
-	"github.com/tendermint/go-rpc"
 	"github.com/tendermint/go-wire"
+	"strings"
 )
 
 type PChainP2P struct {
@@ -145,7 +142,7 @@ func makeNodeInfo(p2pconfig cfg.Config, privKey crypto.PrivKeyEd25519, sw *p2p.S
 			cmn.Fmt("wire_version=%v", wire.Version),
 			cmn.Fmt("p2p_version=%v", p2p.Version),
 			cmn.Fmt("consensus_version=%v", consensus.Version),
-			cmn.Fmt("rpc_version=%v/%v", rpc.Version, rpccore.Version),
+			//cmn.Fmt("rpc_version=%v/%v", rpc.Version, rpccore.Version),
 			//cmn.Fmt("tx_index=%v", txIndexerStatus),
 		},
 	}

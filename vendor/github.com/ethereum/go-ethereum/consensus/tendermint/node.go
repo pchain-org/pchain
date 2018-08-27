@@ -13,7 +13,6 @@ import (
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 
 	"fmt"
-	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/pchain/common/plogger"
 	"io/ioutil"
@@ -56,8 +55,6 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 	privValidatorFile := config.GetString("priv_validator_file")
 	keydir := config.GetString("keystore")
 	privValidator := types.LoadOrGenPrivValidator(privValidatorFile, keydir)
-
-	ep.VADB = dbm.NewDB("validatoraction", config.GetString("db_backend"), config.GetString("db_dir"))
 
 	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
 

@@ -79,7 +79,7 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 	compiler := makeCompilerAPIs(solcPath)
 	nonceLock := new(AddrLocker)
 	txapi := NewPublicTransactionPoolAPI(apiBackend, nonceLock)
-	apiBackend.SetInnerAPIBridge(&APIBridge {txapi:txapi})
+	apiBackend.SetInnerAPIBridge(&APIBridge{txapi: txapi})
 
 	all := []rpc.API{
 		{
@@ -125,6 +125,11 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Namespace: "chain",
 			Version:   "1.0",
 			Service:   NewPublicChainAPI(apiBackend),
+			Public:    true,
+		}, {
+			Namespace: "tdm",
+			Version:   "1.0",
+			Service:   NewPublicTdmAPI(apiBackend),
 			Public:    true,
 		},
 	}

@@ -1,113 +1,90 @@
-// Copyright 2017 The go-ethereum Authors
-// This file is part of the go-ethereum library.
-//
-// The go-ethereum library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The go-ethereum library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-
 package tendermint
 
 import (
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	//"github.com/ethereum/go-ethereum/core/types"
-	//"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 )
 
-// API is a user facing RPC API to dump Istanbul state
+// API is a user facing RPC API of Tendermint
 type API struct {
-	chain    consensus.ChainReader
+	chain      consensus.ChainReader
 	tendermint *backend
 }
-/*
-// GetSnapshot retrieves the state snapshot at a given block.
-func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
-	// Retrieve the requested block number (or current if none requested)
-	var header *types.Header
-	if number == nil || *number == rpc.LatestBlockNumber {
-		header = api.chain.CurrentHeader()
+
+// GetCurrentEpochNumber retrieves the current epoch number.
+func (api *API) GetCurrentEpochNumber() (int, error) {
+	return api.tendermint.core.consensusState.Epoch.Number, nil
+}
+
+// GetEpoch retrieves the Epoch Detail by Number
+func (api *API) GetEpoch(number int) (*tdmTypes.EpochApi, error) {
+
+	var resultEpoch *epoch.Epoch
+	curEpoch := api.tendermint.core.consensusState.Epoch
+	if number < 0 || number > curEpoch.Number {
+		return nil, errors.New("epoch number out of range")
+	}
+
+	if number == curEpoch.Number {
+		resultEpoch = curEpoch
 	} else {
-		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+		resultEpoch = epoch.LoadOneEpoch(curEpoch.GetDB(), number)
 	}
-	// Ensure we have an actually valid block and return its snapshot
-	if header == nil {
-		return nil, errUnknownBlock
+
+	validators := make([]tdmTypes.GenesisValidator, len(resultEpoch.Validators.Validators))
+	for i, val := range resultEpoch.Validators.Validators {
+		validators[i] = tdmTypes.GenesisValidator{
+			EthAccount: common.BytesToAddress(val.Address),
+			PubKey:     val.PubKey,
+			Amount:     val.VotingPower,
+			Name:       "",
+		}
 	}
-	return api.istanbul.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+
+	return &tdmTypes.EpochApi{
+		Number:           resultEpoch.Number,
+		RewardPerBlock:   resultEpoch.RewardPerBlock,
+		StartBlock:       resultEpoch.StartBlock,
+		EndBlock:         resultEpoch.EndBlock,
+		StartTime:        resultEpoch.StartTime,
+		EndTime:          resultEpoch.EndTime,
+		VoteStartBlock:   resultEpoch.GetVoteStartHeight(),
+		VoteEndBlock:     resultEpoch.GetVoteEndHeight(),
+		RevealStartBlock: resultEpoch.GetRevealVoteStartHeight(),
+		RevealEndBlock:   resultEpoch.GetRevealVoteEndHeight(),
+		Status:           resultEpoch.Status,
+		Validators:       validators,
+	}, nil
 }
 
-// GetSnapshotAtHash retrieves the state snapshot at a given block.
-func (api *API) GetSnapshotAtHash(hash common.Hash) (*Snapshot, error) {
-	header := api.chain.GetHeaderByHash(hash)
-	if header == nil {
-		return nil, errUnknownBlock
+// GetEpochVote
+func (api *API) GetEpochVote() (*tdmTypes.EpochVotesApi, error) {
+
+	ep := api.tendermint.core.consensusState.GetRoundState().Epoch
+	if ep.GetNextEpoch() != nil {
+
+		votes := ep.GetNextEpoch().GetEpochValidatorVoteSet().Votes
+		votesApi := make([]tdmTypes.EpochValidatorVoteApi, 0, len(votes))
+		for _, v := range votes {
+			votesApi = append(votesApi, tdmTypes.EpochValidatorVoteApi{
+				Address:  v.Address,
+				PubKey:   v.PubKey,
+				Amount:   v.Amount,
+				Salt:     v.Salt,
+				VoteHash: v.VoteHash,
+				TxHash:   v.TxHash,
+			})
+		}
+
+		return &tdmTypes.EpochVotesApi{
+			EpochNumber: ep.GetNextEpoch().Number,
+			StartBlock:  ep.GetNextEpoch().StartBlock,
+			EndBlock:    ep.GetNextEpoch().EndBlock,
+			Votes:       votesApi,
+		}, nil
 	}
-	return api.istanbul.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return nil, errors.New("next epoch has not been proposed")
 }
-
-// GetValidators retrieves the list of authorized validators at the specified block.
-func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error) {
-	// Retrieve the requested block number (or current if none requested)
-	var header *types.Header
-	if number == nil || *number == rpc.LatestBlockNumber {
-		header = api.chain.CurrentHeader()
-	} else {
-		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
-	}
-	// Ensure we have an actually valid block and return the validators from its snapshot
-	if header == nil {
-		return nil, errUnknownBlock
-	}
-	snap, err := api.istanbul.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return snap.validators(), nil
-}
-
-// GetValidatorsAtHash retrieves the state snapshot at a given block.
-func (api *API) GetValidatorsAtHash(hash common.Hash) ([]common.Address, error) {
-	header := api.chain.GetHeaderByHash(hash)
-	if header == nil {
-		return nil, errUnknownBlock
-	}
-	snap, err := api.istanbul.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return snap.validators(), nil
-}
-
-// Candidates returns the current candidates the node tries to uphold and vote on.
-func (api *API) Candidates() map[common.Address]bool {
-	api.istanbul.candidatesLock.RLock()
-	defer api.istanbul.candidatesLock.RUnlock()
-
-	proposals := make(map[common.Address]bool)
-	for address, auth := range api.istanbul.candidates {
-		proposals[address] = auth
-	}
-	return proposals
-}
-*/
-// Propose injects a new authorization candidate that the validator will attempt to
-// push through.
-func (api *API) Propose(address common.Address, auth bool) {
-
-}
-
-// Discard drops a currently running candidate, stopping the validator from casting
-// further votes (either for or against).
-func (api *API) Discard(address common.Address) {
-
-}
-

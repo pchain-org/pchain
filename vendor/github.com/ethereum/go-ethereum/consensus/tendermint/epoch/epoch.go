@@ -701,31 +701,6 @@ func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool {
 	return true
 }
 
-func (epoch *Epoch) ProposeTransactions(sender string, blockHeight uint64) (tmTypes.Txs, error) {
-
-	txs := make([]tmTypes.Tx, 0)
-
-	if blockHeight == epoch.EndBlock && epoch.Number > 1 {
-		voSet := LoadValidatorOperationSet(epoch.Number - 2)
-		if voSet != nil {
-			for validator, voArr := range voSet.Operations {
-				for i := 0; i < len(voArr); i++ {
-					vo := voArr[i]
-					if vo.Action == SVM_WITHDRAW {
-						tx, err := NewUnlockAssetTransaction(sender, validator, vo.Amount)
-						if err != nil {
-							return tmTypes.Txs{}, err
-						}
-						txs = append(txs, tx)
-					}
-				}
-			}
-		}
-	}
-
-	return txs, nil
-}
-
 func (epoch *Epoch) String() string {
 	return fmt.Sprintf("Epoch : {"+
 		"Number : %v,\n"+
