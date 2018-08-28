@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -533,6 +534,11 @@ func (sb *backend) Commit(proposal *tdmTypes.TdmBlock, seals [][]byte) error {
 func (sb *backend) ChainReader() consensus.ChainReader {
 
 	return sb.chain
+}
+
+// GetEpoch Get Epoch from Tendermint Engine
+func (sb *backend) GetEpoch() *epoch.Epoch {
+	return sb.core.consensusState.Epoch
 }
 
 // update timestamp and signature of the block based on its number of transactions

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
@@ -20,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
+	"golang.org/x/crypto/sha3"
 	"math/big"
 	"sync"
 	"time"
@@ -208,6 +210,103 @@ func (cch *CrossChainHelper) ReadyForLaunchChildChain(height *big.Int, stateDB *
 	}
 
 	logger.Debugln("ReadyForLaunchChildChain - end")
+}
+
+func (cch *CrossChainHelper) ValidateVoteNextEpoch(chainId string) (*epoch.Epoch, error) {
+
+	var ethereum *eth.Ethereum
+	if chainId == MainChain {
+		ethereum = MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
+	} else {
+		ethereum = MustGetEthereumFromNode(chainMgr.childChains[chainId].EthNode)
+	}
+
+	var ep *epoch.Epoch
+	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
+		ep = tdm.GetEpoch()
+	}
+
+	if ep == nil {
+		return nil, errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
+	}
+
+	// Check Epoch in Hash Vote stage
+	if ep.NextEpoch == nil {
+		return nil, errors.New("next Epoch is nil, You can't vote the next epoch")
+	}
+
+	// Vote is valid between height 75% - 85%
+	height := ethereum.BlockChain().CurrentBlock().NumberU64()
+	if !ep.CheckInHashVoteStage(height) {
+		return nil, errors.New(fmt.Sprintf("you can't send the hash vote during this time, current height %v", height))
+	}
+	return ep, nil
+}
+
+func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) (*epoch.Epoch, error) {
+	// Check PubKey match the Address
+	pubkeySlice := ethcrypto.FromECDSAPub(ethcrypto.ToECDSAPub(common.FromHex(pubkey)))
+	if pubkeySlice == nil {
+		return nil, errors.New("your Public Key is not valid, please provide a valid Public Key")
+	}
+
+	validatorPubkey := crypto.EtherumPubKey(pubkeySlice)
+	if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
+		return nil, errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
+	}
+
+	var ethereum *eth.Ethereum
+	if chainId == MainChain {
+		ethereum = MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
+	} else {
+		ethereum = MustGetEthereumFromNode(chainMgr.childChains[chainId].EthNode)
+	}
+
+	var ep *epoch.Epoch
+	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
+		ep = tdm.GetEpoch()
+	}
+
+	if ep == nil {
+		return nil, errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
+	}
+
+	// Check Epoch in Reveal Vote stage
+	if ep.NextEpoch == nil {
+		return nil, errors.New("next Epoch is nil, You can't vote the next epoch")
+	}
+
+	// Vote is valid between height 85% - 95%
+	height := ethereum.BlockChain().CurrentBlock().NumberU64()
+	if !ep.CheckInRevealVoteStage(height) {
+		return nil, errors.New(fmt.Sprintf("you can't send the reveal vote during this time, current height %v", height))
+	}
+
+	voteSet := ep.NextEpoch.GetEpochValidatorVoteSet()
+	vote, exist := voteSet.GetVoteByAddress(from)
+
+	// Check Vote exist
+	if !exist {
+		return nil, errors.New(fmt.Sprintf("Can not found the vote for Address %x", from))
+	}
+
+	if len(vote.VoteHash) == 0 {
+		return nil, errors.New(fmt.Sprintf("Address %x doesn't has vote hash", from))
+	}
+
+	// Check Vote Hash
+	byte_data := [][]byte{
+		from.Bytes(),
+		common.FromHex(pubkey),
+		depositAmount.Bytes(),
+		[]byte(salt),
+	}
+	voteHash := sha3.Sum256(concatCopyPreAllocate(byte_data))
+	if vote.VoteHash != voteHash {
+		return nil, errors.New("your vote doesn't match your vote hash, please check your vote")
+	}
+
+	return ep, nil
 }
 
 func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Transaction {
@@ -426,4 +525,17 @@ func getEthereumFromNode(node *node.Node) (*eth.Ethereum, error) {
 	}
 
 	return ethereum, nil
+}
+
+func concatCopyPreAllocate(slices [][]byte) []byte {
+	var totalLen int
+	for _, s := range slices {
+		totalLen += len(s)
+	}
+	tmp := make([]byte, totalLen)
+	var i int
+	for _, s := range slices {
+		i += copy(tmp[i:], s)
+	}
+	return tmp
 }

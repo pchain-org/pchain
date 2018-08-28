@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -23,6 +24,9 @@ type CrossChainHelper interface {
 	ValidateJoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error
 	JoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error
 	ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB)
+
+	ValidateVoteNextEpoch(chainId string) (*epoch.Epoch, error)
+	ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) (*epoch.Epoch, error)
 
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
 	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction
