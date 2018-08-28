@@ -17,6 +17,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 )
 
 type ChainManager struct {
@@ -35,15 +36,16 @@ type ChainManager struct {
 }
 
 var chainMgr *ChainManager
+var once sync.Once
 
 func GetCMInstance(ctx *cli.Context) *ChainManager {
 
-	if chainMgr == nil {
+	once.Do(func() {
 		chainMgr = &ChainManager{ctx: ctx}
 		chainMgr.childChains = make(map[string]*Chain)
 		chainMgr.childQuits = make(map[string]chan int)
 		chainMgr.cch = &CrossChainHelper{}
-	}
+	})
 	return chainMgr
 }
 
