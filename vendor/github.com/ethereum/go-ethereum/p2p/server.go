@@ -156,12 +156,11 @@ type Server struct {
 	lock    sync.Mutex // protects running
 	running bool
 
-	ntab             discoverTable
-	listener         net.Listener
-	ourHandshakeLock sync.RWMutex // protects ourHandshake
-	ourHandshake     *protoHandshake
-	lastLookup       time.Time
-	DiscV5           *discv5.Network
+	ntab         discoverTable
+	listener     net.Listener
+	ourHandshake *protoHandshake
+	lastLookup   time.Time
+	DiscV5       *discv5.Network
 
 	// These are for Peers, PeerCount (and nothing else).
 	peerOp     chan peerOpFunc
@@ -507,19 +506,6 @@ func (srv *Server) Start() (err error) {
 	return nil
 }
 
-// UpdateOurHandshake updates ourHandshake based on Protocols
-func (srv *Server) UpdateOurHandshake() error {
-	srv.ourHandshakeLock.Lock()
-	defer srv.ourHandshakeLock.Unlock()
-
-	srv.ourHandshake.Caps = srv.ourHandshake.Caps[:0]
-	for _, p := range srv.Protocols {
-		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
-	}
-
-	return nil
-}
-
 func (srv *Server) startListening() error {
 	// Launch the TCP listener.
 	listener, err := net.Listen("tcp", srv.ListenAddr)
@@ -846,9 +832,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *discover.Node) e
 		return err
 	}
 	// Run the protocol handshake
-	srv.ourHandshakeLock.RLock()
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
-	srv.ourHandshakeLock.RUnlock()
 	if err != nil {
 		clog.Trace("Failed proto handshake", "err", err)
 		return err
