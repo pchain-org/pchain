@@ -150,11 +150,6 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		eth.etherbase = crypto.PubkeyToAddress(ctx.NodeKey().PublicKey)
 	}
 
-	// force to set the tendermint etherbase to node key address
-	if chainConfig.Tendermint != nil {
-		eth.etherbase = crypto.PubkeyToAddress(ctx.NodeKey().PublicKey)
-	}
-
 	log.Info("Initialising Ethereum protocol", "versions", eth.engine.Protocol().Versions, "network", config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
@@ -366,11 +361,16 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 
 // set in js console via admin interface or wrapper from cli flags
 func (self *Ethereum) SetEtherbase(etherbase common.Address) {
-	self.lock.Lock()
 	if _, ok := self.engine.(consensus.Istanbul); ok {
 		log.Error("Cannot set etherbase in Istanbul consensus")
 		return
 	}
+	if _, ok := self.engine.(consensus.Tendermint); ok {
+		log.Error("Cannot set etherbase in Tendermint consensus")
+		return
+	}
+
+	self.lock.Lock()
 	self.etherbase = etherbase
 	self.lock.Unlock()
 
