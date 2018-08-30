@@ -155,7 +155,7 @@ func rev_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 	chainId, _ := etd.GetString(REV_ARGS_CHAINID)
 
 	// Check Balance (Available + Lock)
-	total := new(big.Int).Add(state.GetBalance(from), state.GetLockedBalance(from))
+	total := new(big.Int).Add(state.GetBalance(from), state.GetDepositBalance(from))
 	if total.Cmp(depositAmount) == -1 {
 		return core.ErrInsufficientFunds
 	}
@@ -174,7 +174,7 @@ func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChai
 	chainId, _ := etd.GetString(REV_ARGS_CHAINID)
 
 	// Check Balance (Available + Lock)
-	total := new(big.Int).Add(state.GetBalance(from), state.GetLockedBalance(from))
+	total := new(big.Int).Add(state.GetBalance(from), state.GetDepositBalance(from))
 	if total.Cmp(depositAmount) == -1 {
 		return core.ErrInsufficientFunds
 	}
@@ -186,13 +186,13 @@ func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChai
 
 	// Apply Logic
 	// if lock balance less than deposit amount, then add enough amount to locked balance
-	if state.GetLockedBalance(from).Cmp(depositAmount) == -1 {
-		difference := new(big.Int).Sub(depositAmount, state.GetLockedBalance(from))
+	if state.GetDepositBalance(from).Cmp(depositAmount) == -1 {
+		difference := new(big.Int).Sub(depositAmount, state.GetDepositBalance(from))
 		if state.GetBalance(from).Cmp(difference) == -1 {
 			return core.ErrInsufficientFunds
 		} else {
 			state.SubBalance(from, difference)
-			state.AddLockedBalance(from, difference)
+			state.AddDepositBalance(from, difference)
 		}
 	}
 

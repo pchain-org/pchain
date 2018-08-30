@@ -1,15 +1,15 @@
 package state
 
 import (
-	"math/big"
 	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 )
 
-// Retrieve the locked balance from the given address or 0 if object not found
-func (self *StateDB) GetLockedBalance(addr common.Address) *big.Int {
+// Retrieve the deposit balance from the given address or 0 if object not found
+func (self *StateDB) GetDepositBalance(addr common.Address) *big.Int {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.LockedBalance()
+		return stateObject.DepositBalance()
 	}
 	return common.Big0
 }
@@ -23,28 +23,28 @@ func (self *StateDB) GetChainBalance(addr common.Address) *big.Int {
 	return common.Big0
 }
 
-// AddLockedBalance adds amount to the locked balance associated with addr
-func (self *StateDB) AddLockedBalance(addr common.Address, amount *big.Int) {
+// AddDepositBalance adds amount to the deposit balance associated with addr
+func (self *StateDB) AddDepositBalance(addr common.Address, amount *big.Int) {
 
 	//        fmt.Printf("StateDB_AddLockedBalance : value to lock %d\n", amount)
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.AddLockedBalance(amount)
+		stateObject.AddDepositBalance(amount)
 	}
 }
 
-// SubLockedBalance adds amount to the locked balance associated with addr
-func (self *StateDB) SubLockedBalance(addr common.Address, amount *big.Int) {
+// SubDepositBalance adds amount to the deposit balance associated with addr
+func (self *StateDB) SubDepositBalance(addr common.Address, amount *big.Int) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.SubLockedBalance(amount)
+		stateObject.SubDepositBalance(amount)
 	}
 }
 
-func (self *StateDB) SetLockedBalance(addr common.Address, amount *big.Int) {
+func (self *StateDB) SetDepositBalance(addr common.Address, amount *big.Int) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
-		stateObject.SetLockedBalance(amount)
+		stateObject.SetDepositBalance(amount)
 	}
 }
 

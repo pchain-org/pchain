@@ -426,7 +426,7 @@ func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChai
 	} else {
 		// Everything fine, Lock the Balance for this account
 		state.SubBalance(from, depositAmount)
-		state.AddLockedBalance(from, depositAmount)
+		state.AddDepositBalance(from, depositAmount)
 	}
 
 	return nil

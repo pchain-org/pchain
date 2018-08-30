@@ -1,12 +1,12 @@
 package state
 
 import (
-	"math/big"
 	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 )
 
-// AddLockedBalance add amount to the locked balance.
-func (c *stateObject) AddLockedBalance(amount *big.Int) {
+// AddDepositBalance add amount to the deposit balance.
+func (c *stateObject) AddDepositBalance(amount *big.Int) {
 	// EIP158: We must check emptiness for the objects such that the account
 	// clearing (0,0,0 objects) can take effect.
 	if amount.Cmp(common.Big0) == 0 {
@@ -17,27 +17,27 @@ func (c *stateObject) AddLockedBalance(amount *big.Int) {
 		return
 	}
 
-	c.SetLockedBalance(new(big.Int).Add(c.LockedBalance(), amount))
+	c.SetDepositBalance(new(big.Int).Add(c.DepositBalance(), amount))
 }
 
-// SubLockedBalance removes amount from c's locked balance.
-func (c *stateObject) SubLockedBalance(amount *big.Int) {
+// SubDepositBalance removes amount from c's deposit balance.
+func (c *stateObject) SubDepositBalance(amount *big.Int) {
 	if amount.Cmp(common.Big0) == 0 {
 		return
 	}
-	c.SetLockedBalance(new(big.Int).Sub(c.LockedBalance(), amount))
+	c.SetDepositBalance(new(big.Int).Sub(c.DepositBalance(), amount))
 }
 
-func (self *stateObject) SetLockedBalance(amount *big.Int) {
+func (self *stateObject) SetDepositBalance(amount *big.Int) {
 	self.db.journal = append(self.db.journal, balanceChange{
 		account: &self.address,
-		prev:    new(big.Int).Set(self.data.LockedBalance),
+		prev:    new(big.Int).Set(self.data.DepositBalance),
 	})
-	self.setLockedBalance(amount)
+	self.setDepositBalance(amount)
 }
 
-func (self *stateObject) setLockedBalance(amount *big.Int) {
-	self.data.LockedBalance = amount
+func (self *stateObject) setDepositBalance(amount *big.Int) {
+	self.data.DepositBalance = amount
 	if self.onDirty != nil {
 		self.onDirty(self.Address())
 		self.onDirty = nil
@@ -83,9 +83,8 @@ func (self *stateObject) setChainBalance(amount *big.Int) {
 	}
 }
 
-
-func (self *stateObject) LockedBalance() *big.Int {
-	return self.data.LockedBalance
+func (self *stateObject) DepositBalance() *big.Int {
+	return self.data.DepositBalance
 }
 
 func (self *stateObject) ChainBalance() *big.Int {
