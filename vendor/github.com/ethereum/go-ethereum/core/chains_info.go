@@ -338,7 +338,7 @@ func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) 
 			// Refund the Lock Balance
 			cci := GetPendingChildChainData(db, v.ChainID)
 			for _, jv := range cci.JoinedValidators {
-				stateDB.SubDepositBalance(jv.Address, jv.DepositAmount)
+				stateDB.SubChildChainDepositBalance(jv.Address, v.ChainID, jv.DepositAmount)
 				stateDB.AddBalance(jv.Address, jv.DepositAmount)
 			}
 
@@ -351,7 +351,7 @@ func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) 
 				// Deduct the Deposit
 				for _, jv := range cci.JoinedValidators {
 					// Deposit will move to the Child Chain Account
-					stateDB.SubDepositBalance(jv.Address, jv.DepositAmount)
+					stateDB.SubChildChainDepositBalance(jv.Address, v.ChainID, jv.DepositAmount)
 				}
 				// Append the Chain ID to Ready Launch List
 				readyForLaunch = append(readyForLaunch, v.ChainID)
