@@ -28,6 +28,8 @@ import (
 	"runtime/debug"
 	"path/filepath"
 	"encoding/binary"
+	"crypto/sha256"
+	cmn "github.com/ethereum/go-ethereum/common"
 )
 
 const (
@@ -394,15 +396,25 @@ func (cs *ConsensusState) updateProposer() {
 	cs.proposer.Round = cs.Round
 	var roundBytes = make([]byte, 8)
 	binary.BigEndian.PutUint64(roundBytes, uint64(cs.proposer.Round))
-	vrfBytes := append(cs.LastCommit.SignBytes, roundBytes...)
-	hash := types.BytesToHash160(vrfBytes).Big()
-	n := big.NewInt(0)
-	n.Mod(hash, big.NewInt(int64(cs.Validators.Size())))
+	var cc []byte
+	if cs.LastCommit != nil {
+		cc = cs.LastCommit.SignatureAggr.Bytes()
+	} else {
+		cc = ([]byte)("")
+	}
+	vrfBytes := append( roundBytes, cc...)
+	hs := sha256.New()
+	hs.Write(vrfBytes)
+	hv := hs.Sum(nil)
+	hash := cmn.Bytes2Big(hv[:])
+	n :=big.NewInt(int64(cs.Validators.Size()))
+	n.Mod(hash, n)
 	idx := int(n.Int64())
 	if idx >= cs.Validators.Size() {
 		cs.proposer.Proposer = nil
+		PanicConsensus(Fmt("The index of proposer out of range", "index:", idx, "range:", cs.Validators.Size()))
 	} else {
-		cs.proposer.Proposer =  cs.Validators.Validators[idx]
+		cs.proposer.Proposer =  cs.Validators.Validators[idx].Copy()
 	}
 }
 
@@ -684,6 +696,7 @@ func (cs *ConsensusState) updateToStateAndEpochFromFastSync(state *sm.State, epo
 	} else {
 		cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
 	}
+	cs.proposer = nil
 	cs.Validators = validators
 	cs.Proposal = nil
 	cs.ProposalBlock = nil
@@ -757,6 +770,7 @@ func (cs *ConsensusState) updateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	} else {
 		cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
 	}
+	cs.proposer = nil
 	cs.Validators = validators
 	cs.Proposal = nil
 	cs.ProposalBlock = nil
@@ -970,6 +984,7 @@ func (cs *ConsensusState) enterNewRound(height int, round int) {
 		// and meanwhile we might have received a proposal
 		// for round 0.
 	} else {
+		cs.proposer = nil
 		cs.Proposal = nil
 		cs.ProposalBlock = nil
 		cs.ProposalBlockParts = nil
