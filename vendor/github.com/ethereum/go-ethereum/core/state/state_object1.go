@@ -35,7 +35,7 @@ func (c *stateObject) SubDepositBalance(amount *big.Int) {
 }
 
 func (self *stateObject) SetDepositBalance(amount *big.Int) {
-	self.db.journal = append(self.db.journal, balanceChange{
+	self.db.journal = append(self.db.journal, depositBalanceChange{
 		account: &self.address,
 		prev:    new(big.Int).Set(self.data.DepositBalance),
 	})
@@ -89,8 +89,9 @@ func (self *stateObject) SetChildChainDepositBalance(chainId string, amount *big
 		index = len(self.data.ChildChainDepositBalance) - 1
 	}
 
-	self.db.journal = append(self.db.journal, balanceChange{
+	self.db.journal = append(self.db.journal, childChainDepositBalanceChange{
 		account: &self.address,
+		chainId: chainId,
 		prev:    new(big.Int).Set(self.data.ChildChainDepositBalance[index].DepositBalance),
 	})
 	self.setChildChainDepositBalance(index, amount)
@@ -128,7 +129,7 @@ func (c *stateObject) SubChainBalance(amount *big.Int) {
 }
 
 func (self *stateObject) SetChainBalance(amount *big.Int) {
-	self.db.journal = append(self.db.journal, balanceChange{
+	self.db.journal = append(self.db.journal, chainBalanceChange{
 		account: &self.address,
 		prev:    new(big.Int).Set(self.data.ChainBalance),
 	})

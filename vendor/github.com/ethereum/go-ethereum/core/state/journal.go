@@ -47,6 +47,19 @@ type (
 		account *common.Address
 		prev    *big.Int
 	}
+	depositBalanceChange struct {
+		account *common.Address
+		prev    *big.Int
+	}
+	childChainDepositBalanceChange struct {
+		account *common.Address
+		chainId string
+		prev    *big.Int
+	}
+	chainBalanceChange struct {
+		account *common.Address
+		prev    *big.Int
+	}
 	nonceChange struct {
 		account *common.Address
 		prev    uint64
@@ -107,6 +120,35 @@ func (ch touchChange) undo(s *StateDB) {
 
 func (ch balanceChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setBalance(ch.prev)
+}
+
+func (ch depositBalanceChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setDepositBalance(ch.prev)
+}
+
+func (ch childChainDepositBalanceChange) undo(s *StateDB) {
+	self := s.getStateObject(*ch.account)
+
+	var index = -1
+	for i := range self.data.ChildChainDepositBalance {
+		if self.data.ChildChainDepositBalance[i].ChainId == ch.chainId {
+			index = i
+			break
+		}
+	}
+	if index < 0 { // not found, we'll append
+		self.data.ChildChainDepositBalance = append(self.data.ChildChainDepositBalance, &childChainDepositBalance{
+			ChainId:        ch.chainId,
+			DepositBalance: new(big.Int),
+		})
+		index = len(self.data.ChildChainDepositBalance) - 1
+	}
+
+	self.setChildChainDepositBalance(index, ch.prev)
+}
+
+func (ch chainBalanceChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setChainBalance(ch.prev)
 }
 
 func (ch nonceChange) undo(s *StateDB) {
