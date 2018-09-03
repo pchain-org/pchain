@@ -134,6 +134,9 @@ func (cm *ChainManager) InitCrossChainHelper() {
 func (cm *ChainManager) StartChains() error {
 
 	for _, chain := range cm.childChains {
+
+		cm.ethP2P.AddNodeConfig(chain.Id, chain.EthNode)
+
 		// Start each Chain
 		quit := make(chan int)
 		cm.childQuits[chain.Id] = quit
@@ -158,10 +161,6 @@ func (cm *ChainManager) StartEthP2P() error {
 	cm.ethP2P = p2p.NewEthP2PServer(cm.mainChain.EthNode)
 	if cm.ethP2P == nil {
 		return errors.New("p2p server is empty after creation")
-	}
-
-	for _, chain := range cm.childChains {
-		cm.ethP2P.AddNodeConfig(chain.Id, chain.EthNode)
 	}
 
 	return cm.ethP2P.Start()
