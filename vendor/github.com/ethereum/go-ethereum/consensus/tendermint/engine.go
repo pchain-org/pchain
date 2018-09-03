@@ -465,7 +465,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 	defer clear()
 
 	// post block into Istanbul engine
-	logger.Infof("Tendermint (backend) Seal, before fire event with block: %v", block)
+	logger.Infof("Tendermint (backend) Seal, before fire event with block height: %d", block.NumberU64())
 	go tdmTypes.FireEventRequest(sb.core.EventSwitch(), tdmTypes.EventDataRequest{Proposal: block})
 	//go sb.EventMux().Post(tdmTypes.RequestEvent{
 	//	Proposal: block,

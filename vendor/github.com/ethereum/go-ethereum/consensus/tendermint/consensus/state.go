@@ -1119,10 +1119,6 @@ func (cs *ConsensusState) enterCommit(height uint64, commitRound int) {
 	}
 	logger.Infof("enterCommit(%v/%v). Current: %v/%v/%v", height, commitRound, cs.Height, cs.Round, cs.Step)
 
-	if cs.ProposalBlock != nil {
-		logger.Infof("enterCommit. eth block is %v", cs.ProposalBlock.Block)
-	}
-
 	defer func() {
 		// Done enterCommit:
 		// keep cs.Round the same, commitRound points to the right Precommits set.

@@ -87,7 +87,6 @@ func loadRewardScheme(db dbm.DB, key []byte) *RewardScheme {
 		}
 		// TODO: ensure that buf is completely read.
 		rs := MakeRewardScheme(db, rsDoc)
-		logger.Infof("loadRewardScheme. reward scheme is: %v", rs)
 		return rs
 	}
 }
