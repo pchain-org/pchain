@@ -32,19 +32,19 @@ var (
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		PChainId:	     "pchain",
-		ChainId:             big.NewInt(1),
-		HomesteadBlock:      big.NewInt(1150000),
-		DAOForkBlock:        big.NewInt(1920000),
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(2463000),
-		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:         big.NewInt(2675000),
-		EIP158Block:         big.NewInt(2675000),
+		PChainId:       "pchain",
+		ChainId:        big.NewInt(1),
+		HomesteadBlock: big.NewInt(1150000),
+		DAOForkBlock:   big.NewInt(1920000),
+		DAOForkSupport: true,
+		EIP150Block:    big.NewInt(2463000),
+		EIP150Hash:     common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:    big.NewInt(2675000),
+		EIP158Block:    big.NewInt(2675000),
 		//ByzantiumBlock:      big.NewInt(4370000),
 		ByzantiumBlock:      big.NewInt(0), //let's start from 1 block
 		ConstantinopleBlock: nil,
-		Tendermint:	     &TendermintConfig{
+		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
 		},
@@ -52,7 +52,7 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
 	TestnetChainConfig = &ChainConfig{
-		PChainId:	     "testnet",
+		PChainId:            "testnet",
 		ChainId:             big.NewInt(3),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
@@ -68,7 +68,7 @@ var (
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
 	RinkebyChainConfig = &ChainConfig{
-		PChainId:	     "rinkeby",
+		PChainId:            "rinkeby",
 		ChainId:             big.NewInt(4),
 		HomesteadBlock:      big.NewInt(1),
 		DAOForkBlock:        nil,
@@ -87,7 +87,7 @@ var (
 
 	// OttomanChainConfig contains the chain parameters to run a node on the Ottoman test network.
 	OttomanChainConfig = &ChainConfig{
-		PChainId:	"ottoman",
+		PChainId:       "ottoman",
 		ChainId:        big.NewInt(5),
 		HomesteadBlock: big.NewInt(1),
 		DAOForkBlock:   nil,
@@ -128,8 +128,8 @@ var (
 // that any network, identified by its genesis block, can have its own
 // set of configuration options.
 type ChainConfig struct {
-	PChainId string `json:"pChainId"` //PChain id identifies the current chain
-	ChainId *big.Int `json:"chainId"` // Chain id identifies the current chain and is used for replay protection
+	PChainId string   `json:"pChainId"` //PChain id identifies the current chain
+	ChainId  *big.Int `json:"chainId"`  // Chain id identifies the current chain and is used for replay protection
 
 	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
 
@@ -147,9 +147,9 @@ type ChainConfig struct {
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
 	// Various consensus engines
-	Ethash   *EthashConfig   `json:"ethash,omitempty"`
-	Clique   *CliqueConfig   `json:"clique,omitempty"`
-	Istanbul *IstanbulConfig `json:"istanbul,omitempty"`
+	Ethash     *EthashConfig     `json:"ethash,omitempty"`
+	Clique     *CliqueConfig     `json:"clique,omitempty"`
+	Istanbul   *IstanbulConfig   `json:"istanbul,omitempty"`
 	Tendermint *TendermintConfig `json:"tendermint,omitempty"`
 }
 
@@ -192,6 +192,28 @@ func (c *IstanbulConfig) String() string {
 // String implements the stringer interface, returning the consensus engine details.
 func (c *TendermintConfig) String() string {
 	return "tendermint"
+}
+
+// Create a new Chain Config based on the Chain ID, for child chain creation purpose
+func NewChildChainConfig(childChainID string) *ChainConfig {
+	return &ChainConfig{
+		PChainId:       childChainID,
+		ChainId:        big.NewInt(1),
+		HomesteadBlock: big.NewInt(1150000),
+		DAOForkBlock:   big.NewInt(1920000),
+		DAOForkSupport: true,
+		EIP150Block:    big.NewInt(2463000),
+		EIP150Hash:     common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:    big.NewInt(2675000),
+		EIP158Block:    big.NewInt(2675000),
+		//ByzantiumBlock:      big.NewInt(4370000),
+		ByzantiumBlock:      big.NewInt(0), //let's start from 1 block
+		ConstantinopleBlock: nil,
+		Tendermint: &TendermintConfig{
+			Epoch:          30000,
+			ProposerPolicy: 0,
+		},
+	}
 }
 
 // String implements the fmt.Stringer interface.

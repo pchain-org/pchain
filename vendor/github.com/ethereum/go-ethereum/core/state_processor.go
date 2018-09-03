@@ -17,6 +17,7 @@
 package core
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -26,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
-	"fmt"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -57,7 +57,7 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
+func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, []string, error) {
 	var (
 		receipts types.Receipts
 		usedGas  = new(uint64)
@@ -75,18 +75,18 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		//receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
 		totalUsedMoney := big.NewInt(0)
 		receipt, _, err := ApplyTransactionEx(p.config, p.bc, nil, gp, statedb, header, tx,
-							usedGas, totalUsedMoney, cfg, p.cch)
+			usedGas, totalUsedMoney, cfg, p.cch)
 		fmt.Printf("(p *StateProcessor) Process()，after ApplyTransactionEx, receipt is %v\n", receipt)
 		if err != nil {
-			return nil, nil, 0, err
+			return nil, nil, 0, nil, err
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
+	_, childChainIds, _ := p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
 
-	return receipts, allLogs, *usedGas, nil
+	return receipts, allLogs, *usedGas, childChainIds, nil
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database

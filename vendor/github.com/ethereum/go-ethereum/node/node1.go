@@ -3,16 +3,11 @@ package node
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"net/http"
 	"reflect"
 )
-
-func (n *Node) Backend() ethapi.Backend {
-	return n.backend
-}
 
 func (n *Node) RpcAPIs() []rpc.API {
 	return n.rpcAPIs

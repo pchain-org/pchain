@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/prometheus/prometheus/util/flock"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 type EthP2PServer interface {
@@ -58,7 +57,6 @@ type Node struct {
 
 	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
 	services     map[reflect.Type]Service // Currently running services
-	backend      ethapi.Backend
 
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests

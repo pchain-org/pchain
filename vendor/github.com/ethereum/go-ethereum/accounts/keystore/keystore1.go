@@ -1,14 +1,13 @@
 package keystore
 
 import (
-	"io"
 	"github.com/ethereum/go-ethereum/common"
+	"io"
 )
 
 type KeyStorePassphrase struct {
 	Ks keyStorePassphrase
 }
-
 
 func NewKeyStoreByTenermint(keydir string, scryptN, scryptP int) *KeyStorePassphrase {
 	return &KeyStorePassphrase{keyStorePassphrase{keydir, scryptN, scryptP}}
@@ -24,4 +23,8 @@ func NewKey(rand io.Reader) (*Key, error) {
 
 func KeyFileName(keyAddr common.Address) string {
 	return keyFileName(keyAddr)
+}
+
+func WriteKeyStore(filepath string, keyjson []byte) error {
+	return writeKeyFile(filepath, keyjson)
 }

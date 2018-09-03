@@ -15,7 +15,6 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -34,7 +33,6 @@ const (
 
 type CrossChainHelper struct {
 	mtx         sync.Mutex
-	typeMut     *event.TypeMux
 	chainInfoDB dbm.DB
 	//the client does only connect to main chain
 	client *ethclient.Client
@@ -42,10 +40,6 @@ type CrossChainHelper struct {
 
 func (cch *CrossChainHelper) GetMutex() *sync.Mutex {
 	return &cch.mtx
-}
-
-func (cch *CrossChainHelper) GetTypeMutex() *event.TypeMux {
-	return cch.typeMut
 }
 
 func (cch *CrossChainHelper) GetChainInfoDB() dbm.DB {
@@ -192,7 +186,7 @@ func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, 
 	return nil
 }
 
-func (cch *CrossChainHelper) ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB) {
+func (cch *CrossChainHelper) ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB) []string {
 	logger.Debugln("ReadyForLaunchChildChain - start")
 
 	readyId := core.GetChildChainForLaunch(cch.chainInfoDB, height, stateDB)
@@ -200,16 +194,17 @@ func (cch *CrossChainHelper) ReadyForLaunchChildChain(height *big.Int, stateDB *
 		logger.Debugf("ReadyForLaunchChildChain - No child chain to be launch in Block %v", height)
 	} else {
 		logger.Infof("ReadyForLaunchChildChain - %v child chain(s) to be launch in Block %v. %v\n", len(readyId), height, readyId)
-		for _, chainId := range readyId {
-			// Convert the Chain Info from Pending to Formal
-			cci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
-			core.SaveChainInfo(cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: *cci})
-			// Send Post to Chain Manager
-			cch.GetTypeMutex().Post(core.CreateChildChainEvent{ChainId: chainId})
-		}
+		//for _, chainId := range readyId {
+		//	// Convert the Chain Info from Pending to Formal
+		//	cci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
+		//	core.SaveChainInfo(cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: *cci})
+		//	// Send Post to Chain Manager
+		//	cch.GetTypeMutex().Post(core.CreateChildChainEvent{ChainId: chainId})
+		//}
 	}
 
 	logger.Debugln("ReadyForLaunchChildChain - end")
+	return readyId
 }
 
 func (cch *CrossChainHelper) ValidateVoteNextEpoch(chainId string) (*epoch.Epoch, error) {

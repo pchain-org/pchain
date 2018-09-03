@@ -1,19 +1,20 @@
 package chain
 
 import (
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/event"
 	"github.com/pchain/p2p"
 	"github.com/pchain/rpc"
 	"github.com/pkg/errors"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"gopkg.in/urfave/cli.v1"
+	"io/ioutil"
 	"net"
 	"os"
 	"strconv"
@@ -70,7 +71,7 @@ func (cm *ChainManager) LoadAndStartMainChain(ctx *cli.Context) error {
 	}
 
 	//set the event.TypeMutex to cch
-	cm.InitCrossChainHelper(cm.mainChain.EthNode.EventMux())
+	cm.InitCrossChainHelper()
 
 	// ethereum p2p needs to be started after loading the main chain.
 	cm.StartEthP2P()
@@ -111,8 +112,7 @@ func (cm *ChainManager) LoadChains() error {
 	return nil
 }
 
-func (cm *ChainManager) InitCrossChainHelper(typeMut *event.TypeMux) {
-	cm.cch.typeMut = typeMut
+func (cm *ChainManager) InitCrossChainHelper() {
 	cm.cch.chainInfoDB = dbm.NewDB("chaininfo",
 		cm.mainChain.Config.GetString("db_backend"),
 		cm.ctx.GlobalString(DataDirFlag.Name))
@@ -185,21 +185,29 @@ func (cm *ChainManager) StartRPC() error {
 
 func (cm *ChainManager) StartInspectEvent() {
 
+	createChildChainCh := make(chan core.CreateChildChainEvent, 10)
+	createChildChainSub := MustGetEthereumFromNode(cm.mainChain.EthNode).BlockChain().SubscribeCreateChildChainEvent(createChildChainCh)
+
 	go func() {
-		createChildChainSub := cm.mainChain.EthNode.EventMux().Subscribe(core.CreateChildChainEvent{})
+		defer createChildChainSub.Unsubscribe()
 
-		for obj := range createChildChainSub.Chan() {
-			event := obj.Data.(core.CreateChildChainEvent)
-			logger.Infof("CreateChildChainEvent received: %v", event)
-			chainId := event.ChainId
+		for {
+			select {
+			case event := <-createChildChainCh:
+				logger.Infof("CreateChildChainEvent received: %v", event)
+				chainId := event.ChainId
 
-			_, ok := cm.childChains[chainId]
-			if ok {
-				logger.Infof("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue", event)
-				continue
+				_, ok := cm.childChains[chainId]
+				if ok {
+					logger.Infof("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue", event)
+					continue
+				}
+
+				go cm.LoadChildChainInRT(event.ChainId)
+
+			case <-createChildChainSub.Err():
+				return
 			}
-
-			go cm.LoadChildChainInRT(event.ChainId)
 		}
 	}()
 }
@@ -247,11 +255,24 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 	chain := LoadChildChain(cm.ctx, chainId, cm.p2pObj)
 	if chain == nil {
+		// Load the KeyStore file from MainChain
+		wallet, walletErr := cm.mainChain.EthNode.AccountManager().Find(accounts.Account{Address: localEtherbase})
+		if walletErr != nil {
+			logger.Errorf("Failed to Find the Account %v, Error: %v", localEtherbase, walletErr)
+			return
+		}
+		keyJson, readKeyErr := ioutil.ReadFile(wallet.URL().Path)
+		if readKeyErr != nil {
+			logger.Errorf("Failed to Read the KeyStore %v, Error: %v", localEtherbase, readKeyErr)
+			return
+		}
+
 		// child chain uses the same validator with the main chain.
 		privValidatorFile := cm.mainChain.Config.GetString("priv_validator_file")
 		keydir := cm.mainChain.Config.GetString("keystore")
 		self := types.LoadOrGenPrivValidator(privValidatorFile, keydir)
-		err := CreateChildChain(cm.ctx, chainId, *self, validators)
+
+		err := CreateChildChain(cm.ctx, chainId, *self, keyJson, validators)
 		if err != nil {
 			logger.Errorf("Create Child Chain %v failed! %v", chainId, err)
 			return
@@ -263,8 +284,6 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 			return
 		}
 	}
-
-	cm.childChains[chainId] = chain
 
 	//StartChildChain to attach p2p and rpc
 
@@ -280,6 +299,10 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 	// Child Chain start success, then delete the pending data in chain info db
 	core.DeletePendingChildChainData(cm.cch.chainInfoDB, chainId)
+	// Convert the Chain Info from Pending to Formal
+	core.SaveChainInfo(cm.cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: *cci})
+	// Add Child Chain Id into Chain Manager
+	cm.childChains[chainId] = chain
 
 	// Broadcast Child ID to all peers
 	cm.p2pObj.BroadcastChildChainID(chainId)

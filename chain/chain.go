@@ -1,7 +1,9 @@
 package chain
 
 import (
+	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	eth "github.com/ethereum/go-ethereum/node"
 	"github.com/pchain/common/plogger"
@@ -12,6 +14,7 @@ import (
 	cfg "github.com/tendermint/go-config"
 	"gopkg.in/urfave/cli.v1"
 	"net/http"
+	"path/filepath"
 )
 
 const (
@@ -114,10 +117,18 @@ func testEthereumApi() {
 	logger.Infof("testEthereumApi: balance is: %x\n", balance)
 }
 
-func CreateChildChain(ctx *cli.Context, chainId string, validator tdmTypes.PrivValidator, validators []tdmTypes.GenesisValidator) error {
+func CreateChildChain(ctx *cli.Context, chainId string, validator tdmTypes.PrivValidator, keyJson []byte, validators []tdmTypes.GenesisValidator) error {
 
 	// Get Tendermint config base on chain id
 	config := GetTendermintConfig(chainId, ctx)
+
+	// Save the KeyStore File
+	keystoreDir := config.GetString("keystore")
+	keyJsonFilePath := filepath.Join(keystoreDir, keystore.KeyFileName(common.BytesToAddress(validator.Address)))
+	saveKeyError := keystore.WriteKeyStore(keyJsonFilePath, keyJson)
+	if saveKeyError != nil {
+		return saveKeyError
+	}
 
 	// Save the Validator Json File
 	privValFile := config.GetString("priv_validator_file_root")
@@ -125,7 +136,7 @@ func CreateChildChain(ctx *cli.Context, chainId string, validator tdmTypes.PrivV
 	validator.Save()
 
 	// Init the Ethereum Genesis
-	err := initEthGenesisFromExistValidator(config, validators)
+	err := initEthGenesisFromExistValidator(chainId, config, validators)
 	if err != nil {
 		return err
 	}

@@ -93,14 +93,15 @@ type BlockChain struct {
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
-	hc            *HeaderChain
-	rmLogsFeed    event.Feed
-	chainFeed     event.Feed
-	chainSideFeed event.Feed
-	chainHeadFeed event.Feed
-	logsFeed      event.Feed
-	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
+	hc                   *HeaderChain
+	rmLogsFeed           event.Feed
+	chainFeed            event.Feed
+	chainSideFeed        event.Feed
+	chainHeadFeed        event.Feed
+	logsFeed             event.Feed
+	createChildChainFeed event.Feed
+	scope                event.SubscriptionScope
+	genesisBlock         *types.Block
 
 	mu      sync.RWMutex // global mutex for locking chain operations
 	chainmu sync.RWMutex // blockchain insertion lock
@@ -1157,12 +1158,20 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			return i, events, coalescedLogs, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, err := bc.processor.Process(block, state, bc.vmConfig)
+		receipts, logs, usedGas, childChainIds, err := bc.processor.Process(block, state, bc.vmConfig)
 		fmt.Printf("block insert 6 with error: %v\n", err)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return i, events, coalescedLogs, err
 		}
+
+		if len(childChainIds) != 0 {
+			// Add Events for Create Child Chain
+			for _, childChainId := range childChainIds {
+				events = append(events, CreateChildChainEvent{ChainId: childChainId})
+			}
+		}
+
 		// Validate the state using the default validator
 		err = bc.Validator().ValidateState(block, parent, state, receipts, usedGas)
 		fmt.Printf("block insert 7 with error: %v\n", err)
@@ -1390,6 +1399,9 @@ func (bc *BlockChain) PostChainEvents(events []interface{}, logs []*types.Log) {
 
 		case ChainSideEvent:
 			bc.chainSideFeed.Send(ev)
+
+		case CreateChildChainEvent:
+			bc.createChildChainFeed.Send(ev)
 		}
 	}
 }
@@ -1585,4 +1597,9 @@ func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Su
 // SubscribeLogsEvent registers a subscription of []*types.Log.
 func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
+}
+
+// SubscribeCreateChildChainEvent registers a subscription of CreateChildChainEvent.
+func (bc *BlockChain) SubscribeCreateChildChainEvent(ch chan<- CreateChildChainEvent) event.Subscription {
+	return bc.scope.Track(bc.createChildChainFeed.Subscribe(ch))
 }

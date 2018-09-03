@@ -74,9 +74,10 @@ type Work struct {
 
 	Block *types.Block // the new block
 
-	header   *types.Header
-	txs      []*types.Transaction
-	receipts []*types.Receipt
+	header        *types.Header
+	txs           []*types.Transaction
+	receipts      []*types.Receipt
+	childChainIds []string
 
 	createdAt time.Time
 }
@@ -159,7 +160,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 	go worker.update()
 
 	go worker.wait()
-	worker.commitNewWork()
+	//worker.commitNewWork()
 
 	return worker
 }
@@ -351,6 +352,14 @@ func (self *worker) wait() {
 			if stat == core.CanonStatTy {
 				events = append(events, core.ChainHeadEvent{Block: block})
 			}
+
+			if len(work.childChainIds) != 0 {
+				// Add Events for Create Child Chain
+				for _, childChainId := range work.childChainIds {
+					events = append(events, core.CreateChildChainEvent{ChainId: childChainId})
+				}
+			}
+
 			self.chain.PostChainEvents(events, logs)
 
 			// Insert the block into the set of pending ones to wait for confirmations
@@ -505,7 +514,7 @@ func (self *worker) commitNewWork() {
 		delete(self.possibleUncles, hash)
 	}
 	// Create the new block to seal with the consensus engine
-	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
+	if work.Block, work.childChainIds, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
 		log.Error("Failed to finalize block for sealing", "err", err)
 		return
 	}

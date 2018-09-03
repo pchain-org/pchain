@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/event"
 	dbm "github.com/tendermint/go-db"
 	"math/big"
 	"sync"
@@ -15,7 +14,6 @@ import (
 
 type CrossChainHelper interface {
 	GetMutex() *sync.Mutex
-	GetTypeMutex() *event.TypeMux
 	GetClient() *ethclient.Client
 	GetChainInfoDB() dbm.DB
 
@@ -23,7 +21,7 @@ type CrossChainHelper interface {
 	CreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error
 	ValidateJoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error
 	JoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error
-	ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB)
+	ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB) []string
 
 	ValidateVoteNextEpoch(chainId string) (*epoch.Epoch, error)
 	ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) (*epoch.Epoch, error)

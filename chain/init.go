@@ -331,9 +331,10 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, *big.Int, error) {
 	return coinbase, amount, nil
 }
 
-func initEthGenesisFromExistValidator(childConfig cfg.Config, validators []types.GenesisValidator) error {
+func initEthGenesisFromExistValidator(childChainID string, childConfig cfg.Config, validators []types.GenesisValidator) error {
 
 	var coreGenesis = core.Genesis{
+		Config:     params.NewChildChainConfig(childChainID),
 		Nonce:      0xdeadbeefdeadbeef,
 		Timestamp:  0x0,
 		ParentHash: common.StringToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),

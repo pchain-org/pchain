@@ -167,7 +167,7 @@ func (c *Config) IPCEndpoint() string {
 		if strings.HasPrefix(c.IPCPath, `\\.\pipe\`) {
 			return c.IPCPath
 		}
-		return `\\.\pipe\` + c.IPCPath
+		return `\\.\pipe\` + c.ChainId + `\` + c.IPCPath
 	}
 	// Resolve names into the data directory full paths otherwise
 	if filepath.Base(c.IPCPath) == c.IPCPath {
@@ -336,12 +336,12 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 		log.Crit(fmt.Sprintf("Failed to generate node key: %v", err))
 	}
 	/*
-	instanceDir := filepath.Join(c.DataDir, c.name())
-	if err := os.MkdirAll(instanceDir, 0700); err != nil {
-		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
-		return key
-	}
-	keyfile = filepath.Join(instanceDir, datadirPrivateKey)
+		instanceDir := filepath.Join(c.DataDir, c.name())
+		if err := os.MkdirAll(instanceDir, 0700); err != nil {
+			log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
+			return key
+		}
+		keyfile = filepath.Join(instanceDir, datadirPrivateKey)
 	*/
 	if err := os.MkdirAll(c.GeneralDataDir, 0700); err != nil {
 		log.Error(fmt.Sprintf("Failed to persist node key: %v", err))
