@@ -1156,7 +1156,8 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 		// DICCFuncName and WFMCFuncName tx has no Gas/GasPrice because the account may not have enough money.
 		// SB2MCFuncName costs no Gas/GasPrice
 		if etd.FuncName == DICCFuncName || etd.FuncName == WFMCFuncName || etd.FuncName == SB2MCFuncName {
-			args.Gas = nil
+			var gas hexutil.Uint64 = 0
+			args.Gas = &gas
 			args.GasPrice = nil
 		} else {
 			var gas hexutil.Uint64 = defaultMCGas // temporarily force to 'defaultMCGas'.

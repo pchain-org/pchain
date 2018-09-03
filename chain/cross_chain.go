@@ -368,6 +368,15 @@ func (cch *CrossChainHelper) VerifyChildChainBlock(from common.Address, bs []byt
 		return errors.New("invalid difficulty")
 	}
 
+	// special case: epoch 0 update
+	// TODO: how to verify this block which includes epoch 0?
+	if tdmExtra.EpochBytes != nil && len(tdmExtra.EpochBytes) != 0 {
+		ep := epoch.FromBytes(tdmExtra.EpochBytes)
+		if ep != nil && ep.Number == 0 {
+			return nil
+		}
+	}
+
 	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
 	if ci == nil {
 		return fmt.Errorf("chain info %s not found", chainId)

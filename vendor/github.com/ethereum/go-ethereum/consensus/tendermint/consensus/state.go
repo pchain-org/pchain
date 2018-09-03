@@ -872,11 +872,17 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 			}
 		*/
 
-		var epochBytes []byte = []byte{}
-		shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
-		if shouldProposeEpoch {
-			cs.Epoch.SetNextEpoch(cs.Epoch.ProposeNextEpoch(cs.Height))
-			epochBytes = cs.Epoch.NextEpoch.Bytes()
+		var epochBytes = []byte{}
+		if cs.Height == 1 {
+			// We're creating a proposal for the first block.
+			// always setup the epoch so that it'll be sent to the main chain.
+			epochBytes = cs.state.Epoch.Bytes()
+		} else {
+			shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
+			if shouldProposeEpoch {
+				cs.Epoch.SetNextEpoch(cs.Epoch.ProposeNextEpoch(cs.Height))
+				epochBytes = cs.Epoch.NextEpoch.Bytes()
+			}
 		}
 
 		_, val, _ := cs.state.GetValidators()
@@ -952,7 +958,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 
 	// Valdiate proposal block
 	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.TdmExtra.EpochBytes)
-	if proposedNextEpoch != nil {
+	if proposedNextEpoch != nil && proposedNextEpoch.Number != 0 {
 		err = cs.RoundState.Epoch.ValidateNextEpoch(proposedNextEpoch, height)
 		if err != nil {
 			// ProposalBlock is invalid, prevote nil.

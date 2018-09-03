@@ -320,6 +320,7 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 		//if conR.conS.Step < RoundStepPropose {
 		re := data.(types.EventDataRequest)
 		block := re.Proposal
+		logger.Infof("registerEventCallbacks received block: %v", block)
 		logger.Infof("registerEventCallbacks received block height: %d, conR.conS.Height: %d, conR.conS.Step: %v", block.NumberU64(), conR.conS.Height, conR.conS.Step)
 		//wait block in new height or new block has been inserted to start a new height
 		if block.NumberU64() == conR.conS.Height || block.NumberU64() == conR.conS.Height+1 {
