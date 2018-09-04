@@ -26,7 +26,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/pchain/common/plogger"
 )
+
+var logger = plogger.GetLogger("core")
 
 type CrossChainTxType int
 
@@ -34,6 +37,17 @@ const (
 	MainChainToChildChain CrossChainTxType = iota
 	ChildChainToMainChain
 )
+
+func (t CrossChainTxType) String() string {
+	switch t {
+	case MainChainToChildChain:
+		return "MainChainToChildChain"
+	case ChildChainToMainChain:
+		return "ChildChainToMainChain"
+	default:
+		return "UnKnown"
+	}
+}
 
 var (
 	// the prefix must not conflict with variables in database_util.go
@@ -68,7 +82,6 @@ func WriteChildChainBlock(db ethdb.Database, block *types.Block) error {
 	for _, tx := range txs {
 		etd := tx.ExtendTxData()
 		if etd.FuncName == "WithdrawFromChildChain" {
-			from, _ := etd.GetAddress("from")
 			// write the entire tx
 			bs, err := rlp.EncodeToBytes(tx)
 			if err != nil {
@@ -82,14 +95,16 @@ func WriteChildChainBlock(db ethdb.Database, block *types.Block) error {
 			}
 
 			// add 'child chain to main chain' tx.
+			from, _ := etd.GetAddress("from")
 			err = AddCrossChainTx(db, ChildChainToMainChain, tdmExtra.ChainID, from, txHash)
 			if err != nil {
 				return err
 			}
 		} else if etd.FuncName == "DepositInChildChain" {
 			from, _ := etd.GetAddress("from")
+			txHash, _ := etd.GetHash("txHash")
 			// remove 'main chain to child chain' tx.
-			err = RemoveCrossChainTx(db, MainChainToChildChain, tdmExtra.ChainID, from, tx.Hash())
+			err = RemoveCrossChainTx(db, MainChainToChildChain, tdmExtra.ChainID, from, txHash)
 			if err != nil {
 				return err
 			}
@@ -101,33 +116,45 @@ func WriteChildChainBlock(db ethdb.Database, block *types.Block) error {
 
 func AddCrossChainTx(db ethdb.Database, t CrossChainTxType, chainId string, account common.Address, txHash common.Hash) error {
 
+	logger.Infof("AddCrossChainTx %v: chain: %s, account: %x, tx: %x", t, chainId, account, txHash)
 	var hashes []common.Hash
 	key := calcCrossChainTxKey(t, chainId, account)
 	bs, err := db.Get(key)
 	if err == nil { // already exists
 		err = rlp.DecodeBytes(bs, &hashes)
 		if err != nil {
+			logger.Warnf("AddCrossChainTx decode error: %v", err)
 			return err
 		}
 	}
 	hashes = append(hashes, txHash)
 	bs, err = rlp.EncodeToBytes(hashes)
 	if err != nil {
+		logger.Warnf("AddCrossChainTx encode error: %v", err)
 		return err
 	}
-	return db.Put(key, bs)
+	err = db.Put(key, bs)
+	if err != nil {
+		logger.Warnf("AddCrossChainTx db put error: %v", err)
+		return err
+	}
+	logger.Infof("AddCrossChainTx %v: chain: %s, account: %x, txs: %x", t, chainId, account, hashes)
+	return nil
 }
 
 func RemoveCrossChainTx(db ethdb.Database, t CrossChainTxType, chainId string, account common.Address, txHash common.Hash) error {
 
+	logger.Infof("RemoveCrossChainTx %v: chain: %s, account: %x, tx: %x", t, chainId, account, txHash)
 	var hashes []common.Hash
 	key := calcCrossChainTxKey(t, chainId, account)
 	bs, err := db.Get(key)
 	if err != nil {
+		logger.Warnf("RemoveCrossChainTx db get error: %v", err)
 		return err
 	}
 	err = rlp.DecodeBytes(bs, &hashes)
 	if err != nil {
+		logger.Warnf("RemoveCrossChainTx decode error: %v", err)
 		return err
 	}
 	for i := range hashes {
@@ -138,10 +165,18 @@ func RemoveCrossChainTx(db ethdb.Database, t CrossChainTxType, chainId string, a
 
 			bs, err = rlp.EncodeToBytes(hashes)
 			if err != nil {
+				logger.Warnf("RemoveCrossChainTx encode error: %v", err)
 				return err
 			}
 
-			return db.Put(key, bs)
+			err = db.Put(key, bs)
+			if err != nil {
+				logger.Warnf("RemoveCrossChainTx db put error: %v", err)
+				return err
+			}
+
+			logger.Infof("RemoveCrossChainTx %v: chain: %s, account: %x, txs: %x", t, chainId, account, hashes)
+			return nil
 		}
 	}
 	return fmt.Errorf("tx not found: %x", txHash)
@@ -167,21 +202,31 @@ func HasCrossChainTx(db ethdb.Database, t CrossChainTxType, chainId string, acco
 }
 
 func AppendUsedChildChainTx(db ethdb.Database, chainId string, account common.Address, txHash common.Hash) error {
+
+	logger.Infof("AppendUsedChildChainTx chain: %s, account: %x, tx: %x", chainId, account, txHash)
 	var hashes []common.Hash
 	key := calcUsedChildChainTxKey(chainId, account)
 	bs, err := db.Get(key)
 	if err == nil { // already exists
 		err = rlp.DecodeBytes(bs, &hashes)
 		if err != nil {
+			logger.Warnf("AppendUsedChildChainTx decode error: %v", err)
 			return err
 		}
 	}
 	hashes = append(hashes, txHash)
 	bs, err = rlp.EncodeToBytes(hashes)
 	if err != nil {
+		logger.Warnf("AppendUsedChildChainTx encode error: %v", err)
 		return err
 	}
-	return db.Put(key, bs)
+	err = db.Put(key, bs)
+	if err != nil {
+		logger.Warnf("AppendUsedChildChainTx db put error: %v", err)
+		return err
+	}
+	logger.Infof("AppendUsedChildChainTx chain: %s, account: %x, txs: %x", chainId, account, hashes)
+	return nil
 }
 
 func HasUsedChildChainTx(db ethdb.Database, chainId string, account common.Address, txHash common.Hash) bool {

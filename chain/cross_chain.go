@@ -440,6 +440,7 @@ func (cch *CrossChainHelper) SaveChildChainBlockToMainChain(bs []byte) error {
 				ci.EpochNumber = ep.Number
 				ci.Epoch = ep
 				core.SaveChainInfo(cch.chainInfoDB, ci)
+				logger.Infof("Epoch saved from chain: %s, epoch: %v", chainId, ep)
 			}
 		}
 	}

@@ -332,7 +332,7 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 
 			//set block here
 			conR.conS.blockFromMiner = re.Proposal
-			logger.Info("registerEventCallbacks received Request Event conR.conS.blockFromMiner has been set")
+			logger.Infof("registerEventCallbacks received Request Event conR.conS.blockFromMiner has been set with height: %v", conR.conS.blockFromMiner.NumberU64())
 		} else {
 			logger.Info("registerEventCallbacks received Request Event", "conR.conS.Height", conR.conS.Height, "conR.conS.Step", conR.conS.Step)
 		}
