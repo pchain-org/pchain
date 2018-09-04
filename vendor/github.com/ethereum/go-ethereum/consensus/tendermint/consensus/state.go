@@ -763,14 +763,19 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		if cs.isProposalComplete() {
 			cs.enterPrevote(height, cs.Round)
 		}
+	}()
 
-		// Save block to main chain.
-		// TODO: what if there're more than one round for a height? 'saveBlockToMainChain' would be called more than once?
-		if cs.state.TdmExtra.NeedToSave && bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
+	// Save block to main chain (this happens only on validator node).
+	// Note!!! This will BLOCK the WHOLE consensus stack since it blocks receiveRoutine.
+	// TODO: what if there're more than one round for a height? 'saveBlockToMainChain' would be called more than once
+	if cs.state.TdmExtra.NeedToSave {
+		if cs.privValidator != nil && bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
+			logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
 			lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
 			cs.saveBlockToMainChain(lastBlock)
+			cs.state.TdmExtra.NeedToSave = false
 		}
-	}()
+	}
 
 	// If we don't get the proposal and all block parts quick enough, enterPrevote
 	cs.scheduleTimeout(cs.timeoutParams.Propose(round), height, round, RoundStepPropose)
@@ -1398,6 +1403,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 				}
 				if cs.Round <= int(vote.Round) && prevotes.HasTwoThirdsAny() {
 					// Round-skip over to PrevoteWait or goto Precommit.
+					logger.Info("(cs *ConsensusState) VoteTypePrevote 2")
 					cs.enterNewRound(height, int(vote.Round)) // if the vote is ahead of us
 					if prevotes.HasTwoThirdsMajority() {
 						cs.enterPrecommit(height, int(vote.Round))
@@ -1558,7 +1564,8 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 			curNumber = tmpNumber
 		} else {
 			// we don't want to make too many rpc calls
-			time.Sleep(100 * time.Millisecond)
+			// TODO: estimate the right interval
+			time.Sleep(1 * time.Second)
 		}
 	}
 
