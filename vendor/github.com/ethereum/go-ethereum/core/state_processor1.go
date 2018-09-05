@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 )
@@ -80,7 +79,21 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 	} else {
 
-		glog.Infof("ApplyTransactionEx() 0, etd.FuncName is %v\n", etd.FuncName)
+		logger.Infof("ApplyTransactionEx() 0, etd.FuncName is %v\n", etd.FuncName)
+
+		// Pre-pay gas for extended tx.
+		gas := tx.Gas()
+		gasPrice := tx.GasPrice()
+		gasValue := new(big.Int).Mul(new(big.Int).SetUint64(gas), gasPrice)
+		from := msg.From()
+		if statedb.GetBalance(from).Cmp(gasValue) < 0 {
+			return nil, 0, fmt.Errorf("insufficient PAI for gas (%x). Req %v, has %v", from.Bytes()[:4], gasValue, statedb.GetBalance(from))
+		}
+		if err := gp.SubGas(gas); err != nil {
+			return nil, 0, err
+		}
+		statedb.SubBalance(from, gasValue)
+		logger.Infof("ApplyTransactionEx() 1, gas is %v, gasPrice is %v, gasValue is %v\n", gas, gasPrice, gasValue)
 
 		if applyCb := GetApplyCb(etd.FuncName); applyCb != nil {
 			cch.GetMutex().Lock()
@@ -90,6 +103,10 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 			}
 		}
 
+		*usedGas += gas
+		totalUsedMoney.Add(totalUsedMoney, gasValue)
+		logger.Infof("ApplyTransactionEx() 2, totalUsedMoney is %v\n", totalUsedMoney)
+
 		// Update the state with pending changes
 		var root []byte
 		if config.IsByzantium(header.Number) {
@@ -97,16 +114,17 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		} else {
 			root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 		}
-		*usedGas += 0
 		receipt := types.NewReceipt(root, true, *usedGas)
 		receipt.TxHash = tx.Hash()
-		receipt.GasUsed = 0
+		receipt.GasUsed = gas
 
 		// Set the receipt logs and create a bloom for filtering
 		receipt.Logs = statedb.GetLogs(tx.Hash())
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 		statedb.SetNonce(msg.From(), statedb.GetNonce(msg.From())+1)
+		logger.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
+
 		return receipt, 0, nil
 	}
 }
