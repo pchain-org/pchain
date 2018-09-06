@@ -567,6 +567,8 @@ func (w *work) commit(blockchain *core.BlockChain) (common.Hash, error) {
 		}
 	}(block, w.state.Logs(), w.receipts)
 
+	go blockchain.PostChainHeadEvents(block)
+
 	return blockHash, err
 }
 

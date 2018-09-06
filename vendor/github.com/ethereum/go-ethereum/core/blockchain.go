@@ -1234,6 +1234,10 @@ func (self *BlockChain) postChainEvents(events []interface{}, logs []*types.Log)
 	}
 }
 
+func (self *BlockChain) PostChainHeadEvents(block *types.Block) {
+	self.eventMux.Post(ChainHeadEvent{block})
+}
+
 func (self *BlockChain) update() {
 	futureTimer := time.Tick(5 * time.Second)
 	for {
