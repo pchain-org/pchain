@@ -1,30 +1,30 @@
 package ethereum
 
 import (
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/core"
-	"gopkg.in/urfave/cli.v1"
-
 	"github.com/ethereum/go-ethereum/cmd/geth"
+	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/consensus/tendermint"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/les"
-	"github.com/ethereum/go-ethereum/consensus/tendermint"
+	"github.com/ethereum/go-ethereum/node"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var clientIdentifier = "pchain" // Client identifier to advertise over the network
 
 // MakeSystemNode sets up a local node and configures the services to launch
 func MakeSystemNode(chainId, version string, ctx *cli.Context,
-                    pNode tendermint.PChainP2P, cch core.CrossChainHelper) *node.Node {
+	pNode tendermint.PChainP2P, cch core.CrossChainHelper) *node.Node {
 
 	stack, cfg := gethmain.MakeConfigNode(ctx, chainId)
 	//utils.RegisterEthService(stack, &cfg.Eth)
 	registerEthService(stack, &cfg.Eth, ctx, pNode, cch)
 
-	if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
-		utils.RegisterDashboardService(stack, &cfg.Dashboard, ""/*gitCommit*/)
+	if chainId == "pchain" && ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
+		// Only Main Chain can start the dashboard, the dashboard is still not complete
+		utils.RegisterDashboardService(stack, &cfg.Dashboard, "" /*gitCommit*/)
 	}
 	// Whisper must be explicitly enabled by specifying at least 1 whisper flag or in dev mode
 	shhEnabled := gethmain.EnableWhisper(ctx)
@@ -49,10 +49,9 @@ func MakeSystemNode(chainId, version string, ctx *cli.Context,
 	return stack
 }
 
-
 // registerEthService adds an Ethereum client to the stack.
 func registerEthService(stack *node.Node, cfg *eth.Config, cliCtx *cli.Context,
-                        pNode tendermint.PChainP2P, cch core.CrossChainHelper) {
+	pNode tendermint.PChainP2P, cch core.CrossChainHelper) {
 	var err error
 	if cfg.SyncMode == downloader.LightSync {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
