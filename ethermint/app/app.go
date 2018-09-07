@@ -231,7 +231,7 @@ func (app *EthermintApplication) validateTx(tx *ethTypes.Transaction) error {
 	}
 
 	etd := tx.ExtendTxData()
-	if etd == nil || etd.FuncName != "DepositInChildChain" { //TODO: DICCFuncName can't pass the check.
+	if etd == nil || (etd.FuncName != "DepositInChildChain" && etd.FuncName != "WithdrawFromMainChain") { //TODO: DICCFuncName/WFMCFuncName can't pass the check.
 		// Make sure the account exist. Non existent accounts
 		// haven't got funds and well therefor never pass.
 		if !currentState.Exist(from) {
