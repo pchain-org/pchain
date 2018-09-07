@@ -1434,6 +1434,8 @@ func (cs *ConsensusState) addProposalBlockPart(height int, part *types.Part, ver
 		} else if cs.Step == RoundStepCommit {
 			// If we're waiting on the proposal block...
 			cs.tryFinalizeCommit(height)
+		} else {
+			fmt.Printf("current step %v (height %v round %v) is not suitable for proposal", cs.Step, cs.Height, cs.Round)
 		}
 		return true, err
 	}
