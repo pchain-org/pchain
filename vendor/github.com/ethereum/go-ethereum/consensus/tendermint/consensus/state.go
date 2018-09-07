@@ -258,7 +258,6 @@ type ConsensusState struct {
 	cch core.CrossChainHelper
 
 	mtx   sync.Mutex
-	nhMtx sync.Mutex
 	RoundState
 	epoch *ep.Epoch
 	state *sm.State // State until height-1.
