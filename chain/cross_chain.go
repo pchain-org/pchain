@@ -326,7 +326,7 @@ func (cch *CrossChainHelper) GetTxFromChildChain(txHash common.Hash, chainId str
 
 // verify the signature of validators who voted for the block
 // most of the logic here is from 'VerifyHeader'
-func (cch *CrossChainHelper) VerifyChildChainBlock(from common.Address, bs []byte) error {
+func (cch *CrossChainHelper) VerifyChildChainBlock(bs []byte) error {
 
 	logger.Debugln("VerifyChildChainBlock - start")
 

@@ -55,9 +55,6 @@ const (
 	WFMC_ARGS_FROM    = "from"
 	WFMC_ARGS_CHAINID = "chainId"
 	WFMC_ARGS_TXHASH  = "txHash"
-
-	// Save Block To Main Chain Parameters
-	SB2MCFuncName_ARGS_FROM = "from"
 )
 
 type PublicChainAPI struct {
@@ -264,36 +261,6 @@ func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.
 		GasPrice:     nil,
 		Value:        nil,
 		Data:         nil,
-		Nonce:        nil,
-		ExtendTxData: etd,
-	}
-
-	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
-}
-
-func (s *PublicChainAPI) SaveBlockToMainChain(ctx context.Context, from common.Address, block []byte) (common.Hash, error) {
-
-	localChainId := s.b.ChainConfig().PChainId
-	if localChainId != "pchain" {
-		return common.Hash{}, errors.New("this api can only be called in main chain")
-	}
-
-	params := types.MakeKeyValueSet()
-	params.Set(SB2MCFuncName_ARGS_FROM, from)
-
-	etd := &types.ExtendTxData{
-		FuncName: SB2MCFuncName,
-		Params:   params,
-	}
-
-	data := hexutil.Bytes(block)
-	args := SendTxArgs{
-		From:         from,
-		To:           nil,
-		Gas:          nil,
-		GasPrice:     nil,
-		Value:        nil,
-		Data:         &data,
 		Nonce:        nil,
 		ExtendTxData: etd,
 	}
@@ -666,12 +633,9 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossCha
 }
 
 func sb2mc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
 
-	from, _ := etd.GetAddress(SB2MCFuncName_ARGS_FROM)
 	block := []byte(tx.Data())
-
-	err := cch.VerifyChildChainBlock(from, block)
+	err := cch.VerifyChildChainBlock(block)
 	if err != nil {
 		return errors.New("block does not pass verification")
 	}

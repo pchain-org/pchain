@@ -18,6 +18,7 @@ import (
 	"io/ioutil"
 	_ "net/http/pprof"
 	"time"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var logger = plogger.GetLogger("tendermint")
@@ -50,7 +51,7 @@ type Node struct {
 	cch     core.CrossChainHelper
 }
 
-func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBook *p2p.AddrBook, cch core.CrossChainHelper) *Node {
+func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.ChainConfig, sw *p2p.Switch, addrBook *p2p.AddrBook, cch core.CrossChainHelper) *Node {
 	// Get PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
 	keydir := config.GetString("keystore")
@@ -59,7 +60,7 @@ func NewNodeNotStart(backend *backend, config cfg.Config, sw *p2p.Switch, addrBo
 	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
 
 	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(config, backend, cch)
+	consensusState := consensus.NewConsensusState(backend, config, chainConfig, cch)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
@@ -293,7 +294,7 @@ func ProtocolAndAddress(listenAddr string) (string, string) {
 	return protocol, address
 }
 
-func MakeTendermintNode(backend *backend, config cfg.Config, pNode PChainP2P, cch core.CrossChainHelper) *Node {
+func MakeTendermintNode(backend *backend, config cfg.Config, chainConfig *params.ChainConfig, pNode PChainP2P, cch core.CrossChainHelper) *Node {
 
 	genDocFile := config.GetString("genesis_file")
 	if !cmn.FileExists(genDocFile) {
@@ -319,5 +320,5 @@ func MakeTendermintNode(backend *backend, config cfg.Config, pNode PChainP2P, cc
 		}
 	}
 
-	return NewNodeNotStart(backend, config, pNode.Switch(), pNode.AddrBook(), cch)
+	return NewNodeNotStart(backend, config, chainConfig, pNode.Switch(), pNode.AddrBook(), cch)
 }

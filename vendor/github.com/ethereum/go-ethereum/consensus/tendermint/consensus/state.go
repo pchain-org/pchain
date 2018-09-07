@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"crypto/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
 	consss "github.com/ethereum/go-ethereum/consensus"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
@@ -15,9 +16,12 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
+	crypto2 "github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"golang.org/x/net/context"
 	"math/big"
@@ -253,6 +257,7 @@ type ConsensusState struct {
 	BaseService
 
 	config        cfg.Config
+	chainConfig   *params.ChainConfig
 	privValidator PrivValidator // for signing votes
 
 	cch core.CrossChainHelper
@@ -284,10 +289,10 @@ type ConsensusState struct {
 	node Node
 }
 
-func NewConsensusState(config cfg.Config, backend Backend, cch core.CrossChainHelper) *ConsensusState {
+func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.ChainConfig, cch core.CrossChainHelper) *ConsensusState {
 	cs := &ConsensusState{
-		config: config,
-		//blockStore:       blockStore,
+		config:           config,
+		chainConfig:      chainConfig,
 		cch:              cch,
 		peerMsgQueue:     make(chan msgInfo, msgQueueSize),
 		internalMsgQueue: make(chan msgInfo, msgQueueSize),
@@ -1535,7 +1540,28 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 		return
 	}
 
-	hash, err := client.SaveBlockToMainChain(ctx, common.BytesToAddress(cs.privValidator.GetAddress()), bs)
+	// TODO: logic here is copied from PublicTransactionPoolAPI.SendTransaction and KeyStore.SignTx
+	var chainID *big.Int
+	if config := cs.chainConfig; config.IsEIP155(number) {
+		chainID = config.ChainId // use child ChainId?
+	}
+	// Depending on the presence of the chain ID, sign with EIP155 or homestead
+	var s ethTypes.Signer = ethTypes.HomesteadSigner{}
+	if chainID != nil {
+		s = ethTypes.NewEIP155Signer(chainID)
+	}
+
+	var prv *ecdsa.PrivateKey
+	if prvValidator, ok := cs.privValidator.(*types.PrivValidator); ok {
+		prv, err = crypto.ToECDSA(prvValidator.PrivKey.(crypto2.EtherumPrivKey))
+		if err != nil {
+			logger.Errorf("saveBlockToMainChain: PrivateKey error: %v", err)
+			return
+		}
+	} else {
+		panic("saveBlockToMainChain: unexpected privValidator type")
+	}
+	hash, err := client.SendBlockToMainChain(ctx, cs.state.TdmExtra.ChainID, bs, s, common.BytesToAddress(cs.privValidator.GetAddress()), prv)
 	if err != nil {
 		logger.Errorf("saveBlockToMainChain(rpc) failed, err: %v", err)
 		return

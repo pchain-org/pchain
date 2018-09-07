@@ -28,7 +28,7 @@ type CrossChainHelper interface {
 
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
 	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction
-	VerifyChildChainBlock(from common.Address, bs []byte) error
+	VerifyChildChainBlock(bs []byte) error
 	SaveChildChainBlockToMainChain(bs []byte) error
 
 	// these should operate on the main chain db

@@ -2,8 +2,11 @@ package ethclient
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/pkg/errors"
 	"math/big"
 )
 
@@ -18,17 +21,38 @@ func (ec *Client) BlockNumber(ctx context.Context) (*big.Int, error) {
 	return (*big.Int)(&hex), nil
 }
 
-// SaveBlockToMainChain save a block to main chain
-func (ec *Client) SaveBlockToMainChain(ctx context.Context, from common.Address, data []byte) (common.Hash, error) {
+// SaveBlockToMainChain save a block to main chain through eth_sendRawTransaction
+func (ec *Client) SendBlockToMainChain(ctx context.Context, chainId string, data []byte, signer types.Signer, account common.Address, prv *ecdsa.PrivateKey) (common.Hash, error) {
 
-	var res common.Hash
+	if chainId == "" || chainId == "pchain" {
+		return common.Hash{}, errors.New("invalid child chainId")
+	}
 
-	// 'from' here is the validator of child-chain, we need to ensure this account exists&unlocked in main-chain because we use this account to sign tx in main-chain.
-	// TODO: Consider to send raw tx to main-chain.
-	err := ec.c.CallContext(ctx, &res, "chain_saveBlockToMainChain", from, data)
+	// extend tx data
+	etd := &types.ExtendTxData{
+		FuncName: "SaveBlockToMainChain",
+	}
+
+	// nonce
+	nonce, err := ec.NonceAt(ctx, account, nil)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	return res, nil
+	// tx
+	tx := types.NewTransactionEx(nonce, nil, nil, 0, nil, data, etd)
+
+	// sign the tx
+	signedTx, err := types.SignTx(tx, signer, prv)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	// eth_sendRawTransaction
+	err = ec.SendTransaction(ctx, signedTx)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	return tx.Hash(), nil
 }

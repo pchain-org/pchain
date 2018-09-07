@@ -41,7 +41,7 @@ func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 		//recentMessages:   recentMessages,
 		//knownMessages:    knownMessages,
 	}
-	backend.core = MakeTendermintNode(backend, config, pNode, cch)
+	backend.core = MakeTendermintNode(backend, config, chainConfig, pNode, cch)
 	return backend
 }
 
