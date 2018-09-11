@@ -9,7 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/pchain/ethermint/ethereum"
@@ -127,17 +126,6 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey 
 		return errors.New(fmt.Sprintf("Child Chain %s not exist, try use other name instead", chainId))
 	}
 
-	// Check PubKey match the Address
-	pubkeySlice := ethcrypto.FromECDSAPub(ethcrypto.ToECDSAPub(common.FromHex(pubkey)))
-	if pubkeySlice == nil {
-		return errors.New("your Public Key is not valid, please provide a valid Public Key")
-	}
-
-	validatorPubkey := crypto.EtherumPubKey(pubkeySlice)
-	if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
-		return errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
-	}
-
 	// Check if already joined the chain
 	find := false
 	for _, joined := range ci.JoinedValidators {
@@ -172,7 +160,7 @@ func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, 
 	}
 
 	jv := core.JoinedValidator{
-		PubKey:        crypto.EtherumPubKey(common.FromHex(pubkey)),
+		PubKey:        crypto.BLSPubKey(common.FromHex(pubkey)),
 		Address:       from,
 		DepositAmount: depositAmount,
 	}

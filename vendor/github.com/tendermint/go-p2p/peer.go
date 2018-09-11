@@ -192,6 +192,11 @@ func (p *Peer) Addr() net.Addr {
 	return p.conn.RemoteAddr()
 }
 
+// Returns the peer's IP address and port.
+func (p *Peer) PeerNetAddr() string {
+	return p.ListenAddr
+}
+
 // PubKey returns peer's public key.
 func (p *Peer) PubKey() crypto.PubKeyEd25519 {
 	if p.config.AuthEnc {
@@ -279,6 +284,11 @@ func (p *Peer) Equals(other *Peer) bool {
 // Get the data for a given key.
 func (p *Peer) Get(key string) interface{} {
 	return p.Data.Get(key)
+}
+
+// Key returns the peer's id key.
+func (p *Peer) PeerKey() string {
+	return p.Key
 }
 
 // IsInTheSameNetwork Check the Peer if it's in the same chain

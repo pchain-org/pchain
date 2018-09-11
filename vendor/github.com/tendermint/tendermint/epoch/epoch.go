@@ -455,8 +455,6 @@ func (epoch *Epoch) EnterNewEpoch(height int) (*Epoch, []*abciTypes.RefundValida
 				plog.Warnln("Error changing validator set", "error", err)
 				return nil, nil, err
 			}
-			// Update validator accums and set state variables
-			nextEpoch.Validators.IncrementAccum(1)
 
 			nextEpoch.NextEpoch = nil //suppose we will not generate a more epoch after next-epoch
 			plog.Infof("Enter into New Epoch %v", nextEpoch)

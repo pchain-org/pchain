@@ -7,9 +7,10 @@ import (
 	"github.com/tendermint/ed25519"
 	"github.com/tendermint/ed25519/extra25519"
 	. "github.com/tendermint/go-common"
-	data "github.com/tendermint/go-data"
+	"github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"bls"
 )
 
 // PrivKey is part of PrivAccount and state.PrivValidator.
@@ -24,10 +25,12 @@ type PrivKey interface {
 const (
 	TypeEd25519   = byte(0x01)
 	TypeSecp256k1 = byte(0x02)
-	TypeEtherum   = byte(0x03)
+	TypeEthereum   = byte(0x03)
+	TypeBls       = byte(0x04)
 	NameEd25519   = "ed25519"
 	NameSecp256k1 = "secp256k1"
-	NameEtherum    = "etherum"
+	NameEthereum    = "ethereum"
+	NameBls        = "bls"
 )
 
 var privKeyMapper data.Mapper
@@ -37,7 +40,8 @@ func init() {
 	privKeyMapper = data.NewMapper(PrivKeyS{}).
 		RegisterImplementation(PrivKeyEd25519{}, NameEd25519, TypeEd25519).
 		RegisterImplementation(PrivKeySecp256k1{}, NameSecp256k1, TypeSecp256k1).
-	        RegisterImplementation(EtherumPrivKey{}, NameEtherum, TypeEtherum)
+		RegisterImplementation(EthereumPrivKey{}, NameEthereum, TypeEthereum).
+		RegisterImplementation(BLSPrivKey{}, NameBls, TypeBls)
 
 }
 
@@ -201,30 +205,30 @@ func (privKey PrivKeySecp256k1) String() string {
 }
 
 
-type EtherumPrivKey []byte
+type EthereumPrivKey []byte
 
-func (privKey EtherumPrivKey) Bytes() []byte {
+func (privKey EthereumPrivKey) Bytes() []byte {
 	return wire.BinaryBytes(struct{ PrivKey }{privKey})
 }
 
-func (privKey EtherumPrivKey) Sign(msg []byte) Signature {
+func (privKey EthereumPrivKey) Sign(msg []byte) Signature {
 	priv := ethcrypto.ToECDSA(privKey)
 	msg = ethcrypto.Keccak256(msg)
 	sig, err := ethcrypto.Sign(msg, priv)
 	if err != nil {
 		return nil
 	}
-	return EtherumSignature(sig)
+	return EthereumSignature(sig)
 }
 
-func (privKey EtherumPrivKey) PubKey() PubKey {
+func (privKey EthereumPrivKey) PubKey() PubKey {
 	priv := ethcrypto.ToECDSA(privKey)
 	pubKey := ethcrypto.FromECDSAPub(&priv.PublicKey)
-	return EtherumPubKey(pubKey)
+	return EthereumPubKey(pubKey)
 }
 
-func (privKey EtherumPrivKey) Equals(other PrivKey) bool {
-	if otherEd, ok := other.(EtherumPrivKey); ok {
+func (privKey EthereumPrivKey) Equals(other PrivKey) bool {
+	if otherEd, ok := other.(EthereumPrivKey); ok {
 		return bytes.Equal(privKey[:], otherEd[:])
 	} else {
 		return false
@@ -232,12 +236,12 @@ func (privKey EtherumPrivKey) Equals(other PrivKey) bool {
 }
 
 
-func (privKey EtherumPrivKey) MarshalJSON() ([]byte, error) {
+func (privKey EthereumPrivKey) MarshalJSON() ([]byte, error) {
 	return data.Encoder.Marshal(privKey[:])
 }
 
 
-func (privKey *EtherumPrivKey) UnmarshalJSON(enc []byte) error {
+func (privKey *EthereumPrivKey) UnmarshalJSON(enc []byte) error {
 	var ref []byte
 	err := data.Encoder.Unmarshal(&ref, enc)
 	copy((*privKey)[:], ref)
@@ -273,4 +277,51 @@ func GenPrivKeySecp256k1FromSecret(secret []byte) PrivKeySecp256k1 {
 	privKeyBytes := [32]byte{}
 	copy(privKeyBytes[:], priv.Serialize())
 	return PrivKeySecp256k1(privKeyBytes)
+}
+
+
+//-------------------------------------
+type BLSPrivKey []byte
+func (privKey BLSPrivKey) Bytes() []byte {
+	return privKey
+}
+
+func (privKey BLSPrivKey) getElement() *bls.PrivateKey {
+	sk := &bls.PrivateKey{}
+	err := sk.Unmarshal(privKey)
+	if err != nil {
+		return nil
+	} else {
+		return sk
+	}
+}
+
+func (privKey BLSPrivKey) PubKey() PubKey {
+	pub := privKey.getElement().Public()
+	return BLSPubKey(pub.Marshal())
+}
+
+func (privKey BLSPrivKey) Sign(msg []byte) Signature {
+	sk := privKey.getElement()
+	sign := bls.Sign(sk, msg)
+	return BLSSignature(sign.Marshal())
+}
+
+func (privKey BLSPrivKey) Equals(other PrivKey) bool {
+	if otherSk,ok := other.(BLSPrivKey); ok {
+		return bytes.Equal(privKey, otherSk)
+	} else {
+		return false
+	}
+}
+
+func (privKey BLSPrivKey) MarshalJSON() ([]byte, error) {
+	return data.Encoder.Marshal(privKey)
+}
+
+func (privKey *BLSPrivKey) UnmarshalJSON(enc []byte) error {
+	var ref []byte
+	err := data.Encoder.Unmarshal(&ref, enc)
+	copy(*privKey, ref)
+	return err
 }

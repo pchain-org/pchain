@@ -15,10 +15,10 @@ import (
 
 	validatorsStrategy "github.com/pchain/ethermint/strategies/validators"
 
-	"errors"
 	"github.com/pchain/common/plogger"
 	"github.com/pchain/ethermint/tendermint"
 	"github.com/tendermint/abci/server"
+	"github.com/syndtr/goleveldb/leveldb/errors"
 	cmn "github.com/tendermint/go-common"
 	tmTypes "github.com/tendermint/tendermint/types"
 	"io/ioutil"
@@ -27,7 +27,6 @@ import (
 var log = plogger.GetLogger("cmd")
 
 var EthermintCmd = ethermintCmd
-
 func ethermintCmd(chainId string, ctx *cli.Context, quit chan int) error {
 
 	config = GetTendermintConfig(chainId, ctx)

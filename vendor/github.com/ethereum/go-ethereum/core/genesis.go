@@ -51,6 +51,8 @@ type Genesis struct {
 		Balance string
 		Nonce   string
 		Amount  string
+		PubKey  string
+		ConsensusPubKey string
 	}
 }
 

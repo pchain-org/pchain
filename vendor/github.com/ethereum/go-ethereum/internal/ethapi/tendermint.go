@@ -420,7 +420,7 @@ func revealVote_ValidateCb(tx *types.Transaction, state *st.StateDB, cch core.Cr
 		return errors.New("your Public Key is not valid, please provide a valid Public Key")
 	}
 
-	validatorPubkey := crypto.EtherumPubKey(pubkeySlice)
+	validatorPubkey := crypto.EthereumPubKey(pubkeySlice)
 	if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
 		return errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
 	}

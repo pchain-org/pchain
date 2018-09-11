@@ -3,7 +3,7 @@
 在开发和部署时，从github上下载完成以后，需要进行如下调整：
 
 1，在当前目录下创建
-.\src\github.com\tendermint\ethermint\，
+.\src\github.com\pchain，
 将除了 !!restore!!, .git, !!readmefirst!!.txt 这3个目录和文件以外的所有文件都移至新创建的目录下
 
 2，将 !!restore!!目录下的所有内容拷贝到当前目录

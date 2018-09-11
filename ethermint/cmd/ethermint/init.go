@@ -112,16 +112,24 @@ func initEthGenesis(ctx *cli.Context) error {
 			Balance string
 			Nonce   string
 			Amount  string
+			PubKey  string
+			ConsensusPubKey string
 		}{},
 	}
 	for i, validator := range validators {
-		coreGenesis.Alloc[common.ToHex(validator.Address)] = struct {
-			Code    string
-			Storage map[string]string
-			Balance string
-			Nonce   string
-			Amount  string
-		}{Balance: balanceAmounts[i].balance, Amount: balanceAmounts[i].amount}
+		otherConPub, l := validator.PubKey.(crypto.BLSPubKey)
+		otherEthPub, r := validator.EthereumPubKey.(crypto.EthereumPubKey)
+		if l&&r {
+			coreGenesis.Alloc[common.ToHex(validator.EthereumPubKey.Address())] = struct {
+				Code    string
+				Storage map[string]string
+				Balance string
+				Nonce   string
+				Amount  string
+				PubKey  string
+				ConsensusPubKey string
+			}{Balance: balanceAmounts[i].balance, Amount:balanceAmounts[i].amount, PubKey: common.ToHex(otherEthPub[:]), ConsensusPubKey:common.ToHex(otherConPub[:])}
+		}
 	}
 
 	contents, err := json.Marshal(coreGenesis)
@@ -129,6 +137,18 @@ func initEthGenesis(ctx *cli.Context) error {
 		utils.Fatalf("marshal coreGenesis failed")
 		return err
 	}
+
+	var object interface{}
+	err = json.Unmarshal(contents, &object)
+	if err != nil {
+		utils.Fatalf("write eth_genesis_file failed")
+	}
+	contents, err = json.MarshalIndent(object, "", "\t")
+
+	if err != nil {
+		utils.Fatalf("write eth_genesis_file failed")
+	}
+
 	ethGenesisPath := config.GetString("eth_genesis_file")
 	if err = ioutil.WriteFile(ethGenesisPath, contents, 0654); err != nil {
 		utils.Fatalf("write eth_genesis_file failed")
@@ -161,12 +181,12 @@ func init_em_files(genesisPath string) error {
 	gensisFile, err := os.Open(genesisPath)
 	defer gensisFile.Close()
 	if err != nil {
-		utils.Fatalf("failed to read etherume genesis file: %v", err)
+		utils.Fatalf("failed to read Ethereume genesis file: %v", err)
 		return err
 	}
 	contents, err := ioutil.ReadAll(gensisFile)
 	if err != nil {
-		utils.Fatalf("failed to read etherume genesis file: %v", err)
+		utils.Fatalf("failed to read Ethereume genesis file: %v", err)
 		return err
 	}
 	var coreGenesis = core.Genesis{}
@@ -239,11 +259,12 @@ func createPriValidators(num int) []*types.PrivValidator {
 	privValFile := config.GetString("priv_validator_file_root")
 	for i := 0; i < num; i++ {
 		validators[i], newKey = types.GenPrivValidatorKey()
-		privKey := validators[i].PrivKey.(crypto.EtherumPrivKey)
+		privKey := validators[i].EthereumPrivKey.(crypto.EthereumPrivKey)
 		pwd := common.ToHex(privKey[0:7])
 		pwd = string([]byte(pwd)[2:])
 		pwd = strings.ToUpper(pwd)
-		fmt.Println("account:", common.ToHex(validators[i].Address), "pwd:", pwd)
+		pwd = "pchain"
+		fmt.Println("account:",common.ToHex(validators[i].Address), "pwd:", pwd)
 		a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
 		if err := ks.StoreKey(a.URL.Path, newKey, pwd); err != nil {
 			utils.Fatalf("store key failed")

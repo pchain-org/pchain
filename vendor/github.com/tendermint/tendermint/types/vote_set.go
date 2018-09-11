@@ -108,6 +108,10 @@ func (voteSet *VoteSet) Type() byte {
 	}
 }
 
+func (voteSet *VoteSet) Votes() []*Vote {
+	return voteSet.votes
+}
+
 func (voteSet *VoteSet) Size() int {
 	if voteSet == nil {
 		return 0
@@ -457,30 +461,6 @@ func (voteSet *VoteSet) StringShort() string {
 	defer voteSet.mtx.Unlock()
 	return fmt.Sprintf(`VoteSet{H:%v R:%v T:%v +2/3:%v %v %v}`,
 		voteSet.height, voteSet.round, voteSet.type_, voteSet.maj23, voteSet.votesBitArray, voteSet.peerMaj23s)
-}
-
-//--------------------------------------------------------------------------------
-// Commit
-
-func (voteSet *VoteSet) MakeCommit() *Commit {
-	if voteSet.type_ != VoteTypePrecommit {
-		PanicSanity("Cannot MakeCommit() unless VoteSet.Type is VoteTypePrecommit")
-	}
-	voteSet.mtx.Lock()
-	defer voteSet.mtx.Unlock()
-
-	// Make sure we have a 2/3 majority
-	if voteSet.maj23 == nil {
-		PanicSanity("Cannot MakeCommit() unless a blockhash has +2/3")
-	}
-
-	// For every validator, get the precommit
-	votesCopy := make([]*Vote, len(voteSet.votes))
-	copy(votesCopy, voteSet.votes)
-	return &Commit{
-		BlockID:    *voteSet.maj23,
-		Precommits: votesCopy,
-	}
 }
 
 //--------------------------------------------------------------------------------

@@ -15,6 +15,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
+	"bls"
 )
 
 const (
@@ -48,6 +50,9 @@ type PrivValidator struct {
 
 	// PrivKey should be empty if a Signer other than the default is being used.
 	PrivKey crypto.PrivKey `json:"priv_key"`
+	EthereumPubKey  crypto.PubKey `json:"ethereum_pub_key"`
+	EthereumPrivKey crypto.PrivKey `json:"ethereum_priv_key"`
+	EthereumAddress []byte         `json:"ethereum_address"`
 	Signer  `json:"-"`
 
 	// For persistence.
@@ -94,19 +99,32 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 	if err != nil {
 		return nil,nil
 	}
-	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
-	privKey := crypto.EtherumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
+	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
+	privKey := crypto.EthereumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
+	keyPair := bls.GenerateKey()
+	blsPrivKey := crypto.BLSPrivKey(keyPair.Private().Marshal())
+	blsPubKey := blsPrivKey.PubKey()
+	fmt.Println("start")
+	fmt.Println(common.ToHex(blsPrivKey.Bytes()))
+	fmt.Println(common.ToHex(blsPrivKey.PubKey().Bytes()))
+	msg := "hello world"
+	sign := blsPrivKey.Sign([]byte(msg))
+	fmt.Println("verify:", blsPrivKey.PubKey().VerifyBytes([]byte(msg), sign))
+	fmt.Println(common.ToHex(blsPrivKey.PubKey().Bytes()))
 	return &PrivValidator{
-		Address:       pubKey.Address(),
-		PubKey:        pubKey,
-		PrivKey:       privKey,
+		Address:       blsPubKey.Address(),
+		PubKey:        blsPubKey,
+		PrivKey:       blsPrivKey,
+		EthereumAddress:    pubKey.Address(),
+		EthereumPrivKey:    privKey,
+		EthereumPubKey:     pubKey,
 		LastHeight:    0,
 		LastRound:     0,
 		LastStep:      stepNone,
 		LastSignature: nil,
 		LastSignBytes: nil,
 		filePath:      "",
-		Signer:        NewDefaultSigner(privKey),
+		Signer:        NewDefaultSigner(blsPrivKey),
 	}, newKey
 
 }
@@ -125,20 +143,32 @@ func GenPrivValidator(keydir string) *PrivValidator {
 	if err := ks.StoreKey(a.URL.Path, newKey, "pchain"); err != nil {
 		return nil
 	}
-	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
-	privKey := crypto.EtherumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
-	fmt.Println(len(privKey), len(pubKey), len(pubKey.Address()))
+	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
+	privKey := crypto.EthereumPrivKey (ethcrypto.FromECDSA(newKey.PrivateKey))
+	keyPair := bls.GenerateKey()
+	blsPrivKey := crypto.BLSPrivKey(keyPair.Private().Marshal())
+	blsPubKey := blsPrivKey.PubKey()
+	fmt.Println("start")
+	fmt.Println(common.ToHex(blsPrivKey.Bytes()))
+	fmt.Println(common.ToHex(blsPrivKey.PubKey().Bytes()))
+	msg := "hello world"
+	sign := blsPrivKey.Sign([]byte(msg))
+	fmt.Println("verify:", blsPrivKey.PubKey().VerifyBytes([]byte(msg), sign))
+	fmt.Println(common.ToHex(blsPrivKey.PubKey().Bytes()))
 	return &PrivValidator{
-		Address:       pubKey.Address(),
-		PubKey:        pubKey,
-		PrivKey:       privKey,
+		Address:       blsPubKey.Address(),
+		PubKey:        blsPubKey,
+		PrivKey:       blsPrivKey,
+		EthereumAddress:    pubKey.Address(),
+		EthereumPrivKey:    privKey,
+		EthereumPubKey:     pubKey,
 		LastHeight:    0,
 		LastRound:     0,
 		LastStep:      stepNone,
 		LastSignature: nil,
 		LastSignBytes: nil,
 		filePath:      "",
-		Signer:        NewDefaultSigner(privKey),
+		Signer:        NewDefaultSigner(blsPrivKey),
 	}
 }
 
@@ -209,6 +239,11 @@ func (privVal *PrivValidator) GetAddress() []byte {
 	return privVal.Address
 }
 
+// GetPubKey returns the public key of the validator.
+func (privVal *PrivValidator) GetPubKey() crypto.PubKey {
+	return privVal.PubKey
+}
+
 func (privVal *PrivValidator) SignVote(chainID string, vote *Vote) error {
 	privVal.mtx.Lock()
 	defer privVal.mtx.Unlock()
@@ -217,6 +252,7 @@ func (privVal *PrivValidator) SignVote(chainID string, vote *Vote) error {
 		return errors.New(Fmt("Error signing vote: %v", err))
 	}
 	vote.Signature = signature
+	vote.SignBytes = SignBytes(chainID, vote)
 	return nil
 }
 

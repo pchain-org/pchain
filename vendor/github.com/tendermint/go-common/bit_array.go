@@ -32,6 +32,23 @@ func (bA *BitArray) Size() int {
 	return bA.Bits
 }
 
+// Returns number of bits set in the bit array.
+func (bA *BitArray) NumBitsSet() int {
+	var numBits int = 0
+
+	if bA == nil {
+		return 0
+	}
+	bA.mtx.Lock()
+	defer bA.mtx.Unlock()
+	for i := 0; i < bA.Bits; i++ {
+		if bA.getIndex(i) == true {
+			numBits++
+		}
+	}
+	return numBits
+}
+
 // NOTE: behavior is undefined if i >= bA.Bits
 func (bA *BitArray) GetIndex(i int) bool {
 	if bA == nil {

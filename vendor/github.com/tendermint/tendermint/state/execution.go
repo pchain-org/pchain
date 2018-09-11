@@ -91,13 +91,13 @@ func execBlockOnProxyApp(eventCache types.Fireable, proxyAppConn proxy.AppConnCo
 // return a bit array of validators that signed the last commit
 // NOTE: assumes commits have already been authenticated
 func commitBitArrayFromBlock(block *types.Block) *BitArray {
-	signed := NewBitArray(len(block.LastCommit.Precommits))
-	for i, precommit := range block.LastCommit.Precommits {
-		if precommit != nil {
-			signed.SetIndex(i, true) // val_.LastCommitHeight = block.Height - 1
-		}
-	}
-	return signed
+	//signed := NewBitArray(len(block.LastCommit.Precommits))
+	//for i, precommit := range block.LastCommit.Precommits {
+		//if precommit != nil {
+			//signed.SetIndex(i, true) // val_.LastCommitHeight = block.Height - 1
+		//}
+	//}
+	return block.LastCommit.BitArray.Copy()
 }
 
 //-----------------------------------------------------
@@ -116,7 +116,7 @@ func (s *State) validateBlock(block *types.Block) error {
 
 	// Validate block LastCommit.
 	if block.Height == 1 {
-		if len(block.LastCommit.Precommits) != 0 {
+		if block.LastCommit.Size() != 0 {
 			return errors.New("Block at height 1 (first block) should have no LastCommit precommits")
 		}
 	} else {
@@ -131,7 +131,13 @@ func (s *State) validateBlock(block *types.Block) error {
 		//fmt.Printf("(s *State) validateBlock(), avoid LastValidators and LastCommit.Precommits size check for validatorset change\n")
 		lastValidators, _, err := s.GetValidators()
 
-		if err != nil && lastValidators != nil {
+		if err == nil && lastValidators != nil {
+			if block.LastCommit.Size() != lastValidators.Size() {
+				fmt.Printf("validateBlock(), LastCommit.Precommits are: %v, LastValidators are: %v\n",
+					block.LastCommit.BitArray, lastValidators)
+				return errors.New(Fmt("Invalid block commit size. Expected %v, got %v",
+					lastValidators.Size(), block.LastCommit.Size()))
+			}
 			err = lastValidators.VerifyCommit(
 				s.ChainID, s.LastBlockID, block.Height-1, block.LastCommit)
 		}

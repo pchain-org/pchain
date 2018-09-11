@@ -349,6 +349,9 @@ func (n *Node) OnStart1() error {
 	if n.privValidator != nil {
 		consensusState.SetPrivValidator(n.privValidator)
 	}
+
+	//TODO: The node info may not be ready???
+	consensusState.SetNodeInfo(n.sw.NodeInfo())
 	consensusReactor := consensus.NewConsensusReactor(consensusState, fastSync)
 
 	// Add Reactor to P2P Switch
