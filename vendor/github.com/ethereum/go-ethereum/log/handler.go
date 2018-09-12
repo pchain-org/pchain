@@ -9,9 +9,7 @@ import (
 	"runtime"
 	"sync"
 
-	"io/ioutil"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/go-stack/stack"
@@ -147,25 +145,27 @@ func RotatingFileHandler(path string, limit uint, formatter Format) (Handler, er
 	if err := os.MkdirAll(path, 0700); err != nil {
 		return nil, err
 	}
-	files, err := ioutil.ReadDir(path)
-	if err != nil {
-		return nil, err
-	}
-	re := regexp.MustCompile(`\.log$`)
-	last := len(files) - 1
-	for last >= 0 && (!files[last].Mode().IsRegular() || !re.MatchString(files[last].Name())) {
-		last--
-	}
-	var counter *countingWriter
-	if last >= 0 && files[last].Size() < int64(limit) {
-		// Open the last file, and continue to write into it until it's size reaches the limit.
-		if counter, err = prepFile(filepath.Join(path, files[last].Name())); err != nil {
+	/*
+		files, err := ioutil.ReadDir(path)
+		if err != nil {
 			return nil, err
 		}
-	}
-	if counter == nil {
-		counter = new(countingWriter)
-	}
+		re := regexp.MustCompile(`\.log$`)
+		last := len(files) - 1
+		for last >= 0 && (!files[last].Mode().IsRegular() || !re.MatchString(files[last].Name())) {
+			last--
+		}
+		var counter *countingWriter
+		if last >= 0 && files[last].Size() < int64(limit) {
+			// Open the last file, and continue to write into it until it's size reaches the limit.
+			if counter, err = prepFile(filepath.Join(path, files[last].Name())); err != nil {
+				return nil, err
+			}
+		}
+		if counter == nil {
+			counter = new(countingWriter)
+		}*/
+	counter := new(countingWriter)
 	h := StreamHandler(counter, formatter)
 
 	return FuncHandler(func(r *Record) error {

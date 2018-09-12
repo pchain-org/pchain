@@ -1,10 +1,7 @@
 package log
 
 import (
-	"github.com/ethereum/go-ethereum/log/term"
 	"github.com/mattn/go-colorable"
-	"io"
-	"os"
 	"sync"
 )
 
@@ -25,19 +22,16 @@ func NewLogger(chainID, logDir string, logLevel int, fileLine bool, vmodule, bac
 	// logging
 	PrintOrigins(fileLine)
 
-	usecolor := term.IsTty(os.Stderr.Fd()) && os.Getenv("TERM") != "dumb"
-	output := io.Writer(os.Stderr)
-	if usecolor {
-		output = colorable.NewColorableStderr()
-	}
-	ostream := StreamHandler(output, TerminalFormat(usecolor))
+	output := colorable.NewColorableStdout()
+	ostream := StreamHandler(output, TerminalFormat(true))
 	glogger := NewGlogHandler(ostream)
 
 	if logDir != "" {
 		rfh, err := RotatingFileHandler(
 			logDir,
-			262144,
-			JSONFormatOrderedEx(false, true),
+			2*1024*1024,
+			TerminalFormat(false),
+			//JSONFormatOrderedEx(false, true),
 		)
 		if err != nil {
 			panic(err)
