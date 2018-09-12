@@ -25,11 +25,9 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pchain/common/plogger"
 )
-
-var logger = plogger.GetLogger("core")
 
 type CrossChainTxType byte
 
@@ -139,7 +137,7 @@ func WriteChildChainBlock(db ethdb.Database, block *types.Block) error {
 }
 
 func MarkCrossChainTx(db ethdb.Database, t CrossChainTxType, from common.Address, chainId string, txHash common.Hash, used bool) error {
-	logger.Infof("MarkCrossChainTx %v: account: %x, chain: %s, tx: %x, used: %v", t, from, chainId, txHash, used)
+	log.Infof("MarkCrossChainTx %v: account: %x, chain: %s, tx: %x, used: %v", t, from, chainId, txHash, used)
 
 	key := calcCrossChainTxKey(t, from, chainId, txHash)
 	var value []byte
@@ -155,14 +153,14 @@ func MarkCrossChainTx(db ethdb.Database, t CrossChainTxType, from common.Address
 	}
 	err := db.Put(key, value)
 	if err != nil {
-		logger.Warnf("MarkCrossChainTx db put error: %v", err)
+		log.Warnf("MarkCrossChainTx db put error: %v", err)
 		return err
 	}
 	return nil
 }
 
 func ValidateCrossChainTx(db ethdb.Database, t CrossChainTxType, from common.Address, chainId string, txHash common.Hash) CrossChainTxState {
-	logger.Infof("ValidateCrossChainTx %v: account: %x, chain: %s, tx: %x", t, from, chainId, txHash)
+	log.Infof("ValidateCrossChainTx %v: account: %x, chain: %s, tx: %x", t, from, chainId, txHash)
 
 	key := calcCrossChainTxKey(t, from, chainId, txHash)
 	value, err := db.Get(key)
@@ -182,19 +180,19 @@ func ValidateCrossChainTx(db ethdb.Database, t CrossChainTxType, from common.Add
 }
 
 func MarkTxUsedOnChildChain(db ethdb.Database, from common.Address, chainId string, txHash common.Hash) error {
-	logger.Infof("MarkChildChainTxUsed %v: account: %x, chain: %s, tx: %x", from, chainId, txHash)
+	log.Infof("MarkChildChainTxUsed %v: account: %x, chain: %s, tx: %x", from, chainId, txHash)
 
 	key := calcChildChainTxUsedKey(from, chainId, txHash)
 	err := db.Put(key, []byte{byte(CrossChainTxAlreadyUsed)})
 	if err != nil {
-		logger.Warnf("MarkChildChainTxUsed db put error: %v", err)
+		log.Warnf("MarkChildChainTxUsed db put error: %v", err)
 		return err
 	}
 	return nil
 }
 
 func IsTxUsedOnChildChain(db ethdb.Database, from common.Address, chainId string, txHash common.Hash) bool {
-	logger.Infof("IsChildChainTxUsed %v: account: %x, chain: %s, tx: %x", from, chainId, txHash)
+	log.Infof("IsChildChainTxUsed %v: account: %x, chain: %s, tx: %x", from, chainId, txHash)
 
 	key := calcChildChainTxUsedKey(from, chainId, txHash)
 	value, err := db.Get(key)
