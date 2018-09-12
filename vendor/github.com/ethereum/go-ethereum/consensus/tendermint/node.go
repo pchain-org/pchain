@@ -1,6 +1,7 @@
 package tendermint
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	cmn "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
@@ -14,14 +15,11 @@ import (
 
 	"fmt"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/pchain/common/plogger"
+	"github.com/ethereum/go-ethereum/params"
 	"io/ioutil"
 	_ "net/http/pprof"
 	"time"
-	"github.com/ethereum/go-ethereum/params"
 )
-
-var logger = plogger.GetLogger("tendermint")
 
 type PChainP2P interface {
 	Switch() *p2p.Switch
@@ -49,6 +47,7 @@ type Node struct {
 
 	backend *backend
 	cch     core.CrossChainHelper
+	logger  log.Logger
 }
 
 func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.ChainConfig, sw *p2p.Switch, addrBook *p2p.AddrBook, cch core.CrossChainHelper) *Node {
@@ -91,8 +90,10 @@ func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.Ch
 
 		consensusState:   consensusState,
 		consensusReactor: consensusReactor,
+
+		logger: backend.logger,
 	}
-	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
+	node.BaseService = *cmn.NewBaseService(backend.logger, "Node", node)
 
 	consensusState.SetNode(node)
 
@@ -101,7 +102,7 @@ func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.Ch
 
 func (n *Node) OnStart() error {
 
-	logger.Infoln("(n *Node) OnStart()")
+	n.logger.Info("(n *Node) OnStart()")
 
 	/*
 		state, epoch := n.consensusState.InitStateAndEpoch()
@@ -124,7 +125,7 @@ func (n *Node) OnStart() error {
 	if profileHost != "" {
 
 		go func() {
-			logger.Warn("Profile server", "error", http.ListenAndServe(profileHost, nil))
+			n.logger.Warn("Profile server", "error", http.ListenAndServe(profileHost, nil))
 		}()
 	}
 
@@ -132,7 +133,7 @@ func (n *Node) OnStart() error {
 }
 
 func (n *Node) OnStop() {
-	logger.Infoln("(n *Node) OnStop() called")
+	n.logger.Info("(n *Node) OnStop() called")
 	n.BaseService.OnStop()
 
 	n.sw.StopChainReactor(n.consensusState.GetState().TdmExtra.ChainID)

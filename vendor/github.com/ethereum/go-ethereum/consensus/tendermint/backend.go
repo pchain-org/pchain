@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/hashicorp/golang-lru"
 	"gopkg.in/urfave/cli.v1"
@@ -17,7 +18,7 @@ import (
 // New creates an Ethereum backend for Tendermint core engine.
 func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 	privateKey *ecdsa.PrivateKey, db ethdb.Database,
-	pNode PChainP2P, cch core.CrossChainHelper) consensus.Tendermint {
+	pNode PChainP2P, cch core.CrossChainHelper, logger log.Logger) consensus.Tendermint {
 	// Allocate the snapshot caches and create the engine
 	//recents, _ := lru.NewARC(inmemorySnapshots)
 	//recentMessages, _ := lru.NewARC(inmemoryPeers)
@@ -32,7 +33,7 @@ func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 		privateKey:         privateKey,
 		//address:          crypto.PubkeyToAddress(privateKey.PublicKey),
 		//core:             node,
-		//logger:           log.New(),
+		logger:   logger,
 		db:       db,
 		commitCh: make(chan *types.Block, 1),
 		//recents:          recents,
@@ -52,11 +53,11 @@ type backend struct {
 	privateKey         *ecdsa.PrivateKey
 	address            common.Address
 	core               *Node
-	//logger           log.Logger
-	db           ethdb.Database
-	chain        consensus.ChainReader
-	currentBlock func() *types.Block
-	hasBadBlock  func(hash common.Hash) bool
+	logger             log.Logger
+	db                 ethdb.Database
+	chain              consensus.ChainReader
+	currentBlock       func() *types.Block
+	hasBadBlock        func(hash common.Hash) bool
 
 	// the channels for istanbul engine notifications
 	commitCh          chan *types.Block

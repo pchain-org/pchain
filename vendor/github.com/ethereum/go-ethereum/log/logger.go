@@ -123,6 +123,11 @@ type Logger interface {
 	Warn(msg string, ctx ...interface{})
 	Error(msg string, ctx ...interface{})
 	Crit(msg string, ctx ...interface{})
+
+	// Log a message with format
+	Infof(format string, args ...interface{})
+	Warnf(format string, args ...interface{})
+	Errorf(format string, args ...interface{})
 }
 
 type logger struct {
@@ -183,6 +188,18 @@ func (l *logger) Error(msg string, ctx ...interface{}) {
 func (l *logger) Crit(msg string, ctx ...interface{}) {
 	l.write(msg, LvlCrit, ctx, skipLevel)
 	os.Exit(1)
+}
+
+func (l *logger) Infof(format string, args ...interface{}) {
+	l.write(fmt.Sprintf(format, args...), LvlInfo, nil, skipLevel)
+}
+
+func (l *logger) Warnf(format string, args ...interface{}) {
+	l.write(fmt.Sprintf(format, args...), LvlWarn, nil, skipLevel)
+}
+
+func (l *logger) Errorf(format string, args ...interface{}) {
+	l.write(fmt.Sprintf(format, args...), LvlError, nil, skipLevel)
 }
 
 func (l *logger) GetHandler() Handler {

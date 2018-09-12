@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"time"
 
 	. "github.com/tendermint/go-common"
@@ -31,13 +32,16 @@ type timeoutTicker struct {
 	timer    *time.Timer
 	tickChan chan timeoutInfo
 	tockChan chan timeoutInfo
+
+	logger log.Logger
 }
 
-func NewTimeoutTicker() TimeoutTicker {
+func NewTimeoutTicker(logger log.Logger) TimeoutTicker {
 	tt := &timeoutTicker{
 		timer:    time.NewTimer(0),
 		tickChan: make(chan timeoutInfo, tickTockBufferSize),
 		tockChan: make(chan timeoutInfo, tickTockBufferSize),
+		logger:   logger,
 	}
 	tt.stopTimer() // don't want to fire until the first scheduled timeout
 	tt.BaseService = *NewBaseService(logger, "TimeoutTicker", tt)
@@ -75,7 +79,7 @@ func (t *timeoutTicker) stopTimer() {
 		select {
 		case <-t.timer.C:
 		default:
-			logger.Debug("Timer already stopped")
+			t.logger.Debug("Timer already stopped")
 		}
 	}
 }
@@ -84,12 +88,12 @@ func (t *timeoutTicker) stopTimer() {
 // timers are interupted and replaced by new ticks from later steps
 // timeouts of 0 on the tickChan will be immediately relayed to the tockChan
 func (t *timeoutTicker) timeoutRoutine() {
-	logger.Info("Starting timeout routine")
+	t.logger.Info("Starting timeout routine")
 	var ti timeoutInfo
 	for {
 		select {
 		case newti := <-t.tickChan:
-			logger.Infof("Received tick. old_ti: %v, new_ti: %v", ti, newti)
+			t.logger.Infof("Received tick. old_ti: %v, new_ti: %v", ti, newti)
 
 			// ignore tickers for old height/round/step
 			/*
@@ -112,9 +116,9 @@ func (t *timeoutTicker) timeoutRoutine() {
 			// NOTE time.Timer allows duration to be non-positive
 			ti = newti
 			t.timer.Reset(ti.Duration)
-			logger.Infof("Scheduled timeout. dur: %v, height: %v, round: %v, step: %v", ti.Duration, ti.Height, ti.Round, ti.Step)
+			t.logger.Infof("Scheduled timeout. dur: %v, height: %v, round: %v, step: %v", ti.Duration, ti.Height, ti.Round, ti.Step)
 		case <-t.timer.C:
-			logger.Infof("Timed out. dur: %v, height: %v, round: %v, step: %v", ti.Duration, ti.Height, ti.Round, ti.Step)
+			t.logger.Infof("Timed out. dur: %v, height: %v, round: %v, step: %v", ti.Duration, ti.Height, ti.Round, ti.Step)
 			// go routine here gaurantees timeoutRoutine doesn't block.
 			// Determinism comes from playback in the receiveRoutine.
 			// We can eliminate it by merging the timeoutRoutine into receiveRoutine

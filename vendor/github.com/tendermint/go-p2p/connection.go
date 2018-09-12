@@ -150,7 +150,7 @@ func NewMConnectionWithConfig(conn net.Conn, reactorsByChainId map[string]*Chain
 		mconn.channelsByChainId[chainId] = chainChannel
 	}
 
-	mconn.BaseService = *cmn.NewBaseService(logger, "MConnection", mconn)
+	mconn.BaseService = *cmn.NewBaseService(log.Root(), "MConnection", mconn)
 
 	return mconn
 }
@@ -495,7 +495,7 @@ FOR_LOOP:
 			c.recvMonitor.Update(int(n))
 			if err != nil {
 				if c.IsRunning() {
-					logger.Warn("Connection failed @ recvRoutine msg Chain ID", "conn", c, "error", err)
+					log.Warn("Connection failed @ recvRoutine msg Chain ID", "conn", c, "error", err)
 					c.stopForError(err)
 				}
 				break FOR_LOOP
@@ -512,7 +512,7 @@ FOR_LOOP:
 			c.recvMonitor.Update(int(n))
 			if err != nil {
 				if c.IsRunning() {
-					logger.Warn("Connection failed @ recvRoutine", " conn:", c, " error:", err)
+					log.Warn("Connection failed @ recvRoutine", " conn:", c, " error:", err)
 					c.stopForError(err)
 				}
 				break FOR_LOOP
@@ -525,13 +525,13 @@ FOR_LOOP:
 			msgBytes, err := channel.recvMsgPacket(pkt)
 			if err != nil {
 				if c.IsRunning() {
-					logger.Warn("Connection failed @ recvRoutine", " conn:", c, " error:", err)
+					log.Warn("Connection failed @ recvRoutine", " conn:", c, " error:", err)
 					c.stopForError(err)
 				}
 				break FOR_LOOP
 			}
 			if msgBytes != nil {
-				logger.Debug("Received bytes", "chain", chainID, "chID", pkt.ChannelID, "msgBytes", msgBytes)
+				log.Debug("Received bytes", "chain", chainID, "chID", pkt.ChannelID, "msgBytes", msgBytes)
 				c.onReceive(chainID, pkt.ChannelID, msgBytes)
 			}
 		default:

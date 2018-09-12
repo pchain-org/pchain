@@ -3,6 +3,7 @@ package consensus
 import (
 	consss "github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/log"
 
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
@@ -30,9 +31,9 @@ func (cs *ConsensusState) StartNewHeight() {
 	cr := cs.backend.ChainReader()
 	curEthBlock := cr.CurrentBlock()
 	curHeight := curEthBlock.NumberU64()
-	logger.Infof("StartNewHeight. current block height is %v", curHeight)
+	cs.logger.Infof("StartNewHeight. current block height is %v", curHeight)
 
-	state, epoch := cs.InitStateAndEpoch()
+	state, epoch := cs.InitStateAndEpoch(cs.logger)
 	epoch = state.ApplyBlock(curEthBlock, epoch)
 	cs.UpdateToStateAndEpoch(state, epoch)
 
@@ -40,9 +41,9 @@ func (cs *ConsensusState) StartNewHeight() {
 	cs.scheduleRound0(cs.getRoundState()) //not use cs.GetRoundState to avoid dead-lock
 }
 
-func (cs *ConsensusState) InitStateAndEpoch() (*sm.State, *ep.Epoch) {
+func (cs *ConsensusState) InitStateAndEpoch(logger log.Logger) (*sm.State, *ep.Epoch) {
 
-	state := &sm.State{}
+	state := sm.NewState(logger)
 	var epoch *ep.Epoch = nil
 	epochDB := cs.node.EpochDB()
 
@@ -65,11 +66,11 @@ func (cs *ConsensusState) InitStateAndEpoch() (*sm.State, *ep.Epoch) {
 			cmn.PanicSanity(cmn.Fmt("InitStateAndEpoch(), Genesis doc parse json error: %v", err))
 		}
 
-		state = sm.MakeGenesisState( /*stateDB, */ genDoc)
+		state = sm.MakeGenesisState( /*stateDB, */ genDoc, logger)
 		//state.Save()
 
 		rewardScheme := ep.MakeRewardScheme(epochDB, &genDoc.RewardScheme)
-		epoch = ep.MakeOneEpoch(epochDB, &genDoc.CurrentEpoch)
+		epoch = ep.MakeOneEpoch(epochDB, &genDoc.CurrentEpoch, logger)
 		epoch.RS = rewardScheme
 
 		if state.TdmExtra.EpochNumber != uint64(epoch.Number) {
@@ -79,13 +80,13 @@ func (cs *ConsensusState) InitStateAndEpoch() (*sm.State, *ep.Epoch) {
 		rewardScheme.Save()
 		epoch.Save()
 
-		logger.Infof("InitStateAndEpoch. genesis state extra: %#v, epoch validators: %v", state.TdmExtra, epoch.Validators)
+		cs.logger.Infof("InitStateAndEpoch. genesis state extra: %#v, epoch validators: %v", state.TdmExtra, epoch.Validators)
 	} else {
-		epoch = ep.LoadOneEpoch(epochDB, int(state.TdmExtra.EpochNumber))
+		epoch = ep.LoadOneEpoch(epochDB, int(state.TdmExtra.EpochNumber), logger)
 		state.Epoch = epoch
 		cs.ReconstructLastCommit(state)
 
-		logger.Infof("InitStateAndEpoch. state extra: %#v, epoch validators: %v", state.TdmExtra, epoch.Validators)
+		cs.logger.Infof("InitStateAndEpoch. state extra: %#v, epoch validators: %v", state.TdmExtra, epoch.Validators)
 	}
 
 	return state, epoch
@@ -147,7 +148,7 @@ func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	}
 
 	cs.Validators = validators
-	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators)
+	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators, cs.logger)
 	cs.LastCommit = lastPrecommits
 	cs.Epoch = epoch
 
@@ -202,14 +203,14 @@ func (bs *ConsensusState) LoadTendermintExtra(height uint64) (*types.TendermintE
 
 	ethBlock := cr.GetBlockByNumber(height)
 	if ethBlock == nil {
-		logger.Warn("LoadTendermintExtra. nil block")
+		bs.logger.Warn("LoadTendermintExtra. nil block")
 		return nil, 0
 	}
 
 	header := cr.GetHeader(ethBlock.Hash(), ethBlock.NumberU64())
 	tdmExtra, err := types.ExtractTendermintExtra(header)
 	if err != nil {
-		logger.Warnf("LoadTendermintExtra. error: %v", err)
+		bs.logger.Warnf("LoadTendermintExtra. error: %v", err)
 		return nil, 0
 	}
 

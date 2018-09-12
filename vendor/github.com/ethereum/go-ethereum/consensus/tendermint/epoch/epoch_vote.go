@@ -3,6 +3,7 @@ package epoch
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
@@ -72,7 +73,7 @@ func LoadEpochVoteSet(epochDB db.DB, epochNumber int) *EpochValidatorVoteSet {
 		var voteSet EpochValidatorVoteSet
 		err := wire.ReadBinaryBytes(data, &voteSet)
 		if err != nil {
-			logger.Errorln(err)
+			log.Error("Load Epoch Vote Set failed", "error", err)
 			return nil
 		}
 		// Fulfill the Vote Map

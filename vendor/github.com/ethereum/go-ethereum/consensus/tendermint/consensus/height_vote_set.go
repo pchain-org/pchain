@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"strings"
 	"sync"
 
@@ -36,11 +37,14 @@ type HeightVoteSet struct {
 	round             int                  // max tracked round
 	roundVoteSets     map[int]RoundVoteSet // keys: [0...round]
 	peerCatchupRounds map[string][]int     // keys: peer.Key; values: at most 2 rounds
+
+	logger log.Logger
 }
 
-func NewHeightVoteSet(chainID string, height uint64, valSet *types.ValidatorSet) *HeightVoteSet {
+func NewHeightVoteSet(chainID string, height uint64, valSet *types.ValidatorSet, logger log.Logger) *HeightVoteSet {
 	hvs := &HeightVoteSet{
 		chainID: chainID,
+		logger:  logger,
 	}
 	hvs.Reset(height, valSet)
 	return hvs
@@ -91,7 +95,7 @@ func (hvs *HeightVoteSet) addRound(round int) {
 	if _, ok := hvs.roundVoteSets[round]; ok {
 		PanicSanity("addRound() for an existing round")
 	}
-	logger.Debug("addRound(round)", "round", round)
+	hvs.logger.Debug("addRound(round)", "round", round)
 	prevotes := types.NewVoteSet(hvs.chainID, hvs.height, round, types.VoteTypePrevote, hvs.valSet)
 	precommits := types.NewVoteSet(hvs.chainID, hvs.height, round, types.VoteTypePrecommit, hvs.valSet)
 	hvs.roundVoteSets[round] = RoundVoteSet{
@@ -118,7 +122,7 @@ func (hvs *HeightVoteSet) AddVote(vote *types.Vote, peerKey string) (added bool,
 			// Peer has sent a vote that does not match our round,
 			// for more than one round.  Bad peer!
 			// TODO punish peer.
-			logger.Warn("Deal with peer giving votes from unwanted rounds")
+			hvs.logger.Warn("Deal with peer giving votes from unwanted rounds")
 			return
 		}
 	}

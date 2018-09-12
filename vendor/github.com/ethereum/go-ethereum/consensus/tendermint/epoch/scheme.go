@@ -6,10 +6,8 @@ import (
 	"bytes"
 	"fmt"
 	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
 	wire "github.com/tendermint/go-wire"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"strconv"
@@ -44,30 +42,6 @@ const rewardSchemeKey = "REWARDSCHEME"
 
 //var epoches = []Epoch{}
 
-// Load the most recent state from "state" db,
-// or create a new one (and save) from genesis.
-func GetRewardScheme(config cfg.Config, rsDB dbm.DB) *RewardScheme {
-	rs := LoadRewardScheme(rsDB)
-	if rs == nil {
-		rs = MakeRewardSchemeFromFile(rsDB, config.GetString("epoch_file"))
-		if rs != nil {
-			rs.Save()
-		} else {
-			logger.Errorf("GetRewardScheme. reward scheme read from file failed")
-			os.Exit(1)
-		}
-	}
-
-	logger.Infof("GetRewardScheme. reward scheme is: %v", rs)
-
-	if rs.totalReward.Sign() != 1 { // total reward <= 0
-		logger.Errorf("GetRewardScheme. reward scheme checked failed")
-		os.Exit(1)
-	}
-
-	return rs
-}
-
 func LoadRewardScheme(db dbm.DB) *RewardScheme {
 	return loadRewardScheme(db, []byte(rewardSchemeKey))
 }
@@ -82,28 +56,13 @@ func loadRewardScheme(db dbm.DB, key []byte) *RewardScheme {
 		wire.ReadBinaryPtr(&rsDoc, r, 0, n, err)
 		if *err != nil {
 			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
-			logger.Errorf("loadRewardScheme: Data has been corrupted or its spec has changed: %v\n", *err)
+			//logger.Errorf("loadRewardScheme: Data has been corrupted or its spec has changed: %v\n", *err)
 			os.Exit(1)
 		}
 		// TODO: ensure that buf is completely read.
 		rs := MakeRewardScheme(db, rsDoc)
 		return rs
 	}
-}
-
-// Used during replay and in tests.
-func MakeRewardSchemeFromFile(db dbm.DB, genFile string) *RewardScheme {
-	genJSON, err := ioutil.ReadFile(genFile)
-	if err != nil {
-		logger.Errorf("Couldn't read GenesisDoc file: %v", err)
-		os.Exit(1)
-	}
-	genDoc, err := tmTypes.GenesisDocFromJSON(genJSON)
-	if err != nil {
-		logger.Errorf("Error reading GenesisDoc: %v", err)
-		os.Exit(1)
-	}
-	return MakeRewardScheme(db, &genDoc.RewardScheme)
 }
 
 func MakeRewardScheme(db dbm.DB, rsDoc *tmTypes.RewardSchemeDoc) *RewardScheme {
@@ -153,7 +112,7 @@ func (rs *TxScheme) saveTotalReward(height int) []byte {
 func (rs *RewardScheme) Save() {
 	rs.mtx.Lock()
 	defer rs.mtx.Unlock()
-	logger.Infof("(rs *RewardScheme) Save(), (rewardSchemeKey, ts.Bytes()) are: (%s,%s\n", rewardSchemeKey, rs.Bytes())
+	//logger.Infof("(rs *RewardScheme) Save(), (rewardSchemeKey, ts.Bytes()) are: (%s,%s\n", rewardSchemeKey, rs.Bytes())
 	rs.db.SetSync([]byte(rewardSchemeKey), rs.Bytes())
 }
 
@@ -163,9 +122,9 @@ func (rs *RewardScheme) Bytes() []byte {
 	rsDoc := rs.MakeRewardSchemeDoc()
 	wire.WriteBinary(rsDoc, buf, n, err)
 	if *err != nil {
-		logger.Warnf("Epoch get bytes error: %v", err)
+		//logger.Warnf("Epoch get bytes error: %v", err)
 	}
-	logger.Infof("(rs *RewardScheme) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
+	//logger.Infof("(rs *RewardScheme) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
 	return buf.Bytes()
 }
 

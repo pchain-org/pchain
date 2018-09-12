@@ -31,7 +31,7 @@ func (api *API) GetEpoch(number int) (*tdmTypes.EpochApi, error) {
 	if number == curEpoch.Number {
 		resultEpoch = curEpoch
 	} else {
-		resultEpoch = epoch.LoadOneEpoch(curEpoch.GetDB(), number)
+		resultEpoch = epoch.LoadOneEpoch(curEpoch.GetDB(), number, nil)
 	}
 
 	validators := make([]tdmTypes.GenesisValidator, len(resultEpoch.Validators.Validators))

@@ -1,9 +1,8 @@
 package common
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"sync/atomic"
-
-	"github.com/sirupsen/logrus"
 )
 
 type Service interface {
@@ -65,7 +64,7 @@ Typical usage:
 */
 
 type BaseService struct {
-	logger  *logrus.Logger
+	logger  log.Logger
 	name    string
 	started uint32 // atomic
 	stopped uint32 // atomic
@@ -75,7 +74,7 @@ type BaseService struct {
 	impl Service
 }
 
-func NewBaseService(logger *logrus.Logger, name string, impl Service) *BaseService {
+func NewBaseService(logger log.Logger, name string, impl Service) *BaseService {
 	return &BaseService{
 		logger: logger,
 		name:   name,
@@ -183,7 +182,7 @@ type QuitService struct {
 	BaseService
 }
 
-func NewQuitService(logger *logrus.Logger, name string, impl Service) *QuitService {
+func NewQuitService(logger log.Logger, name string, impl Service) *QuitService {
 	if logger != nil {
 		logger.Warn("QuitService is deprecated, use BaseService instead")
 	}

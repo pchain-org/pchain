@@ -3,7 +3,7 @@ package p2p
 import (
 	"bytes"
 	"fmt"
-	"github.com/pchain/common/plogger"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tendermint/go-p2p"
 	"github.com/tendermint/go-wire"
 	"reflect"
@@ -15,8 +15,6 @@ const (
 
 	maxChildChainMessageSize = 1048576 // 1MB
 )
-
-var plog = plogger.GetLogger("ChildChainReactor")
 
 // ChainReactor is only available for main chain used
 type ChainReactor struct {
@@ -44,34 +42,34 @@ func (r *ChainReactor) GetChannels() []*p2p.ChannelDescriptor {
 func (r *ChainReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte) {
 	_, msg, err := DecodeMessage(msgBytes)
 	if err != nil {
-		plog.Warn("Error decoding message", "error", err)
+		log.Warn("Error decoding message", "error", err)
 		return
 	}
-	plog.Debugln("Receive", "src", src, "chId", chID, "msg", msg)
+	log.Debug("Receive", "src", src, "chId", chID, "msg", msg)
 
 	switch msg := msg.(type) {
 	case *ccRequestMessage:
-		plog.Debugf("Got child id msg from peer %v", src)
+		log.Debugf("Got child id msg from peer %v", src)
 
 		// Check the chain id from request matched the local network
 		update := r.checkAndUpdateNetwork(msg.ChildChainID, src)
 
 		// Send Response Message back to peer
 		if update {
-			plog.Debugf("Update Peer network -- success. %#+v", src.NodeInfo)
+			log.Debugf("Update Peer network -- success. %#+v", src.NodeInfo)
 			r.sendResponse(src, msg.ChildChainID)
 		} else {
-			plog.Debugln("Update Peer network -- do nothing")
+			log.Debug("Update Peer network -- do nothing")
 		}
 
 	case *ccResponseMessage:
-		plog.Debugf("Got child id response msg from peer %v", src)
+		log.Debugf("Got child id response msg from peer %v", src)
 
 		// Check the chain id from request matched the local network
 		r.checkAndUpdateNetwork(msg.ChildChainID, src)
 
 	default:
-		plog.Warnf("Unknown message type %v", reflect.TypeOf(msg))
+		log.Warnf("Unknown message type %v", reflect.TypeOf(msg))
 	}
 }
 

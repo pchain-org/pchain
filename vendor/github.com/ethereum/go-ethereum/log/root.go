@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -67,4 +68,24 @@ func Crit(msg string, ctx ...interface{}) {
 // Non-zero calldepth skips as many stack frames.
 func Output(msg string, lvl Lvl, calldepth int, ctx ...interface{}) {
 	root.write(msg, lvl, ctx, calldepth+skipLevel)
+}
+
+// Debugf is a convenient alias for Root().Debugf
+func Debugf(format string, args ...interface{}) {
+	root.write(fmt.Sprintf(format, args...), LvlDebug, nil, skipLevel)
+}
+
+// Infof is a convenient alias for Root().Infof
+func Infof(format string, args ...interface{}) {
+	root.write(fmt.Sprintf(format, args...), LvlInfo, nil, skipLevel)
+}
+
+// Warnf is a convenient alias for Root().Warnf
+func Warnf(format string, args ...interface{}) {
+	root.write(fmt.Sprintf(format, args...), LvlWarn, nil, skipLevel)
+}
+
+// Errorf is a convenient alias for Root().Errorf
+func Errorf(format string, args ...interface{}) {
+	root.write(fmt.Sprintf(format, args...), LvlError, nil, skipLevel)
 }

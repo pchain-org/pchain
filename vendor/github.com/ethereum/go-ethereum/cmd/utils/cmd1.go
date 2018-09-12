@@ -2,12 +2,11 @@ package utils
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"os"
 	"os/signal"
 	//"strings"
 	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
 	//"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -17,7 +16,7 @@ import (
 	//"github.com/ethereum/go-ethereum/console"
 )
 
-func StartNodeEx(ctx *cli.Context, stack *node.Node) error{
+func StartNodeEx(ctx *cli.Context, stack *node.Node) error {
 
 	StartNode1(stack)
 
@@ -64,12 +63,12 @@ func StartNode1(stack *node.Node) {
 		signal.Notify(sigc, os.Interrupt)
 		defer signal.Stop(sigc)
 		<-sigc
-		glog.V(logger.Info).Infoln("Got interrupt, shutting down...")
+		log.Info("Got interrupt, shutting down...")
 		go stack.Stop()
 		for i := 3; i > 0; i-- {
 			<-sigc
 			if i > 1 {
-				glog.V(logger.Info).Infof("Already shutting down, interrupt %d more times for panic.", i-1)
+				log.Info(fmt.Sprintf("Already shutting down, interrupt %d more times for panic.", i-1))
 			}
 		}
 		fmt.Println("pow recover 4")
