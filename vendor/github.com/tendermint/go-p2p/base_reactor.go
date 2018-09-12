@@ -1,8 +1,9 @@
 package p2p
 
 import (
-	"github.com/sirupsen/logrus"
 	cmn "github.com/tendermint/go-common"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type Reactor interface {
@@ -37,7 +38,7 @@ type BaseReactor struct {
 	Switch          *Switch
 }
 
-func NewBaseReactor(logger *logrus.Logger, name string, impl Reactor) *BaseReactor {
+func NewBaseReactor(logger log.Logger, name string, impl Reactor) *BaseReactor {
 	return &BaseReactor{
 		BaseService: *cmn.NewBaseService(logger, name, impl),
 		Switch:      nil,

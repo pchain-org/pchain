@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 )
@@ -79,7 +80,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 	} else {
 
-		logger.Infof("ApplyTransactionEx() 0, etd.FuncName is %v\n", etd.FuncName)
+		log.Infof("ApplyTransactionEx() 0, etd.FuncName is %v\n", etd.FuncName)
 
 		// Pre-pay gas for extended tx.
 		gas := tx.Gas()
@@ -93,7 +94,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 			return nil, 0, err
 		}
 		statedb.SubBalance(from, gasValue)
-		logger.Infof("ApplyTransactionEx() 1, gas is %v, gasPrice is %v, gasValue is %v\n", gas, gasPrice, gasValue)
+		log.Infof("ApplyTransactionEx() 1, gas is %v, gasPrice is %v, gasValue is %v\n", gas, gasPrice, gasValue)
 
 		if applyCb := GetApplyCb(etd.FuncName); applyCb != nil {
 			cch.GetMutex().Lock()
@@ -105,7 +106,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 		*usedGas += gas
 		totalUsedMoney.Add(totalUsedMoney, gasValue)
-		logger.Infof("ApplyTransactionEx() 2, totalUsedMoney is %v\n", totalUsedMoney)
+		log.Infof("ApplyTransactionEx() 2, totalUsedMoney is %v\n", totalUsedMoney)
 
 		// Update the state with pending changes
 		var root []byte
@@ -123,7 +124,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 		statedb.SetNonce(msg.From(), statedb.GetNonce(msg.From())+1)
-		logger.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
+		log.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
 
 		return receipt, 0, nil
 	}

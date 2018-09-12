@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"runtime"
 	"sync"
 
 	"io/ioutil"
@@ -124,10 +125,18 @@ func prepFile(path string) (*countingWriter, error) {
 	if err != nil {
 		return nil, err
 	}
-	ns := fi.Size() - cut
-	if err = f.Truncate(ns); err != nil {
-		return nil, err
+
+	var ns int64
+	if runtime.GOOS == "windows" || cut == 0 {
+		// Do not truncate file in windows, as append flag will cause Access Denied error
+		ns = fi.Size()
+	} else {
+		ns = fi.Size() - cut
+		if err = f.Truncate(ns); err != nil {
+			return nil, err
+		}
 	}
+
 	return &countingWriter{w: f, count: uint(ns)}, nil
 }
 
@@ -166,7 +175,7 @@ func RotatingFileHandler(path string, limit uint, formatter Format) (Handler, er
 		}
 		if counter.w == nil {
 			f, err := os.OpenFile(
-				filepath.Join(path, fmt.Sprintf("%s.log", strings.Replace(r.Time.Format("060102150405.00"), ".", "", 1))),
+				filepath.Join(path, fmt.Sprintf("%s.log", strings.Replace(r.Time.Format("2006-01-02_150405.000"), ".", "_", 1))),
 				os.O_CREATE|os.O_APPEND|os.O_WRONLY,
 				0600,
 			)

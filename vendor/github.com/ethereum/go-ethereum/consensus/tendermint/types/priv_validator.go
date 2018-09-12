@@ -141,12 +141,12 @@ func LoadOrGenPrivValidator(filePath, keydir string) *PrivValidator {
 	var privValidator *PrivValidator
 	if _, err := os.Stat(filePath); err == nil {
 		privValidator = LoadPrivValidator(filePath)
-		logger.Infoln("Loaded PrivValidator", "file", filePath, "privValidator", privValidator)
+		//logger.Infoln("Loaded PrivValidator", "file", filePath, "privValidator", privValidator)
 	} else {
 		privValidator = GenPrivValidator(keydir)
 		privValidator.SetFile(filePath)
 		privValidator.Save()
-		logger.Infoln("Generated PrivValidator", "file", filePath)
+		//logger.Infoln("Generated PrivValidator", "file", filePath)
 	}
 	return privValidator
 }

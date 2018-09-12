@@ -37,14 +37,17 @@ type CpuAgent struct {
 	engine consensus.Engine
 
 	isMining int32 // isMining indicates whether the agent is currently mining
+
+	logger log.Logger
 }
 
-func NewCpuAgent(chain consensus.ChainReader, engine consensus.Engine) *CpuAgent {
+func NewCpuAgent(chain consensus.ChainReader, engine consensus.Engine, logger log.Logger) *CpuAgent {
 	miner := &CpuAgent{
 		chain:  chain,
 		engine: engine,
 		stop:   make(chan struct{}, 1),
 		workCh: make(chan *Work, 1),
+		logger: logger,
 	}
 	return miner
 }
@@ -101,11 +104,11 @@ out:
 
 func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
 	if result, err := self.engine.Seal(self.chain, work.Block, stop); result != nil {
-		log.Info("Successfully sealed new block", "number", result.Number(), "hash", result.Hash())
+		self.logger.Info("Successfully sealed new block", "number", result.Number(), "hash", result.Hash())
 		self.returnCh <- &Result{work, result}
 	} else {
 		if err != nil {
-			log.Warn("Block sealing failed", "err", err)
+			self.logger.Warn("Block sealing failed", "err", err)
 		}
 		self.returnCh <- nil
 	}

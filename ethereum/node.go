@@ -55,12 +55,12 @@ func registerEthService(stack *node.Node, cfg *eth.Config, cliCtx *cli.Context,
 	var err error
 	if cfg.SyncMode == downloader.LightSync {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, cfg, nil)
+			return les.New(ctx, cfg, nil, stack.GetLogger())
 		})
 	} else {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			//return NewBackend(ctx, cfg, cliCtx, pNode, cch)
-			fullNode, err := eth.New(ctx, cfg, cliCtx, pNode, cch)
+			fullNode, err := eth.New(ctx, cfg, cliCtx, pNode, cch, stack.GetLogger())
 			if fullNode != nil && cfg.LightServ > 0 {
 				ls, _ := les.NewLesServer(fullNode, cfg)
 				fullNode.AddLesServer(ls)

@@ -15,6 +15,7 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -97,7 +98,7 @@ func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId st
 
 // CreateChildChain Save the Child Chain Data into the DB, the data will be used later during Block Commit Callback
 func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error {
-	logger.Debug("CreateChildChain - start")
+	log.Debug("CreateChildChain - start")
 
 	cci := &core.CoreChainInfo{
 		Owner:            from,
@@ -110,13 +111,13 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 	}
 	core.CreatePendingChildChainData(cch.chainInfoDB, cci)
 
-	logger.Debug("CreateChildChain - end")
+	log.Debug("CreateChildChain - end")
 	return nil
 }
 
 // ValidateJoinChildChain check the criteria whether it meets the join child chain requirement
 func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error {
-	logger.Debug("ValidateJoinChildChain - start")
+	log.Debug("ValidateJoinChildChain - start")
 
 	if chainId == MainChain {
 		return errors.New("you can't join PChain as a child chain, try use other name instead")
@@ -157,18 +158,18 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey 
 		return errors.New("deposit amount must be greater than 0")
 	}
 
-	logger.Debug("ValidateJoinChildChain - end")
+	log.Debug("ValidateJoinChildChain - end")
 	return nil
 }
 
 // JoinChildChain Join the Child Chain
 func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error {
-	logger.Debugln("JoinChildChain - start")
+	log.Debug("JoinChildChain - start")
 
 	// Load the Child Chain first
 	ci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
 	if ci == nil {
-		logger.Errorf("JoinChildChain - Child Chain %s not exist, you can't join the chain", chainId)
+		log.Errorf("JoinChildChain - Child Chain %s not exist, you can't join the chain", chainId)
 		return fmt.Errorf("Child Chain %s not exist, you can't join the chain", chainId)
 	}
 
@@ -182,18 +183,18 @@ func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, 
 
 	core.UpdatePendingChildChainData(cch.chainInfoDB, ci)
 
-	logger.Debugln("JoinChildChain - end")
+	log.Debug("JoinChildChain - end")
 	return nil
 }
 
 func (cch *CrossChainHelper) ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB) []string {
-	logger.Debugln("ReadyForLaunchChildChain - start")
+	log.Debug("ReadyForLaunchChildChain - start")
 
 	readyId := core.GetChildChainForLaunch(cch.chainInfoDB, height, stateDB)
 	if len(readyId) == 0 {
-		logger.Debugf("ReadyForLaunchChildChain - No child chain to be launch in Block %v", height)
+		log.Debugf("ReadyForLaunchChildChain - No child chain to be launch in Block %v", height)
 	} else {
-		logger.Infof("ReadyForLaunchChildChain - %v child chain(s) to be launch in Block %v. %v\n", len(readyId), height, readyId)
+		log.Infof("ReadyForLaunchChildChain - %v child chain(s) to be launch in Block %v. %v\n", len(readyId), height, readyId)
 		//for _, chainId := range readyId {
 		//	// Convert the Chain Info from Pending to Formal
 		//	cci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
@@ -203,7 +204,7 @@ func (cch *CrossChainHelper) ReadyForLaunchChildChain(height *big.Int, stateDB *
 		//}
 	}
 
-	logger.Debugln("ReadyForLaunchChildChain - end")
+	log.Debug("ReadyForLaunchChildChain - end")
 	return readyId
 }
 
@@ -328,7 +329,7 @@ func (cch *CrossChainHelper) GetTxFromChildChain(txHash common.Hash, chainId str
 // most of the logic here is from 'VerifyHeader'
 func (cch *CrossChainHelper) VerifyChildChainBlock(bs []byte) error {
 
-	logger.Debugln("VerifyChildChainBlock - start")
+	log.Debug("VerifyChildChainBlock - start")
 
 	var block types.Block
 	err := rlp.DecodeBytes(bs, &block)
@@ -399,13 +400,13 @@ func (cch *CrossChainHelper) VerifyChildChainBlock(bs []byte) error {
 		return err
 	}
 
-	logger.Debugln("VerifyChildChainBlock - end")
+	log.Debug("VerifyChildChainBlock - end")
 	return nil
 }
 
 func (cch *CrossChainHelper) SaveChildChainBlockToMainChain(bs []byte) error {
 
-	logger.Debugln("SaveChildChainBlockToMainChain - start")
+	log.Debug("SaveChildChainBlockToMainChain - start")
 
 	var block types.Block
 	err := rlp.DecodeBytes(bs, &block)
@@ -440,12 +441,12 @@ func (cch *CrossChainHelper) SaveChildChainBlockToMainChain(bs []byte) error {
 				ci.EpochNumber = ep.Number
 				ci.Epoch = ep
 				core.SaveChainInfo(cch.chainInfoDB, ci)
-				logger.Infof("Epoch saved from chain: %s, epoch: %v", chainId, ep)
+				log.Infof("Epoch saved from chain: %s, epoch: %v", chainId, ep)
 			}
 		}
 	}
 
-	logger.Debugln("SaveChildChainBlockToMainChain - end")
+	log.Debug("SaveChildChainBlockToMainChain - end")
 	return nil
 }
 

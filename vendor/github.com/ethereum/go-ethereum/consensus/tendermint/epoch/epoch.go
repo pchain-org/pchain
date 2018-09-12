@@ -6,12 +6,10 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	"github.com/pchain/common/plogger"
+	"github.com/ethereum/go-ethereum/log"
 	abciTypes "github.com/tendermint/abci/types"
-	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
-	"io/ioutil"
 	"math"
 	"math/big"
 	"os"
@@ -20,8 +18,6 @@ import (
 	"sync"
 	"time"
 )
-
-var logger = plogger.GetLogger("Epoch")
 
 var NextEpochNotExist = errors.New("next epoch parameters do not exist, fatal error")
 var NextEpochNotEXPECTED = errors.New("next epoch parameters are not excepted, fatal error")
@@ -59,57 +55,27 @@ type Epoch struct {
 	RS               *RewardScheme
 	PreviousEpoch    *Epoch
 	NextEpoch        *Epoch
+
+	logger log.Logger
 }
 
 func calcEpochKeyWithHeight(number int) []byte {
 	return []byte(fmt.Sprintf("EPOCH:%v", number))
 }
 
-//roughly one epoch one month
-//var rewardPerEpoch = rewardThisYear / 12
-
-//var epoches = []Epoch{}
-
-// Load the most recent state from "state" db,
-// or create a new one (and save) from genesis.
-func GetEpoch(config cfg.Config, epochDB dbm.DB, number int) *Epoch {
-
-	epoch := LoadOneEpoch(epochDB, number)
-	if epoch == nil {
-		epoch = MakeEpochFromFile(epochDB, config.GetString("epoch_file"))
-		if epoch != nil {
-			epoch.Save()
-		} else {
-			os.Exit(1)
-		}
-	}
-
-	if epoch.Number < 0 {
-		os.Exit(1)
-	}
-
-	rewardScheme := GetRewardScheme(config, epochDB)
-	if rewardScheme == nil {
-		os.Exit(1)
-	}
-	epoch.RS = rewardScheme
-
-	return epoch
-}
-
 // Load Full Epoch By EpochNumber
-func LoadOneEpoch(db dbm.DB, epochNumber int) *Epoch {
-	epoch := loadOneEpoch(db, epochNumber)
+func LoadOneEpoch(db dbm.DB, epochNumber int, logger log.Logger) *Epoch {
+	epoch := loadOneEpoch(db, epochNumber, logger)
 	// Set Reward Scheme
 	rewardscheme := LoadRewardScheme(db)
 	epoch.RS = rewardscheme
 	// Set Previous Epoch
-	epoch.PreviousEpoch = loadOneEpoch(db, epochNumber-1)
+	epoch.PreviousEpoch = loadOneEpoch(db, epochNumber-1, logger)
 	if epoch.PreviousEpoch != nil {
 		epoch.PreviousEpoch.RS = rewardscheme
 	}
 	// Set Next Epoch
-	epoch.NextEpoch = loadOneEpoch(db, epochNumber+1)
+	epoch.NextEpoch = loadOneEpoch(db, epochNumber+1, logger)
 	if epoch.NextEpoch != nil {
 		epoch.NextEpoch.RS = rewardscheme
 		// Set ValidatorVoteSet
@@ -119,7 +85,7 @@ func LoadOneEpoch(db dbm.DB, epochNumber int) *Epoch {
 	return epoch
 }
 
-func loadOneEpoch(db dbm.DB, epochNumber int) *Epoch {
+func loadOneEpoch(db dbm.DB, epochNumber int, logger log.Logger) *Epoch {
 
 	oneEpoch := &tmTypes.OneEpochDoc{}
 	buf := db.Get(calcEpochKeyWithHeight(epochNumber))
@@ -134,29 +100,14 @@ func loadOneEpoch(db dbm.DB, epochNumber int) *Epoch {
 			os.Exit(1)
 		}
 		// TODO: ensure that buf is completely read.
-		ts := MakeOneEpoch(db, oneEpoch)
+		ts := MakeOneEpoch(db, oneEpoch, logger)
 		logger.Infof("loadOneEpoch. epoch is: %v", ts)
 		return ts
 	}
 }
 
-// Used during replay and in tests.
-func MakeEpochFromFile(db dbm.DB, genesisFile string) *Epoch {
-	epochJSON, err := ioutil.ReadFile(genesisFile)
-	if err != nil {
-		logger.Errorf("Couldn't read GenesisDoc file: %v\n", err)
-		os.Exit(1)
-	}
-	genDoc, err := tmTypes.GenesisDocFromJSON(epochJSON)
-	if err != nil {
-		logger.Errorf("Error reading GenesisDoc: %v\n", err)
-		os.Exit(1)
-	}
-	return MakeOneEpoch(db, &genDoc.CurrentEpoch)
-}
-
 // Convert from OneEpochDoc (Json) to Epoch
-func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc) *Epoch {
+func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc, logger log.Logger) *Epoch {
 
 	number, _ := strconv.Atoi(oneEpoch.Number)
 	RewardPerBlock, _ := new(big.Int).SetString(oneEpoch.RewardPerBlock, 10)
@@ -196,6 +147,8 @@ func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc) *Epoch {
 		BlockGenerated: BlockGenerated,
 		Status:         Status,
 		Validators:     tmTypes.NewValidatorSet(validators),
+
+		logger: logger,
 	}
 
 	return te
@@ -270,12 +223,12 @@ func FromBytes(buf []byte) *Epoch {
 		wire.ReadBinaryPtr(&oneEpoch, r, 0, n, err)
 		if *err != nil {
 			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
-			logger.Errorf("LoadState: Data has been corrupted or its spec has changed: %v", *err)
+			//logger.Errorf("LoadState: Data has been corrupted or its spec has changed: %v", *err)
 			os.Exit(1)
 		}
 		// TODO: ensure that buf is completely read.
-		ts := MakeOneEpoch(nil, oneEpoch)
-		logger.Infof("FromBytes. epoch is: %v", ts)
+		ts := MakeOneEpoch(nil, oneEpoch, nil)
+		//logger.Infof("FromBytes. epoch is: %v", ts)
 		return ts
 	}
 }
@@ -288,7 +241,7 @@ func (epoch *Epoch) Bytes() []byte {
 	epochDoc := epoch.MakeOneEpochDoc()
 	wire.WriteBinary(epochDoc, buf, n, err)
 	if *err != nil {
-		logger.Errorf("Epoch get bytes error: %v", err)
+		epoch.logger.Errorf("Epoch get bytes error: %v", err)
 		return nil
 	}
 	//fmt.Printf("(ts *EPOCH) Bytes(), (buf, n) are: (%v,%v)\n", buf.Bytes(), *n)
@@ -352,6 +305,8 @@ func (epoch *Epoch) ProposeNextEpoch(curBlockHeight uint64) *Epoch {
 
 			PreviousEpoch: epoch,
 			NextEpoch:     nil,
+
+			logger: epoch.logger,
 		}
 
 		return next
@@ -446,14 +401,14 @@ func (epoch *Epoch) EnterNewEpoch(height uint64) (*Epoch, []*abciTypes.RefundVal
 			// update the validator set with the latest abciResponses
 			refund, err := updateEpochValidatorSet(nextEpoch.Validators, nextEpoch.validatorVoteSet)
 			if err != nil {
-				logger.Warnln("Error changing validator set", "error", err)
+				epoch.logger.Warn("Error changing validator set", "error", err)
 				return nil, nil, err
 			}
 			// Update validator accums and set state variables
 			nextEpoch.Validators.IncrementAccum(1)
 
 			nextEpoch.NextEpoch = nil //suppose we will not generate a more epoch after next-epoch
-			logger.Infof("Enter into New Epoch %v", nextEpoch)
+			epoch.logger.Infof("Enter into New Epoch %v", nextEpoch)
 			return nextEpoch, refund, nil
 		} else {
 			return nil, nil, NextEpochNotExist
@@ -545,7 +500,7 @@ func (epoch *Epoch) GetEpochByBlockNumber(blockNumber uint64) *Epoch {
 
 	for number := epoch.Number - 1; number >= 0; number-- {
 
-		ep := loadOneEpoch(epoch.db, number)
+		ep := loadOneEpoch(epoch.db, number, epoch.logger)
 		if ep == nil {
 			return nil
 		}
@@ -576,8 +531,9 @@ func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
 	}
 
 	return &Epoch{
-		mtx: epoch.mtx,
-		db:  epoch.db,
+		mtx:    epoch.mtx,
+		db:     epoch.db,
+		logger: epoch.logger,
 
 		RS: epoch.RS,
 
@@ -607,7 +563,7 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight uint64) (rewardPerBlock 
 	//var allocated            = epoch.RS.allocated //0
 	var epochNumberPerYear = epoch.RS.epochNumberPerYear //12
 
-	zeroEpoch := loadOneEpoch(epoch.db, 0)
+	zeroEpoch := loadOneEpoch(epoch.db, 0, epoch.logger)
 	initStartTime := zeroEpoch.StartTime
 
 	//from 0 year
@@ -632,7 +588,7 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight uint64) (rewardPerBlock 
 
 		blocksOfNextEpoch = uint64(epochTimePerEpochLeftNextYear / timePerBlockThisEpoch)
 		if blocksOfNextEpoch == 0 {
-			logger.Panicln("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
+			epoch.logger.Crit("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
 		}
 
 		rewardPerEpochNextYear := calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear, int64(nextYear), int64(epochNumberPerYear))
@@ -649,7 +605,7 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight uint64) (rewardPerBlock 
 
 		blocksOfNextEpoch = uint64(epochTimePerEpochLeftThisYear / timePerBlockThisEpoch)
 		if blocksOfNextEpoch == 0 {
-			logger.Panicln("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
+			epoch.logger.Crit("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
 		}
 
 		rewardPerEpochThisYear := calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear, int64(thisYear), int64(epochNumberPerYear))

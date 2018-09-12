@@ -3,7 +3,7 @@ package rpc
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/pchain/common/plogger"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tendermint/go-rpc/server"
 	"gopkg.in/urfave/cli.v1"
 	"net"
@@ -11,14 +11,12 @@ import (
 	"strconv"
 )
 
-var logger = plogger.GetLogger("rpc")
-
 var listeners map[string]net.Listener
 var muxes map[string]*http.ServeMux
 
 func Hookup(chainId string, handler http.Handler) error {
 
-	logger.Infof("Hookup RPC for (chainId, rpc Handler): (%v, %v)", chainId, handler)
+	log.Infof("Hookup RPC for (chainId, rpc Handler): (%v, %v)", chainId, handler)
 	for _, mux := range muxes {
 		if handler != nil {
 			mux.Handle("/"+chainId, handler)
@@ -57,9 +55,9 @@ func StartRPC(ctx *cli.Context) error {
 
 func StopRPC() {
 	for _, l := range listeners {
-		logger.Infoln("Closing rpc listener", "listener", l)
+		log.Info("Closing rpc listener", "listener", l)
 		if err := l.Close(); err != nil {
-			logger.Errorln("Error closing listener", "listener", l, "error", err)
+			log.Error("Error closing listener", "listener", l, "error", err)
 		}
 	}
 }

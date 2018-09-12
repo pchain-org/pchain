@@ -35,7 +35,7 @@ const (
 
 // DefaultConfig contains reasonable default settings.
 var DefaultConfig = Config{
-	GeneralDataDir:	  DefaultDataDir(),
+	GeneralDataDir:   DefaultDataDir(),
 	DataDir:          DefaultDataDir(),
 	HTTPPort:         DefaultHTTPPort,
 	HTTPModules:      []string{"net", "web3"},
@@ -56,11 +56,11 @@ func DefaultDataDir() string {
 	home := homeDir()
 	if home != "" {
 		if runtime.GOOS == "darwin" {
-			return filepath.Join(home, "Library", "Ethereum")
+			return filepath.Join(home, "Library", "Pchain")
 		} else if runtime.GOOS == "windows" {
-			return filepath.Join(home, "AppData", "Roaming", "Ethereum")
+			return filepath.Join(home, "AppData", "Roaming", "Pchain")
 		} else {
-			return filepath.Join(home, ".ethereum")
+			return filepath.Join(home, ".pchain")
 		}
 	}
 	// As we cannot guess a stable location, return empty and handle later

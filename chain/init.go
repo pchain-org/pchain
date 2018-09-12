@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"os"
 	"path/filepath"
 
@@ -81,7 +82,7 @@ func init_cmd(ctx *cli.Context, config cfg.Config, chainId string, ethGenesisPat
 }
 
 func InitEthGenesis(ctx *cli.Context) error {
-	logger.Infoln("this is init_eth_genesis")
+	log.Info("this is init_eth_genesis")
 	args := ctx.Args()
 	if len(args) != 1 {
 		utils.Fatalf("len of args is %d", len(args))
@@ -137,7 +138,7 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 func init_eth_blockchain(chainId string, ethGenesisPath string, ctx *cli.Context) {
 
 	dbPath := filepath.Join(utils.MakeDataDir(ctx), chainId, "geth/chaindata")
-	logger.Infof("init_eth_blockchain 0 with dbPath: %s", dbPath)
+	log.Infof("init_eth_blockchain 0 with dbPath: %s", dbPath)
 
 	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MakeDataDir(ctx), chainId, gethmain.ClientIdentifier, "chaindata"), 0, 0)
 	if err != nil {
@@ -145,21 +146,21 @@ func init_eth_blockchain(chainId string, ethGenesisPath string, ctx *cli.Context
 	}
 	defer chainDb.Close()
 
-	logger.Info("init_eth_blockchain 1")
+	log.Info("init_eth_blockchain 1")
 	genesisFile, err := os.Open(ethGenesisPath)
 	if err != nil {
 		utils.Fatalf("failed to read genesis file: %v", err)
 	}
 	defer genesisFile.Close()
 
-	logger.Info("init_eth_blockchain 2")
+	log.Info("init_eth_blockchain 2")
 	block, err := core.WriteGenesisBlock(chainDb, genesisFile)
 	if err != nil {
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
 
-	logger.Info("init_eth_blockchain end")
-	logger.Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
+	log.Info("init_eth_blockchain end")
+	log.Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
 }
 
 func init_em_files(config cfg.Config, chainId string, genesisPath string, validators []types.GenesisValidator) error {
@@ -258,7 +259,7 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 		if privValidator != nil {
 			coinbase, amount, checkErr := checkAccount(*coreGenesis)
 			if checkErr != nil {
-				logger.Infof(checkErr.Error())
+				log.Infof(checkErr.Error())
 				cmn.Exit(checkErr.Error())
 			}
 
@@ -285,7 +286,7 @@ func createPriValidators(config cfg.Config, num int) []*types.PrivValidator {
 	for i := 0; i < num; i++ {
 		validators[i], newKey = types.GenPrivValidatorKey()
 		pwd := "pchain"
-		logger.Infoln("account:", common.ToHex(validators[i].Address), "pwd:", pwd)
+		log.Info("account:", common.ToHex(validators[i].Address), "pwd:", pwd)
 		a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
 		if err := ks.StoreKey(a.URL.Path, newKey, pwd); err != nil {
 			utils.Fatalf("store key failed")
@@ -307,9 +308,9 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, *big.Int, error) {
 	amount := big.NewInt(10)
 	balance := big.NewInt(-1)
 	found := false
-	logger.Infof("checkAccount(), coinbase is %x", coinbase)
+	log.Infof("checkAccount(), coinbase is %x", coinbase)
 	for address, account := range coreGenesis.Alloc {
-		logger.Infof("checkAccount(), address is %x, balance is %v, amount is %v", address, account.Balance, account.Amount)
+		log.Infof("checkAccount(), address is %x, balance is %v, amount is %v", address, account.Balance, account.Amount)
 		if coinbase == address {
 			balance = account.Balance
 			amount = account.Amount
@@ -319,12 +320,12 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, *big.Int, error) {
 	}
 
 	if !found {
-		logger.Error("invalidate eth_account")
+		log.Error("invalidate eth_account")
 		return common.Address{}, nil, errors.New("invalidate eth_account")
 	}
 
 	if balance.Sign() == -1 || amount.Sign() == -1 {
-		logger.Errorf("balance / amount can't be negative integer, balance is %v, amount is %v", balance, amount)
+		log.Errorf("balance / amount can't be negative integer, balance is %v, amount is %v", balance, amount)
 		return common.Address{}, nil, errors.New("no enough balance")
 	}
 

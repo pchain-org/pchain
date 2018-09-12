@@ -81,7 +81,7 @@ func (s *State) ApplyBlock(block *ethTypes.Block, epoch *ep.Epoch) *ep.Epoch {
 		epoch, _, _ := epoch.EnterNewEpoch(tdmExtra.Height)
 		epoch.Save()
 	} else if err != nil {
-		logger.Error(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
+		s.logger.Error(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
 			tdmExtra.Height, s.Epoch, err))
 		return nil
 	}

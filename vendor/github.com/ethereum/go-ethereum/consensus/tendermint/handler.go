@@ -18,10 +18,10 @@ package tendermint
 
 import (
 	"errors"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
@@ -37,7 +37,7 @@ var (
 // Protocol implements consensus.Engine.Protocol
 func (sb *backend) Protocol() consensus.Protocol {
 
-	logger.Info("Tendermint (backend) Protocol, add logic here")
+	sb.logger.Info("Tendermint (backend) Protocol, add logic here")
 
 	return consensus.Protocol{
 		Name:     "pchain" + sb.chainConfig.PChainId,
@@ -51,7 +51,7 @@ func (sb *backend) HandleMsg(addr common.Address, msg p2p.Msg) (bool, error) {
 	sb.coreMu.Lock()
 	defer sb.coreMu.Unlock()
 
-	logger.Info("Tendermint (backend) HandleMsg, add logic here")
+	sb.logger.Info("Tendermint (backend) HandleMsg, add logic here")
 
 	return false, nil
 }
@@ -59,13 +59,13 @@ func (sb *backend) HandleMsg(addr common.Address, msg p2p.Msg) (bool, error) {
 // SetBroadcaster implements consensus.Handler.SetBroadcaster
 func (sb *backend) SetBroadcaster(broadcaster consensus.Broadcaster) {
 
-	logger.Infof("Tendermint (backend) SetBroadcaster: %p", broadcaster)
+	sb.logger.Infof("Tendermint (backend) SetBroadcaster: %p", broadcaster)
 	sb.broadcaster = broadcaster
 }
 
 func (sb *backend) GetBroadcaster() consensus.Broadcaster {
 
-	logger.Infof("Tendermint (backend) GetBroadcaster: %p", sb.broadcaster)
+	sb.logger.Infof("Tendermint (backend) GetBroadcaster: %p", sb.broadcaster)
 	return sb.broadcaster
 }
 
@@ -77,4 +77,8 @@ func (sb *backend) NewChainHead() error {
 	}
 	go tdmTypes.FireEventFinalCommitted(sb.core.EventSwitch(), tdmTypes.EventDataFinalCommitted{})
 	return nil
+}
+
+func (sb *backend) GetLogger() log.Logger {
+	return sb.logger
 }
