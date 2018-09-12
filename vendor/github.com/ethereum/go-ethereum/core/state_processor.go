@@ -57,13 +57,14 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, []string, error) {
+func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, *types.PendingOps, error) {
 	var (
 		receipts types.Receipts
 		usedGas  = new(uint64)
 		header   = block.Header()
 		allLogs  []*types.Log
 		gp       = new(GasPool).AddGas(block.GasLimit())
+		ops      = new(types.PendingOps)
 	)
 	// Mutate the the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
@@ -74,7 +75,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
 		//receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
 		totalUsedMoney := big.NewInt(0)
-		receipt, _, err := ApplyTransactionEx(p.config, p.bc, nil, gp, statedb, header, tx,
+		receipt, _, err := ApplyTransactionEx(p.config, p.bc, nil, gp, statedb, ops, header, tx,
 			usedGas, totalUsedMoney, cfg, p.cch)
 		fmt.Printf("(p *StateProcessor) Process()，after ApplyTransactionEx, receipt is %v\n", receipt)
 		if err != nil {
@@ -84,9 +85,12 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	_, childChainIds, _ := p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
+	_, fops, _ := p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
+	for i := range fops {
+		ops.Append(fops[i]) // ignore 'bool' ret here.
+	}
 
-	return receipts, allLogs, *usedGas, childChainIds, nil
+	return receipts, allLogs, *usedGas, ops, nil
 }
 
 // ApplyTransaction attempts to apply a transaction to the given state database

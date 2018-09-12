@@ -15,7 +15,7 @@ import (
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB,
+func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, ops *types.PendingOps,
 	header *types.Header, tx *types.Transaction, usedGas *uint64, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper) (*types.Receipt, uint64, error) {
 
 	fmt.Printf("ApplyTransactionEx 0\n")
@@ -98,7 +98,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		if applyCb := GetApplyCb(etd.FuncName); applyCb != nil {
 			cch.GetMutex().Lock()
 			defer cch.GetMutex().Unlock()
-			if err := applyCb(tx, statedb, cch); err != nil {
+			if err := applyCb(tx, statedb, ops, cch); err != nil {
 				return nil, 0, err
 			}
 		}

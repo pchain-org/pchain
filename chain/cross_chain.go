@@ -449,70 +449,54 @@ func (cch *CrossChainHelper) SaveChildChainBlockToMainChain(bs []byte) error {
 	return nil
 }
 
-func (cch *CrossChainHelper) AddToChildChainTx(chainId string, account common.Address, txHash common.Hash) error {
+func (cch *CrossChainHelper) MarkToChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error {
 	chainMgr := GetCMInstance(nil)
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
 	chainDb := ethereum.ChainDb()
 
-	return core.AddCrossChainTx(chainDb, core.MainChainToChildChain, chainId, account, txHash)
+	return core.MarkCrossChainTx(chainDb, core.MainChainToChildChain, from, chainId, txHash, used)
 }
 
-func (cch *CrossChainHelper) RemoveToChildChainTx(chainId string, account common.Address, txHash common.Hash) error {
+func (cch *CrossChainHelper) ValidateToChildChainTx(from common.Address, chainId string, txHash common.Hash) core.CrossChainTxState {
 	chainMgr := GetCMInstance(nil)
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
 	chainDb := ethereum.ChainDb()
 
-	return core.RemoveCrossChainTx(chainDb, core.MainChainToChildChain, chainId, account, txHash)
+	return core.ValidateCrossChainTx(chainDb, core.MainChainToChildChain, from, chainId, txHash)
 }
 
-func (cch *CrossChainHelper) HasToChildChainTx(chainId string, account common.Address, txHash common.Hash) bool {
+func (cch *CrossChainHelper) MarkFromChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error {
 	chainMgr := GetCMInstance(nil)
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
 	chainDb := ethereum.ChainDb()
 
-	return core.HasCrossChainTx(chainDb, core.MainChainToChildChain, chainId, account, txHash)
+	return core.MarkCrossChainTx(chainDb, core.ChildChainToMainChain, from, chainId, txHash, used)
 }
 
-func (cch *CrossChainHelper) AddFromChildChainTx(chainId string, account common.Address, txHash common.Hash) error {
+func (cch *CrossChainHelper) ValidateFromChildChainTx(from common.Address, chainId string, txHash common.Hash) core.CrossChainTxState {
 	chainMgr := GetCMInstance(nil)
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
 	chainDb := ethereum.ChainDb()
 
-	return core.AddCrossChainTx(chainDb, core.ChildChainToMainChain, chainId, account, txHash)
+	return core.ValidateCrossChainTx(chainDb, core.ChildChainToMainChain, from, chainId, txHash)
 }
 
-func (cch *CrossChainHelper) RemoveFromChildChainTx(chainId string, account common.Address, txHash common.Hash) error {
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.RemoveCrossChainTx(chainDb, core.ChildChainToMainChain, chainId, account, txHash)
-}
-
-func (cch *CrossChainHelper) HasFromChildChainTx(chainId string, account common.Address, txHash common.Hash) bool {
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.HasCrossChainTx(chainDb, core.ChildChainToMainChain, chainId, account, txHash)
-}
-
-func (cch *CrossChainHelper) AppendUsedChildChainTx(chainId string, account common.Address, txHash common.Hash) error {
+func (cch *CrossChainHelper) MarkTxUsedOnChildChain(from common.Address, chainId string, txHash common.Hash) error {
 	chainMgr := GetCMInstance(nil)
 	chain := chainMgr.childChains[chainId]
 	ethereum := MustGetEthereumFromNode(chain.EthNode)
 	chainDb := ethereum.ChainDb()
 
-	return core.AppendUsedChildChainTx(chainDb, chainId, account, txHash)
+	return core.MarkTxUsedOnChildChain(chainDb, from, chainId, txHash)
 }
 
-func (cch *CrossChainHelper) HasUsedChildChainTx(chainId string, account common.Address, txHash common.Hash) bool {
+func (cch *CrossChainHelper) IsTxUsedOnChildChain(from common.Address, chainId string, txHash common.Hash) bool {
 	chainMgr := GetCMInstance(nil)
 	chain := chainMgr.childChains[chainId]
 	ethereum := MustGetEthereumFromNode(chain.EthNode)
 	chainDb := ethereum.ChainDb()
 
-	return core.HasUsedChildChainTx(chainDb, chainId, account, txHash)
+	return core.IsTxUsedOnChildChain(chainDb, from, chainId, txHash)
 }
 
 func MustGetEthereumFromNode(node *node.Node) *eth.Ethereum {

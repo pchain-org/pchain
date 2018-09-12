@@ -74,10 +74,11 @@ type Work struct {
 
 	Block *types.Block // the new block
 
-	header        *types.Header
-	txs           []*types.Transaction
-	receipts      []*types.Receipt
-	childChainIds []string
+	header   *types.Header
+	txs      []*types.Transaction
+	receipts []*types.Receipt
+
+	ops *types.PendingOps // pending events here
 
 	createdAt time.Time
 }
@@ -337,6 +338,12 @@ func (self *worker) wait() {
 				log.Error("Failed writing block to chain", "err", err)
 				continue
 			}
+			// execute the pending ops.
+			for _, op := range work.ops.Ops() {
+				if err := core.ApplyOp(op, self.chain, self.cch); err != nil {
+					log.Error("Failed executing op", op, "err", err)
+				}
+			}
 			// check if canon block and write transactions
 			if stat == core.CanonStatTy {
 				// implicit by posting ChainHeadEvent
@@ -351,13 +358,6 @@ func (self *worker) wait() {
 			events = append(events, core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 			if stat == core.CanonStatTy {
 				events = append(events, core.ChainHeadEvent{Block: block})
-			}
-
-			if len(work.childChainIds) != 0 {
-				// Add Events for Create Child Chain
-				for _, childChainId := range work.childChainIds {
-					events = append(events, core.CreateChildChainEvent{ChainId: childChainId})
-				}
 			}
 
 			self.chain.PostChainEvents(events, logs)
@@ -399,6 +399,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		family:    set.New(),
 		uncles:    set.New(),
 		header:    header,
+		ops:       new(types.PendingOps),
 		createdAt: time.Now(),
 	}
 
@@ -512,9 +513,13 @@ func (self *worker) commitNewWork() {
 		delete(self.possibleUncles, hash)
 	}
 	// Create the new block to seal with the consensus engine
-	if work.Block, work.childChainIds, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
+	var ops []types.PendingOp
+	if work.Block, ops, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
 		log.Error("Failed to finalize block for sealing", "err", err)
 		return
+	}
+	for i := range ops {
+		work.ops.Append(ops[i]) // ignore 'bool' ret here.
 	}
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
@@ -726,7 +731,7 @@ func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.Transaction
 func (env *Work) commitTransactionEx(tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool, totalUsedMoney *big.Int, cch core.CrossChainHelper) (error, []*types.Log) {
 	snap := env.state.Snapshot()
 
-	receipt, _, err := core.ApplyTransactionEx(env.config, bc, nil, gp, env.state, env.header, tx, &env.header.GasUsed, totalUsedMoney, vm.Config{}, cch)
+	receipt, _, err := core.ApplyTransactionEx(env.config, bc, nil, gp, env.state, env.ops, env.header, tx, &env.header.GasUsed, totalUsedMoney, vm.Config{}, cch)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return err, nil

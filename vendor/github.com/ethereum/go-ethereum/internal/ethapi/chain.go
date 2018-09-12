@@ -273,7 +273,7 @@ func (s *PublicChainAPI) GetTxFromChildChainByHash(ctx context.Context, chainId 
 
 	childTx := cch.GetTxFromChildChain(txHash, chainId)
 	if childTx == nil {
-		return common.Hash{}, errors.New(fmt.Sprintf("tx %x does not exist in child chain %s", txHash, chainId))
+		return common.Hash{}, fmt.Errorf("tx %x does not exist in child chain %s", txHash, chainId)
 	}
 
 	return txHash, nil
@@ -327,7 +327,7 @@ func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 	return nil
 }
 
-func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
 	from, _ := etd.GetAddress(CCC_ARGS_FROM)
@@ -341,11 +341,17 @@ func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChai
 		return err
 	}
 
-	err := cch.CreateChildChain(from, chainId, uint16(minValidators), minDepositAmount, startBlock, endBlock)
-	if err != nil {
-		return err
+	op := types.CreateChildChainOp{
+		From:             from,
+		ChainId:          chainId,
+		MinValidators:    uint16(minValidators),
+		MinDepositAmount: minDepositAmount,
+		StartBlock:       startBlock,
+		EndBlock:         endBlock,
 	}
-
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
+	}
 	return nil
 }
 
@@ -369,7 +375,7 @@ func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 	return nil
 }
 
-func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
 	from, _ := etd.GetAddress(JCC_ARGS_FROM)
@@ -386,15 +392,19 @@ func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChai
 		return err
 	}
 
-	// Add the validator into Chain DB
-	err := cch.JoinChildChain(from, pubkey, chainId, depositAmount)
-	if err != nil {
-		return err
-	} else {
-		// Everything fine, Lock the Balance for this account
-		state.SubBalance(from, depositAmount)
-		state.AddChildChainDepositBalance(from, chainId, depositAmount)
+	op := types.JoinChildChainOp{
+		From:          from,
+		PubKey:        pubkey,
+		ChainId:       chainId,
+		DepositAmount: depositAmount,
 	}
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
+	}
+
+	// Everything fine, Lock the Balance for this account
+	state.SubBalance(from, depositAmount)
+	state.AddChildChainDepositBalance(from, chainId, depositAmount)
 
 	return nil
 }
@@ -408,17 +418,17 @@ func dimc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 
 	running := core.CheckChildChainRunning(cch.GetChainInfoDB(), chainId)
 	if !running {
-		return errors.New(fmt.Sprintf("%s chain not running", chainId))
+		return fmt.Errorf("%s chain not running", chainId)
 	}
 
 	if state.GetBalance(from).Cmp(amount) < 0 {
-		return errors.New(fmt.Sprintf("%x has no enough balance for deposit", from))
+		return fmt.Errorf("%x has no enough balance for deposit", from)
 	}
 
 	return nil
 }
 
-func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
 	from, _ := etd.GetAddress(DIMC_ARGS_FROM)
@@ -427,19 +437,27 @@ func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossCha
 
 	running := core.CheckChildChainRunning(cch.GetChainInfoDB(), chainId)
 	if !running {
-		return errors.New(fmt.Sprintf("%s chain not running", chainId))
+		return fmt.Errorf("%s chain not running", chainId)
 	}
 
 	if state.GetBalance(from).Cmp(amount) < 0 {
-		return errors.New(fmt.Sprintf("%x has no enough balance for deposit", from))
+		return fmt.Errorf("%x has no enough balance for deposit", from)
+	}
+
+	op := types.MarkMainChainToChildChainTxOp{
+		CrossChainTx: types.CrossChainTx{
+			From:    from,
+			ChainId: chainId,
+			TxHash:  tx.Hash(),
+		},
+	}
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
 	}
 
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), chainId)
 	state.SubBalance(from, amount)
 	state.AddChainBalance(chainInfo.Owner, amount)
-
-	// record this cross chain tx
-	cch.AddToChildChainTx(chainId, from, tx.Hash())
 
 	return nil
 }
@@ -453,21 +471,22 @@ func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 
 	mainTx := cch.GetTxFromMainChain(txHash)
 	if mainTx == nil {
-		return errors.New(fmt.Sprintf("tx %x does not exist in main chain", txHash))
+		return fmt.Errorf("tx %x does not exist in main chain", txHash)
 	}
 
 	// check from the main chain perspective
-	if !cch.HasToChildChainTx(chainId, from, txHash) {
-		return errors.New(fmt.Sprintf("tx %x already been used", txHash))
+	if s := cch.ValidateToChildChainTx(from, chainId, txHash); s != core.CrossChainTxReady {
+		return fmt.Errorf("tx %x has wrong state: %v", txHash, s)
 	}
+
 	// check from the child chain perspective
-	if cch.HasUsedChildChainTx(chainId, from, txHash) {
-		return errors.New(fmt.Sprintf("tx %x already been used", txHash))
+	if cch.IsTxUsedOnChildChain(from, chainId, txHash) {
+		return fmt.Errorf("tx %x already used in child chain", txHash)
 	}
 
 	mainEtd := mainTx.ExtendTxData()
 	if mainEtd == nil || mainEtd.FuncName != DIMCFuncName {
-		return errors.New(fmt.Sprintf("not expected tx %s", mainEtd))
+		return fmt.Errorf("not expected tx %s", mainEtd)
 	}
 
 	mainFrom, _ := mainEtd.GetAddress(DIMC_ARGS_FROM)
@@ -480,7 +499,7 @@ func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 	return nil
 }
 
-func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
 	from, _ := etd.GetAddress(DICC_ARGS_FROM)
@@ -489,21 +508,22 @@ func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossCha
 
 	mainTx := cch.GetTxFromMainChain(txHash)
 	if mainTx == nil {
-		return errors.New(fmt.Sprintf("tx %x does not exist in main chain", txHash))
+		return fmt.Errorf("tx %x does not exist in main chain", txHash)
 	}
 
 	// check from the main chain perspective
-	if !cch.HasToChildChainTx(chainId, from, txHash) {
-		return errors.New(fmt.Sprintf("tx %x already been used", txHash))
+	if s := cch.ValidateToChildChainTx(from, chainId, txHash); s != core.CrossChainTxReady {
+		return fmt.Errorf("tx %x has wrong state: %v", txHash, s)
 	}
+
 	// check from the child chain perspective
-	if cch.HasUsedChildChainTx(chainId, from, txHash) {
-		return errors.New(fmt.Sprintf("tx %x already been used", txHash))
+	if cch.IsTxUsedOnChildChain(from, chainId, txHash) {
+		return fmt.Errorf("tx %x already used in child chain", txHash)
 	}
 
 	mainEtd := mainTx.ExtendTxData()
 	if mainEtd == nil || mainEtd.FuncName != DIMCFuncName {
-		return errors.New(fmt.Sprintf("not expected tx %s", mainEtd))
+		return fmt.Errorf("not expected tx %s", mainEtd)
 	}
 
 	mainFrom, _ := mainEtd.GetAddress(DIMC_ARGS_FROM)
@@ -514,8 +534,16 @@ func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossCha
 		return errors.New("params are not consistent with tx in main chain")
 	}
 
-	cch.AppendUsedChildChainTx(chainId, from, txHash)
-	// the cross chain tx will be removed(in main chain db) when saving the child chain block to the main chain.
+	op := types.MarkTxUsedOnChildChainOp{
+		CrossChainTx: types.CrossChainTx{
+			From:    from,
+			ChainId: chainId,
+			TxHash:  txHash,
+		},
+	}
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
+	}
 
 	state.AddBalance(mainFrom, mainAmount)
 
@@ -535,7 +563,7 @@ func wfcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 	return nil
 }
 
-func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
 	from, _ := etd.GetAddress(WFCC_ARGS_FROM)
@@ -546,8 +574,6 @@ func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossCha
 	}
 
 	state.SubBalance(from, amount)
-
-	// the cross chain tx will be added(in main chain db) when saving the child chain block to the main chain.
 
 	return nil
 }
@@ -561,22 +587,23 @@ func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 
 	childTx := cch.GetTxFromChildChain(txHash, chainId)
 	if childTx == nil {
-		return errors.New(fmt.Sprintf("tx %x does not exist in child chain %s", txHash, chainId))
+		return fmt.Errorf("tx %x does not exist in child chain %s", txHash, chainId)
 	}
 
-	if !cch.HasFromChildChainTx(chainId, from, txHash) {
-		return errors.New(fmt.Sprintf("tx %x already been used", txHash))
+	if s := cch.ValidateFromChildChainTx(from, chainId, txHash); s != core.CrossChainTxReady {
+		return fmt.Errorf("tx %x has wrong state: %v", txHash, s)
 	}
 
 	childEtd := childTx.ExtendTxData()
 	if childEtd == nil || childEtd.FuncName != WFCCFuncName {
-		return errors.New(fmt.Sprintf("not expected tx %s", childEtd))
+		return fmt.Errorf("not expected tx %s", childEtd)
 	}
 
 	childFrom, _ := childEtd.GetAddress(WFCC_ARGS_FROM)
+	childChainId, _ := childEtd.GetString(WFCC_ARGS_CHAINID)
 	childAmount, _ := childEtd.GetBigInt(WFCC_ARGS_AMOUNT)
 
-	if childFrom != from {
+	if childFrom != from || childChainId != chainId {
 		return errors.New("params are not consistent with tx in child chain")
 	}
 
@@ -588,7 +615,7 @@ func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 	return nil
 }
 
-func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
 	from, _ := etd.GetAddress(WFMC_ARGS_FROM)
@@ -597,23 +624,23 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossCha
 
 	childTx := cch.GetTxFromChildChain(txHash, chainId)
 	if childTx == nil {
-		return errors.New(fmt.Sprintf("tx %x does not exist in child chain %s", txHash, chainId))
+		return fmt.Errorf("tx %x does not exist in child chain %s", txHash, chainId)
 	}
 
-	if !cch.HasFromChildChainTx(chainId, from, txHash) {
-		return errors.New(fmt.Sprintf("tx %x already been used", txHash))
+	if s := cch.ValidateFromChildChainTx(from, chainId, txHash); s != core.CrossChainTxReady {
+		return fmt.Errorf("tx %x has wrong state: %v", txHash, s)
 	}
 
 	childEtd := childTx.ExtendTxData()
 	if childEtd == nil || childEtd.FuncName != WFCCFuncName {
-		return errors.New(fmt.Sprintf("not expected tx %s", childEtd))
+		return fmt.Errorf("not expected tx %s", childEtd)
 	}
 
 	childFrom, _ := childEtd.GetAddress(WFCC_ARGS_FROM)
 	childChainId, _ := childEtd.GetString(WFCC_ARGS_CHAINID)
 	childAmount, _ := childEtd.GetBigInt(WFCC_ARGS_AMOUNT)
 
-	if childFrom != from {
+	if childFrom != from || childChainId != chainId {
 		return errors.New("params are not consistent with tx in child chain")
 	}
 
@@ -623,8 +650,16 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossCha
 		return errors.New("no enough balance to withdraw")
 	}
 
-	// delete this cross chain tx
-	cch.RemoveFromChildChainTx(childChainId, childFrom, txHash)
+	op := types.MarkChildChainToMainChainTxUsedOp{
+		CrossChainTx: types.CrossChainTx{
+			From:    childFrom,
+			ChainId: childChainId,
+			TxHash:  txHash,
+		},
+	}
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
+	}
 
 	state.SubChainBalance(chainOwner, childAmount)
 	state.AddBalance(from, childAmount)
@@ -637,14 +672,21 @@ func sb2mc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cros
 	block := []byte(tx.Data())
 	err := cch.VerifyChildChainBlock(block)
 	if err != nil {
-		return errors.New("block does not pass verification")
+		return fmt.Errorf("block can not pass verification: %v", err)
 	}
 
 	return nil
 }
 
-func sb2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func sb2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 	block := []byte(tx.Data())
 
-	return cch.SaveChildChainBlockToMainChain(block)
+	op := types.SaveBlockToMainChainOp{
+		Block: block,
+	}
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
+	}
+
+	return nil
 }

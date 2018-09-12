@@ -401,14 +401,19 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 // Note, the block header and state database might be updated to reflect any
 // consensus rules that happen at finalization (e.g. block rewards).
 func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt) (*types.Block, []string, error) {
+	uncles []*types.Header, receipts []*types.Receipt) (*types.Block, []types.PendingOp, error) {
 
 	logger.Infof("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
-	var childChainIdForLaunch []string
+	var ops []types.PendingOp
 	if chain.Config().PChainId == "pchain" {
 		// Check the Child Chain Start
-		childChainIdForLaunch = sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
+		childChainIdsForLaunch := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
+		if len(childChainIdsForLaunch) > 0 {
+			ops = append(ops, &types.LaunchChildChainsOp{
+				ChildChainIds: childChainIdsForLaunch,
+			})
+		}
 	}
 
 	// Calculate the rewards, and drop the uncles
@@ -418,7 +423,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	header.UncleHash = types.TendermintNilUncleHash
 
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts), childChainIdForLaunch, nil
+	return types.NewBlock(header, txs, nil, receipts), ops, nil
 }
 
 // Seal generates a new block for the given input block with the local miner's

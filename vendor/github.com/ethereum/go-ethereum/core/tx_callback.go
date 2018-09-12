@@ -32,19 +32,17 @@ type CrossChainHelper interface {
 	SaveChildChainBlockToMainChain(bs []byte) error
 
 	// these should operate on the main chain db
-	AddToChildChainTx(chainId string, account common.Address, txHash common.Hash) error
-	RemoveToChildChainTx(chainId string, account common.Address, txHash common.Hash) error
-	HasToChildChainTx(chainId string, account common.Address, txHash common.Hash) bool
-	AddFromChildChainTx(chainId string, account common.Address, txHash common.Hash) error
-	RemoveFromChildChainTx(chainId string, account common.Address, txHash common.Hash) error
-	HasFromChildChainTx(chainId string, account common.Address, txHash common.Hash) bool
+	MarkToChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error
+	ValidateToChildChainTx(from common.Address, chainId string, txHash common.Hash) CrossChainTxState
+	MarkFromChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error
+	ValidateFromChildChainTx(from common.Address, chainId string, txHash common.Hash) CrossChainTxState
 	// these should operate on the child chain db
-	AppendUsedChildChainTx(chainId string, account common.Address, txHash common.Hash) error
-	HasUsedChildChainTx(chainId string, account common.Address, txHash common.Hash) bool
+	MarkTxUsedOnChildChain(from common.Address, chainId string, txHash common.Hash) error
+	IsTxUsedOnChildChain(from common.Address, chainId string, txHash common.Hash) bool
 }
 
 type EtdValidateCb func(tx *types.Transaction, state *state.StateDB, cch CrossChainHelper) error
-type EtdApplyCb func(tx *types.Transaction, state *state.StateDB, cch CrossChainHelper) error
+type EtdApplyCb func(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch CrossChainHelper) error
 type EtdInsertBlockCb func(block *types.Block)
 
 var validateCbMap = make(map[string]EtdValidateCb)

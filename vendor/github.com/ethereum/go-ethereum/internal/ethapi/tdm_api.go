@@ -113,7 +113,7 @@ func vne_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 	return err
 }
 
-func vne_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func vne_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 	from, _ := etd.GetAddress(VNE_ARGS_FROM)
 	voteHash, _ := etd.GetHash(VNE_ARGS_HASH)
@@ -164,7 +164,7 @@ func rev_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 	return err
 }
 
-func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 	etd := tx.ExtendTxData()
 
 	from, _ := etd.GetAddress(REV_ARGS_FROM)
