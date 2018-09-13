@@ -125,6 +125,7 @@ type Logger interface {
 	Crit(msg string, ctx ...interface{})
 
 	// Log a message with format
+	Debugf(format string, args ...interface{})
 	Infof(format string, args ...interface{})
 	Warnf(format string, args ...interface{})
 	Errorf(format string, args ...interface{})
@@ -188,6 +189,10 @@ func (l *logger) Error(msg string, ctx ...interface{}) {
 func (l *logger) Crit(msg string, ctx ...interface{}) {
 	l.write(msg, LvlCrit, ctx, skipLevel)
 	os.Exit(1)
+}
+
+func (l *logger) Debugf(format string, args ...interface{}) {
+	l.write(fmt.Sprintf(format, args...), LvlDebug, nil, skipLevel)
 }
 
 func (l *logger) Infof(format string, args ...interface{}) {
