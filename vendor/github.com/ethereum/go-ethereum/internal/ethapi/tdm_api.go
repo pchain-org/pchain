@@ -201,7 +201,7 @@ func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChai
 
 	if exist {
 		// Update the Hash Vote with Real Data
-		vote.PubKey = crypto.EtherumPubKey(common.FromHex(pubkey))
+		vote.PubKey = crypto.EthereumPubKey(common.FromHex(pubkey))
 		vote.Amount = depositAmount
 		vote.Salt = salt
 		vote.TxHash = tx.Hash()

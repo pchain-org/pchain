@@ -3,6 +3,7 @@ package types
 // canonical json is go-wire's json for structs with fields in alphabetical order
 import (
 	crypto "github.com/tendermint/go-crypto"
+	"math/big"
 )
 
 type CanonicalJSONBlockID struct {
@@ -21,6 +22,7 @@ type CanonicalJSONProposal struct {
 	POLBlockID       CanonicalJSONBlockID       `json:"pol_block_id"`
 	POLRound         int                        `json:"pol_round"`
 	Round            int                        `json:"round"`
+	Hash		 []byte 		    `json:"hash"`
 }
 
 type CanonicalJSONVote struct {
@@ -28,6 +30,16 @@ type CanonicalJSONVote struct {
 	Height  uint64                  `json:"height"`
 	Round   uint64                  `json:"round"`
 	Type    byte                 `json:"type"`
+}
+
+type CanonicalJSONSignAggr struct {
+        Height  uint64                  `json:"height"`
+        Round   int                  `json:"round"`
+        Type    byte                 `json:"type"`
+		NumValidators int	     `json:"NumValidators"`
+        BlockID CanonicalJSONBlockID `json:"block_id"`
+        Maj23   CanonicalJSONBlockID `json:"maj23"`
+	Sum	int64		     `json:"sum"`
 }
 
 //------------------------------------
@@ -43,11 +55,15 @@ type CanonicalJSONOnceVote struct {
 	Vote    CanonicalJSONVote `json:"vote"`
 }
 
+type CanonicalJSONOnceSignAggr struct {
+	ChainID		string            	`json:"chain_id"`
+	SignAggr	CanonicalJSONSignAggr	`json:"sign_aggr"`
+}
+
 //-----------------------------
 //author@liaoyd
 type CanonicalJSONOnceValidatorMsg struct {
 	ChainID string             `json:"chain_id"`
-	ValidatorMsg   CanonicalJSONValidatorMsg `json:"validator_msg"`
 }
 
 type CanonicalJSONValidatorMsg struct {
@@ -56,7 +72,7 @@ type CanonicalJSONValidatorMsg struct {
 	ValidatorIndex int           `json:"validator_index"`
 	Key            string        `json:"key"`
 	PubKey         crypto.PubKey `json:"pub_key"`
-	Power          uint64        `json:"power"`
+	Power          *big.Int      `json:"power"`
 	Action         string        `json:"action"`
         Target         string        `json:"target"`
 }
@@ -97,3 +113,14 @@ func CanonicalVote(vote *Vote) CanonicalJSONVote {
 	}
 }
 
+func CanonicalSignAggr(signAggr *SignAggr) CanonicalJSONSignAggr {
+	return CanonicalJSONSignAggr{
+		signAggr.Height,
+		signAggr.Round,
+		signAggr.Type,
+		signAggr.NumValidators,
+		CanonicalBlockID(signAggr.BlockID),
+		CanonicalBlockID(signAggr.Maj23),
+		signAggr.Sum,
+	}
+}

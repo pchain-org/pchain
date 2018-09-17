@@ -29,8 +29,6 @@ import (
 type ValidatorSet struct {
 	// NOTE: persisted via reflect, must be exported.
 	Validators []*Validator `json:"validators"`
-	Proposer   *Validator   `json:"proposer"`
-
 	// cached (unexported)
 	totalVotingPower *big.Int
 }
@@ -45,33 +43,9 @@ func NewValidatorSet(vals []*Validator) *ValidatorSet {
 		Validators: validators,
 	}
 
-	if vals != nil {
-		vs.IncrementAccum(1)
-	}
-
 	return vs
 }
 
-// incrementAccum and update the proposer
-// TODO: mind the overflow when times and votingPower shares too large.
-func (valSet *ValidatorSet) IncrementAccum(times int) {
-	// Add VotingPower * times to each validator and order into heap.
-	validatorsHeap := cmn.NewHeap()
-	for _, val := range valSet.Validators {
-		val.Accum.Add(val.Accum, new(big.Int).Mul(val.VotingPower, big.NewInt(int64(times)))) // TODO: mind overflow
-		validatorsHeap.Push(val, accumComparable{val})
-	}
-
-	// Decrement the validator with most accum times times
-	for i := 0; i < times; i++ {
-		mostest := validatorsHeap.Peek().(*Validator)
-		if i == times-1 {
-			valSet.Proposer = mostest
-		}
-		mostest.Accum.Sub(mostest.Accum, valSet.TotalVotingPower())
-		validatorsHeap.Update(mostest, accumComparable{mostest})
-	}
-}
 
 func (valSet *ValidatorSet) Copy() *ValidatorSet {
 	validators := make([]*Validator, len(valSet.Validators))
@@ -81,15 +55,48 @@ func (valSet *ValidatorSet) Copy() *ValidatorSet {
 	}
 	return &ValidatorSet{
 		Validators:       validators,
-		Proposer:         valSet.Proposer,
 		totalVotingPower: valSet.totalVotingPower,
 	}
+}
+
+func (valSet *ValidatorSet) AggrPubKey(bitMap *cmn.BitArray) crypto.PubKey {
+	if bitMap == nil {
+		return nil
+	}
+	if (int)(bitMap.Size()) != len(valSet.Validators) {
+		return nil
+	}
+	validators := valSet.Validators
+	var pks []*crypto.PubKey
+	for i := (uint64)(0); i < bitMap.Size(); i++ {
+		if bitMap.GetIndex(i) {
+			pks = append(pks, &(validators[i].PubKey))
+		}
+	}
+	return crypto.BLSPubKeyAggregate(pks)
+}
+
+func (valSet *ValidatorSet) TalliedVotingPower(bitMap *cmn.BitArray) (*big.Int, error) {
+	if bitMap == nil {
+		return big.NewInt(0),fmt.Errorf("Invalid bitmap(nil)")
+	}
+	validators := valSet.Validators
+	if validators == nil {
+		return big.NewInt(0), fmt.Errorf("Invalid validators(nil)")
+	}
+	if valSet.Size() != (int)(bitMap.Size()) {
+		return big.NewInt(0), fmt.Errorf("Size is not equal, validators size:%v, bitmap size:%v", valSet.Size(), bitMap.Size())
+	}
+	powerSum := big.NewInt(0)
+	for i := 0; i < (int)(bitMap.Size()); i++ {
+		powerSum.Add(powerSum,validators[i].VotingPower )
+	}
+	return powerSum,nil
 }
 
 func (valSet *ValidatorSet) Equals(other *ValidatorSet) bool {
 
 	if valSet.totalVotingPower.Cmp(other.totalVotingPower) != 0 ||
-		!valSet.Proposer.Equals(other.Proposer) ||
 		len(valSet.Validators) != len(other.Validators) {
 		return false
 	}
@@ -144,16 +151,6 @@ func (valSet *ValidatorSet) TotalVotingPower() *big.Int {
 	return valSet.totalVotingPower
 }
 
-func (valSet *ValidatorSet) GetProposer() (proposer *Validator) {
-	if len(valSet.Validators) == 0 {
-		return nil
-	}
-	if valSet.Proposer == nil {
-		valSet.Proposer = valSet.findProposer()
-	}
-	return valSet.Proposer.Copy()
-}
-
 func (valSet *ValidatorSet) findProposer() *Validator {
 	var proposer *Validator
 	for _, val := range valSet.Validators {
@@ -183,7 +180,6 @@ func (valSet *ValidatorSet) Add(val *Validator) (added bool) {
 	if idx == len(valSet.Validators) {
 		valSet.Validators = append(valSet.Validators, val)
 		// Invalidate cache
-		valSet.Proposer = nil
 		valSet.totalVotingPower = nil
 		return true
 	} else if bytes.Compare(valSet.Validators[idx].Address, val.Address) == 0 {
@@ -195,7 +191,6 @@ func (valSet *ValidatorSet) Add(val *Validator) (added bool) {
 		copy(newValidators[idx+1:], valSet.Validators[idx:])
 		valSet.Validators = newValidators
 		// Invalidate cache
-		valSet.Proposer = nil
 		valSet.totalVotingPower = nil
 		return true
 	}
@@ -208,7 +203,6 @@ func (valSet *ValidatorSet) Update(val *Validator) (updated bool) {
 	} else {
 		valSet.Validators[index] = val.Copy()
 		// Invalidate cache
-		valSet.Proposer = nil
 		valSet.totalVotingPower = nil
 		return true
 	}
@@ -228,7 +222,6 @@ func (valSet *ValidatorSet) Remove(address []byte) (val *Validator, removed bool
 		}
 		valSet.Validators = newValidators
 		// Invalidate cache
-		valSet.Proposer = nil
 		valSet.totalVotingPower = nil
 		return removedVal, true
 	}
@@ -246,50 +239,43 @@ func (valSet *ValidatorSet) Iterate(fn func(index int, val *Validator) bool) {
 // Verify that +2/3 of the set had signed the given signBytes
 func (valSet *ValidatorSet) VerifyCommit(chainID string, height uint64, commit *Commit) error {
 
-	if valSet.Size() != len(commit.Precommits) {
-		return fmt.Errorf("Invalid commit -- wrong set size: %v vs %v", valSet.Size(), len(commit.Precommits))
-	}
-
 	fmt.Printf("(valSet *ValidatorSet) VerifyCommit(), avoid valSet and commit.Precommits size check for validatorset change\n")
-	if height != commit.Height() {
-		return fmt.Errorf("Invalid commit -- wrong height: %v vs %v", height, commit.Height())
+	if commit == nil {
+		return fmt.Errorf("Invalid commit(nil)")
+	}
+	if (uint64)(valSet.Size()) != commit.BitArray.Size() {
+		return fmt.Errorf("Invalid commit -- wrong set size: %v vs %v", valSet.Size(), commit.BitArray.Size())
+	}
+	if height != commit.Height {
+		return fmt.Errorf("Invalid commit -- wrong height: %v vs %v", height, commit.Height)
 	}
 
-	talliedVotingPower := big.NewInt(0)
-	round := commit.Round()
+	pubKey := valSet.AggrPubKey(commit.BitArray)
+	vote := &Vote{
 
-	for idx, precommit := range commit.Precommits {
-		// may be nil if validator skipped.
-		if precommit == nil {
-			continue
-		}
-		if precommit.Height != height {
-			return fmt.Errorf("Invalid commit -- wrong height: %v vs %v", height, precommit.Height)
-		}
-		if int(precommit.Round) != round {
-			return fmt.Errorf("Invalid commit -- wrong round: %v vs %v", round, precommit.Round)
-		}
-		if precommit.Type != VoteTypePrecommit {
-			return fmt.Errorf("Invalid commit -- not precommit @ index %v", idx)
-		}
-		_, val := valSet.GetByIndex(idx)
-		// Validate signature
-		precommitSignBytes := SignBytes(chainID, precommit)
-		if !val.PubKey.VerifyBytes(precommitSignBytes, precommit.Signature) {
-			return fmt.Errorf("Invalid commit -- invalid signature: %v", precommit)
-		}
-		// Good precommit!
-		talliedVotingPower.Add(talliedVotingPower, val.VotingPower)
+		BlockID:	commit.BlockID,
+		Height: 	commit.Height,
+		Round: 		(uint64)(commit.Round),
+		Type: 		commit.Type(),
+	}
+	if !pubKey.VerifyBytes(SignBytes(chainID, vote), commit.SignAggr) {
+		return fmt.Errorf("Invalid commit -- wrong Signature:%v or BitArray:%v", commit.SignAggr, commit.BitArray)
 	}
 
-	twoThird := new(big.Int).Mul(valSet.TotalVotingPower(), big.NewInt(2))
-	twoThird.Div(twoThird, big.NewInt(3))
+	talliedVotingPower, err := valSet.TalliedVotingPower(commit.BitArray)
+	if err != nil {
+		return err
+	}
 
-	if talliedVotingPower.Cmp(twoThird) == 1 {
+	quorum := big.NewInt(0)
+	quorum.Mul(valSet.totalVotingPower, big.NewInt(2))
+	quorum.Div(quorum, big.NewInt(3))
+	quorum.Add(quorum, big.NewInt(1))
+	if talliedVotingPower.Cmp(quorum) >= 0 {
 		return nil
 	} else {
 		return fmt.Errorf("Invalid commit -- insufficient voting power: got %v, needed %v",
-			talliedVotingPower, twoThird.Add(twoThird, big.NewInt(1)))
+			talliedVotingPower, (quorum))
 	}
 }
 
@@ -404,11 +390,9 @@ func (valSet *ValidatorSet) StringIndented(indent string) string {
 		return false
 	})
 	return fmt.Sprintf(`ValidatorSet{
-%s  Proposer: %v
 %s  Validators:
 %s    %v
 %s}`,
-		indent, valSet.GetProposer().String(),
 		indent,
 		indent, strings.Join(valStrings, "\n"+indent+"    "),
 		indent)

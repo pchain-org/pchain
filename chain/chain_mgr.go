@@ -235,7 +235,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		}
 
 		// dereference the PubKey
-		if pubkey, ok := v.PubKey.(*crypto.EtherumPubKey); ok {
+		if pubkey, ok := v.PubKey.(*crypto.EthereumPubKey); ok {
 			v.PubKey = *pubkey
 		}
 

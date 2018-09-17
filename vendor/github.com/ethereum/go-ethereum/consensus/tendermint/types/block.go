@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -13,6 +12,7 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
+	"github.com/tendermint/go-crypto"
 )
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
@@ -197,117 +197,58 @@ type Commit struct {
 	// Any peer with a block can gossip precommits by index with a peer without recalculating the
 	// active ValidatorSet.
 	BlockID    BlockID `json:"blockID"`
-	Precommits []*Vote `json:"precommits"`
+	Height		uint64	`json:"height"`
+	Round		int	`json:"round"`
+
+	// BLS signature aggregation to be added here
+	SignAggr	crypto.BLSSignature     `json:"SignAggr"`
+	BitArray        *BitArray
 
 	// Volatile
-	firstPrecommit *Vote
-	hash           []byte
-	bitArray       *BitArray
+	hash            []byte
 }
 
-func (commit *Commit) FirstPrecommit() *Vote {
-	if len(commit.Precommits) == 0 {
-		return nil
-	}
-	if commit.firstPrecommit != nil {
-		return commit.firstPrecommit
-	}
-	for _, precommit := range commit.Precommits {
-		if precommit != nil {
-			commit.firstPrecommit = precommit
-			return precommit
-		}
-	}
-	return nil
-}
 
-func (commit *Commit) Height() uint64 {
-	if len(commit.Precommits) == 0 {
-		return 0
-	}
-	return commit.FirstPrecommit().Height
-}
-
-func (commit *Commit) Round() int {
-	if len(commit.Precommits) == 0 {
-		return 0
-	}
-	return int(commit.FirstPrecommit().Round)
-}
 
 func (commit *Commit) Type() byte {
 	return VoteTypePrecommit
 }
 
 func (commit *Commit) Size() int {
-	if commit == nil {
-		return 0
-	}
-	return len(commit.Precommits)
+	return (int)(commit.BitArray.Size())
 }
 
-func (commit *Commit) BitArray() *BitArray {
-	if commit.bitArray == nil {
-		commit.bitArray = NewBitArray(uint64(len(commit.Precommits)))
-		for i, precommit := range commit.Precommits {
-			commit.bitArray.SetIndex(uint64(i), precommit != nil)
-		}
-	}
-	return commit.bitArray
+func (commit *Commit) NumCommits() int {
+	return (int)(commit.BitArray.NumBitsSet())
 }
 
-func (commit *Commit) GetByIndex(index int) *Vote {
-	return commit.Precommits[index]
-}
-
-func (commit *Commit) IsCommit() bool {
-	if len(commit.Precommits) == 0 {
-		return false
-	}
-	return true
-}
 
 func (commit *Commit) ValidateBasic() error {
 	if commit.BlockID.IsZero() {
 		return errors.New("Commit cannot be for nil block")
 	}
-	if len(commit.Precommits) == 0 {
-		return errors.New("No precommits in commit")
+/*
+	if commit.Type() != VoteTypePrecommit {
+		return fmt.Errorf("Invalid commit type. Expected VoteTypePrecommit, got %v",
+			precommit.Type)
 	}
-	height, round := commit.Height(), commit.Round()
 
-	// validate the precommits
-	for _, precommit := range commit.Precommits {
-		// It's OK for precommits to be missing.
-		if precommit == nil {
-			continue
-		}
-		// Ensure that all votes are precommits
-		if precommit.Type != VoteTypePrecommit {
-			return fmt.Errorf("Invalid commit vote. Expected precommit, got %v",
-				precommit.Type)
-		}
-		// Ensure that all heights are the same
-		if precommit.Height != height {
-			return fmt.Errorf("Invalid commit precommit height. Expected %v, got %v",
-				height, precommit.Height)
-		}
-		// Ensure that all rounds are the same
-		if int(precommit.Round) != round {
-			return fmt.Errorf("Invalid commit precommit round. Expected %v, got %v",
-				round, precommit.Round)
-		}
-	}
+	// shall we validate the signature aggregation?
+*/
+
 	return nil
 }
 
 func (commit *Commit) Hash() []byte {
 	if commit.hash == nil {
+/*
 		bs := make([]interface{}, len(commit.Precommits))
 		for i, precommit := range commit.Precommits {
 			bs[i] = precommit
 		}
-		commit.hash = merkle.SimpleHashFromBinaries(bs)
+*/
+		hash := merkle.SimpleHashFromBinary(*commit)
+		commit.hash = hash
 	}
 	return commit.hash
 }
@@ -316,23 +257,25 @@ func (commit *Commit) StringIndented(indent string) string {
 	if commit == nil {
 		return "nil-Commit"
 	}
-	precommitStrings := make([]string, len(commit.Precommits))
-	for i, precommit := range commit.Precommits {
-		precommitStrings[i] = precommit.String()
-	}
 	return fmt.Sprintf(`Commit{
 %s  BlockID:    %v
-%s  Precommits: %v
+%s  Height:     %v
+%s  Round:      %v
+%s  Type:       %v
+%s  BitArray:   %v
 %s}#%X`,
 		indent, commit.BlockID,
-		indent, strings.Join(precommitStrings, "\n"+indent+"  "),
+		indent, commit.Height,
+		indent, commit.Round,
+		indent, commit.Type,
+		indent, commit.BitArray.String(),
 		indent, commit.hash)
 }
 
 //--------------------------------------------------------------------------------
 
 type BlockID struct {
-	Hash        []byte        `json:"hash"`
+	Hash        []byte       `json:"hash"`
 	PartsHeader PartSetHeader `json:"parts"`
 }
 

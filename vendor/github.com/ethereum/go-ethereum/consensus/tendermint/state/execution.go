@@ -1,19 +1,18 @@
 package state
 
 import (
-	"errors"
-	//"fmt"
-
-	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/pkg/errors"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	. "github.com/tendermint/go-common"
+	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 )
 
 //--------------------------------------------------
 
 // return a bit array of validators that signed the last commit
 // NOTE: assumes commits have already been authenticated
+/*
 func commitBitArrayFromBlock(block *types.TdmBlock) *BitArray {
 
 	signed := NewBitArray(uint64(len(block.TdmExtra.SeenCommit.Precommits)))
@@ -23,7 +22,7 @@ func commitBitArrayFromBlock(block *types.TdmBlock) *BitArray {
 		}
 	}
 	return signed
-}
+}*/
 
 //-----------------------------------------------------
 // Validate block

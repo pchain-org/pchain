@@ -72,6 +72,10 @@ func (info *NodeInfo) ListenHost() string {
 	return host
 }
 
+func (info *NodeInfo) ListenAddres() string {
+	return info.ListenAddr
+}
+
 func (info *NodeInfo) ListenPort() int {
 	_, port, _ := net.SplitHostPort(info.ListenAddr)
 	port_i, err := strconv.Atoi(port)

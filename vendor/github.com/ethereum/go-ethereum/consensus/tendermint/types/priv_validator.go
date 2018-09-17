@@ -85,8 +85,8 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 	if err != nil {
 		return nil, nil
 	}
-	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
-	privKey := crypto.EtherumPrivKey(ethcrypto.FromECDSA(newKey.PrivateKey))
+	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
+	privKey := crypto.EthereumPrivKey(ethcrypto.FromECDSA(newKey.PrivateKey))
 	return &PrivValidator{
 		Address:  pubKey.Address(),
 		PubKey:   pubKey,
@@ -111,8 +111,8 @@ func GenPrivValidator(keydir string) *PrivValidator {
 	if err := ks.StoreKey(a.URL.Path, newKey, ""); err != nil {
 		return nil
 	}
-	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
-	privKey := crypto.EtherumPrivKey(ethcrypto.FromECDSA(newKey.PrivateKey))
+	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
+	privKey := crypto.EthereumPrivKey(ethcrypto.FromECDSA(newKey.PrivateKey))
 	fmt.Println(len(privKey), len(pubKey), len(pubKey.Address()))
 	return &PrivValidator{
 		Address:  pubKey.Address(),
@@ -177,6 +177,10 @@ func (privVal *PrivValidator) save() {
 
 func (privVal *PrivValidator) GetAddress() []byte {
 	return privVal.Address
+}
+
+func (priVal *PrivValidator) GetPubKey() crypto.PubKey {
+	return priVal.PubKey
 }
 
 func (privVal *PrivValidator) SignVote(chainID string, vote *Vote) error {

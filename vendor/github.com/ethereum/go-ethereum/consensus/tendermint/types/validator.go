@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	abciTypes "github.com/tendermint/abci/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
-	"math/big"
 )
 
 // Volatile state for each Validator

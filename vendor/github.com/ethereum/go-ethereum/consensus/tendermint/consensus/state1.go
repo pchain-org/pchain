@@ -119,12 +119,12 @@ func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 
 	// Reset fields based on state.
 	_, validators, _ := state.GetValidators()
-	lastPrecommits := (*types.VoteSet)(nil)
+	lastPrecommits := (*types.SignAggr)(nil)
 	if cs.CommitRound > -1 && cs.Votes != nil {
 		if !cs.Votes.Precommits(cs.CommitRound).HasTwoThirdsMajority() {
 			cmn.PanicSanity("updateToState(state) called but last Precommit round didn't have +2/3")
 		}
-		lastPrecommits = cs.Votes.Precommits(cs.CommitRound)
+		lastPrecommits = cs.VoteSignAggr.Precommits(cs.CommitRound)
 	}
 
 	cs.Initialize()
