@@ -88,12 +88,12 @@ func (bs *BaseService) Start() (bool, error) {
 	if atomic.CompareAndSwapUint32(&bs.started, 0, 1) {
 		if atomic.LoadUint32(&bs.stopped) == 1 {
 			if bs.logger != nil {
-				bs.logger.Warn("Not starting ", bs.name, " -- already stopped, impl:", bs.impl)
+				bs.logger.Warnf("Not starting %v -- already stopped, impl: %v", bs.name, bs.impl)
 			}
 			return false, nil
 		} else {
 			if bs.logger != nil {
-				bs.logger.Info("Starting ", bs.name, " impl:", bs.impl)
+				bs.logger.Infof("Starting %v impl: %v", bs.name, bs.impl)
 			}
 		}
 		err := bs.impl.OnStart()
@@ -105,7 +105,7 @@ func (bs *BaseService) Start() (bool, error) {
 		return true, err
 	} else {
 		if bs.logger != nil {
-			bs.logger.Debug("Not starting ", bs.name, " -- already started, impl:", bs.impl)
+			bs.logger.Debugf("Not starting %v -- already started, impl: %v", bs.name, bs.impl)
 		}
 		return false, nil
 	}

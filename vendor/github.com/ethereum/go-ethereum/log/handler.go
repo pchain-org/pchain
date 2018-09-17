@@ -76,8 +76,9 @@ func FileHandler(path string, fmtr Format) (Handler, error) {
 
 // countingWriter wraps a WriteCloser object in order to count the written bytes.
 type countingWriter struct {
-	w     io.WriteCloser // the wrapped object
-	count uint           // number of bytes written
+	sync.RWMutex                // read write locker for rotate log file
+	w            io.WriteCloser // the wrapped object
+	count        uint           // number of bytes written
 }
 
 // Write increments the byte counter by the number of bytes written.
@@ -169,21 +170,38 @@ func RotatingFileHandler(path string, limit uint, formatter Format) (Handler, er
 	h := StreamHandler(counter, formatter)
 
 	return FuncHandler(func(r *Record) error {
+		counter.RLock()
+		defer counter.RUnlock()
+
 		if counter.count > limit {
-			counter.Close()
-			counter.w = nil
+			counter.RUnlock()
+			// Hold Write Lock to Reset the Log Counter
+			counter.Lock()
+			if counter.count > limit {
+				counter.Close()
+				counter.w = nil
+			}
+			counter.Unlock()
+			counter.RLock()
 		}
 		if counter.w == nil {
-			f, err := os.OpenFile(
-				filepath.Join(path, fmt.Sprintf("%s.log", strings.Replace(r.Time.Format("2006-01-02_150405.000"), ".", "_", 1))),
-				os.O_CREATE|os.O_APPEND|os.O_WRONLY,
-				0600,
-			)
-			if err != nil {
-				return err
+			counter.RUnlock()
+			// Hold Write Lock to Create a new log file
+			counter.Lock()
+			if counter.w == nil {
+				f, err := os.OpenFile(
+					filepath.Join(path, fmt.Sprintf("%s.log", strings.Replace(r.Time.Format("2006-01-02_150405.000"), ".", "_", 1))),
+					os.O_CREATE|os.O_APPEND|os.O_WRONLY,
+					0600,
+				)
+				if err != nil {
+					return err
+				}
+				counter.w = f
+				counter.count = 0
 			}
-			counter.w = f
-			counter.count = 0
+			counter.Unlock()
+			counter.RLock()
 		}
 		return h.Log(r)
 	}), nil
