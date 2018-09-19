@@ -41,7 +41,7 @@ func (sb *backend) Protocol() consensus.Protocol {
 
 	return consensus.Protocol{
 		Name:     "pchain" + sb.chainConfig.PChainId,
-		Versions: []uint{9},
+		Versions: []uint{64},
 		Lengths:  []uint64{64},
 	}
 }
