@@ -8,10 +8,10 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru"
 	"github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/tendermint/go-wire"
 	"math/big"
 	"time"
 )
@@ -291,16 +291,20 @@ func (sb *backend) verifyCommittedSeals(chain consensus.ChainReader, header *typ
 
 	epoch := sb.core.consensusState.Epoch.GetEpochByBlockNumber(tdmExtra.Height)
 	if epoch == nil || epoch.Validators == nil {
+		sb.logger.Errorf("verifyCommittedSeals error. Epoch %v", epoch)
 		return errInconsistentValidatorSet
 	}
 
 	valSet := epoch.Validators
 	if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
+		sb.logger.Errorf("verifyCommittedSeals error. Our Validator Set %x, tdmExtra Valdiator %x", valSet.Hash(), tdmExtra.ValidatorsHash)
 		return errInconsistentValidatorSet
 	}
 
 	seenCommit := tdmExtra.SeenCommit
 	if !bytes.Equal(tdmExtra.SeenCommitHash, seenCommit.Hash()) {
+		sb.logger.Errorf("verifyCommittedSeals SeenCommit is %#+v", seenCommit)
+		sb.logger.Errorf("verifyCommittedSeals error. Our SeenCommitHash %x, tdmExtra SeenCommitHash %x", seenCommit.Hash(), tdmExtra.SeenCommitHash)
 		return errInvalidCommittedSeals
 	}
 
@@ -659,10 +663,11 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 			return err
 		}
 	*/
-	payload, err := rlp.EncodeToBytes(tdmExtra)
-	if err != nil {
-		return err
-	}
+	payload := wire.BinaryBytes(*tdmExtra)
+	//payload, err := rlp.EncodeToBytes(tdmExtra)
+	//if err != nil {
+	//	return err
+	//}
 
 	h.Extra = payload
 	return nil
