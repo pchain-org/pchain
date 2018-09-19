@@ -108,7 +108,7 @@ func GenPrivValidator(keydir string) *PrivValidator {
 		return nil
 	}
 	a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
-	if err := ks.StoreKey(a.URL.Path, newKey, ""); err != nil {
+	if err := ks.StoreKey(a.URL.Path, newKey, "pchain"); err != nil {
 		return nil
 	}
 	pubKey := crypto.EtherumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
