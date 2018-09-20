@@ -36,6 +36,8 @@ func NewValidator(pubKey crypto.PubKey, votingPower *big.Int) *Validator {
 // Panics if the validator is nil.
 func (v *Validator) Copy() *Validator {
 	vCopy := *v
+	vCopy.VotingPower = new(big.Int).Set(v.VotingPower)
+	vCopy.Accum = new(big.Int).Set(v.Accum)
 	return &vCopy
 }
 
