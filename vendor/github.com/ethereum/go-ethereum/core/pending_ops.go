@@ -27,8 +27,8 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 		return cch.MarkTxUsedOnChildChain(op.From, op.ChainId, op.TxHash)
 	case *types.MarkChildChainToMainChainTxUsedOp:
 		return cch.MarkFromChildChainTx(op.From, op.ChainId, op.TxHash, true)
-	case *types.SaveBlockToMainChainOp:
-		return cch.SaveChildChainBlockToMainChain(op.Block)
+	case *types.SaveDataToMainChainOp:
+		return cch.SaveChildChainDataToMainChain(op.Data)
 	default:
 		return fmt.Errorf("unknown op: %v", op)
 	}

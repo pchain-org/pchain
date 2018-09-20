@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	pabi "github.com/pchain/abi"
 )
 
 type CrossChainTxType byte
@@ -102,33 +103,44 @@ func WriteChildChainBlock(db ethdb.Database, block *types.Block) error {
 
 	txs := block.Transactions()
 	for _, tx := range txs {
-		etd := tx.ExtendTxData()
-		if etd.FuncName == "WithdrawFromChildChain" {
-			// write the entire tx
-			bs, err := rlp.EncodeToBytes(tx)
+		if pabi.IsPChainContractAddr(tx.To()) {
+			data := tx.Data()
+			function, err := pabi.FunctionTypeFromId(data[:4])
 			if err != nil {
-				return err
-			}
-			txHash := tx.Hash()
-			key := calcChildChainTxKey(tdmExtra.ChainID, txHash)
-			err = db.Put(key, bs)
-			if err != nil {
-				return err
+				continue
 			}
 
-			// mark 'child chain to main chain' tx.
-			from, _ := etd.GetAddress("from")
-			err = MarkCrossChainTx(db, ChildChainToMainChain, from, tdmExtra.ChainID, txHash, false)
-			if err != nil {
-				return err
-			}
-		} else if etd.FuncName == "DepositInChildChain" {
-			from, _ := etd.GetAddress("from")
-			txHash, _ := etd.GetHash("txHash")
-			// mark 'main chain to child chain' tx as used.
-			err = MarkCrossChainTx(db, MainChainToChildChain, from, tdmExtra.ChainID, txHash, true)
-			if err != nil {
-				return err
+			if function == pabi.WithdrawFromChildChain {
+				// write the entire tx
+				bs, err := rlp.EncodeToBytes(tx)
+				if err != nil {
+					return err
+				}
+				txHash := tx.Hash()
+				key := calcChildChainTxKey(tdmExtra.ChainID, txHash)
+				err = db.Put(key, bs)
+				if err != nil {
+					return err
+				}
+
+				// mark 'child chain to main chain' tx.
+				from, _ := types.HomesteadSigner{}.Sender(tx) // TODO: which signer to use here?
+				err = MarkCrossChainTx(db, ChildChainToMainChain, from, tdmExtra.ChainID, txHash, false)
+				if err != nil {
+					return err
+				}
+			} else if function == pabi.DepositInChildChain {
+				var args pabi.DepositInChildChainArgs
+				if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.DepositInChildChain.String(), data[4:]); err != nil {
+					return err
+				}
+
+				from, _ := types.HomesteadSigner{}.Sender(tx) // TODO: which signer to use here?
+				// mark 'main chain to child chain' tx as used.
+				err = MarkCrossChainTx(db, MainChainToChildChain, from, tdmExtra.ChainID, args.TxHash, true)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

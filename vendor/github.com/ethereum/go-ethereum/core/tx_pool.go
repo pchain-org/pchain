@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	pabi "github.com/pchain/abi"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -582,8 +583,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrNonceTooLow
 	}
 
-	etd := tx.ExtendTxData()
-	if etd == nil || etd.FuncName == "" {
+	if !pabi.IsPChainContractAddr(tx.To()) {
 		// Transactions can't be negative. This may never happen using RLP decoded
 		// transactions but may occur if you create a transaction using the RPC.
 		if tx.Value().Sign() < 0 {
@@ -606,11 +606,17 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			return ErrIntrinsicGas
 		}
 	} else {
-		log.Info("etd.FuncName", etd.FuncName)
-		if validateCb := GetValidateCb(etd.FuncName); validateCb != nil {
+		// the first 4 bytes is the function identifier
+		data := tx.Data()
+		function, err := pabi.FunctionTypeFromId(data[:4])
+		if err != nil {
+			return err
+		}
+		log.Info("validateTx Chain Function", function.String())
+		if validateCb := GetValidateCb(function); validateCb != nil {
 			pool.cch.GetMutex().Lock()
 			defer pool.cch.GetMutex().Unlock()
-			if err := validateCb(tx, pool.currentState, pool.cch); err != nil {
+			if err := validateCb(tx, pool.signer, pool.currentState, pool.cch); err != nil {
 				return err
 			}
 		}

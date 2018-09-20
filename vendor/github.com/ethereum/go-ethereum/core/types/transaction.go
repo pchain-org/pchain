@@ -48,42 +48,6 @@ func deriveSigner(V *big.Int) Signer {
 	}
 }
 
-type OriTransaction struct {
-	data oritxdata
-	// caches
-	hash atomic.Value
-	size atomic.Value
-	from atomic.Value
-}
-
-type oritxdata struct {
-	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
-	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
-	GasLimit     uint64          `json:"gas"      gencodec:"required"`
-	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
-	Amount       *big.Int        `json:"value"    gencodec:"required"`
-	Payload      []byte          `json:"input"    gencodec:"required"`
-
-	// Signature values
-	V *big.Int `json:"v" gencodec:"required"`
-	R *big.Int `json:"r" gencodec:"required"`
-	S *big.Int `json:"s" gencodec:"required"`
-
-	// This is only used when marshaling to JSON.
-	Hash *common.Hash `json:"hash" rlp:"-"`
-}
-
-type oriTxdataMarshaling struct {
-	AccountNonce hexutil.Uint64
-	Price        *hexutil.Big
-	GasLimit     hexutil.Uint64
-	Amount       *hexutil.Big
-	Payload      hexutil.Bytes
-	V            *hexutil.Big
-	R            *hexutil.Big
-	S            *hexutil.Big
-}
-
 type Transaction struct {
 	data txdata
 	// caches
@@ -104,7 +68,6 @@ type txdata struct {
 	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
 	Amount       *big.Int        `json:"value"    gencodec:"required"`
 	Payload      []byte          `json:"input"    gencodec:"required"`
-	ExtendTxData *ExtendTxData
 
 	// Signature values
 	V *big.Int `json:"v" gencodec:"required"`
@@ -127,41 +90,8 @@ type txdataMarshaling struct {
 	S            *hexutil.Big
 }
 
-func OriToTransaction(oriTx *OriTransaction) *Transaction {
-
-	if oriTx == nil {
-		return nil
-	}
-
-	tx := &Transaction{
-		data: txdata{
-			AccountNonce: oriTx.data.AccountNonce,
-			Price:        oriTx.data.Price,
-			GasLimit:     oriTx.data.GasLimit,
-			Recipient:    oriTx.data.Recipient,
-			Amount:       oriTx.data.Amount,
-			Payload:      oriTx.data.Payload[:],
-			ExtendTxData: &ExtendTxData{},
-			V:            oriTx.data.V,
-			R:            oriTx.data.R,
-			S:            oriTx.data.S,
-			Hash:         oriTx.data.Hash,
-		},
-		hash: oriTx.hash,
-		size: oriTx.size,
-		from: oriTx.from,
-	}
-
-	return tx
-}
-
 func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
 	return newTransaction(nonce, &to, amount, gasLimit, gasPrice, data)
-}
-
-func NewTransactionEx(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte,
-	etd *ExtendTxData) *Transaction {
-	return newTransactionEx(nonce, to, amount, gasLimit, gasPrice, data, etd)
 }
 
 func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
@@ -176,35 +106,6 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 		AccountNonce: nonce,
 		Recipient:    to,
 		Payload:      data,
-		ExtendTxData: new(ExtendTxData),
-		Amount:       new(big.Int),
-		GasLimit:     gasLimit,
-		Price:        new(big.Int),
-		V:            new(big.Int),
-		R:            new(big.Int),
-		S:            new(big.Int),
-	}
-	if amount != nil {
-		d.Amount.Set(amount)
-	}
-	if gasPrice != nil {
-		d.Price.Set(gasPrice)
-	}
-
-	return &Transaction{data: d}
-}
-
-func newTransactionEx(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte,
-	etd *ExtendTxData) *Transaction {
-
-	if len(data) > 0 {
-		data = common.CopyBytes(data)
-	}
-	d := txdata{
-		AccountNonce: nonce,
-		Recipient:    to,
-		Payload:      data,
-		ExtendTxData: etd,
 		Amount:       new(big.Int),
 		GasLimit:     gasLimit,
 		Price:        new(big.Int),
@@ -239,22 +140,6 @@ func isProtectedV(V *big.Int) bool {
 	}
 	// anything not 27 or 28 are considered unprotected
 	return true
-}
-
-// EncodeRLP implements rlp.Encoder
-func (tx *OriTransaction) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &tx.data)
-}
-
-// DecodeRLP implements rlp.Decoder
-func (tx *OriTransaction) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	err := s.Decode(&tx.data)
-	if err == nil {
-		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
-	}
-
-	return err
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -301,13 +186,12 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-func (tx *Transaction) Data() []byte                { return common.CopyBytes(tx.data.Payload) }
-func (tx *Transaction) ExtendTxData() *ExtendTxData { return tx.data.ExtendTxData }
-func (tx *Transaction) Gas() uint64                 { return tx.data.GasLimit }
-func (tx *Transaction) GasPrice() *big.Int          { return new(big.Int).Set(tx.data.Price) }
-func (tx *Transaction) Value() *big.Int             { return new(big.Int).Set(tx.data.Amount) }
-func (tx *Transaction) Nonce() uint64               { return tx.data.AccountNonce }
-func (tx *Transaction) CheckNonce() bool            { return true }
+func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
+func (tx *Transaction) Gas() uint64        { return tx.data.GasLimit }
+func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Price) }
+func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
+func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
+func (tx *Transaction) CheckNonce() bool   { return true }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
@@ -432,7 +316,6 @@ func (tx *Transaction) String() string {
 		tx.data.GasLimit,
 		tx.data.Amount,
 		tx.data.Payload,
-		tx.data.ExtendTxData,
 		tx.data.V,
 		tx.data.R,
 		tx.data.S,

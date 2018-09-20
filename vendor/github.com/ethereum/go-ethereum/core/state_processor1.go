@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	pabi "github.com/pchain/abi"
 	"math/big"
 )
 
@@ -21,13 +22,13 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 	fmt.Printf("ApplyTransactionEx 0\n")
 
-	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
+	signer := types.MakeSigner(config, header.Number)
+	msg, err := tx.AsMessage(signer)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	etd := tx.ExtendTxData()
-	if etd == nil || etd.FuncName == "" {
+	if !pabi.IsPChainContractAddr(tx.To()) {
 
 		fmt.Printf("ApplyTransactionEx 1\n")
 
@@ -80,12 +81,17 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 	} else {
 
-		log.Infof("ApplyTransactionEx() 0, etd.FuncName is %v\n", etd.FuncName)
+		// the first 4 bytes is the function identifier
+		data := tx.Data()
+		function, err := pabi.FunctionTypeFromId(data[:4])
+		if err != nil {
+			return nil, 0, err
+		}
+		log.Infof("ApplyTransactionEx() 0, Chain Function is %v\n", function.String())
 
-		// Pre-pay gas for extended tx.
-		gas := tx.Gas()
-		gasPrice := tx.GasPrice()
-		gasValue := new(big.Int).Mul(new(big.Int).SetUint64(gas), gasPrice)
+		// instead of pre-buy '#GasLimit' Gas and return unused Gas, here we only buy the needed Gas.
+		gas := function.RequiredGas()
+		gasValue := new(big.Int).Mul(new(big.Int).SetUint64(gas), tx.GasPrice())
 		from := msg.From()
 		if statedb.GetBalance(from).Cmp(gasValue) < 0 {
 			return nil, 0, fmt.Errorf("insufficient PAI for gas (%x). Req %v, has %v", from.Bytes()[:4], gasValue, statedb.GetBalance(from))
@@ -94,12 +100,12 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 			return nil, 0, err
 		}
 		statedb.SubBalance(from, gasValue)
-		log.Infof("ApplyTransactionEx() 1, gas is %v, gasPrice is %v, gasValue is %v\n", gas, gasPrice, gasValue)
+		log.Infof("ApplyTransactionEx() 1, gas is %v, gasPrice is %v, gasValue is %v\n", gas, tx.GasPrice(), gasValue)
 
-		if applyCb := GetApplyCb(etd.FuncName); applyCb != nil {
+		if applyCb := GetApplyCb(function); applyCb != nil {
 			cch.GetMutex().Lock()
 			defer cch.GetMutex().Unlock()
-			if err := applyCb(tx, statedb, ops, cch); err != nil {
+			if err := applyCb(tx, signer, statedb, ops, cch); err != nil {
 				return nil, 0, err
 			}
 		}

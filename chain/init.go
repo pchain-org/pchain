@@ -286,7 +286,7 @@ func createPriValidators(config cfg.Config, num int) []*types.PrivValidator {
 	for i := 0; i < num; i++ {
 		validators[i], newKey = types.GenPrivValidatorKey()
 		pwd := "pchain"
-		log.Info("account:", common.ToHex(validators[i].Address), "pwd:", pwd)
+		log.Info("createPriValidators", "account:", common.ToHex(validators[i].Address), "pwd:", pwd)
 		a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
 		if err := ks.StoreKey(a.URL.Path, newKey, pwd); err != nil {
 			utils.Fatalf("store key failed")

@@ -404,7 +404,7 @@ func (cch *CrossChainHelper) VerifyChildChainBlock(bs []byte) error {
 	return nil
 }
 
-func (cch *CrossChainHelper) SaveChildChainBlockToMainChain(bs []byte) error {
+func (cch *CrossChainHelper) SaveChildChainDataToMainChain(bs []byte) error {
 
 	log.Debug("SaveChildChainBlockToMainChain - start")
 

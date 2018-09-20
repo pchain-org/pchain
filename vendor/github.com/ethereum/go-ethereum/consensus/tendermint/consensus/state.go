@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	pabi "github.com/pchain/abi"
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	crypto2 "github.com/tendermint/go-crypto"
@@ -1238,22 +1239,26 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 
 		// update 'NeedToSave' field here
 		if block.TdmExtra.ChainID != "pchain" {
-			// epoch
+			// check epoch
 			if len(block.TdmExtra.EpochBytes) > 0 {
 				block.TdmExtra.NeedToSave = true
 				cs.logger.Infof("NeedToSave set to true due to epoch. Chain: %s, Height: %v", block.TdmExtra.ChainID, block.TdmExtra.Height)
 			} else {
-				// special tx
+				// check special cross-chain tx
 				txs := block.Block.Transactions()
 				for _, tx := range txs {
-					etd := tx.ExtendTxData()
-					if etd == nil {
-						continue
-					}
-					if etd.FuncName == "WithdrawFromChildChain" || etd.FuncName == "DepositInChildChain" {
-						block.TdmExtra.NeedToSave = true
-						cs.logger.Infof("NeedToSave set to true due to tx. Tx: %s, Chain: %s, Height: %v", etd.FuncName, block.TdmExtra.ChainID, block.TdmExtra.Height)
-						break
+					if pabi.IsPChainContractAddr(tx.To()) {
+						data := tx.Data()
+						function, err := pabi.FunctionTypeFromId(data[:4])
+						if err != nil {
+							continue
+						}
+
+						if function == pabi.WithdrawFromChildChain || function == pabi.DepositInChildChain {
+							block.TdmExtra.NeedToSave = true
+							cs.logger.Infof("NeedToSave set to true due to tx. Tx: %s, Chain: %s, Height: %v", function.String(), block.TdmExtra.ChainID, block.TdmExtra.Height)
+							break
+						}
 					}
 				}
 			}
@@ -1532,16 +1537,17 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 
 	client := cs.cch.GetClient()
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	//ctx := context.Background() // testing only!
 
 	number, err := client.BlockNumber(ctx)
 	if err != nil {
-		cs.logger.Error("saveBlockToMainChain: failed to get BlockNumber at the beginning.")
+		cs.logger.Error("saveDataToMainChain: failed to get BlockNumber at the beginning.")
 		return
 	}
 
 	bs, err := rlp.EncodeToBytes(block)
 	if err != nil {
-		cs.logger.Errorf("saveBlockToMainChain: failed to encode the block: %v", block)
+		cs.logger.Errorf("saveDataToMainChain: failed to encode the block: %v", block)
 		return
 	}
 
@@ -1560,18 +1566,18 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 	if prvValidator, ok := cs.privValidator.(*types.PrivValidator); ok {
 		prv, err = crypto.ToECDSA(prvValidator.PrivKey.(crypto2.EtherumPrivKey))
 		if err != nil {
-			cs.logger.Errorf("saveBlockToMainChain: PrivateKey error: %v", err)
+			cs.logger.Errorf("saveDataToMainChain: PrivateKey error: %v", err)
 			return
 		}
 	} else {
-		panic("saveBlockToMainChain: unexpected privValidator type")
+		panic("saveDataToMainChain: unexpected privValidator type")
 	}
-	hash, err := client.SendBlockToMainChain(ctx, cs.state.TdmExtra.ChainID, bs, s, common.BytesToAddress(cs.privValidator.GetAddress()), prv)
+	hash, err := client.SendDataToMainChain(ctx, cs.state.TdmExtra.ChainID, bs, s, common.BytesToAddress(cs.privValidator.GetAddress()), prv)
 	if err != nil {
-		cs.logger.Errorf("saveBlockToMainChain(rpc) failed, err: %v", err)
+		cs.logger.Errorf("saveDataToMainChain(rpc) failed, err: %v", err)
 		return
 	} else {
-		cs.logger.Infof("saveBlockToMainChain(rpc) success, hash: %v", hash)
+		cs.logger.Infof("saveDataToMainChain(rpc) success, hash: %x", hash)
 	}
 
 	//we wait for 3 blocks, if not write to main chain, just return
@@ -1580,14 +1586,14 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 
 		tmpNumber, err := client.BlockNumber(ctx)
 		if err != nil {
-			cs.logger.Error("saveBlockToMainChain: failed to get BlockNumber, abort to wait for 3 blocks")
+			cs.logger.Error("saveDataToMainChain: failed to get BlockNumber, abort to wait for 3 blocks")
 			return
 		}
 
 		if tmpNumber.Cmp(curNumber) > 0 {
 			_, isPending, err := client.TransactionByHash(ctx, hash)
 			if !isPending && err == nil {
-				cs.logger.Info("saveBlockToMainChain: tx packaged in block in main chain")
+				cs.logger.Info("saveDataToMainChain: tx packaged in block in main chain")
 				return
 			}
 
@@ -1599,5 +1605,5 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 		}
 	}
 
-	cs.logger.Error("saveBlockToMainChain: tx not packaged in any block after 3 blocks in main chain")
+	cs.logger.Error("saveDataToMainChain: tx not packaged in any block after 3 blocks in main chain")
 }

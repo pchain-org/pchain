@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	pabi "github.com/pchain/abi"
 	"github.com/pkg/errors"
 	"math/big"
 )
@@ -22,15 +23,16 @@ func (ec *Client) BlockNumber(ctx context.Context) (*big.Int, error) {
 }
 
 // SaveBlockToMainChain save a block to main chain through eth_sendRawTransaction
-func (ec *Client) SendBlockToMainChain(ctx context.Context, chainId string, data []byte, signer types.Signer, account common.Address, prv *ecdsa.PrivateKey) (common.Hash, error) {
+func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data []byte, signer types.Signer, account common.Address, prv *ecdsa.PrivateKey) (common.Hash, error) {
 
 	if chainId == "" || chainId == "pchain" {
 		return common.Hash{}, errors.New("invalid child chainId")
 	}
 
-	// extend tx data
-	etd := &types.ExtendTxData{
-		FuncName: "SaveBlockToMainChain",
+	// data
+	bs, err := pabi.ChainABI.Pack(pabi.SaveDataToMainChain.String(), data)
+	if err != nil {
+		return common.Hash{}, err
 	}
 
 	// nonce
@@ -40,7 +42,7 @@ func (ec *Client) SendBlockToMainChain(ctx context.Context, chainId string, data
 	}
 
 	// tx
-	tx := types.NewTransactionEx(nonce, nil, nil, 0, nil, data, etd)
+	tx := types.NewTransaction(nonce, pabi.ChainContractMagicAddr, nil, 0, nil, bs)
 
 	// sign the tx
 	signedTx, err := types.SignTx(tx, signer, prv)
@@ -54,5 +56,5 @@ func (ec *Client) SendBlockToMainChain(ctx context.Context, chainId string, data
 		return common.Hash{}, err
 	}
 
-	return tx.Hash(), nil
+	return signedTx.Hash(), nil
 }

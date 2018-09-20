@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	pabi "github.com/pchain/abi"
 	dbm "github.com/tendermint/go-db"
 	"math/big"
 	"sync"
@@ -29,7 +30,7 @@ type CrossChainHelper interface {
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
 	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction
 	VerifyChildChainBlock(bs []byte) error
-	SaveChildChainBlockToMainChain(bs []byte) error
+	SaveChildChainDataToMainChain(bs []byte) error
 
 	// these should operate on the main chain db
 	MarkToChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error
@@ -41,28 +42,28 @@ type CrossChainHelper interface {
 	IsTxUsedOnChildChain(from common.Address, chainId string, txHash common.Hash) bool
 }
 
-type EtdValidateCb func(tx *types.Transaction, state *state.StateDB, cch CrossChainHelper) error
-type EtdApplyCb func(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch CrossChainHelper) error
+type EtdValidateCb func(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch CrossChainHelper) error
+type EtdApplyCb func(tx *types.Transaction, signer types.Signer, state *state.StateDB, ops *types.PendingOps, cch CrossChainHelper) error
 type EtdInsertBlockCb func(block *types.Block)
 
-var validateCbMap = make(map[string]EtdValidateCb)
-var applyCbMap = make(map[string]EtdApplyCb)
+var validateCbMap = make(map[pabi.FunctionType]EtdValidateCb)
+var applyCbMap = make(map[pabi.FunctionType]EtdApplyCb)
 var insertBlockCbMap = make(map[string]EtdInsertBlockCb)
 
-func RegisterValidateCb(name string, validateCb EtdValidateCb) error {
+func RegisterValidateCb(function pabi.FunctionType, validateCb EtdValidateCb) error {
 
-	_, ok := validateCbMap[name]
+	_, ok := validateCbMap[function]
 	if ok {
 		return errors.New("the name has registered in validateCbMap")
 	}
 
-	validateCbMap[name] = validateCb
+	validateCbMap[function] = validateCb
 	return nil
 }
 
-func GetValidateCb(name string) EtdValidateCb {
+func GetValidateCb(function pabi.FunctionType) EtdValidateCb {
 
-	cb, ok := validateCbMap[name]
+	cb, ok := validateCbMap[function]
 	if ok {
 		return cb
 	}
@@ -70,21 +71,21 @@ func GetValidateCb(name string) EtdValidateCb {
 	return nil
 }
 
-func RegisterApplyCb(name string, applyCb EtdApplyCb) error {
+func RegisterApplyCb(function pabi.FunctionType, applyCb EtdApplyCb) error {
 
-	_, ok := applyCbMap[name]
+	_, ok := applyCbMap[function]
 	if ok {
 		return errors.New("the name has registered in applyCbMap")
 	}
 
-	applyCbMap[name] = applyCb
+	applyCbMap[function] = applyCb
 
 	return nil
 }
 
-func GetApplyCb(name string) EtdApplyCb {
+func GetApplyCb(function pabi.FunctionType) EtdApplyCb {
 
-	cb, ok := applyCbMap[name]
+	cb, ok := applyCbMap[function]
 	if ok {
 		return cb
 	}

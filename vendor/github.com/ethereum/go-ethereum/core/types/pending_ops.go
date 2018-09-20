@@ -158,14 +158,14 @@ func (op *MarkChildChainToMainChainTxUsedOp) String() string {
 }
 
 // SaveBlockToMainChain op
-type SaveBlockToMainChainOp struct {
-	Block []byte
+type SaveDataToMainChainOp struct {
+	Data []byte
 }
 
-func (op *SaveBlockToMainChainOp) Conflict(op1 PendingOp) bool {
+func (op *SaveDataToMainChainOp) Conflict(op1 PendingOp) bool {
 	return false
 }
 
-func (op *SaveBlockToMainChainOp) String() string {
-	return fmt.Sprintf("MarkMainChainToChildChainTxOp")
+func (op *SaveDataToMainChainOp) String() string {
+	return fmt.Sprintf("SaveDataToMainChainOp")
 }
