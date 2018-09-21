@@ -173,7 +173,7 @@ func RotatingFileHandler(path string, limit uint, formatter Format) (Handler, er
 		counter.RLock()
 		defer counter.RUnlock()
 
-		if counter.count > limit {
+		if counter.count > limit || counter.w == nil {
 			counter.RUnlock()
 			// Hold Write Lock to Reset the Log Counter
 			counter.Lock()
@@ -181,13 +181,8 @@ func RotatingFileHandler(path string, limit uint, formatter Format) (Handler, er
 				counter.Close()
 				counter.w = nil
 			}
-			counter.Unlock()
-			counter.RLock()
-		}
-		if counter.w == nil {
-			counter.RUnlock()
+
 			// Hold Write Lock to Create a new log file
-			counter.Lock()
 			if counter.w == nil {
 				f, err := os.OpenFile(
 					filepath.Join(path, fmt.Sprintf("%s.log", strings.Replace(r.Time.Format("2006-01-02_150405.000"), ".", "_", 1))),
