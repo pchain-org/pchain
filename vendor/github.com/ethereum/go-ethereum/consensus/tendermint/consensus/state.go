@@ -1536,18 +1536,18 @@ func CompareHRS(h1 uint64, r1 int, s1 RoundStepType, h2 uint64, r2 int, s2 Round
 func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 
 	client := cs.cch.GetClient()
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 	//ctx := context.Background() // testing only!
 
 	number, err := client.BlockNumber(ctx)
 	if err != nil {
-		cs.logger.Error("saveDataToMainChain: failed to get BlockNumber at the beginning.")
+		cs.logger.Error("saveDataToMainChain: failed to get BlockNumber at the beginning.", "err", err)
 		return
 	}
 
 	bs, err := rlp.EncodeToBytes(block)
 	if err != nil {
-		cs.logger.Errorf("saveDataToMainChain: failed to encode the block: %v", block)
+		cs.logger.Error("saveDataToMainChain: failed to encode the block", "block", block, "err", err)
 		return
 	}
 
@@ -1566,7 +1566,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 	if prvValidator, ok := cs.privValidator.(*types.PrivValidator); ok {
 		prv, err = crypto.ToECDSA(prvValidator.PrivKey.(crypto2.EtherumPrivKey))
 		if err != nil {
-			cs.logger.Errorf("saveDataToMainChain: PrivateKey error: %v", err)
+			cs.logger.Error("saveDataToMainChain: failed to get PrivateKey", "err", err)
 			return
 		}
 	} else {
@@ -1574,7 +1574,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 	}
 	hash, err := client.SendDataToMainChain(ctx, cs.state.TdmExtra.ChainID, bs, s, common.BytesToAddress(cs.privValidator.GetAddress()), prv)
 	if err != nil {
-		cs.logger.Errorf("saveDataToMainChain(rpc) failed, err: %v", err)
+		cs.logger.Error("saveDataToMainChain(rpc) failed", "err", err)
 		return
 	} else {
 		cs.logger.Infof("saveDataToMainChain(rpc) success, hash: %x", hash)
@@ -1586,7 +1586,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 
 		tmpNumber, err := client.BlockNumber(ctx)
 		if err != nil {
-			cs.logger.Error("saveDataToMainChain: failed to get BlockNumber, abort to wait for 3 blocks")
+			cs.logger.Error("saveDataToMainChain: failed to get BlockNumber, abort to wait for 3 blocks", "err", err)
 			return
 		}
 
