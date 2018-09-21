@@ -192,7 +192,7 @@ func ValidateCrossChainTx(db ethdb.Database, t CrossChainTxType, from common.Add
 }
 
 func MarkTxUsedOnChildChain(db ethdb.Database, from common.Address, chainId string, txHash common.Hash) error {
-	log.Infof("MarkChildChainTxUsed %v: account: %x, chain: %s, tx: %x", from, chainId, txHash)
+	log.Infof("MarkChildChainTxUsed: account: %x, chain: %s, tx: %x", from, chainId, txHash)
 
 	key := calcChildChainTxUsedKey(from, chainId, txHash)
 	err := db.Put(key, []byte{byte(CrossChainTxAlreadyUsed)})
@@ -204,7 +204,7 @@ func MarkTxUsedOnChildChain(db ethdb.Database, from common.Address, chainId stri
 }
 
 func IsTxUsedOnChildChain(db ethdb.Database, from common.Address, chainId string, txHash common.Hash) bool {
-	log.Infof("IsChildChainTxUsed %v: account: %x, chain: %s, tx: %x", from, chainId, txHash)
+	log.Infof("IsChildChainTxUsed: account: %x, chain: %s, tx: %x", from, chainId, txHash)
 
 	key := calcChildChainTxUsedKey(from, chainId, txHash)
 	value, err := db.Get(key)
