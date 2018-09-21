@@ -583,21 +583,22 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrNonceTooLow
 	}
 
+	// Transactions can't be negative. This may never happen using RLP decoded
+	// transactions but may occur if you create a transaction using the RPC.
+	if tx.Value().Sign() < 0 {
+		return ErrNegativeValue
+	}
+	// Ensure the transaction doesn't exceed the current block limit gas.
+	if pool.currentMaxGas < tx.Gas() {
+		return ErrGasLimit
+	}
+	// Transactor should have enough funds to cover the costs
+	// cost == V + GP * GL
+	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+		return ErrInsufficientFunds
+	}
+
 	if !pabi.IsPChainContractAddr(tx.To()) {
-		// Transactions can't be negative. This may never happen using RLP decoded
-		// transactions but may occur if you create a transaction using the RPC.
-		if tx.Value().Sign() < 0 {
-			return ErrNegativeValue
-		}
-		// Ensure the transaction doesn't exceed the current block limit gas.
-		if pool.currentMaxGas < tx.Gas() {
-			return ErrGasLimit
-		}
-		// Transactor should have enough funds to cover the costs
-		// cost == V + GP * GL
-		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-			return ErrInsufficientFunds
-		}
 		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
 		if err != nil {
 			return err

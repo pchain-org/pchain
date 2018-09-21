@@ -1117,10 +1117,36 @@ type SendTxArgs struct {
 // setDefaults is a helper function that fills in default values for unspecified tx fields.
 func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 
-	if args.Gas == nil {
-		args.Gas = new(hexutil.Uint64)
-		*(*uint64)(args.Gas) = 90000
+	var function = pabi.Unknown
+	if pabi.IsPChainContractAddr(args.To) {
+		var input []byte
+		if args.Data != nil {
+			input = *args.Data
+		} else if args.Input != nil {
+			input = *args.Input
+		}
+		if len(input) == 0 {
+			return errors.New(`pchain contract without any data provided`)
+		}
+
+		var err error
+		function, err = pabi.FunctionTypeFromId(input[:4])
+		if err != nil {
+			return err
+		}
 	}
+
+	// force GasLimit to 0 for DepositInChildChain/WithdrawFromMainChain/SaveDataToMainChain in order to avoid being dropped by TxPool.
+	if function == pabi.DepositInChildChain || function == pabi.WithdrawFromMainChain || function == pabi.SaveDataToMainChain {
+		args.Gas = new(hexutil.Uint64)
+		*(*uint64)(args.Gas) = 0
+	} else {
+		if args.Gas == nil {
+			args.Gas = new(hexutil.Uint64)
+			*(*uint64)(args.Gas) = 90000
+		}
+	}
+
 	if args.GasPrice == nil {
 		price, err := b.SuggestPrice(ctx)
 		if err != nil {
@@ -1134,8 +1160,8 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
 		return errors.New(`Both "data" and "input" are set and not equal. Please use "input" to pass transaction call data.`)
 	}
-	if args.To == nil || pabi.IsPChainContractAddr(args.To) {
-		// Contract creation or PChain Contract
+	if args.To == nil {
+		// Contract creation
 		var input []byte
 		if args.Data != nil {
 			input = *args.Data
@@ -1143,9 +1169,6 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 			input = *args.Input
 		}
 		if len(input) == 0 {
-			if pabi.IsPChainContractAddr(args.To) {
-				return errors.New(`pchain contract without any data provided`)
-			}
 			return errors.New(`contract creation without any data provided`)
 		}
 	}
