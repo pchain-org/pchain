@@ -89,19 +89,24 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		}
 		log.Infof("ApplyTransactionEx() 0, Chain Function is %v\n", function.String())
 
-		// instead of pre-buy '#GasLimit' Gas and return unused Gas, here we only buy the needed Gas.
-		gas := function.RequiredGas()
-		gasValue := new(big.Int).Mul(new(big.Int).SetUint64(gas), tx.GasPrice())
+		// pre-buy gas according to the gas limit
+		gasLimit := tx.Gas()
+		gasValue := new(big.Int).Mul(new(big.Int).SetUint64(gasLimit), tx.GasPrice())
 		from := msg.From()
 		if statedb.GetBalance(from).Cmp(gasValue) < 0 {
 			return nil, 0, fmt.Errorf("insufficient PAI for gas (%x). Req %v, has %v", from.Bytes()[:4], gasValue, statedb.GetBalance(from))
 		}
-		if err := gp.SubGas(gas); err != nil {
+		if err := gp.SubGas(gasLimit); err != nil {
 			return nil, 0, err
 		}
 		statedb.SubBalance(from, gasValue)
-		log.Infof("ApplyTransactionEx() 1, gas is %v, gasPrice is %v, gasValue is %v\n", gas, tx.GasPrice(), gasValue)
+		log.Infof("ApplyTransactionEx() 1, gas is %v, gasPrice is %v, gasValue is %v\n", gasLimit, tx.GasPrice(), gasValue)
 
+		// use gas
+		gas := function.RequiredGas()
+		if gasLimit < gas {
+			return nil, 0, vm.ErrOutOfGas
+		}
 		if applyCb := GetApplyCb(function); applyCb != nil {
 			cch.GetMutex().Lock()
 			defer cch.GetMutex().Unlock()
@@ -109,6 +114,12 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 				return nil, 0, err
 			}
 		}
+
+		// refund gas
+		remainingGas := gasLimit - gas
+		remaining := new(big.Int).Mul(new(big.Int).SetUint64(remainingGas), tx.GasPrice())
+		statedb.AddBalance(from, remaining)
+		gp.AddGas(remainingGas)
 
 		*usedGas += gas
 		totalUsedMoney.Add(totalUsedMoney, gasValue)
