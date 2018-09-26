@@ -251,6 +251,8 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 	if !validator {
 		log.Warnf("You are not in the validators of child chain %v, no need to start the child chain", chainId)
+		// Update Child Chain to formal
+		cm.formalizeChildChain(chainId, *cci)
 		return
 	}
 
@@ -299,9 +301,8 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	}
 
 	// Child Chain start success, then delete the pending data in chain info db
-	core.DeletePendingChildChainData(cm.cch.chainInfoDB, chainId)
-	// Convert the Chain Info from Pending to Formal
-	core.SaveChainInfo(cm.cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: *cci})
+	cm.formalizeChildChain(chainId, *cci)
+
 	// Add Child Chain Id into Chain Manager
 	cm.childChains[chainId] = chain
 
@@ -312,6 +313,13 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	rpc.Hookup(chain.Id, chain.RpcHandler)
 
 	<-quit
+}
+
+func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainInfo) {
+	// Child Chain start success, then delete the pending data in chain info db
+	core.DeletePendingChildChainData(cm.cch.chainInfoDB, chainId)
+	// Convert the Chain Info from Pending to Formal
+	core.SaveChainInfo(cm.cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: cci})
 }
 
 func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool {
