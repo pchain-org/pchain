@@ -20,6 +20,9 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 			}
 			bc.PostChainEvents(events, nil)
 		}
+		if op.NewPendingIdx != nil || len(op.DeleteChildChainIds) > 0 {
+			cch.ProcessPostPendingData(op.NewPendingIdx, op.DeleteChildChainIds)
+		}
 		return nil
 	case *types.MarkMainChainToChildChainTxOp:
 		return cch.MarkToChildChainTx(op.From, op.ChainId, op.TxHash, false)

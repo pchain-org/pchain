@@ -411,12 +411,15 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 	if chain.Config().PChainId == "pchain" {
 		// Check the Child Chain Start
-		childChainIdsForLaunch := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
-		if len(childChainIdsForLaunch) > 0 {
+		readyId, updateBytes, removedId := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
+		if len(readyId) > 0 || updateBytes != nil || len(removedId) > 0 {
 			if ok := ops.Append(&types.LaunchChildChainsOp{
-				ChildChainIds: childChainIdsForLaunch,
+				ChildChainIds:       readyId,
+				NewPendingIdx:       updateBytes,
+				DeleteChildChainIds: removedId,
 			}); !ok {
-				sb.logger.Errorf("Tendermint (backend) Finalize, Fail to append LaunchChildChainsOp", "child chain ids", childChainIdsForLaunch)
+				// This should not happened
+				sb.logger.Error("Tendermint (backend) Finalize, Fail to append LaunchChildChainsOp, only one LaunchChildChainsOp is allowed in each block")
 			}
 		}
 	}

@@ -76,15 +76,22 @@ func (op *JoinChildChainOp) String() string {
 
 // LaunchChildChain op
 type LaunchChildChainsOp struct {
-	ChildChainIds []string
+	ChildChainIds       []string
+	NewPendingIdx       []byte
+	DeleteChildChainIds []string
 }
 
 func (op *LaunchChildChainsOp) Conflict(op1 PendingOp) bool {
+	if _, ok := op1.(*LaunchChildChainsOp); ok {
+		// Only one LaunchChildChainsOp is allowed in each block
+		return true
+	}
 	return false
 }
 
 func (op *LaunchChildChainsOp) String() string {
-	return fmt.Sprintf("LaunchChildChainsOp - %v", op.ChildChainIds)
+	return fmt.Sprintf("LaunchChildChainsOp - Launch Child Chain: %v, New Pending Child Chain Length: %v, To be deleted Child Chain: %v",
+		op.ChildChainIds, len(op.NewPendingIdx), op.DeleteChildChainIds)
 }
 
 // CrossChainTx

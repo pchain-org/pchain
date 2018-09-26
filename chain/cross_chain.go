@@ -187,25 +187,22 @@ func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, 
 	return nil
 }
 
-func (cch *CrossChainHelper) ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB) []string {
+func (cch *CrossChainHelper) ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB) ([]string, []byte, []string) {
 	log.Debug("ReadyForLaunchChildChain - start")
 
-	readyId := core.GetChildChainForLaunch(cch.chainInfoDB, height, stateDB)
+	readyId, updateBytes, removedId := core.GetChildChainForLaunch(cch.chainInfoDB, height, stateDB)
 	if len(readyId) == 0 {
 		log.Debugf("ReadyForLaunchChildChain - No child chain to be launch in Block %v", height)
 	} else {
-		log.Infof("ReadyForLaunchChildChain - %v child chain(s) to be launch in Block %v. %v\n", len(readyId), height, readyId)
-		//for _, chainId := range readyId {
-		//	// Convert the Chain Info from Pending to Formal
-		//	cci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
-		//	core.SaveChainInfo(cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: *cci})
-		//	// Send Post to Chain Manager
-		//	cch.GetTypeMutex().Post(core.CreateChildChainEvent{ChainId: chainId})
-		//}
+		log.Infof("ReadyForLaunchChildChain - %v child chain(s) to be launch in Block %v. %v", len(readyId), height, readyId)
 	}
 
 	log.Debug("ReadyForLaunchChildChain - end")
-	return readyId
+	return readyId, updateBytes, removedId
+}
+
+func (cch *CrossChainHelper) ProcessPostPendingData(newPendingIdxBytes []byte, deleteChildChainIds []string) {
+	core.ProcessPostPendingData(cch.chainInfoDB, newPendingIdxBytes, deleteChildChainIds)
 }
 
 func (cch *CrossChainHelper) ValidateVoteNextEpoch(chainId string) (*epoch.Epoch, error) {
