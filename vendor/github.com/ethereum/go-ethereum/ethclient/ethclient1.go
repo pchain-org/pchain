@@ -35,6 +35,12 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data 
 		return common.Hash{}, err
 	}
 
+	// gasPrice
+	gasPrice, err := ec.SuggestGasPrice(ctx)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
 	// nonce
 	nonce, err := ec.NonceAt(ctx, account, nil)
 	if err != nil {
@@ -42,7 +48,7 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data 
 	}
 
 	// tx
-	tx := types.NewTransaction(nonce, pabi.ChainContractMagicAddr, nil, 0, nil, bs)
+	tx := types.NewTransaction(nonce, pabi.ChainContractMagicAddr, nil, 0, gasPrice, bs)
 
 	// sign the tx
 	signedTx, err := types.SignTx(tx, signer, prv)
