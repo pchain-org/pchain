@@ -127,6 +127,18 @@ func (ks *KeyStore) SignTx(account *Account, tx *Transaction, chainID *BigInt) (
 	return &Transaction{signed}, nil
 }
 
+// SignTxWithAddress signs the given transaction with the requested account.
+func (ks *KeyStore) SignTxWithAddress(account *Account, tx *Transaction, chainID *BigInt) (*Transaction, error) {
+	if chainID == nil { // Null passed from mobile app
+		chainID = new(BigInt)
+	}
+	signed, err := ks.keystore.SignTxWithAddress(account.account, tx.tx, chainID.bigint)
+	if err != nil {
+		return nil, err
+	}
+	return &Transaction{signed}, nil
+}
+
 // SignHashPassphrase signs hash if the private key matching the given address can
 // be decrypted with the given passphrase. The produced signature is in the
 // [R || S || V] format where V is 0 or 1.

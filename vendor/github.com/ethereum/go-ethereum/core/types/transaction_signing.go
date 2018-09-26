@@ -62,6 +62,25 @@ func SignTx(tx *Transaction, s Signer, prv *ecdsa.PrivateKey) (*Transaction, err
 	return tx.WithSignature(s, sig)
 }
 
+// SignTx signs the transaction using the given signer and private key
+func SignTxWithAddress(tx *Transaction, s Signer, prv *ecdsa.PrivateKey) (*Transaction, error) {
+	h := s.Hash(tx)
+	sig, err := crypto.Sign(h[:], prv)
+	if err != nil {
+		return nil, err
+	}
+
+	signTx, err := tx.WithSignature(s, sig)
+	if err != nil {
+		return nil, err
+	}
+
+	fromAddr := crypto.PubkeyToAddress(prv.PublicKey)
+	signTx.from.Store(sigCache{signer: s, from: fromAddr})
+
+	return signTx, nil
+}
+
 // Sender returns the address derived from the signature (V, R, S) using secp256k1
 // elliptic curve and an error if it failed deriving or upon an incorrect
 // signature.

@@ -30,12 +30,12 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 	if !pabi.IsPChainContractAddr(tx.To()) {
 
-		fmt.Printf("ApplyTransactionEx 1\n")
+		//log.Debugf("ApplyTransactionEx 1\n")
 
 		// Create a new context to be used in the EVM environment
 		context := NewEVMContext(msg, header, bc, author)
 
-		fmt.Printf("ApplyTransactionEx 2\n")
+		//log.Debugf("ApplyTransactionEx 2\n")
 
 		// Create a new environment which holds all relevant information
 		// about the transaction and calling mechanisms.
@@ -46,14 +46,14 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 			return nil, 0, err
 		}
 
-		fmt.Printf("ApplyTransactionEx 3\n")
+		//log.Debugf("ApplyTransactionEx 3\n")
 		// Update the state with pending changes
 		var root []byte
 		if config.IsByzantium(header.Number) {
-			fmt.Printf("ApplyTransactionEx(), is byzantium\n")
+			//log.Debugf("ApplyTransactionEx(), is byzantium\n")
 			statedb.Finalise(true)
 		} else {
-			fmt.Printf("ApplyTransactionEx(), is not byzantium\n")
+			//log.Debugf("ApplyTransactionEx(), is not byzantium\n")
 			root = statedb.IntermediateRoot(false).Bytes()
 		}
 		*usedGas += gas
@@ -62,21 +62,21 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
 		// based on the eip phase, we're passing wether the root touch-delete accounts.
 		receipt := types.NewReceipt(root, failed, *usedGas)
-		fmt.Printf("ApplyTransactionEx，new receipt with (root,failed,*usedGas) = (%v,%v,%v)\n", root, failed, *usedGas)
+		//log.Debugf("ApplyTransactionEx，new receipt with (root,failed,*usedGas) = (%v,%v,%v)\n", root, failed, *usedGas)
 		receipt.TxHash = tx.Hash()
-		fmt.Printf("ApplyTransactionEx，new receipt with txhash %v\n", receipt.TxHash)
+		//log.Debugf("ApplyTransactionEx，new receipt with txhash %v\n", receipt.TxHash)
 		receipt.GasUsed = gas
-		fmt.Printf("ApplyTransactionEx，new receipt with gas %v\n", receipt.GasUsed)
+		//log.Debugf("ApplyTransactionEx，new receipt with gas %v\n", receipt.GasUsed)
 		// if the transaction created a contract, store the creation address in the receipt.
 		if msg.To() == nil {
 			receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
 		}
 		// Set the receipt logs and create a bloom for filtering
 		receipt.Logs = statedb.GetLogs(tx.Hash())
-		fmt.Printf("ApplyTransactionEx，new receipt with receipt.Logs %v\n", receipt.Logs)
+		//log.Debugf("ApplyTransactionEx，new receipt with receipt.Logs %v\n", receipt.Logs)
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-		fmt.Printf("ApplyTransactionEx，new receipt with receipt.Bloom %v\n", receipt.Bloom)
-		fmt.Printf("ApplyTransactionEx 4\n")
+		//log.Debugf("ApplyTransactionEx，new receipt with receipt.Bloom %v\n", receipt.Bloom)
+		//log.Debugf("ApplyTransactionEx 4\n")
 		return receipt, gas, err
 
 	} else {

@@ -547,6 +547,10 @@ func (w *wallet) SignTx(account accounts.Account, tx *types.Transaction, chainID
 	return signed, nil
 }
 
+func (w *wallet) SignTxWithAddress(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
+	return tx, fmt.Errorf("No support SignTxWithAddress with this wallet")
+}
+
 // SignHashWithPassphrase implements accounts.Wallet, however signing arbitrary
 // data is not supported for Ledger wallets, so this method will always return
 // an error.

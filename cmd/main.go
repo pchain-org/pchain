@@ -4,13 +4,19 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/pchain/chain"
 	"github.com/pchain/version"
 	"gopkg.in/urfave/cli.v1"
 	"os"
-	"path"
 	"path/filepath"
+	"runtime"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/metrics"
+	"time"
+	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/bridge"
+	"path"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func main() {
@@ -58,6 +64,7 @@ func main() {
 	cliApp.HideVersion = true // we have a command to print the version
 
 	cliApp.Before = func(ctx *cli.Context) error {
+
 		// Log Folder
 		logFolderFlag := ctx.GlobalString(LogDirFlag.Name)
 
@@ -68,6 +75,26 @@ func main() {
 		// Tendermint Config
 		chain.Config = chain.GetTendermintConfig(chain.MainChain, ctx)
 
+		runtime.GOMAXPROCS(runtime.NumCPU())
+
+		logdir := ""
+		if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
+			logdir = (&node.Config{DataDir: utils.MakeDataDir(ctx)}).ResolvePath("logs")
+		}
+		if err := bridge.Debug_Setup(ctx, logdir); err != nil {
+			return err
+		}
+
+		// Start system runtime metrics collection
+		go metrics.CollectProcessMetrics(3 * time.Second)
+
+		utils.SetupNetwork(ctx)
+		return nil
+	}
+
+	cliApp.After = func(ctx *cli.Context) error {
+		bridge.Debug_Exit()
+		console.Stdin.Close() // Resets terminal mode.
 		return nil
 	}
 
