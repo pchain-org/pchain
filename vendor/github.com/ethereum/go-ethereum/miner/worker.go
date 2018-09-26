@@ -517,13 +517,9 @@ func (self *worker) commitNewWork() {
 		delete(self.possibleUncles, hash)
 	}
 	// Create the new block to seal with the consensus engine
-	var ops []types.PendingOp
-	if work.Block, ops, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts); err != nil {
+	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, uncles, work.receipts, work.ops); err != nil {
 		self.logger.Error("Failed to finalize block for sealing", "err", err)
 		return
-	}
-	for i := range ops {
-		work.ops.Append(ops[i]) // ignore 'bool' ret here.
 	}
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
