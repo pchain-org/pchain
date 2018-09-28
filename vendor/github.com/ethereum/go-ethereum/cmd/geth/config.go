@@ -148,6 +148,7 @@ func makeConfigNode(ctx *cli.Context, chainId string) (*node.Node, gethConfig) {
 
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
 	utils.SetDashboardConfig(ctx, &cfg.Dashboard)
+	utils.SetGeneralConfig(ctx)
 
 	return stack, cfg
 }

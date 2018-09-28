@@ -554,6 +554,12 @@ var (
 		Usage: "Default minimum difference between two consecutive block's timestamps in seconds",
 		Value: eth.DefaultConfig.Istanbul.BlockPeriod,
 	}
+
+	//for performance test
+	PerfTestFlag = cli.BoolFlag{
+		Name:  "perftest",
+		Usage: "Whether doing performance test, will remove some limitations and cause system more frigile",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1164,6 +1170,10 @@ func SetDashboardConfig(ctx *cli.Context, cfg *dashboard.Config) {
 	cfg.Host = ctx.GlobalString(DashboardAddrFlag.Name)
 	cfg.Port = ctx.GlobalInt(DashboardPortFlag.Name)
 	cfg.Refresh = ctx.GlobalDuration(DashboardRefreshFlag.Name)
+}
+
+func SetGeneralConfig(ctx *cli.Context) {
+	params.GenCfg.PerfTest = ctx.GlobalBool(PerfTestFlag.Name)
 }
 
 // RegisterEthService adds an Ethereum client to the stack.

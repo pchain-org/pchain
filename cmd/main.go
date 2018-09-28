@@ -203,6 +203,8 @@ func newCliApp(version, usage string) *cli.App {
 		utils.WhisperMaxMessageSizeFlag,
 		utils.WhisperMinPOWFlag,
 
+		utils.PerfTestFlag,
+
 		LogDirFlag,
 
 		//Tendermint flags

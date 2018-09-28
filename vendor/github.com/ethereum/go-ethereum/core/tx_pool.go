@@ -647,8 +647,10 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		invalidTxCounter.Inc(1)
 		return false, err
 	}
+
 	// If the transaction pool is full, discard underpriced transactions
-	if uint64(len(pool.all)) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
+	if !params.GenCfg.PerfTest &&
+		uint64(len(pool.all)) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
 		if pool.priced.Underpriced(tx, pool.locals) {
 			log.Trace("Discarding underpriced transaction", "hash", hash, "price", tx.GasPrice())
@@ -663,6 +665,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 			pool.removeTx(tx.Hash())
 		}
 	}
+
 	// If the transaction is replacing an already pending one, do directly
 	from, _ := types.Sender(pool.signer, tx) // already validated
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
@@ -689,6 +692,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 
 		return old != nil, nil
 	}
+
 	// New transaction isn't replacing a pending one, push into queue
 	replace, err := pool.enqueueTx(hash, tx)
 	if err != nil {
