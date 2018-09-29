@@ -166,7 +166,6 @@ type RoundState struct {
 	Step               RoundStepType
 	StartTime          time.Time
 	CommitTime         time.Time // Subjective time when +2/3 precommits for Block at Round were found
-	Epoch              *ep.Epoch
 	Validators         *types.ValidatorSet
 	Proposal           *types.Proposal
 	ProposalBlock      *types.TdmBlock
@@ -267,7 +266,7 @@ type ConsensusState struct {
 
 	mtx sync.Mutex
 	RoundState
-	epoch *ep.Epoch
+	Epoch *ep.Epoch
 	state *sm.State // State until height-1.
 
 	peerMsgQueue     chan msgInfo   // serializes msgs affecting state (proposals, block parts, votes)
@@ -974,7 +973,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	// Valdiate proposal block
 	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.TdmExtra.EpochBytes)
 	if proposedNextEpoch != nil && proposedNextEpoch.Number != 0 {
-		err = cs.RoundState.Epoch.ValidateNextEpoch(proposedNextEpoch, height)
+		err = cs.Epoch.ValidateNextEpoch(proposedNextEpoch, height)
 		if err != nil {
 			// ProposalBlock is invalid, prevote nil.
 			cs.logger.Warnf("enterPrevote: Proposal reward scheme is invalid, error: %v", err)

@@ -111,7 +111,6 @@ func (cs *ConsensusState) Initialize() {
 	cs.LastCommit = nil
 	cs.Epoch = nil
 	cs.state = nil
-	cs.epoch = nil
 }
 
 // Updates ConsensusState and increments height to match thatRewardScheme of state.
@@ -153,7 +152,6 @@ func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	cs.Epoch = epoch
 
 	cs.state = state
-	cs.epoch = epoch
 
 	cs.newStep()
 }

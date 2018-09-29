@@ -63,7 +63,7 @@ func (api *API) GetEpoch(number int) (*tdmTypes.EpochApi, error) {
 // GetEpochVote
 func (api *API) GetEpochVote() (*tdmTypes.EpochVotesApi, error) {
 
-	ep := api.tendermint.core.consensusState.GetRoundState().Epoch
+	ep := api.tendermint.core.consensusState.Epoch
 	if ep.GetNextEpoch() != nil {
 
 		votes := ep.GetNextEpoch().GetEpochValidatorVoteSet().Votes
