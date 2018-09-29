@@ -68,9 +68,9 @@ func (s *State) ApplyBlock(block *ethTypes.Block, epoch *ep.Epoch) *ep.Epoch {
 	//here handles the proposed next epoch
 	nextEpochInBlock := ep.FromBytes(tdmExtra.EpochBytes)
 	if nextEpochInBlock != nil {
+		nextEpochInBlock.SetRewardScheme(s.Epoch.GetRewardScheme())
+		nextEpochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
 		epoch.SetNextEpoch(nextEpochInBlock)
-		epoch.NextEpoch.RS = s.Epoch.RS
-		epoch.NextEpoch.Status = ep.EPOCH_VOTED_NOT_SAVED
 		epoch.Save()
 	}
 

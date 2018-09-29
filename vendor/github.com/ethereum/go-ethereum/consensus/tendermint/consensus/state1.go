@@ -71,7 +71,7 @@ func (cs *ConsensusState) InitStateAndEpoch(logger log.Logger) (*sm.State, *ep.E
 
 		rewardScheme := ep.MakeRewardScheme(epochDB, &genDoc.RewardScheme)
 		epoch = ep.MakeOneEpoch(epochDB, &genDoc.CurrentEpoch, logger)
-		epoch.RS = rewardScheme
+		epoch.SetRewardScheme(rewardScheme)
 
 		if state.TdmExtra.EpochNumber != uint64(epoch.Number) {
 			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), initial state error"))

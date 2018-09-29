@@ -111,7 +111,7 @@ func vne_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateD
 		return err
 	}
 
-	voteSet := ep.NextEpoch.GetEpochValidatorVoteSet()
+	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
 	vote, exist := voteSet.GetVoteByAddress(from)
 
 	if exist {
@@ -188,7 +188,7 @@ func rev_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateD
 		}
 	}
 
-	voteSet := ep.NextEpoch.GetEpochValidatorVoteSet()
+	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
 	vote, exist := voteSet.GetVoteByAddress(from)
 
 	if exist {

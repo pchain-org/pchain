@@ -143,7 +143,7 @@ func (s *State) GetValidators() (*types.ValidatorSet, *types.ValidatorSet, error
 	if s.TdmExtra.EpochNumber == uint64(s.Epoch.Number) {
 		return s.Epoch.Validators, s.Epoch.Validators, nil
 	} else if s.TdmExtra.EpochNumber == uint64(s.Epoch.Number-1) {
-		return s.Epoch.PreviousEpoch.Validators, s.Epoch.Validators, nil
+		return s.Epoch.GetPreviousEpoch().Validators, s.Epoch.Validators, nil
 	}
 
 	return nil, nil, errors.New("epoch information error")

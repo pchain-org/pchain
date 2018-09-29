@@ -224,7 +224,7 @@ func (cch *CrossChainHelper) ValidateVoteNextEpoch(chainId string) (*epoch.Epoch
 	}
 
 	// Check Epoch in Hash Vote stage
-	if ep.NextEpoch == nil {
+	if ep.GetNextEpoch() == nil {
 		return nil, errors.New("next Epoch is nil, You can't vote the next epoch")
 	}
 
@@ -265,7 +265,7 @@ func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Addr
 	}
 
 	// Check Epoch in Reveal Vote stage
-	if ep.NextEpoch == nil {
+	if ep.GetNextEpoch() == nil {
 		return nil, errors.New("next Epoch is nil, You can't vote the next epoch")
 	}
 
@@ -275,7 +275,7 @@ func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Addr
 		return nil, errors.New(fmt.Sprintf("you can't send the reveal vote during this time, current height %v", height))
 	}
 
-	voteSet := ep.NextEpoch.GetEpochValidatorVoteSet()
+	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
 	vote, exist := voteSet.GetVoteByAddress(from)
 
 	// Check Vote exist

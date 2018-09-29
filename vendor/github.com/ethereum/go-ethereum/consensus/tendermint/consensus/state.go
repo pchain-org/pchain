@@ -896,7 +896,7 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 			shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
 			if shouldProposeEpoch {
 				cs.Epoch.SetNextEpoch(cs.Epoch.ProposeNextEpoch(cs.Height))
-				epochBytes = cs.Epoch.NextEpoch.Bytes()
+				epochBytes = cs.Epoch.GetNextEpoch().Bytes()
 			}
 		}
 
