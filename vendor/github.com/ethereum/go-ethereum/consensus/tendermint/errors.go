@@ -26,4 +26,7 @@ var (
 	ErrStoppedEngine = errors.New("stopped engine")
 	// ErrStartedEngine is returned if the engine is already started
 	ErrStartedEngine = errors.New("started engine")
+
+	// ErrNoPrivValidator is returned if private validator is not set during the start of the node
+	ErrNoPrivValidator = errors.New("cannot start node without private validator")
 )

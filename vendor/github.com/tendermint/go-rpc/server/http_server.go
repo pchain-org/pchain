@@ -31,7 +31,7 @@ func StartHTTPServer(listenAddr string, handler http.Handler) (listener net.List
 		proto, addr = parts[0], parts[1]
 	}
 
-	log.Info("Starting RPC HTTP server on ", proto, " socket ", addr)
+	log.Info("Starting RPC HTTP server on", "socket", proto, "address", addr)
 	listener, err = net.Listen(proto, addr)
 	if err != nil {
 		return nil, errors.Errorf("Failed to listen to ", listenAddr, err)

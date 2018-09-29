@@ -7,6 +7,7 @@ import (
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-p2p"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
@@ -52,9 +53,11 @@ type Node struct {
 
 func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.ChainConfig, sw *p2p.Switch, addrBook *p2p.AddrBook, cch core.CrossChainHelper) *Node {
 	// Get PrivValidator
+	var privValidator *types.PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
-	keydir := config.GetString("keystore")
-	privValidator := types.LoadOrGenPrivValidator(privValidatorFile, keydir)
+	if _, err := os.Stat(privValidatorFile); err == nil {
+		privValidator = types.LoadPrivValidator(privValidatorFile)
+	}
 
 	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
 
@@ -103,6 +106,11 @@ func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.Ch
 func (n *Node) OnStart() error {
 
 	n.logger.Info("(n *Node) OnStart()")
+
+	// Check Private Validator has been set
+	if n.privValidator == nil {
+		return ErrNoPrivValidator
+	}
 
 	/*
 		state, epoch := n.consensusState.InitStateAndEpoch()

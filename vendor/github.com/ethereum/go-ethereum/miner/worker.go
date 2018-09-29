@@ -222,7 +222,10 @@ func (self *worker) start() {
 	}
 
 	if tendermint, ok := self.engine.(consensus.Tendermint); ok {
-		tendermint.Start(self.chain, self.chain.CurrentBlock, self.chain.HasBadBlock)
+		err := tendermint.Start(self.chain, self.chain.CurrentBlock, self.chain.HasBadBlock)
+		if err != nil {
+			self.logger.Error("Starting Tendermint failed", "err", err)
+		}
 	}
 
 	// spin up agents
