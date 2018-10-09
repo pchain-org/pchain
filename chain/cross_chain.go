@@ -470,7 +470,14 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 			continue
 		}
 
-		err = core.WriteChildChainTransaction(chainDb, chainId, &tx)
+		// retrieve 'from' here.
+		childChain := chainMgr.childChains[chainId]
+		childEthereum := MustGetEthereumFromNode(childChain.EthNode)
+		childChainConfig := childEthereum.ChainConfig()
+		signer := types.NewEIP155Signer(childChainConfig.ChainId)
+		from, _ := types.Sender(signer, &tx)
+
+		err = core.WriteChildChainTransaction(chainDb, chainId, from, &tx)
 		if err != nil {
 			log.Error("SaveChildChainProofDataToMainChain write tx error", "err", err)
 			continue

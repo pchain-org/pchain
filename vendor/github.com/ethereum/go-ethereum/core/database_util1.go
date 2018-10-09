@@ -93,7 +93,7 @@ func GetChildChainTransactionByHash(db ethdb.Database, chainId string, txHash co
 	return decodeTx(bs)
 }
 
-func WriteChildChainTransaction(db ethdb.Database, chainId string, tx *types.Transaction) error {
+func WriteChildChainTransaction(db ethdb.Database, chainId string, from common.Address, tx *types.Transaction) error {
 
 	if pabi.IsPChainContractAddr(tx.To()) {
 		data := tx.Data()
@@ -116,7 +116,6 @@ func WriteChildChainTransaction(db ethdb.Database, chainId string, tx *types.Tra
 			}
 
 			// mark 'child chain to main chain' tx.
-			from, _ := types.HomesteadSigner{}.Sender(tx) // TODO: which signer to use here?
 			err = MarkCrossChainTx(db, ChildChainToMainChain, from, chainId, txHash, false)
 			if err != nil {
 				return err
@@ -127,7 +126,6 @@ func WriteChildChainTransaction(db ethdb.Database, chainId string, tx *types.Tra
 				return err
 			}
 
-			from, _ := types.HomesteadSigner{}.Sender(tx) // TODO: which signer to use here?
 			// mark 'main chain to child chain' tx as used.
 			err = MarkCrossChainTx(db, MainChainToChildChain, from, chainId, args.TxHash, true)
 			if err != nil {
