@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -34,9 +33,8 @@ import (
 //go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
 
 var (
-	ErrInvalidSig            = errors.New("invalid transaction v, r, s values")
-	ErrExtendedDataWrongType = errors.New("wrong type when parsing extended data")
-	errNoSigner              = errors.New("missing signing methods")
+	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
+	errNoSigner   = errors.New("missing signing methods")
 )
 
 // deriveSigner makes a *best* guess about which signer to use.
@@ -54,11 +52,6 @@ type Transaction struct {
 	hash atomic.Value
 	size atomic.Value
 	from atomic.Value
-}
-
-type ExtendTxData struct {
-	FuncName string
-	Params   KeyValueSet
 }
 
 type txdata struct {
@@ -84,7 +77,6 @@ type txdataMarshaling struct {
 	GasLimit     hexutil.Uint64
 	Amount       *hexutil.Big
 	Payload      hexutil.Bytes
-	ExtendTxData *ExtendTxData `json:"extendTxData"`
 	V            *hexutil.Big
 	R            *hexutil.Big
 	S            *hexutil.Big
@@ -479,156 +471,3 @@ func (m Message) Gas() uint64          { return m.gasLimit }
 func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
-
-// Custom EncodeRLP for ExtendTxData
-func (e *ExtendTxData) EncodeRLP(w io.Writer) error {
-	sbyte, err := json.Marshal(e)
-	if err != nil {
-		return err
-	}
-	return rlp.Encode(w, sbyte)
-}
-
-// Custom DecodeRLP for ExtendTxData
-func (e *ExtendTxData) DecodeRLP(s *rlp.Stream) error {
-	kind, size, err := s.Kind()
-	if err != nil {
-		return err
-	}
-
-	if kind == rlp.String && size != 0 {
-		sbyte, err := s.Bytes()
-		if err != nil {
-			return err
-		}
-		err = json.Unmarshal(sbyte, e)
-	}
-	return err
-}
-
-func (e *ExtendTxData) GetString(key string) (string, error) {
-	v, err := e.Params.Get(key)
-	if err != nil {
-		return "", err
-	}
-
-	if vv, ok := v.(string); ok {
-		return vv, nil
-	} else {
-		return "", ErrExtendedDataWrongType
-	}
-}
-
-func (e *ExtendTxData) GetAddress(key string) (common.Address, error) {
-	v, err := e.Params.Get(key)
-	if err != nil {
-		return common.Address{}, err
-	}
-
-	switch vv := v.(type) {
-	case string:
-		return common.HexToAddress(vv), nil
-	case common.Address:
-		return vv, nil
-	default:
-		return common.Address{}, ErrExtendedDataWrongType
-	}
-}
-
-func (e *ExtendTxData) GetHash(key string) (common.Hash, error) {
-	v, err := e.Params.Get(key)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	switch vv := v.(type) {
-	case string:
-		return common.HexToHash(vv), nil
-	case common.Hash:
-		return vv, nil
-	default:
-		return common.Hash{}, ErrExtendedDataWrongType
-	}
-}
-
-func (e *ExtendTxData) GetBigInt(key string) (*big.Int, error) {
-	v, err := e.Params.Get(key)
-	if err != nil {
-		return nil, err
-	}
-
-	switch vv := v.(type) {
-	case string:
-		vvv, ok := new(big.Int).SetString(vv, 0)
-		if !ok {
-			return nil, errors.New("wrong type")
-		}
-		return vvv, nil
-	case *big.Int:
-		return vv, nil
-	case *hexutil.Big:
-		return (*big.Int)(vv), nil
-	default:
-		return nil, ErrExtendedDataWrongType
-	}
-}
-
-func (e *ExtendTxData) GetUInt64(key string) (uint64, error) {
-	v, err := e.Params.Get(key)
-	if err != nil {
-		return 0, err
-	}
-
-	switch vv := v.(type) {
-	case string:
-		var bs []byte
-		if vv[0] != '"' {
-			bs = make([]byte, 0, len(vv)+2)
-			bs = append(bs, '"')
-			bs = append(bs, []byte(vv)...)
-			bs = append(bs, '"')
-		} else {
-			bs = []byte(vv)
-		}
-		var vvv hexutil.Uint64
-		err := json.Unmarshal(bs, &vvv)
-		if err != nil {
-			return 0, err
-		}
-		return uint64(vvv), nil
-	case *hexutil.Uint64:
-		return uint64(*vv), nil
-	default:
-		return 0, ErrExtendedDataWrongType
-	}
-}
-
-func (e *ExtendTxData) GetUInt(key string) (uint, error) {
-	v, err := e.Params.Get(key)
-	if err != nil {
-		return 0, err
-	}
-
-	switch vv := v.(type) {
-	case string:
-		var bs []byte
-		if vv[0] != '"' {
-			bs = make([]byte, 0, len(vv)+2)
-			bs = append(bs, '"')
-			bs = append(bs, []byte(vv)...)
-			bs = append(bs, '"')
-		} else {
-			bs = []byte(vv)
-		}
-		var vvv hexutil.Uint
-		err := json.Unmarshal(bs, &vvv)
-		if err != nil {
-			return 0, err
-		}
-		return uint(vvv), nil
-	case *hexutil.Uint:
-		return uint(*vv), nil
-	default:
-		return 0, ErrExtendedDataWrongType
-	}
-}
