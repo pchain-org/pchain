@@ -2,6 +2,8 @@ package core
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus"
+	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -32,6 +34,13 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 		return cch.MarkFromChildChainTx(op.From, op.ChainId, op.TxHash, true)
 	case *types.SaveDataToMainChainOp:
 		return cch.SaveChildChainProofDataToMainChain(op.Data)
+	case *tmTypes.SwitchEpochOp:
+		eng := bc.engine.(consensus.Tendermint)
+		nextEp, err := eng.GetEpoch().EnterNewEpoch(op.NewValidators)
+		if err == nil {
+			eng.SetEpoch(nextEp)
+		}
+		return err
 	default:
 		return fmt.Errorf("unknown op: %v", op)
 	}

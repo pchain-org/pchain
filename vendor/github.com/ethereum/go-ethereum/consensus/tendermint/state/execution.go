@@ -58,33 +58,32 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 
 //-----------------------------------------------------------------------------
 // ApplyBlock applies the epoch infor from last block
-func (s *State) ApplyBlock(block *ethTypes.Block, epoch *ep.Epoch) *ep.Epoch {
+func ApplyBlock(block *ethTypes.Block, epoch *ep.Epoch) {
 
 	if block.NumberU64() == 0 {
-		return epoch
+		return
 	}
 
 	tdmExtra, _ := types.ExtractTendermintExtra(block.Header())
 	//here handles the proposed next epoch
 	nextEpochInBlock := ep.FromBytes(tdmExtra.EpochBytes)
-	if nextEpochInBlock != nil {
-		nextEpochInBlock.SetRewardScheme(s.Epoch.GetRewardScheme())
+	if nextEpochInBlock != nil && nextEpochInBlock.Number != 0 {
+		nextEpochInBlock.SetRewardScheme(epoch.GetRewardScheme())
 		nextEpochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
 		epoch.SetNextEpoch(nextEpochInBlock)
 		epoch.Save()
 	}
 
-	//here handles if need to enter next epoch
-	ok, err := epoch.ShouldEnterNewEpoch(tdmExtra.Height)
-	if ok && err == nil {
-		// now update the block and validators
-		epoch, _, _ := epoch.EnterNewEpoch(tdmExtra.Height)
-		epoch.Save()
-	} else if err != nil {
-		s.logger.Error(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
-			tdmExtra.Height, s.Epoch, err))
-		return nil
-	}
-
-	return epoch
+	/*
+		//here handles if need to enter next epoch
+		ok, err := epoch.ShouldEnterNewEpoch(tdmExtra.Height)
+		if ok && err == nil {
+			// now update the block and validators
+			epoch, _, _ := epoch.EnterNewEpoch(tdmExtra.Height)
+			epoch.Save()
+		} else if err != nil {
+			s.logger.Error(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
+				tdmExtra.Height, s.Epoch, err))
+			return nil
+		}*/
 }

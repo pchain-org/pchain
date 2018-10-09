@@ -23,7 +23,7 @@ type RewardScheme struct {
 	AddedPerYear       *big.Int
 	DescendPerYear     *big.Int
 	Allocated          *big.Int
-	EpochNumberPerYear int
+	EpochNumberPerYear uint64
 }
 
 // Load Reward Scheme
@@ -51,7 +51,7 @@ func MakeRewardScheme(db dbm.DB, rsDoc *tmTypes.RewardSchemeDoc) *RewardScheme {
 	rewardFirstYear, _ := new(big.Int).SetString(rsDoc.RewardFirstYear, 10)
 	descendPerYear, _ := new(big.Int).SetString(rsDoc.DescendPerYear, 10)
 	allocated, _ := new(big.Int).SetString(rsDoc.Allocated, 10)
-	epochNumberPerYear, _ := strconv.Atoi(rsDoc.EpochNumberPerYear)
+	epochNumberPerYear, _ := strconv.ParseUint(rsDoc.EpochNumberPerYear, 10, 64)
 
 	rs := &RewardScheme{
 		db:                 db,

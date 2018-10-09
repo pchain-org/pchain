@@ -249,8 +249,8 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 				RewardPerBlock: rewardPerBlock,
 				StartBlock:     "0",
 				EndBlock:       "2592000",
-				StartTime:      time.Now().Format(time.RFC3339Nano),
-				EndTime:        "0", //not accurate for current epoch
+				StartTime:      time.Now(),
+				EndTime:        time.Unix(0, 0), //not accurate for current epoch
 				BlockGenerated: "0",
 				Status:         "0",
 			},

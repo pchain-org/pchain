@@ -894,8 +894,7 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 		} else {
 			shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
 			if shouldProposeEpoch {
-				cs.Epoch.SetNextEpoch(cs.Epoch.ProposeNextEpoch(cs.Height))
-				epochBytes = cs.Epoch.GetNextEpoch().Bytes()
+				epochBytes = cs.Epoch.ProposeNextEpoch(cs.Height).Bytes()
 			}
 		}
 
@@ -904,7 +903,7 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 		cs.blockFromMiner = nil
 
 		return types.MakeBlock(cs.Height, cs.state.TdmExtra.ChainID, commit,
-			ethBlock, val.Hash(), epochBytes,
+			ethBlock, val.Hash(), cs.Epoch.Number, epochBytes,
 			cs.config.GetInt("block_part_size"))
 	} else {
 		cs.logger.Warn("block from miner should not be nil, let's start another round")

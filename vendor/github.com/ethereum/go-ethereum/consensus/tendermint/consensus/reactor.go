@@ -14,8 +14,6 @@ import (
 	"github.com/tendermint/go-wire"
 	//sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	"github.com/tendermint/go-clist"
-	"math/big"
 )
 
 const (
@@ -119,9 +117,6 @@ func (conR *ConsensusReactor) AddPeer(peer *p2p.Peer) {
 	go conR.gossipVotesRoutine(peer, peerState)
 	go conR.queryMaj23Routine(peer, peerState)
 
-	go conR.validatorExMsgRoutine(peer, peerState)
-	// go conR.GetDiffValidator()
-
 	// Send our state to peer.
 	conR.sendNewRoundStepMessages(peer)
 }
@@ -197,22 +192,6 @@ func (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte)
 				BlockID: msg.BlockID,
 				Votes:   ourVotes,
 			}})
-		case *TestMessage:
-			fmt.Println(chID, src, msg)
-			fmt.Println("get test message!!!!!!!!!")
-			// fmt.Println(src.PubKey())
-			switch msg.ValidatorMsg.Action {
-			case "JOIN":
-				// msg.ValidatorMsg.PubKey = src.PubKey()     //get PubKey
-				validatorMsg := msg.ValidatorMsg
-				from := validatorMsg.From
-				ValidatorMsgMap[from] = validatorMsg //store request
-				if _, ok := types.AcceptVoteSet[from]; !ok {
-					types.AcceptVoteSet[from] = conR.NewAcceptVotes(validatorMsg, from) //new vote list to add vote
-				}
-			case "ACCEPT":
-				conR.tryAddAcceptVote(msg.ValidatorMsg) //TODO
-			}
 		default:
 			conR.logger.Warn(Fmt("Unknown message type %v", reflect.TypeOf(msg)))
 		}
@@ -1167,8 +1146,6 @@ const (
 	msgTypeHasVote      = byte(0x15)
 	msgTypeVoteSetMaj23 = byte(0x16)
 	msgTypeVoteSetBits  = byte(0x17)
-	//new liaoyd
-	msgTypeTest = byte(0x03)
 )
 
 type ConsensusMessage interface{}
@@ -1184,8 +1161,6 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{&HasVoteMessage{}, msgTypeHasVote},
 	wire.ConcreteType{&VoteSetMaj23Message{}, msgTypeVoteSetMaj23},
 	wire.ConcreteType{&VoteSetBitsMessage{}, msgTypeVoteSetBits},
-	//new liaoyd
-	wire.ConcreteType{&TestMessage{}, msgTypeTest},
 )
 
 // TODO: check for unnecessary extra bytes at the end.
@@ -1208,23 +1183,9 @@ type NewRoundStepMessage struct {
 	LastCommitRound       int
 }
 
-//new liaoyd
-// type TestMessage struct {
-// 	IP    string
-// 	Value string
-// }
-type TestMessage struct {
-	ValidatorMsg *types.ValidatorMsg
-}
-
 func (m *NewRoundStepMessage) String() string {
 	return fmt.Sprintf("[NewRoundStep H:%v R:%v S:%v LCR:%v]",
 		m.Height, m.Round, m.Step, m.LastCommitRound)
-}
-
-//new liaoyd
-func (m *TestMessage) String() string {
-	return fmt.Sprintf("[TestMessage %v]", m.ValidatorMsg)
 }
 
 //-------------------------------------
@@ -1321,162 +1282,4 @@ type VoteSetBitsMessage struct {
 
 func (m *VoteSetBitsMessage) String() string {
 	return fmt.Sprintf("[VSB %v/%02d/%v %v %v]", m.Height, m.Round, m.Type, m.BlockID, m.Votes)
-}
-
-//----------------------------------------------
-//author@liaoyd
-// type AcceptVotes struct {
-// 	Height int            `json:"height"`
-// 	Key    string         `json:"key"`
-// 	PubKey crypto.PubKey  `json:"pub_key"`
-// 	Power  uint64         `"power"`
-// 	Sum    int64          `"sum"`
-// 	Votes  []*types.ExMsg `votes`
-// 	Maj23  bool           `"maj23"`
-// }
-
-// type PreVal struct {
-// 	ValidatorSet *types.ValidatorSet `json:"validator_set"`
-// }
-
-// var AcceptVoteSet map[string]*types.AcceptVotes //votes
-
-func (conR *ConsensusReactor) NewAcceptVotes(msg *types.ValidatorMsg, key string) *types.AcceptVotes {
-	return &types.AcceptVotes{
-		Epoch:  msg.Epoch,
-		Key:    key,
-		PubKey: msg.PubKey,
-		Power:  msg.Power,
-		Action: msg.Action,
-		Sum:    big.NewInt(0),
-		Votes:  make([]*types.ValidatorMsg, conR.conS.Validators.Size()),
-		Maj23:  false,
-	}
-}
-
-//------------------------------------------
-var ValidatorMsgList = clist.New() //transfer
-
-var ValidatorMsgMap map[string]*types.ValidatorMsg //request
-
-func SendValidatorMsgToCons(from string, key string, epoch int, power uint64, action string, target string) {
-	// fmt.Println("in func SendExMsgToCons(s string)")
-	validatorMsg := types.NewValidatorMsg(from, key, epoch, power, action, target)
-
-	ValidatorMsgList.PushBack(validatorMsg)
-}
-
-func (conR *ConsensusReactor) validatorExMsgRoutine(peer *p2p.Peer, ps *PeerState) {
-	fmt.Println("in func validatorExMsgRoutine(peer *p2p.Peer, ps *PeerState)")
-	types.AcceptVoteSet = make(map[string]*types.AcceptVotes)
-	// AcceptVoteSet := types.AcceptVoteSet
-	ValidatorMsgMap = make(map[string]*types.ValidatorMsg)
-	// AcceptVoteSet = make(map[string]*types.AcceptVotes)
-
-	var next *clist.CElement
-
-	for {
-		if next == nil {
-			next = ValidatorMsgList.FrontWait()
-		}
-		msg := next.Value.(*types.ValidatorMsg)
-		fmt.Println("msg:", msg)
-
-		switch msg.Action {
-		case "JOIN": //joinValidator
-			// privVal := types.LoadPrivValidator("/mnt/vdb/ethermint-validatortest/.ethermint/priv_validator.json")
-			privVal := types.LoadPrivValidator(conR.conS.config.GetString("priv_validator_file"))
-			msg.PubKey = privVal.PubKey
-			// fmt.Println("priVal:", privVal)
-			// fmt.Println("priValPubKey:", privVal.PubKey)
-			tMsg := &TestMessage{ValidatorMsg: msg}
-			fmt.Println("broadcast message!!!!!!")
-			peer.Send(conR.ChainId, StateChannel, struct{ ConsensusMessage }{tMsg})
-
-			from := msg.From
-			ValidatorMsgMap[from] = msg
-			if _, ok := types.AcceptVoteSet[from]; !ok {
-				types.AcceptVoteSet[from] = conR.NewAcceptVotes(msg, from) //new vote list to add vote
-			}
-		case "ACCEPT": //acceptJoinReq
-			if conR.conS.privValidator == nil || !conR.conS.Validators.HasAddress(conR.conS.privValidator.GetAddress()) {
-				fmt.Println("we are not in validator set")
-				break
-			}
-			if received, ok := ValidatorMsgMap[msg.Target]; ok {
-				if received.Epoch <= conR.conS.Epoch.Number {
-					fmt.Println("request height is lower than consensus height")
-					break
-				}
-				if received.Power == msg.Power && received.Epoch == msg.Epoch {
-					addr := conR.conS.privValidator.GetAddress()
-					valIndex, _ := conR.conS.Validators.GetByAddress(addr)
-					msg.ValidatorIndex = valIndex
-					msg.PubKey = received.PubKey
-
-					conR.conS.privValidator.SignValidatorMsg(conR.ChainId, msg)
-					tMsg := &TestMessage{ValidatorMsg: msg}
-					fmt.Println("sending tMsg!!!", tMsg)
-					// conR.Switch.Broadcast(StateChannel, struct{ ConsensusMessage }{tMsg})
-					peer.Send(conR.ChainId, StateChannel, struct{ ConsensusMessage }{tMsg})
-					conR.tryAddAcceptVote(msg)
-
-				} else {
-					fmt.Println("different power or height")
-				}
-			} else {
-				fmt.Println("didn't received JOIN request")
-			}
-		}
-		next = next.NextWait()
-		continue
-	}
-}
-
-func (conR *ConsensusReactor) tryAddAcceptVote(validatorMsg *types.ValidatorMsg) (success bool, err error) {
-	fmt.Println("in func (conR *ConsensusReactor) tryAddAcceptVote(validatorMsg *types.ValidatorMsg) (success bool, err error)")
-	_, val := conR.conS.Validators.GetByIndex(validatorMsg.ValidatorIndex)
-	if val == nil {
-		fmt.Println("bad index!!!!!")
-		return false, types.ErrVoteInvalidValidatorIndex
-	}
-	if !val.PubKey.VerifyBytes(types.SignBytes(conR.ChainId, validatorMsg), validatorMsg.Signature) {
-		// Bad signature.
-		fmt.Println("bad signature!!!!!")
-		return false, types.ErrVoteInvalidSignature
-	}
-	if validatorMsg.Epoch <= conR.conS.Epoch.Number {
-		fmt.Println("bad height!!!!!")
-		return false, nil
-	}
-	return conR.addAcceptVotes(validatorMsg)
-}
-
-func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (success bool, err error) {
-	fmt.Println("in func (conR *ConsensusReactor) addAcceptVotes(validatorMsg *types.ValidatorMsg) (success bool, err error)")
-	_, val := conR.conS.Validators.GetByIndex(validatorMsg.ValidatorIndex)
-	target := validatorMsg.Target
-	if types.AcceptVoteSet[target].Votes[validatorMsg.ValidatorIndex] != nil {
-		fmt.Println("duplicate vote!!!")
-		return false, nil
-	}
-	types.AcceptVoteSet[target].Sum.Add(types.AcceptVoteSet[target].Sum, val.VotingPower)
-	types.AcceptVoteSet[target].Votes[validatorMsg.ValidatorIndex] = validatorMsg
-
-	twoThird := new(big.Int).Mul(conR.conS.Validators.TotalVotingPower(), big.NewInt(2))
-	twoThird.Div(twoThird, big.NewInt(3))
-
-	if types.AcceptVoteSet[target].Sum.Cmp(twoThird) == 1 && !types.AcceptVoteSet[target].Maj23 {
-		fmt.Println("update validator set!!!!")
-		types.AcceptVoteSet[target].Maj23 = true
-		//these following values should be filled when join/withdraw, and not modified here
-		/*
-			types.AcceptVoteSet[target].Epoch = validatorMsg.Epoch
-			types.AcceptVoteSet[target].PubKey = validatorMsg.PubKey
-			types.AcceptVoteSet[target].Power = validatorMsg.Power
-			types.AcceptVoteSet[target].Key = target
-			types.AcceptVoteSet[target].Action = validatorMsg.Action
-		*/
-	}
-	return true, nil
 }

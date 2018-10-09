@@ -8,7 +8,7 @@ import (
 )
 
 type EpochApi struct {
-	Number           int                `json:"number"`
+	Number           uint64             `json:"number"`
 	RewardPerBlock   *big.Int           `json:"reward_per_block"`
 	StartBlock       uint64             `json:"start_block"`
 	EndBlock         uint64             `json:"end_block"`
@@ -23,7 +23,7 @@ type EpochApi struct {
 }
 
 type EpochVotesApi struct {
-	EpochNumber int                     `json:"vote_for_epoch"`
+	EpochNumber uint64                  `json:"vote_for_epoch"`
 	StartBlock  uint64                  `json:"start_block"`
 	EndBlock    uint64                  `json:"end_block"`
 	Votes       []EpochValidatorVoteApi `json:"votes"`

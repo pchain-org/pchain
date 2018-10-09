@@ -155,4 +155,6 @@ type Tendermint interface {
 	EngineStartStop
 
 	GetEpoch() *epoch.Epoch
+
+	SetEpoch(ep *epoch.Epoch)
 }

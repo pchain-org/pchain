@@ -1,6 +1,7 @@
 package tendermint
 
 import (
+	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/log"
 	cmn "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
@@ -9,17 +10,14 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	ethTypes "github.com/ethereum/go-ethereum/core/types"
-
-	"fmt"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/params"
 	"io/ioutil"
 	_ "net/http/pprof"
-	"time"
 )
 
 type PChainP2P interface {
@@ -51,7 +49,7 @@ type Node struct {
 	logger  log.Logger
 }
 
-func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.ChainConfig, sw *p2p.Switch, addrBook *p2p.AddrBook, cch core.CrossChainHelper) *Node {
+func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.ChainConfig, sw *p2p.Switch, addrBook *p2p.AddrBook, cch core.CrossChainHelper, genDoc *types.GenesisDoc) *Node {
 	// Get PrivValidator
 	var privValidator *types.PrivValidator
 	privValidatorFile := config.GetString("priv_validator_file")
@@ -59,10 +57,13 @@ func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.Ch
 		privValidator = types.LoadPrivValidator(privValidatorFile)
 	}
 
+	// Initial Epoch
 	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
+	ep := epoch.InitEpoch(epochDB, genDoc, backend.logger)
 
 	// Make ConsensusReactor
 	consensusState := consensus.NewConsensusState(backend, config, chainConfig, cch)
+	consensusState.Epoch = ep
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
@@ -150,23 +151,23 @@ func (n *Node) OnStop() {
 }
 
 //update the state with new insert block information
-func (n *Node) SaveState(block *ethTypes.Block) {
-
-	epoch := n.consensusState.Epoch
-	state := n.consensusState.GetState()
-
-	fmt.Printf("(n *Node) SaveState(block *ethTypes.Block) with state.height = %v, block.height = %v\n",
-		uint64(state.TdmExtra.Height), block.NumberU64())
-
-	if uint64(state.TdmExtra.Height) != block.NumberU64() {
-		fmt.Printf("(n *Node) SaveState(block *ethTypes.Block)， block height not equal\n")
-	}
-
-	epoch.Save()
-	//state.Save()
-
-	n.consensusState.StartNewHeight()
-}
+//func (n *Node) SaveState(block *ethTypes.Block) {
+//
+//	epoch := n.consensusState.Epoch
+//	state := n.consensusState.GetState()
+//
+//	fmt.Printf("(n *Node) SaveState(block *ethTypes.Block) with state.height = %v, block.height = %v\n",
+//		uint64(state.TdmExtra.Height), block.NumberU64())
+//
+//	if uint64(state.TdmExtra.Height) != block.NumberU64() {
+//		fmt.Printf("(n *Node) SaveState(block *ethTypes.Block)， block height not equal\n")
+//	}
+//
+//	epoch.Save()
+//	//state.Save()
+//
+//	n.consensusState.StartNewHeight()
+//}
 
 func (n *Node) RunForever() {
 	// Sleep forever and then...
@@ -305,29 +306,34 @@ func ProtocolAndAddress(listenAddr string) (string, string) {
 
 func MakeTendermintNode(backend *backend, config cfg.Config, chainConfig *params.ChainConfig, pNode PChainP2P, cch core.CrossChainHelper) *Node {
 
+	var genDoc *types.GenesisDoc
 	genDocFile := config.GetString("genesis_file")
-	if !cmn.FileExists(genDocFile) {
-		//log.Notice(cmn.Fmt("Waiting for genesis file %v...", genDocFile))
-		fmt.Printf(cmn.Fmt("Waiting for genesis file %v...", genDocFile))
-		for {
+
+	for {
+		if !cmn.FileExists(genDocFile) {
+			backend.logger.Infof("Waiting for genesis file %v...", genDocFile)
 			time.Sleep(time.Second)
-			if !cmn.FileExists(genDocFile) {
-				continue
-			}
-			jsonBlob, err := ioutil.ReadFile(genDocFile)
-			if err != nil {
-				cmn.Exit(cmn.Fmt("Couldn't read GenesisDoc file: %v", err))
-			}
-			genDoc, err := types.GenesisDocFromJSON(jsonBlob)
-			if err != nil {
-				cmn.PanicSanity(cmn.Fmt("Genesis doc parse json error: %v", err))
-			}
-			if genDoc.ChainID == "" {
-				cmn.PanicSanity(cmn.Fmt("Genesis doc %v must include non-empty chain_id", genDocFile))
-			}
-			config.Set("chain_id", genDoc.ChainID)
+			continue
 		}
+		genDoc = readGenesisFromFile(genDocFile)
+		config.Set("chain_id", genDoc.ChainID)
+		break
 	}
 
-	return NewNodeNotStart(backend, config, chainConfig, pNode.Switch(), pNode.AddrBook(), cch)
+	return NewNodeNotStart(backend, config, chainConfig, pNode.Switch(), pNode.AddrBook(), cch, genDoc)
+}
+
+func readGenesisFromFile(genDocFile string) *types.GenesisDoc {
+	jsonBlob, err := ioutil.ReadFile(genDocFile)
+	if err != nil {
+		cmn.Exit(cmn.Fmt("Couldn't read GenesisDoc file: %v", err))
+	}
+	genDoc, err := types.GenesisDocFromJSON(jsonBlob)
+	if err != nil {
+		cmn.PanicSanity(cmn.Fmt("Genesis doc parse json error: %v", err))
+	}
+	if genDoc.ChainID == "" {
+		cmn.PanicSanity(cmn.Fmt("Genesis doc %v must include non-empty chain_id", genDocFile))
+	}
+	return genDoc
 }

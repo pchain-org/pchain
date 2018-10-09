@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"github.com/ethereum/go-ethereum/log"
 	"io/ioutil"
-	//"sync"
 	"time"
 
 	. "github.com/tendermint/go-common"
@@ -33,7 +32,7 @@ type State struct {
 	//db  dbm.DB
 
 	// should not change
-	GenesisDoc *types.GenesisDoc
+	//GenesisDoc *types.GenesisDoc
 
 	/*
 		ChainID    string
@@ -95,7 +94,7 @@ func (s *State) Copy() *State {
 
 	return &State{
 		//db:              s.db,
-		GenesisDoc: s.GenesisDoc,
+		//GenesisDoc: s.GenesisDoc,
 		/*
 			ChainID:         s.ChainID,
 			Height:			 s.Height,
@@ -164,42 +163,42 @@ func MakeGenesisStateFromFile( /*db dbm.DB, */ genDocFile string) *State {
 	if err != nil {
 		Exit(Fmt("Error reading GenesisDoc: %v", err))
 	}
-	return MakeGenesisState( /*db, */ genDoc, nil)
+	return MakeGenesisState( /*db, */ genDoc.ChainID, nil)
 }
 
 // MakeGenesisState creates state from types.GenesisDoc.
 //
 // Used in tests.
-func MakeGenesisState( /*db dbm.DB, */ genDoc *types.GenesisDoc, logger log.Logger) *State {
-	if len(genDoc.CurrentEpoch.Validators) == 0 {
-		Exit(Fmt("The genesis file has no validators"))
-	}
-
-	if genDoc.GenesisTime.IsZero() {
-		genDoc.GenesisTime = time.Now()
-	}
+func MakeGenesisState( /*db dbm.DB,  genDoc *types.GenesisDoc,*/ chainID string, logger log.Logger) *State {
+	//if len(genDoc.CurrentEpoch.Validators) == 0 {
+	//	Exit(Fmt("The genesis file has no validators"))
+	//}
+	//
+	//if genDoc.GenesisTime.IsZero() {
+	//	genDoc.GenesisTime = time.Now()
+	//}
 
 	// Make validators slice
-	validators := make([]*types.Validator, len(genDoc.CurrentEpoch.Validators))
-	for i, val := range genDoc.CurrentEpoch.Validators {
-		pubKey := val.PubKey
-		address := pubKey.Address()
-
-		// Make validator
-		validators[i] = &types.Validator{
-			Address:     address,
-			PubKey:      pubKey,
-			VotingPower: val.Amount,
-		}
-	}
+	//validators := make([]*types.Validator, len(genDoc.CurrentEpoch.Validators))
+	//for i, val := range genDoc.CurrentEpoch.Validators {
+	//	pubKey := val.PubKey
+	//	address := pubKey.Address()
+	//
+	//	// Make validator
+	//	validators[i] = &types.Validator{
+	//		Address:     address,
+	//		PubKey:      pubKey,
+	//		VotingPower: val.Amount,
+	//	}
+	//}
 
 	return &State{
 		//db:              db,
-		GenesisDoc: genDoc,
+		//GenesisDoc: genDoc,
 		TdmExtra: &types.TendermintExtra{
-			ChainID:     genDoc.ChainID,
+			ChainID:     chainID,
 			Height:      0,
-			Time:        genDoc.GenesisTime,
+			Time:        time.Now(),
 			EpochNumber: 0,
 			NeedToSave:  false,
 		},

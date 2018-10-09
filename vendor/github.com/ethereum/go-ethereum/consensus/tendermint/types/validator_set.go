@@ -90,8 +90,7 @@ func (valSet *ValidatorSet) Copy() *ValidatorSet {
 
 func (valSet *ValidatorSet) Equals(other *ValidatorSet) bool {
 
-	if valSet.totalVotingPower.Cmp(other.totalVotingPower) != 0 ||
-		!valSet.Proposer.Equals(other.Proposer) ||
+	if !valSet.Proposer.Equals(other.Proposer) ||
 		len(valSet.Validators) != len(other.Validators) {
 		return false
 	}
@@ -380,16 +379,6 @@ func (valSet *ValidatorSet) FromBytes(b []byte) {
 		// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
 		cmn.PanicCrisis(*err)
 	}
-}
-
-func (valSet *ValidatorSet) ToAbciValidators() []*abci.Validator {
-
-	abciValidators := make([]*abci.Validator, len(valSet.Validators))
-	for i, val := range valSet.Validators {
-		abciValidators[i] = val.ToAbciValidator()
-	}
-
-	return abciValidators
 }
 
 func (valSet *ValidatorSet) String() string {

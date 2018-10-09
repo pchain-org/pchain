@@ -409,6 +409,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 	sb.logger.Infof("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
+	// Check if any Child Chain need to be launch and Update their account balance accordingly
 	if chain.Config().PChainId == "pchain" {
 		// Check the Child Chain Start
 		readyId, updateBytes, removedId := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
@@ -422,6 +423,20 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 				sb.logger.Error("Tendermint (backend) Finalize, Fail to append LaunchChildChainsOp, only one LaunchChildChainsOp is allowed in each block")
 			}
 		}
+	}
+
+	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
+	if ok, newValidators, refunds, _ := sb.core.consensusState.Epoch.ShouldEnterNewEpoch(header.Number.Uint64()); ok {
+		// Create a new Change Epoch Op. (Epoch Op should be the last one to be execute)
+		for _, r := range refunds {
+			state.SubDepositBalance(r.Address, r.Amount)
+			state.AddBalance(r.Address, r.Amount)
+		}
+
+		ops.Append(&tdmTypes.SwitchEpochOp{
+			NewValidators: newValidators,
+		})
+
 	}
 
 	// Calculate the rewards, and drop the uncles
@@ -561,6 +576,11 @@ func (sb *backend) ChainReader() consensus.ChainReader {
 // GetEpoch Get Epoch from Tendermint Engine
 func (sb *backend) GetEpoch() *epoch.Epoch {
 	return sb.core.consensusState.Epoch
+}
+
+// SetEpoch Set Epoch to Tendermint Engine
+func (sb *backend) SetEpoch(ep *epoch.Epoch) {
+	sb.core.consensusState.Epoch = ep
 }
 
 // update timestamp and signature of the block based on its number of transactions

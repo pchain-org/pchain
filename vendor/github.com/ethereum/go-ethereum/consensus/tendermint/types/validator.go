@@ -6,7 +6,7 @@ import (
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
-	abciTypes "github.com/tendermint/abci/types"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
@@ -84,14 +84,6 @@ func (v *Validator) Hash() []byte {
 	return wire.BinaryRipemd160(v)
 }
 
-func (v *Validator) ToAbciValidator() *abciTypes.Validator {
-	return &abciTypes.Validator{
-		Address: common.BytesToAddress(v.Address),
-		PubKey:  v.PubKey.Bytes(),
-		Power:   v.VotingPower,
-	}
-}
-
 //-------------------------------------
 
 var ValidatorCodec = validatorCodec{}
@@ -109,6 +101,30 @@ func (vc validatorCodec) Decode(r io.Reader, n *int, err *error) interface{} {
 func (vc validatorCodec) Compare(o1 interface{}, o2 interface{}) int {
 	PanicSanity("ValidatorCodec.Compare not implemented")
 	return 0
+}
+
+//-------------------------------------
+
+type RefundValidatorAmount struct {
+	Address common.Address
+	Amount  *big.Int
+}
+
+// SwitchEpoch op
+type SwitchEpochOp struct {
+	NewValidators *ValidatorSet
+}
+
+func (op *SwitchEpochOp) Conflict(op1 ethTypes.PendingOp) bool {
+	if _, ok := op1.(*SwitchEpochOp); ok {
+		// Only one SwitchEpochOp is allowed in each block
+		return true
+	}
+	return false
+}
+
+func (op *SwitchEpochOp) String() string {
+	return fmt.Sprintf("SwitchEpochOp - New Validators: %v", op.NewValidators)
 }
 
 //--------------------------------------------------------------------------------

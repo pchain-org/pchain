@@ -32,7 +32,7 @@ type CoreChainInfo struct {
 	JoinedValidators []JoinedValidator
 
 	//validators - for stable phase; should be Epoch information
-	EpochNumber int
+	EpochNumber uint64
 
 	//the statitics for balance in & out
 	//depositInMainChain >= depositInChildChain
@@ -70,7 +70,7 @@ func calcCoreChainInfoKey(chainId string) []byte {
 	return []byte(chainInfoKey + ":" + chainId)
 }
 
-func calcEpochKey(number int, chainId string) []byte {
+func calcEpochKey(number uint64, chainId string) []byte {
 	return []byte(chainInfoKey + fmt.Sprintf("-%v-%s", number, chainId))
 }
 
@@ -150,7 +150,7 @@ func (cci *CoreChainInfo) TotalDeposit() *big.Int {
 	return sum
 }
 
-func loadEpoch(db dbm.DB, number int, chainId string) *ep.Epoch {
+func loadEpoch(db dbm.DB, number uint64, chainId string) *ep.Epoch {
 
 	mtx.Lock()
 	defer mtx.Unlock()

@@ -23,12 +23,13 @@ type TdmBlock struct {
 }
 
 func MakeBlock(height uint64, chainID string, commit *Commit,
-	block *types.Block, valHash []byte, epochBytes []byte, partSize int) (*TdmBlock, *PartSet) {
+	block *types.Block, valHash []byte, epochNumber uint64, epochBytes []byte, partSize int) (*TdmBlock, *PartSet) {
 
 	TdmExtra := &TendermintExtra{
 		ChainID:        chainID,
 		Height:         uint64(height),
 		Time:           time.Now(),
+		EpochNumber:    epochNumber,
 		ValidatorsHash: valHash,
 		SeenCommit:     commit,
 		EpochBytes:     epochBytes,

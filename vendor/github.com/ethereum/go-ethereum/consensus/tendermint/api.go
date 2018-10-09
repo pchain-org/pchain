@@ -15,12 +15,12 @@ type API struct {
 }
 
 // GetCurrentEpochNumber retrieves the current epoch number.
-func (api *API) GetCurrentEpochNumber() (int, error) {
+func (api *API) GetCurrentEpochNumber() (uint64, error) {
 	return api.tendermint.core.consensusState.Epoch.Number, nil
 }
 
 // GetEpoch retrieves the Epoch Detail by Number
-func (api *API) GetEpoch(number int) (*tdmTypes.EpochApi, error) {
+func (api *API) GetEpoch(number uint64) (*tdmTypes.EpochApi, error) {
 
 	var resultEpoch *epoch.Epoch
 	curEpoch := api.tendermint.core.consensusState.Epoch

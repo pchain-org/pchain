@@ -3,12 +3,10 @@ package consensus
 import (
 	consss "github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	"github.com/ethereum/go-ethereum/log"
 
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	cmn "github.com/tendermint/go-common"
-	"io/ioutil"
 	"time"
 )
 
@@ -33,63 +31,38 @@ func (cs *ConsensusState) StartNewHeight() {
 	curHeight := curEthBlock.NumberU64()
 	cs.logger.Infof("StartNewHeight. current block height is %v", curHeight)
 
-	state, epoch := cs.InitStateAndEpoch(cs.logger)
-	epoch = state.ApplyBlock(curEthBlock, epoch)
-	cs.UpdateToStateAndEpoch(state, epoch)
+	state := cs.InitState(cs.Epoch)
+	sm.ApplyBlock(curEthBlock, cs.Epoch)
+	cs.UpdateToState(state)
 
 	cs.newStep()
 	cs.scheduleRound0(cs.getRoundState()) //not use cs.GetRoundState to avoid dead-lock
 }
 
-func (cs *ConsensusState) InitStateAndEpoch(logger log.Logger) (*sm.State, *ep.Epoch) {
+func (cs *ConsensusState) InitState(epoch *ep.Epoch) *sm.State {
 
-	state := sm.NewState(logger)
-	var epoch *ep.Epoch = nil
-	epochDB := cs.node.EpochDB()
+	state := sm.NewState(cs.logger)
 
 	state.TdmExtra, _ = cs.LoadLastTendermintExtra()
-
 	if state.TdmExtra == nil { //means it it the first block
 
-		genDocFile := cs.node.Config().GetString("genesis_file")
-		if !cmn.FileExists(genDocFile) {
-			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), Couldn't find GenesisDoc file"))
-		}
-
-		jsonBlob, err := ioutil.ReadFile(genDocFile)
-		if err != nil {
-			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), Couldn't read GenesisDoc file: %v", err))
-		}
-
-		genDoc, err := types.GenesisDocFromJSON(jsonBlob)
-		if err != nil {
-			cmn.PanicSanity(cmn.Fmt("InitStateAndEpoch(), Genesis doc parse json error: %v", err))
-		}
-
-		state = sm.MakeGenesisState( /*stateDB, */ genDoc, logger)
+		state = sm.MakeGenesisState( /*stateDB, */ cs.chainConfig.PChainId, cs.logger)
 		//state.Save()
-
-		rewardScheme := ep.MakeRewardScheme(epochDB, &genDoc.RewardScheme)
-		epoch = ep.MakeOneEpoch(epochDB, &genDoc.CurrentEpoch, logger)
-		epoch.SetRewardScheme(rewardScheme)
 
 		if state.TdmExtra.EpochNumber != uint64(epoch.Number) {
 			cmn.Exit(cmn.Fmt("InitStateAndEpoch(), initial state error"))
 		}
 		state.Epoch = epoch
-		rewardScheme.Save()
-		epoch.Save()
 
 		cs.logger.Infof("InitStateAndEpoch. genesis state extra: %#v, epoch validators: %v", state.TdmExtra, epoch.Validators)
 	} else {
-		epoch = ep.LoadOneEpoch(epochDB, int(state.TdmExtra.EpochNumber), logger)
 		state.Epoch = epoch
 		cs.ReconstructLastCommit(state)
 
 		cs.logger.Infof("InitStateAndEpoch. state extra: %#v, epoch validators: %v", state.TdmExtra, epoch.Validators)
 	}
 
-	return state, epoch
+	return state
 }
 
 func (cs *ConsensusState) Initialize() {
@@ -109,13 +82,12 @@ func (cs *ConsensusState) Initialize() {
 	cs.Votes = nil
 	cs.CommitRound = -1
 	cs.LastCommit = nil
-	cs.Epoch = nil
 	cs.state = nil
 }
 
 // Updates ConsensusState and increments height to match thatRewardScheme of state.
 // The round becomes 0 and cs.Step becomes RoundStepNewHeight.
-func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch) {
+func (cs *ConsensusState) UpdateToState(state *sm.State) {
 
 	// Reset fields based on state.
 	_, validators, _ := state.GetValidators()
@@ -149,7 +121,6 @@ func (cs *ConsensusState) UpdateToStateAndEpoch(state *sm.State, epoch *ep.Epoch
 	cs.Validators = validators
 	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators, cs.logger)
 	cs.LastCommit = lastPrecommits
-	cs.Epoch = epoch
 
 	cs.state = state
 
