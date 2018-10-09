@@ -30,8 +30,8 @@ type CrossChainHelper interface {
 
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
 	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction
-	VerifyChildChainBlock(bs []byte) error
-	SaveChildChainDataToMainChain(bs []byte) error
+	VerifyChildChainProofData(bs []byte) error
+	SaveChildChainProofDataToMainChain(bs []byte) error
 
 	// these should operate on the main chain db
 	MarkToChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error

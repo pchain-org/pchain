@@ -656,7 +656,7 @@ func sd2mc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.S
 		return err
 	}
 
-	err := cch.VerifyChildChainBlock(bs)
+	err := cch.VerifyChildChainProofData(bs)
 	if err != nil {
 		return fmt.Errorf("data can not pass verification: %v", err)
 	}

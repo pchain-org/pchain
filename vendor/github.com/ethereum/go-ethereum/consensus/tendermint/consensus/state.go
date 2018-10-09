@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"context"
 	"crypto/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
 	consss "github.com/ethereum/go-ethereum/consensus"
@@ -25,7 +26,6 @@ import (
 	cfg "github.com/tendermint/go-config"
 	crypto2 "github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
-	"golang.org/x/net/context"
 	"math/big"
 )
 
@@ -1538,15 +1538,22 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 	//ctx := context.Background() // testing only!
 
-	number, err := client.BlockNumber(ctx)
+	proofData, err := ethTypes.NewChildChainProofData(block)
 	if err != nil {
-		cs.logger.Error("saveDataToMainChain: failed to get BlockNumber at the beginning.", "err", err)
+		cs.logger.Error("saveDataToMainChain: failed to create proof data", "block", block, "err", err)
 		return
 	}
 
-	bs, err := rlp.EncodeToBytes(block)
+	bs, err := rlp.EncodeToBytes(proofData)
 	if err != nil {
-		cs.logger.Error("saveDataToMainChain: failed to encode the block", "block", block, "err", err)
+		cs.logger.Error("saveDataToMainChain: failed to encode proof data", "proof data", proofData, "err", err)
+		return
+	}
+	cs.logger.Infof("saveDataToMainChain proof data length: %x", len(bs))
+
+	number, err := client.BlockNumber(ctx)
+	if err != nil {
+		cs.logger.Error("saveDataToMainChain: failed to get BlockNumber at the beginning.", "err", err)
 		return
 	}
 

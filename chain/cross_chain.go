@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"golang.org/x/crypto/sha3"
@@ -324,17 +325,17 @@ func (cch *CrossChainHelper) GetTxFromChildChain(txHash common.Hash, chainId str
 
 // verify the signature of validators who voted for the block
 // most of the logic here is from 'VerifyHeader'
-func (cch *CrossChainHelper) VerifyChildChainBlock(bs []byte) error {
+func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
 
-	log.Debug("VerifyChildChainBlock - start")
+	log.Debug("VerifyChildChainProofData - start")
 
-	var block types.Block
-	err := rlp.DecodeBytes(bs, &block)
+	var proofData types.ChildChainProofData
+	err := rlp.DecodeBytes(bs, &proofData)
 	if err != nil {
 		return err
 	}
 
-	header := block.Header()
+	header := proofData.Header
 	// Don't waste time checking blocks from the future
 	if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
 		return errors.New("block in the future")
@@ -397,21 +398,33 @@ func (cch *CrossChainHelper) VerifyChildChainBlock(bs []byte) error {
 		return err
 	}
 
-	log.Debug("VerifyChildChainBlock - end")
+	// tx merkle proof verify
+	keybuf := new(bytes.Buffer)
+	for i, txIndex := range proofData.TxIndexs {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(txIndex))
+		_, err, _ := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Debug("VerifyChildChainProofData - end")
 	return nil
 }
 
-func (cch *CrossChainHelper) SaveChildChainDataToMainChain(bs []byte) error {
+func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error {
 
-	log.Debug("SaveChildChainBlockToMainChain - start")
+	log.Debug("SaveChildChainProofDataToMainChain - start")
 
-	var block types.Block
-	err := rlp.DecodeBytes(bs, &block)
+	var proofData types.ChildChainProofData
+	err := rlp.DecodeBytes(bs, &proofData)
 	if err != nil {
 		return err
 	}
 
-	tdmExtra, err := tdmTypes.ExtractTendermintExtra(block.Header())
+	header := proofData.Header
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
 	if err != nil {
 		return err
 	}
@@ -424,12 +437,8 @@ func (cch *CrossChainHelper) SaveChildChainDataToMainChain(bs []byte) error {
 	chainMgr := GetCMInstance(nil)
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
 	chainDb := ethereum.ChainDb()
-	err = core.WriteChildChainBlock(chainDb, &block)
-	if err != nil {
-		return err
-	}
 
-	//here is epoch update; should be a more general mechanism
+	// here is epoch update; should be a more general mechanism
 	if len(tdmExtra.EpochBytes) != 0 {
 		ep := epoch.FromBytes(tdmExtra.EpochBytes)
 		if ep != nil {
@@ -443,7 +452,32 @@ func (cch *CrossChainHelper) SaveChildChainDataToMainChain(bs []byte) error {
 		}
 	}
 
-	log.Debug("SaveChildChainBlockToMainChain - end")
+	// here is the tx
+	keybuf := new(bytes.Buffer)
+	for i, txIndex := range proofData.TxIndexs {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(txIndex))
+		val, err, _ := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
+		if err != nil {
+			log.Error("SaveChildChainProofDataToMainChain VerifyProof error", "err", err)
+			continue
+		}
+
+		var tx types.Transaction
+		err = rlp.DecodeBytes(val, &tx)
+		if err != nil {
+			log.Error("SaveChildChainProofDataToMainChain decode tx error", "err", err)
+			continue
+		}
+
+		err = core.WriteChildChainTransaction(chainDb, chainId, &tx)
+		if err != nil {
+			log.Error("SaveChildChainProofDataToMainChain write tx error", "err", err)
+			continue
+		}
+	}
+
+	log.Debug("SaveChildChainProofDataToMainChain - end")
 	return nil
 }
 

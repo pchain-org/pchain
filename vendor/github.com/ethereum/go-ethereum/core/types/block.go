@@ -27,10 +27,13 @@ import (
 	"time"
 	"unsafe"
 
+	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
+	pabi "github.com/pchain/abi"
 )
 
 var (
@@ -463,3 +466,51 @@ func (self blockSorter) Swap(i, j int) {
 func (self blockSorter) Less(i, j int) bool { return self.by(self.blocks[i], self.blocks[j]) }
 
 func Number(b1, b2 *Block) bool { return b1.header.Number.Cmp(b2.header.Number) < 0 }
+
+// ChildChainProofData represents a proof of tx/epoch from child chain to the main chain.
+type ChildChainProofData struct {
+	Header *Header
+
+	TxIndexs []uint
+	TxProofs []*BSKeyValueSet
+}
+
+func NewChildChainProofData(block *Block) (*ChildChainProofData, error) {
+	ret := &ChildChainProofData{
+		Header: block.Header(),
+	}
+
+	txs := block.Transactions()
+	// build the Trie (see derive_sha.go)
+	keybuf := new(bytes.Buffer)
+	trie := new(trie.Trie)
+	for i := 0; i < txs.Len(); i++ {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(i))
+		trie.Update(keybuf.Bytes(), txs.GetRlp(i))
+	}
+	// do the Merkle Proof for the specific tx
+	for i, tx := range txs {
+		if pabi.IsPChainContractAddr(tx.To()) {
+			data := tx.Data()
+			function, err := pabi.FunctionTypeFromId(data[:4])
+			if err != nil {
+				continue
+			}
+
+			if function == pabi.WithdrawFromChildChain || function == pabi.DepositInChildChain {
+				kvSet := MakeBSKeyValueSet()
+				keybuf.Reset()
+				rlp.Encode(keybuf, uint(i))
+				if err := trie.Prove(keybuf.Bytes(), 0, kvSet); err != nil {
+					return nil, err
+				}
+
+				ret.TxIndexs = append(ret.TxIndexs, uint(i))
+				ret.TxProofs = append(ret.TxProofs, kvSet)
+			}
+		}
+	}
+
+	return ret, nil
+}
