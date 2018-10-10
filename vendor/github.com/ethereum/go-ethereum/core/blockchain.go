@@ -502,7 +502,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 	log.Info(fmt.Sprintf("(bc *BlockChain) insert block number %v", block.NumberU64()))
 	ibCbMap := GetInsertBlockCbMap()
 	for _, cb := range ibCbMap {
-		cb(block)
+		cb(bc, block)
 	}
 }
 

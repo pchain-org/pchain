@@ -32,7 +32,6 @@ func (cs *ConsensusState) StartNewHeight() {
 	cs.logger.Infof("StartNewHeight. current block height is %v", curHeight)
 
 	state := cs.InitState(cs.Epoch)
-	sm.ApplyBlock(curEthBlock, cs.Epoch)
 	cs.UpdateToState(state)
 
 	cs.newStep()

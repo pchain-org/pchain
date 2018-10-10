@@ -45,7 +45,7 @@ type CrossChainHelper interface {
 
 type EtdValidateCb func(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch CrossChainHelper) error
 type EtdApplyCb func(tx *types.Transaction, signer types.Signer, state *state.StateDB, ops *types.PendingOps, cch CrossChainHelper) error
-type EtdInsertBlockCb func(block *types.Block)
+type EtdInsertBlockCb func(bc *BlockChain, block *types.Block)
 
 var validateCbMap = make(map[pabi.FunctionType]EtdValidateCb)
 var applyCbMap = make(map[pabi.FunctionType]EtdApplyCb)

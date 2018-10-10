@@ -2,10 +2,13 @@ package state
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/consensus"
+
 	//"fmt"
 
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	. "github.com/tendermint/go-common"
 )
@@ -57,9 +60,12 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 }
 
 //-----------------------------------------------------------------------------
-// ApplyBlock applies the epoch infor from last block
-func ApplyBlock(block *ethTypes.Block, epoch *ep.Epoch) {
 
+func init() {
+	core.RegisterInsertBlockCb("InsertNextEpoch", insertNextEpoch)
+}
+
+func insertNextEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 	if block.NumberU64() == 0 {
 		return
 	}
@@ -68,22 +74,11 @@ func ApplyBlock(block *ethTypes.Block, epoch *ep.Epoch) {
 	//here handles the proposed next epoch
 	nextEpochInBlock := ep.FromBytes(tdmExtra.EpochBytes)
 	if nextEpochInBlock != nil && nextEpochInBlock.Number != 0 {
-		nextEpochInBlock.SetRewardScheme(epoch.GetRewardScheme())
+		// Update Engine -> Epoch
+		eng := bc.Engine().(consensus.Tendermint)
+		currentEpoch := eng.GetEpoch()
 		nextEpochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
-		epoch.SetNextEpoch(nextEpochInBlock)
-		epoch.Save()
+		currentEpoch.SetNextEpoch(nextEpochInBlock)
+		currentEpoch.Save()
 	}
-
-	/*
-		//here handles if need to enter next epoch
-		ok, err := epoch.ShouldEnterNewEpoch(tdmExtra.Height)
-		if ok && err == nil {
-			// now update the block and validators
-			epoch, _, _ := epoch.EnterNewEpoch(tdmExtra.Height)
-			epoch.Save()
-		} else if err != nil {
-			s.logger.Error(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
-				tdmExtra.Height, s.Epoch, err))
-			return nil
-		}*/
 }

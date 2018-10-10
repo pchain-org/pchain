@@ -289,7 +289,7 @@ func (sb *backend) verifyCommittedSeals(chain consensus.ChainReader, header *typ
 		return errInvalidExtraDataFormat
 	}
 
-	epoch := sb.core.consensusState.Epoch.GetEpochByBlockNumber(tdmExtra.Height)
+	epoch := sb.core.consensusState.Epoch
 	if epoch == nil || epoch.Validators == nil {
 		sb.logger.Errorf("verifyCommittedSeals error. Epoch %v", epoch)
 		return errInconsistentValidatorSet

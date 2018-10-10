@@ -68,13 +68,14 @@ func (te *TendermintExtra) Hash() []byte {
 		return nil
 	}
 	return merkle.SimpleHashFromMap(map[string]interface{}{
-		"ChainID":    te.ChainID,
-		"Height":     te.Height,
-		"Time":       te.Time,
-		"SeenCommit": te.SeenCommitHash,
-		"Validators": te.ValidatorsHash,
-		"NeedToSave": te.NeedToSave,
-		"EpochBytes": te.EpochBytes,
+		"ChainID":     te.ChainID,
+		"Height":      te.Height,
+		"Time":        te.Time,
+		"NeedToSave":  te.NeedToSave,
+		"EpochNumber": te.EpochNumber,
+		"SeenCommit":  te.SeenCommitHash,
+		"Validators":  te.ValidatorsHash,
+		"EpochBytes":  te.EpochBytes,
 	})
 }
 
