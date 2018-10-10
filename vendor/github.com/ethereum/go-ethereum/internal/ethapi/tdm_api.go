@@ -76,8 +76,8 @@ func init() {
 	core.RegisterApplyCb(pabi.VoteNextEpoch, vne_ApplyCb)
 
 	// Reveal Vote
-	core.RegisterValidateCb(pabi.VoteNextEpoch, rev_ValidateCb)
-	core.RegisterApplyCb(pabi.VoteNextEpoch, rev_ApplyCb)
+	core.RegisterValidateCb(pabi.RevealVote, rev_ValidateCb)
+	core.RegisterApplyCb(pabi.RevealVote, rev_ApplyCb)
 }
 
 func vne_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch core.CrossChainHelper) error {
