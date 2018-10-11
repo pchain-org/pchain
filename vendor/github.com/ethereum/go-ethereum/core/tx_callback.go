@@ -43,8 +43,8 @@ type CrossChainHelper interface {
 	IsTxUsedOnChildChain(from common.Address, chainId string, txHash common.Hash) bool
 }
 
-type EtdValidateCb func(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch CrossChainHelper) error
-type EtdApplyCb func(tx *types.Transaction, signer types.Signer, state *state.StateDB, ops *types.PendingOps, cch CrossChainHelper) error
+type EtdValidateCb func(tx *types.Transaction, state *state.StateDB, cch CrossChainHelper) error
+type EtdApplyCb func(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch CrossChainHelper) error
 type EtdInsertBlockCb func(bc *BlockChain, block *types.Block)
 
 var validateCbMap = make(map[pabi.FunctionType]EtdValidateCb)

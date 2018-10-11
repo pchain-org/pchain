@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	pabi "github.com/pchain/abi"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/sha3"
 	"math/big"
 )
 
@@ -23,7 +24,7 @@ func (ec *Client) BlockNumber(ctx context.Context) (*big.Int, error) {
 }
 
 // SaveBlockToMainChain save a block to main chain through eth_sendRawTransaction
-func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data []byte, signer types.Signer, account common.Address, prv *ecdsa.PrivateKey) (common.Hash, error) {
+func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data []byte, account common.Address, prv *ecdsa.PrivateKey) (common.Hash, error) {
 
 	if chainId == "" || chainId == "pchain" {
 		return common.Hash{}, errors.New("invalid child chainId")
@@ -51,6 +52,8 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data 
 	tx := types.NewTransaction(nonce, pabi.ChainContractMagicAddr, nil, 0, gasPrice, bs)
 
 	// sign the tx
+	digest := sha3.Sum256([]byte("pchain"))
+	signer := types.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
 	signedTx, err := types.SignTx(tx, signer, prv)
 	if err != nil {
 		return common.Hash{}, err

@@ -617,7 +617,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if validateCb := GetValidateCb(function); validateCb != nil {
 			pool.cch.GetMutex().Lock()
 			defer pool.cch.GetMutex().Unlock()
-			if err := validateCb(tx, pool.signer, pool.currentState, pool.cch); err != nil {
+			if err := validateCb(tx, pool.currentState, pool.cch); err != nil {
 				return err
 			}
 		}

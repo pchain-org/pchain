@@ -1548,23 +1548,12 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 		cs.logger.Error("saveDataToMainChain: failed to encode proof data", "proof data", proofData, "err", err)
 		return
 	}
-	cs.logger.Infof("saveDataToMainChain proof data length: %x", len(bs))
+	cs.logger.Infof("saveDataToMainChain proof data length: %d", len(bs))
 
 	number, err := client.BlockNumber(ctx)
 	if err != nil {
 		cs.logger.Error("saveDataToMainChain: failed to get BlockNumber at the beginning.", "err", err)
 		return
-	}
-
-	// TODO: logic here is copied from PublicTransactionPoolAPI.SendTransaction and KeyStore.SignTx
-	var chainID *big.Int
-	if config := cs.chainConfig; config.IsEIP155(number) {
-		chainID = config.ChainId // use child ChainId?
-	}
-	// Depending on the presence of the chain ID, sign with EIP155 or homestead
-	var s ethTypes.Signer = ethTypes.HomesteadSigner{}
-	if chainID != nil {
-		s = ethTypes.NewEIP155Signer(chainID)
 	}
 
 	var prv *ecdsa.PrivateKey
@@ -1577,7 +1566,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 	} else {
 		panic("saveDataToMainChain: unexpected privValidator type")
 	}
-	hash, err := client.SendDataToMainChain(ctx, cs.state.TdmExtra.ChainID, bs, s, common.BytesToAddress(cs.privValidator.GetAddress()), prv)
+	hash, err := client.SendDataToMainChain(ctx, cs.state.TdmExtra.ChainID, bs, common.BytesToAddress(cs.privValidator.GetAddress()), prv)
 	if err != nil {
 		cs.logger.Error("saveDataToMainChain(rpc) failed", "err", err)
 		return

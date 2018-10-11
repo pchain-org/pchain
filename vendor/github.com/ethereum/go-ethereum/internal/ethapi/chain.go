@@ -227,8 +227,12 @@ func init() {
 	core.RegisterApplyCb(pabi.SaveDataToMainChain, sd2mc_ApplyCb)
 }
 
-func ccc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch core.CrossChainHelper) error {
+func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -247,8 +251,12 @@ func ccc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.Sta
 	return nil
 }
 
-func ccc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -278,7 +286,12 @@ func ccc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateD
 	return nil
 }
 
-func jcc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch core.CrossChainHelper) error {
+func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -302,7 +315,12 @@ func jcc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.Sta
 	return nil
 }
 
-func jcc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -340,7 +358,12 @@ func jcc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateD
 	return nil
 }
 
-func dimc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch core.CrossChainHelper) error {
+func dimc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -364,7 +387,12 @@ func dimc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.St
 	return nil
 }
 
-func dimc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -403,7 +431,12 @@ func dimc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.State
 	return nil
 }
 
-func dicc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch core.CrossChainHelper) error {
+func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -430,7 +463,11 @@ func dicc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.St
 		return fmt.Errorf("tx %x already used in child chain", args.TxHash)
 	}
 
-	dimcFrom, err := types.Sender(signer, dimcTx)
+	var signer2 types.Signer = types.HomesteadSigner{}
+	if dimcTx.Protected() {
+		signer2 = types.NewEIP155Signer(dimcTx.ChainId())
+	}
+	dimcFrom, err := types.Sender(signer2, dimcTx)
 	if err != nil {
 		return core.ErrInvalidSender
 	}
@@ -448,7 +485,12 @@ func dicc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.St
 	return nil
 }
 
-func dicc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -475,7 +517,11 @@ func dicc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.State
 		return fmt.Errorf("tx %x already used in child chain", args.TxHash)
 	}
 
-	dimcFrom, err := types.Sender(signer, dimcTx)
+	var signer2 types.Signer = types.HomesteadSigner{}
+	if dimcTx.Protected() {
+		signer2 = types.NewEIP155Signer(dimcTx.ChainId())
+	}
+	dimcFrom, err := types.Sender(signer2, dimcTx)
 	if err != nil {
 		return core.ErrInvalidSender
 	}
@@ -506,7 +552,12 @@ func dicc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.State
 	return nil
 }
 
-func wfcc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch core.CrossChainHelper) error {
+func wfcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -525,7 +576,12 @@ func wfcc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.St
 	return nil
 }
 
-func wfcc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -546,7 +602,12 @@ func wfcc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.State
 	return nil
 }
 
-func wfmc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch core.CrossChainHelper) error {
+func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -567,7 +628,11 @@ func wfmc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.St
 		return fmt.Errorf("tx %x has wrong state: %v", args.TxHash, s)
 	}
 
-	wfccFrom, err := types.Sender(signer, wfccTx)
+	var signer2 types.Signer = types.HomesteadSigner{}
+	if wfccTx.Protected() {
+		signer2 = types.NewEIP155Signer(wfccTx.ChainId())
+	}
+	wfccFrom, err := types.Sender(signer2, wfccTx)
 	if err != nil {
 		return core.ErrInvalidSender
 	}
@@ -590,7 +655,12 @@ func wfmc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.St
 	return nil
 }
 
-func wfmc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -611,7 +681,11 @@ func wfmc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.State
 		return fmt.Errorf("tx %x has wrong state: %v", args.TxHash, s)
 	}
 
-	wfccFrom, err := types.Sender(signer, wfccTx)
+	var signer2 types.Signer = types.HomesteadSigner{}
+	if wfccTx.Protected() {
+		signer2 = types.NewEIP155Signer(wfccTx.ChainId())
+	}
+	wfccFrom, err := types.Sender(signer2, wfccTx)
 	if err != nil {
 		return core.ErrInvalidSender
 	}
@@ -648,7 +722,7 @@ func wfmc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.State
 	return nil
 }
 
-func sd2mc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch core.CrossChainHelper) error {
+func sd2mc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
 	var bs []byte
 	data := tx.Data()
@@ -664,7 +738,7 @@ func sd2mc_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.S
 	return nil
 }
 
-func sd2mc_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 	var bs []byte
 	data := tx.Data()
 	if err := pabi.ChainABI.UnpackMethodInputs(&bs, pabi.SaveDataToMainChain.String(), data[4:]); err != nil {

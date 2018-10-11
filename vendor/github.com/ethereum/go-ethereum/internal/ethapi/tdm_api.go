@@ -80,7 +80,7 @@ func init() {
 	core.RegisterApplyCb(pabi.RevealVote, rev_ApplyCb)
 }
 
-func vne_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch core.CrossChainHelper) error {
+func vne_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
 	var args pabi.VoteNextEpochArgs
 	data := tx.Data()
@@ -92,7 +92,12 @@ func vne_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.Sta
 	return err
 }
 
-func vne_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+func vne_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -131,7 +136,12 @@ func vne_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateD
 	return nil
 }
 
-func rev_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, cch core.CrossChainHelper) error {
+func rev_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -153,7 +163,12 @@ func rev_ValidateCb(tx *types.Transaction, signer types.Signer, state *state.Sta
 	return err
 }
 
-func rev_ApplyCb(tx *types.Transaction, signer types.Signer, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+
+	var signer types.Signer = types.HomesteadSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender

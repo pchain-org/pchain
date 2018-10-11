@@ -110,7 +110,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		if applyCb := GetApplyCb(function); applyCb != nil {
 			cch.GetMutex().Lock()
 			defer cch.GetMutex().Unlock()
-			if err := applyCb(tx, signer, statedb, ops, cch); err != nil {
+			if err := applyCb(tx, statedb, ops, cch); err != nil {
 				return nil, 0, err
 			}
 		}
