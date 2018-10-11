@@ -62,23 +62,36 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 //-----------------------------------------------------------------------------
 
 func init() {
-	core.RegisterInsertBlockCb("InsertNextEpoch", insertNextEpoch)
+	core.RegisterInsertBlockCb("UpdateLocalEpoch", updateLocalEpoch)
 }
 
-func insertNextEpoch(bc *core.BlockChain, block *ethTypes.Block) {
+func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 	if block.NumberU64() == 0 {
 		return
 	}
 
 	tdmExtra, _ := types.ExtractTendermintExtra(block.Header())
 	//here handles the proposed next epoch
-	nextEpochInBlock := ep.FromBytes(tdmExtra.EpochBytes)
-	if nextEpochInBlock != nil && nextEpochInBlock.Number != 0 {
-		// Update Engine -> Epoch
-		eng := bc.Engine().(consensus.Tendermint)
-		currentEpoch := eng.GetEpoch()
-		nextEpochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
-		currentEpoch.SetNextEpoch(nextEpochInBlock)
-		currentEpoch.Save()
+	epochInBlock := ep.FromBytes(tdmExtra.EpochBytes)
+
+	eng := bc.Engine().(consensus.Tendermint)
+	currentEpoch := eng.GetEpoch()
+
+	if epochInBlock != nil {
+		if epochInBlock.Number == currentEpoch.Number+1 {
+			// Save the next epoch
+			epochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
+			currentEpoch.SetNextEpoch(epochInBlock)
+			currentEpoch.Save()
+		} else if epochInBlock.Number == currentEpoch.Number {
+			// Update the current epoch Start Time from proposer
+			currentEpoch.StartTime = epochInBlock.StartTime
+			currentEpoch.Save()
+
+			// Update the previous epoch End Time
+			if currentEpoch.Number > 0 {
+				ep.UpdateEpochEndTime(currentEpoch.GetDB(), currentEpoch.Number-1, epochInBlock.StartTime)
+			}
+		}
 	}
 }

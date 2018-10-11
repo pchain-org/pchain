@@ -93,9 +93,11 @@ func LoadOneEpoch(db dbm.DB, epochNumber uint64, logger log.Logger) *Epoch {
 	// Set Validator VoteSet if has
 	epoch.validatorVoteSet = LoadEpochVoteSet(db, epochNumber)
 	// Set Previous Epoch
-	epoch.previousEpoch = loadOneEpoch(db, epochNumber-1, logger)
-	if epoch.previousEpoch != nil {
-		epoch.previousEpoch.rs = rewardscheme
+	if epochNumber > 0 {
+		epoch.previousEpoch = loadOneEpoch(db, epochNumber-1, logger)
+		if epoch.previousEpoch != nil {
+			epoch.previousEpoch.rs = rewardscheme
+		}
 	}
 	// Set Next Epoch
 	epoch.nextEpoch = loadOneEpoch(db, epochNumber+1, logger)
@@ -109,10 +111,6 @@ func LoadOneEpoch(db dbm.DB, epochNumber uint64, logger log.Logger) *Epoch {
 }
 
 func loadOneEpoch(db dbm.DB, epochNumber uint64, logger log.Logger) *Epoch {
-
-	if epochNumber < 0 {
-		return nil
-	}
 
 	buf := db.Get(calcEpochKeyWithHeight(epochNumber))
 	ep := FromBytes(buf)
@@ -130,8 +128,8 @@ func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc, logger log.Logger) *
 	RewardPerBlock, _ := new(big.Int).SetString(oneEpoch.RewardPerBlock, 10)
 	StartBlock, _ := strconv.ParseUint(oneEpoch.StartBlock, 10, 64)
 	EndBlock, _ := strconv.ParseUint(oneEpoch.EndBlock, 10, 64)
-	StartTime := oneEpoch.StartTime
-	EndTime := oneEpoch.EndTime
+	StartTime := time.Now()
+	EndTime := time.Unix(0, 0) //not accurate for current epoch
 	BlockGenerated, _ := strconv.Atoi(oneEpoch.BlockGenerated)
 	Status, _ := strconv.Atoi(oneEpoch.Status)
 
@@ -667,4 +665,17 @@ func (epoch *Epoch) String() string {
 		epoch.previousEpoch,
 		epoch.rs != nil,
 	)
+}
+
+func UpdateEpochEndTime(db dbm.DB, epNumber uint64, endTime time.Time) {
+	// Load Epoch from DB
+	ep := loadOneEpoch(db, epNumber, nil)
+	if ep != nil {
+		ep.mtx.Lock()
+		defer ep.mtx.Unlock()
+		// Set End Time
+		ep.EndTime = endTime
+		// Save back to DB
+		db.SetSync(calcEpochKeyWithHeight(epNumber), ep.Bytes())
+	}
 }

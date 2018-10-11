@@ -886,8 +886,12 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 			}
 		*/
 
-		var epochBytes = []byte{}
-		if cs.Height == 1 {
+		var epochBytes []byte
+
+		// New Height equal to the first block in new Epoch
+		if cs.Height == cs.Epoch.StartBlock {
+			epochBytes = cs.Epoch.Bytes()
+		} else if cs.Height == 1 {
 			// We're creating a proposal for the first block.
 			// always setup the epoch so that it'll be sent to the main chain.
 			epochBytes = cs.state.Epoch.Bytes()
@@ -971,7 +975,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 
 	// Valdiate proposal block
 	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.TdmExtra.EpochBytes)
-	if proposedNextEpoch != nil && proposedNextEpoch.Number != 0 {
+	if proposedNextEpoch != nil && proposedNextEpoch.Number == cs.Epoch.Number+1 {
 		err = cs.Epoch.ValidateNextEpoch(proposedNextEpoch, height)
 		if err != nil {
 			// ProposalBlock is invalid, prevote nil.
