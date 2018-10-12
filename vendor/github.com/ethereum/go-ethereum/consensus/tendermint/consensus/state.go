@@ -898,7 +898,9 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 		} else {
 			shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
 			if shouldProposeEpoch {
-				epochBytes = cs.Epoch.ProposeNextEpoch(cs.Height).Bytes()
+				lastHeight := cs.backend.ChainReader().CurrentBlock().Number().Uint64()
+				lastBlockTime := time.Unix(cs.backend.ChainReader().CurrentBlock().Time().Int64(), 0)
+				epochBytes = cs.Epoch.ProposeNextEpoch(lastHeight, lastBlockTime).Bytes()
 			}
 		}
 
@@ -976,10 +978,12 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	// Valdiate proposal block
 	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.TdmExtra.EpochBytes)
 	if proposedNextEpoch != nil && proposedNextEpoch.Number == cs.Epoch.Number+1 {
-		err = cs.Epoch.ValidateNextEpoch(proposedNextEpoch, height)
+		lastHeight := cs.backend.ChainReader().CurrentBlock().Number().Uint64()
+		lastBlockTime := time.Unix(cs.backend.ChainReader().CurrentBlock().Time().Int64(), 0)
+		err = cs.Epoch.ValidateNextEpoch(proposedNextEpoch, lastHeight, lastBlockTime)
 		if err != nil {
 			// ProposalBlock is invalid, prevote nil.
-			cs.logger.Warnf("enterPrevote: Proposal reward scheme is invalid, error: %v", err)
+			cs.logger.Warnf("enterPrevote: Proposal Next Epoch is invalid, error: %v", err)
 			cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
 			return
 		}

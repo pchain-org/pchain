@@ -228,9 +228,9 @@ func (epoch *Epoch) Bytes() []byte {
 	return wire.BinaryBytes(*epoch)
 }
 
-func (epoch *Epoch) ValidateNextEpoch(next *Epoch, height uint64) error {
+func (epoch *Epoch) ValidateNextEpoch(next *Epoch, lastHeight uint64, lastBlockTime time.Time) error {
 
-	myNextEpoch := epoch.ProposeNextEpoch(height)
+	myNextEpoch := epoch.ProposeNextEpoch(lastHeight, lastBlockTime)
 
 	if !myNextEpoch.Equals(next, false) {
 		return NextEpochNotEXPECTED
@@ -258,11 +258,11 @@ func (epoch *Epoch) ShouldProposeNextEpoch(curBlockHeight uint64) bool {
 	return shouldPropose
 }
 
-func (epoch *Epoch) ProposeNextEpoch(curBlockHeight uint64) *Epoch {
+func (epoch *Epoch) ProposeNextEpoch(lastBlockHeight uint64, lastBlockTime time.Time) *Epoch {
 
 	if epoch != nil {
 
-		rewardPerBlock, blocks := epoch.estimateForNextEpoch(curBlockHeight)
+		rewardPerBlock, blocks := epoch.estimateForNextEpoch(lastBlockHeight, lastBlockTime)
 
 		next := &Epoch{
 			mtx: epoch.mtx,
@@ -537,7 +537,7 @@ func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
 	}
 }
 
-func (epoch *Epoch) estimateForNextEpoch(curBlockHeight uint64) (rewardPerBlock *big.Int, blocksOfNextEpoch uint64) {
+func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime time.Time) (rewardPerBlock *big.Int, blocksOfNextEpoch uint64) {
 
 	//var totalReward          = 210000000e+18
 	//var preAllocated         = 100000000e+18
@@ -554,7 +554,7 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight uint64) (rewardPerBlock 
 	thisYear := epoch.Number / epochNumberPerYear
 	nextYear := thisYear + 1
 
-	timePerBlockThisEpoch := time.Now().Sub(epoch.StartTime).Nanoseconds() / int64(curBlockHeight-epoch.StartBlock)
+	timePerBlockThisEpoch := lastBlockTime.Sub(epoch.StartTime).Nanoseconds() / int64(lastBlockHeight-epoch.StartBlock)
 
 	epochLeftThisYear := epochNumberPerYear - epoch.Number%epochNumberPerYear - 1
 
@@ -583,7 +583,7 @@ func (epoch *Epoch) estimateForNextEpoch(curBlockHeight uint64) (rewardPerBlock 
 
 		nextYearStartTime := initStartTime.AddDate(int(nextYear), 0, 0)
 
-		timeLeftThisYear := nextYearStartTime.Sub(time.Now())
+		timeLeftThisYear := nextYearStartTime.Sub(lastBlockTime)
 
 		epochTimePerEpochLeftThisYear := timeLeftThisYear.Nanoseconds() / int64(epochLeftThisYear)
 
