@@ -297,7 +297,7 @@ func (self *worker) update() {
 				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
 				txset := types.NewTransactionsByPriceAndNonce(self.current.signer, txs)
 
-				self.current.commitTransactionsEx(self.mux, txset, self.chain, self.coinbase, self.totalUsedMoney, nil)
+				self.current.commitTransactionsEx(self.mux, txset, self.chain, self.coinbase, self.totalUsedMoney, self.cch)
 				self.currentMu.Unlock()
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
