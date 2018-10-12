@@ -295,6 +295,12 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	// Start the new Child Chain, and it will start child chain reactors as well
 	quit := make(chan int)
 	cm.childQuits[chain.Id] = quit
+
+	// Add mine Flag if absent before child chain start
+	if !cm.ctx.GlobalIsSet(utils.MiningEnabledFlag.Name) {
+		cm.ctx.GlobalSet(utils.MiningEnabledFlag.Name, "true")
+	}
+
 	err := StartChain(cm.ctx, chain, nil, quit)
 	if err != nil {
 		return
