@@ -206,7 +206,7 @@ func (cch *CrossChainHelper) ProcessPostPendingData(newPendingIdxBytes []byte, d
 	core.ProcessPostPendingData(cch.chainInfoDB, newPendingIdxBytes, deleteChildChainIds)
 }
 
-func (cch *CrossChainHelper) ValidateVoteNextEpoch(chainId string) (*epoch.Epoch, error) {
+func (cch *CrossChainHelper) ValidateVoteNextEpoch(chainId string) error {
 
 	var ethereum *eth.Ethereum
 	if chainId == MainChain {
@@ -221,32 +221,55 @@ func (cch *CrossChainHelper) ValidateVoteNextEpoch(chainId string) (*epoch.Epoch
 	}
 
 	if ep == nil {
-		return nil, errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
+		return errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
 	}
 
 	// Check Epoch in Hash Vote stage
 	if ep.GetNextEpoch() == nil {
-		return nil, errors.New("next Epoch is nil, You can't vote the next epoch")
+		return errors.New("next Epoch is nil, You can't vote the next epoch")
 	}
 
 	// Vote is valid between height 75% - 85%
 	height := ethereum.BlockChain().CurrentBlock().NumberU64()
 	if !ep.CheckInHashVoteStage(height) {
-		return nil, errors.New(fmt.Sprintf("you can't send the hash vote during this time, current height %v", height))
+		return errors.New(fmt.Sprintf("you can't send the hash vote during this time, current height %v", height))
 	}
-	return ep, nil
+	return nil
 }
 
-func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) (*epoch.Epoch, error) {
+func (cch *CrossChainHelper) VoteNextEpoch(ep *epoch.Epoch, from common.Address, voteHash common.Hash, txHash common.Hash) error {
+
+	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
+	vote, exist := voteSet.GetVoteByAddress(from)
+
+	if exist {
+		// Overwrite the Previous Hash Vote
+		vote.VoteHash = voteHash
+		vote.TxHash = txHash
+	} else {
+		// Create a new Hash Vote
+		vote = &epoch.EpochValidatorVote{
+			Address:  from,
+			VoteHash: voteHash,
+			TxHash:   txHash,
+		}
+		voteSet.StoreVote(vote)
+	}
+	// Save the VoteSet
+	epoch.SaveEpochVoteSet(ep.GetDB(), ep.GetNextEpoch().Number, voteSet)
+	return nil
+}
+
+func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) error {
 	// Check PubKey match the Address
 	pubkeySlice := ethcrypto.FromECDSAPub(ethcrypto.ToECDSAPub(common.FromHex(pubkey)))
 	if pubkeySlice == nil {
-		return nil, errors.New("your Public Key is not valid, please provide a valid Public Key")
+		return errors.New("your Public Key is not valid, please provide a valid Public Key")
 	}
 
 	validatorPubkey := crypto.EtherumPubKey(pubkeySlice)
 	if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
-		return nil, errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
+		return errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
 	}
 
 	var ethereum *eth.Ethereum
@@ -262,18 +285,18 @@ func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Addr
 	}
 
 	if ep == nil {
-		return nil, errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
+		return errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
 	}
 
 	// Check Epoch in Reveal Vote stage
 	if ep.GetNextEpoch() == nil {
-		return nil, errors.New("next Epoch is nil, You can't vote the next epoch")
+		return errors.New("next Epoch is nil, You can't vote the next epoch")
 	}
 
 	// Vote is valid between height 85% - 95%
 	height := ethereum.BlockChain().CurrentBlock().NumberU64()
 	if !ep.CheckInRevealVoteStage(height) {
-		return nil, errors.New(fmt.Sprintf("you can't send the reveal vote during this time, current height %v", height))
+		return errors.New(fmt.Sprintf("you can't send the reveal vote during this time, current height %v", height))
 	}
 
 	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
@@ -281,11 +304,11 @@ func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Addr
 
 	// Check Vote exist
 	if !exist {
-		return nil, errors.New(fmt.Sprintf("Can not found the vote for Address %x", from))
+		return errors.New(fmt.Sprintf("Can not found the vote for Address %x", from))
 	}
 
 	if len(vote.VoteHash) == 0 {
-		return nil, errors.New(fmt.Sprintf("Address %x doesn't has vote hash", from))
+		return errors.New(fmt.Sprintf("Address %x doesn't has vote hash", from))
 	}
 
 	// Check Vote Hash
@@ -297,10 +320,27 @@ func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Addr
 	}
 	voteHash := sha3.Sum256(concatCopyPreAllocate(byte_data))
 	if vote.VoteHash != voteHash {
-		return nil, errors.New("your vote doesn't match your vote hash, please check your vote")
+		return errors.New("your vote doesn't match your vote hash, please check your vote")
 	}
 
-	return ep, nil
+	return nil
+}
+
+func (cch *CrossChainHelper) RevealVote(ep *epoch.Epoch, from common.Address, pubkey string, depositAmount *big.Int, salt string, txHash common.Hash) error {
+
+	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
+	vote, exist := voteSet.GetVoteByAddress(from)
+
+	if exist {
+		// Update the Hash Vote with Real Data
+		vote.PubKey = crypto.EtherumPubKey(common.FromHex(pubkey))
+		vote.Amount = depositAmount
+		vote.Salt = salt
+		vote.TxHash = txHash
+	}
+	// Save the VoteSet
+	epoch.SaveEpochVoteSet(ep.GetDB(), ep.GetNextEpoch().Number, voteSet)
+	return nil
 }
 
 func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Transaction {

@@ -26,6 +26,12 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 			cch.ProcessPostPendingData(op.NewPendingIdx, op.DeleteChildChainIds)
 		}
 		return nil
+	case *types.VoteNextEpochOp:
+		ep := bc.engine.(consensus.Tendermint).GetEpoch()
+		return cch.VoteNextEpoch(ep, op.From, op.VoteHash, op.TxHash)
+	case *types.RevealVoteOp:
+		ep := bc.engine.(consensus.Tendermint).GetEpoch()
+		return cch.RevealVote(ep, op.From, op.Pubkey, op.Amount, op.Salt, op.TxHash)
 	case *types.MarkMainChainToChildChainTxOp:
 		return cch.MarkToChildChainTx(op.From, op.ChainId, op.TxHash, false)
 	case *types.MarkTxUsedOnChildChainOp:

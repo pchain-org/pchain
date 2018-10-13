@@ -25,8 +25,10 @@ type CrossChainHelper interface {
 	ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB) ([]string, []byte, []string)
 	ProcessPostPendingData(newPendingIdxBytes []byte, deleteChildChainIds []string)
 
-	ValidateVoteNextEpoch(chainId string) (*epoch.Epoch, error)
-	ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) (*epoch.Epoch, error)
+	ValidateVoteNextEpoch(chainId string) error
+	VoteNextEpoch(ep *epoch.Epoch, from common.Address, voteHash common.Hash, txHash common.Hash) error
+	ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) error
+	RevealVote(ep *epoch.Epoch, from common.Address, pubkey string, depositAmount *big.Int, salt string, txHash common.Hash) error
 
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
 	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction

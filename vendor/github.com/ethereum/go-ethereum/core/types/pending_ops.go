@@ -176,3 +176,35 @@ func (op *SaveDataToMainChainOp) Conflict(op1 PendingOp) bool {
 func (op *SaveDataToMainChainOp) String() string {
 	return fmt.Sprintf("SaveDataToMainChainOp")
 }
+
+// VoteNextEpoch op
+type VoteNextEpochOp struct {
+	From     common.Address
+	VoteHash common.Hash
+	TxHash   common.Hash
+}
+
+func (op *VoteNextEpochOp) Conflict(op1 PendingOp) bool {
+	return false
+}
+
+func (op *VoteNextEpochOp) String() string {
+	return fmt.Sprintf("VoteNextEpoch")
+}
+
+// RevealVote op
+type RevealVoteOp struct {
+	From   common.Address
+	Pubkey string
+	Amount *big.Int
+	Salt   string
+	TxHash common.Hash
+}
+
+func (op *RevealVoteOp) Conflict(op1 PendingOp) bool {
+	return false
+}
+
+func (op *RevealVoteOp) String() string {
+	return fmt.Sprintf("RevealVote")
+}

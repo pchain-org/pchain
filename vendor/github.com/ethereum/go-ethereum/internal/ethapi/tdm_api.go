@@ -2,15 +2,14 @@ package ethapi
 
 import (
 	"context"
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	pabi "github.com/pchain/abi"
-	"github.com/tendermint/go-crypto"
 	"math/big"
 )
 
@@ -88,7 +87,7 @@ func vne_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 		return err
 	}
 
-	_, err := cch.ValidateVoteNextEpoch(args.ChainId)
+	err := cch.ValidateVoteNextEpoch(args.ChainId)
 	return err
 }
 
@@ -109,28 +108,19 @@ func vne_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 		return err
 	}
 
-	txhash := tx.Hash()
-
-	ep, err := cch.ValidateVoteNextEpoch(args.ChainId)
+	err = cch.ValidateVoteNextEpoch(args.ChainId)
 	if err != nil {
 		return err
 	}
 
-	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
-	vote, exist := voteSet.GetVoteByAddress(from)
+	op := types.VoteNextEpochOp{
+		From:     from,
+		VoteHash: args.VoteHash,
+		TxHash:   tx.Hash(),
+	}
 
-	if exist {
-		// Overwrite the Previous Hash Vote
-		vote.VoteHash = args.VoteHash
-		vote.TxHash = txhash
-	} else {
-		// Create a new Hash Vote
-		vote = &epoch.EpochValidatorVote{
-			Address:  from,
-			VoteHash: args.VoteHash,
-			TxHash:   txhash,
-		}
-		voteSet.StoreVote(vote)
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
 	}
 
 	return nil
@@ -159,7 +149,7 @@ func rev_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 		return core.ErrInsufficientFunds
 	}
 
-	_, err = cch.ValidateRevealVote(args.ChainId, from, args.PubKey, args.Amount, args.Salt)
+	err = cch.ValidateRevealVote(args.ChainId, from, args.PubKey, args.Amount, args.Salt)
 	return err
 }
 
@@ -186,7 +176,7 @@ func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 		return core.ErrInsufficientFunds
 	}
 
-	ep, err := cch.ValidateRevealVote(args.ChainId, from, args.PubKey, args.Amount, args.Salt)
+	err = cch.ValidateRevealVote(args.ChainId, from, args.PubKey, args.Amount, args.Salt)
 	if err != nil {
 		return err
 	}
@@ -203,15 +193,16 @@ func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 		}
 	}
 
-	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
-	vote, exist := voteSet.GetVoteByAddress(from)
+	op := types.RevealVoteOp{
+		From:   from,
+		Pubkey: args.PubKey,
+		Amount: args.Amount,
+		Salt:   args.Salt,
+		TxHash: tx.Hash(),
+	}
 
-	if exist {
-		// Update the Hash Vote with Real Data
-		vote.PubKey = crypto.EtherumPubKey(common.FromHex(args.PubKey))
-		vote.Amount = args.Amount
-		vote.Salt = args.Salt
-		vote.TxHash = tx.Hash()
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
 	}
 
 	return nil
