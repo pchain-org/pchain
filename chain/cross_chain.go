@@ -471,10 +471,8 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 		}
 
 		// retrieve 'from' here.
-		childChain := chainMgr.childChains[chainId]
-		childEthereum := MustGetEthereumFromNode(childChain.EthNode)
-		childChainConfig := childEthereum.ChainConfig()
-		signer := types.NewEIP155Signer(childChainConfig.ChainId)
+		digest := sha3.Sum256([]byte(chainId))
+		signer := types.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
 		from, _ := types.Sender(signer, &tx)
 
 		err = core.WriteChildChainTransaction(chainDb, chainId, from, &tx)
