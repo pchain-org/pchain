@@ -32,4 +32,7 @@ var (
 	// ErrNonceTooHigh is returned if the nonce of a transaction is higher than the
 	// next one expected based on the local chain.
 	ErrNonceTooHigh = errors.New("nonce too high")
+
+	// ErrNoContractOnMainChain is returned if the contract creation tx has been submit to PChain main chain
+	ErrNoContractOnMainChain = errors.New("no contract creation on main chain")
 )

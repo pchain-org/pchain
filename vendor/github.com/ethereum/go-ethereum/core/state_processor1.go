@@ -28,6 +28,11 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		return nil, 0, err
 	}
 
+	// Not allow contract creation on PChain Main Chain
+	if config.PChainId == "pchain" && tx.To() == nil {
+		return nil, 0, ErrNoContractOnMainChain
+	}
+
 	if !pabi.IsPChainContractAddr(tx.To()) {
 
 		//log.Debugf("ApplyTransactionEx 1\n")

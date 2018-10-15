@@ -598,6 +598,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrInsufficientFunds
 	}
 
+	// Not allow contract creation on PChain Main Chain
+	if pool.chainconfig.PChainId == "pchain" && tx.To() == nil {
+		return ErrNoContractOnMainChain
+	}
+
 	if !pabi.IsPChainContractAddr(tx.To()) {
 		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
 		if err != nil {
