@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
-	"golang.org/x/crypto/sha3"
 	"math/big"
 	"sync"
 	"time"
@@ -318,7 +317,7 @@ func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Addr
 		depositAmount.Bytes(),
 		[]byte(salt),
 	}
-	voteHash := sha3.Sum256(concatCopyPreAllocate(byte_data))
+	voteHash := ethcrypto.Keccak256Hash(concatCopyPreAllocate(byte_data))
 	if vote.VoteHash != voteHash {
 		return errors.New("your vote doesn't match your vote hash, please check your vote")
 	}
