@@ -511,7 +511,7 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 		}
 
 		// retrieve 'from' here.
-		digest := sha3.Sum256([]byte(chainId))
+		digest := ethcrypto.Keccak256([]byte(chainId))
 		signer := types.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
 		from, _ := types.Sender(signer, &tx)
 

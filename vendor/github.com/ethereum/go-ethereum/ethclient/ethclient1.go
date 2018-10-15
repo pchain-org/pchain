@@ -6,9 +6,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	pabi "github.com/pchain/abi"
 	"github.com/pkg/errors"
-	"golang.org/x/crypto/sha3"
 	"math/big"
 	"math/rand"
 	"time"
@@ -39,7 +39,7 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data 
 	}
 
 	// tx signer for the main chain
-	digest := sha3.Sum256([]byte("pchain"))
+	digest := crypto.Keccak256([]byte("pchain"))
 	signer := types.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
 
 	var hash = common.Hash{}

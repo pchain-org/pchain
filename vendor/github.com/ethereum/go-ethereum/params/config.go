@@ -22,7 +22,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"golang.org/x/crypto/sha3"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
@@ -123,7 +123,7 @@ var (
 )
 
 func init() {
-	digest := sha3.Sum256([]byte(MainnetChainConfig.PChainId))
+	digest := crypto.Keccak256([]byte(MainnetChainConfig.PChainId))
 	MainnetChainConfig.ChainId = new(big.Int).SetBytes(digest[:])
 }
 
@@ -219,7 +219,7 @@ func NewChildChainConfig(childChainID string) *ChainConfig {
 		},
 	}
 
-	digest := sha3.Sum256([]byte(config.PChainId))
+	digest := crypto.Keccak256([]byte(config.PChainId))
 	config.ChainId = new(big.Int).SetBytes(digest[:])
 
 	return config
