@@ -10,6 +10,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/sha3"
 	"math/big"
+	"math/rand"
+	"time"
 )
 
 func (ec *Client) BlockNumber(ctx context.Context) (*big.Int, error) {
@@ -36,34 +38,60 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data 
 		return common.Hash{}, err
 	}
 
-	// gasPrice
-	gasPrice, err := ec.SuggestGasPrice(ctx)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	// nonce
-	nonce, err := ec.NonceAt(ctx, account, nil)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	// tx
-	tx := types.NewTransaction(nonce, pabi.ChainContractMagicAddr, nil, 0, gasPrice, bs)
-
-	// sign the tx
+	// tx signer for the main chain
 	digest := sha3.Sum256([]byte("pchain"))
 	signer := types.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
-	signedTx, err := types.SignTx(tx, signer, prv)
-	if err != nil {
-		return common.Hash{}, err
+
+	var hash = common.Hash{}
+	err = retry(3, time.Millisecond*300, func() error {
+		// gasPrice
+		gasPrice, err := ec.SuggestGasPrice(ctx)
+		if err != nil {
+			return err
+		}
+
+		// nonce
+		nonce, err := ec.NonceAt(ctx, account, nil)
+		if err != nil {
+			return err
+		}
+
+		// tx
+		tx := types.NewTransaction(nonce, pabi.ChainContractMagicAddr, nil, 0, gasPrice, bs)
+
+		// sign the tx
+		signedTx, err := types.SignTx(tx, signer, prv)
+		if err != nil {
+			return err
+		}
+
+		// eth_sendRawTransaction
+		err = ec.SendTransaction(ctx, signedTx)
+		if err != nil {
+			return err
+		}
+
+		hash = signedTx.Hash()
+		return nil
+	})
+
+	return hash, err
+}
+
+func retry(attemps int, sleep time.Duration, fn func() error) error {
+
+	if err := fn(); err != nil {
+		if attemps--; attemps >= 0 {
+			// Add some randomness to prevent creating a Thundering Herd
+			jitter := time.Duration(rand.Int63n(int64(sleep)))
+			sleep = sleep + jitter/2
+
+			time.Sleep(sleep)
+			return retry(attemps, sleep*2, fn)
+		}
+
+		return err
 	}
 
-	// eth_sendRawTransaction
-	err = ec.SendTransaction(ctx, signedTx)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	return signedTx.Hash(), nil
+	return nil
 }
