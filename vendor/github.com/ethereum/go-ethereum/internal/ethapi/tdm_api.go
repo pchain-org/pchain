@@ -93,10 +93,7 @@ func vne_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 
 func vne_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
-	var signer types.Signer = types.HomesteadSigner{}
-	if tx.Protected() {
-		signer = types.NewEIP155Signer(tx.ChainId())
-	}
+	signer := types.NewEIP155Signer(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -128,10 +125,7 @@ func vne_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 
 func rev_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
-	var signer types.Signer = types.HomesteadSigner{}
-	if tx.Protected() {
-		signer = types.NewEIP155Signer(tx.ChainId())
-	}
+	signer := types.NewEIP155Signer(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -155,10 +149,7 @@ func rev_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 
 func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
-	var signer types.Signer = types.HomesteadSigner{}
-	if tx.Protected() {
-		signer = types.NewEIP155Signer(tx.ChainId())
-	}
+	signer := types.NewEIP155Signer(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
