@@ -126,7 +126,11 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey 
 	// Check if "chainId" has been created/registered
 	ci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
 	if ci == nil {
-		return fmt.Errorf("Child Chain %s not exist, try use other name instead", chainId)
+		if core.GetChainInfo(cch.chainInfoDB, chainId) != nil {
+			return fmt.Errorf("chain %s has already created/started, try use other name instead", chainId)
+		} else {
+			return fmt.Errorf("child chain %s not exist, try use other name instead", chainId)
+		}
 	}
 
 	// Check PubKey match the Address
