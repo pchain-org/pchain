@@ -113,23 +113,6 @@ func (cct *CrossChainTx) Equal(cct1 *CrossChainTx) bool {
 	return cct.From == cct1.From && cct.ChainId == cct1.ChainId && cct.TxHash == cct1.TxHash
 }
 
-// MarkMainChainToChildChainTx op
-type MarkMainChainToChildChainTxOp struct {
-	CrossChainTx
-}
-
-func (op *MarkMainChainToChildChainTxOp) Conflict(op1 PendingOp) bool {
-	if op1, ok := op1.(*MarkMainChainToChildChainTxOp); ok {
-		return op.CrossChainTx.Equal(&op1.CrossChainTx)
-	}
-	return false
-}
-
-func (op *MarkMainChainToChildChainTxOp) String() string {
-	return fmt.Sprintf("MarkMainChainToChildChainTxOp - From: %x, ChainId: %s, TxHash: %x",
-		op.From, op.ChainId, op.TxHash)
-}
-
 // MarkTxUsedOnChildChain op
 type MarkTxUsedOnChildChainOp struct {
 	CrossChainTx

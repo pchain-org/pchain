@@ -498,7 +498,7 @@ func NewChildChainProofData(block *Block) (*ChildChainProofData, error) {
 				continue
 			}
 
-			if function == pabi.WithdrawFromChildChain || function == pabi.DepositInChildChain {
+			if function == pabi.WithdrawFromChildChain {
 				kvSet := MakeBSKeyValueSet()
 				keybuf.Reset()
 				rlp.Encode(keybuf, uint(i))

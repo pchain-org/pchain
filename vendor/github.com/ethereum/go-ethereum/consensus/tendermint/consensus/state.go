@@ -1259,7 +1259,7 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 							continue
 						}
 
-						if function == pabi.WithdrawFromChildChain || function == pabi.DepositInChildChain {
+						if function == pabi.WithdrawFromChildChain {
 							block.TdmExtra.NeedToSave = true
 							cs.logger.Infof("NeedToSave set to true due to tx. Tx: %s, Chain: %s, Height: %v", function.String(), block.TdmExtra.ChainID, block.TdmExtra.Height)
 							break

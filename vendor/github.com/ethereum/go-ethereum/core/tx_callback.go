@@ -36,8 +36,6 @@ type CrossChainHelper interface {
 	SaveChildChainProofDataToMainChain(bs []byte) error
 
 	// these should operate on the main chain db
-	MarkToChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error
-	ValidateToChildChainTx(from common.Address, chainId string, txHash common.Hash) CrossChainTxState
 	MarkFromChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error
 	ValidateFromChildChainTx(from common.Address, chainId string, txHash common.Hash) CrossChainTxState
 	// these should operate on the child chain db

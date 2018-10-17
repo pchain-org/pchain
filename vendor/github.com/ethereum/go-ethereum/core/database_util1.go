@@ -120,17 +120,6 @@ func WriteChildChainTransaction(db ethdb.Database, chainId string, from common.A
 			if err != nil {
 				return err
 			}
-		} else if function == pabi.DepositInChildChain {
-			var args pabi.DepositInChildChainArgs
-			if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.DepositInChildChain.String(), data[4:]); err != nil {
-				return err
-			}
-
-			// mark 'main chain to child chain' tx as used.
-			err = MarkCrossChainTx(db, MainChainToChildChain, from, chainId, args.TxHash, true)
-			if err != nil {
-				return err
-			}
 		}
 	}
 

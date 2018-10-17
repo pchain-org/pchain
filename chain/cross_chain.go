@@ -529,22 +529,6 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 	return nil
 }
 
-func (cch *CrossChainHelper) MarkToChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error {
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.MarkCrossChainTx(chainDb, core.MainChainToChildChain, from, chainId, txHash, used)
-}
-
-func (cch *CrossChainHelper) ValidateToChildChainTx(from common.Address, chainId string, txHash common.Hash) core.CrossChainTxState {
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.ValidateCrossChainTx(chainDb, core.MainChainToChildChain, from, chainId, txHash)
-}
-
 func (cch *CrossChainHelper) MarkFromChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error {
 	chainMgr := GetCMInstance(nil)
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)

@@ -395,17 +395,6 @@ func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return fmt.Errorf("%x has no enough balance for deposit", from)
 	}
 
-	op := types.MarkMainChainToChildChainTxOp{
-		CrossChainTx: types.CrossChainTx{
-			From:    from,
-			ChainId: args.ChainId,
-			TxHash:  tx.Hash(),
-		},
-	}
-	if ok := ops.Append(&op); !ok {
-		return fmt.Errorf("pending ops conflict: %v", op)
-	}
-
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 	state.SubBalance(from, args.Amount)
 	state.AddChainBalance(chainInfo.Owner, args.Amount)
@@ -432,12 +421,6 @@ func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 		return fmt.Errorf("tx %x does not exist in main chain", args.TxHash)
 	}
 
-	// check from the main chain perspective
-	if s := cch.ValidateToChildChainTx(from, args.ChainId, args.TxHash); s != core.CrossChainTxReady {
-		return fmt.Errorf("tx %x has wrong state: %v", args.TxHash, s)
-	}
-
-	// check from the child chain perspective
 	if cch.IsTxUsedOnChildChain(from, args.ChainId, args.TxHash) {
 		return fmt.Errorf("tx %x already used in child chain", args.TxHash)
 	}
@@ -480,12 +463,6 @@ func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return fmt.Errorf("tx %x does not exist in main chain", args.TxHash)
 	}
 
-	// check from the main chain perspective
-	if s := cch.ValidateToChildChainTx(from, args.ChainId, args.TxHash); s != core.CrossChainTxReady {
-		return fmt.Errorf("tx %x has wrong state: %v", args.TxHash, s)
-	}
-
-	// check from the child chain perspective
 	if cch.IsTxUsedOnChildChain(from, args.ChainId, args.TxHash) {
 		return fmt.Errorf("tx %x already used in child chain", args.TxHash)
 	}
