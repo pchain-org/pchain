@@ -47,7 +47,7 @@ func (api *PublicTdmAPI) VoteNextEpoch(ctx context.Context, from common.Address,
 	return api.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-func (api *PublicTdmAPI) RevealVote(ctx context.Context, from common.Address, pubkey string, amount *big.Int, salt string) (common.Hash, error) {
+func (api *PublicTdmAPI) RevealVote(ctx context.Context, from common.Address, pubkey string, amount *hexutil.Big, salt string) (common.Hash, error) {
 
 	chainId := api.b.ChainConfig().PChainId
 
