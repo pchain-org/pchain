@@ -630,7 +630,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 			if err := stateObject.CommitTrie(s.db); err != nil {
 				return common.Hash{}, err
 			}
-			// Write any UCTX changes in the state object to its UCTX trie.
+			// Write any TX1 changes in the state object to its TX1 trie.
 			if err := stateObject.CommitTX1Trie(s.db); err != nil {
 				return common.Hash{}, err
 			}
@@ -647,6 +647,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		}
 		if account.Root != emptyState {
 			s.db.TrieDB().Reference(account.Root, parent)
+		}
+		if account.TX1Root != emptyState {
+			s.db.TrieDB().Reference(account.TX1Root, parent)
 		}
 		code := common.BytesToHash(account.CodeHash)
 		if code != emptyCode {
