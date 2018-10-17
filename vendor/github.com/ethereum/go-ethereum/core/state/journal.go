@@ -68,6 +68,10 @@ type (
 		account       *common.Address
 		key, prevalue common.Hash
 	}
+	addTX1Change struct {
+		account *common.Address
+		txHash  common.Hash
+	}
 	codeChange struct {
 		account            *common.Address
 		prevcode, prevhash []byte
@@ -161,6 +165,10 @@ func (ch codeChange) undo(s *StateDB) {
 
 func (ch storageChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setState(ch.key, ch.prevalue)
+}
+
+func (ch addTX1Change) undo(s *StateDB) {
+	s.getStateObject(*ch.account).removeTX1(ch.txHash)
 }
 
 func (ch refundChange) undo(s *StateDB) {

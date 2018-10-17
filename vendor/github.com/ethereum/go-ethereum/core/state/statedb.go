@@ -243,6 +243,14 @@ func (self *StateDB) GetState(a common.Address, b common.Hash) common.Hash {
 	return common.Hash{}
 }
 
+func (self *StateDB) HasTX1(a common.Address, txHash common.Hash) bool {
+	stateObject := self.getStateObject(a)
+	if stateObject != nil {
+		return stateObject.HasTX1(self.db, txHash)
+	}
+	return false
+}
+
 // Database retrieves the low level database supporting the lower level trie ops.
 func (self *StateDB) Database() Database {
 	return self.db
@@ -257,6 +265,17 @@ func (self *StateDB) StorageTrie(a common.Address) Trie {
 	}
 	cpy := stateObject.deepCopy(self, nil)
 	return cpy.updateTrie(self.db)
+}
+
+// TX1Trie returns the TX1 trie of an account.
+// The return value is a copy and is nil for non-existent accounts.
+func (self *StateDB) TX1Trie(a common.Address) Trie {
+	stateObject := self.getStateObject(a)
+	if stateObject == nil {
+		return nil
+	}
+	cpy := stateObject.deepCopy(self, nil)
+	return cpy.updateTX1Trie(self.db)
 }
 
 func (self *StateDB) HasSuicided(addr common.Address) bool {
@@ -312,6 +331,13 @@ func (self *StateDB) SetState(addr common.Address, key common.Hash, value common
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetState(self.db, key, value)
+	}
+}
+
+func (self *StateDB) AddTX1(addr common.Address, txHash common.Hash) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.AddTX1(self.db, txHash)
 	}
 }
 
@@ -531,6 +557,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			s.deleteStateObject(stateObject)
 		} else {
 			stateObject.updateRoot(s.db)
+			stateObject.updateTX1Root(s.db)
 			s.updateStateObject(stateObject)
 		}
 	}
@@ -601,6 +628,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 			}
 			// Write any storage changes in the state object to its storage trie.
 			if err := stateObject.CommitTrie(s.db); err != nil {
+				return common.Hash{}, err
+			}
+			// Write any UCTX changes in the state object to its UCTX trie.
+			if err := stateObject.CommitTX1Trie(s.db); err != nil {
 				return common.Hash{}, err
 			}
 			// Update the object in the main account trie.

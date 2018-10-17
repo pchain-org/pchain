@@ -80,6 +80,11 @@ type stateObject struct {
 	cachedStorage Storage // Storage entry cache to avoid duplicate reads
 	dirtyStorage  Storage // Storage entries that need to be flushed to disk
 
+	// Write caches.
+	tx1Trie Trie // tx1 trie, which become non-nil on first access
+
+	dirtyTX1 map[common.Hash]struct{} // tx1 entries that need to be flushed to disk
+
 	// Cache flags.
 	// When an object is marked suicided it will be delete from the trie
 	// during the "update" phase of the state transition.
@@ -104,6 +109,7 @@ type Account struct {
 	ChildChainDepositBalance []*childChainDepositBalance // only valid in main chain for child chain validator before child chain launch, can not be consumed
 	ChainBalance             *big.Int                    // only valid in main chain for child chain owner, can not be consumed
 	Root                     common.Hash                 // merkle root of the storage trie
+	TX1Root                  common.Hash                 // merkle root of the TX1 trie
 	CodeHash                 []byte
 }
 
@@ -128,6 +134,7 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 		data:          data,
 		cachedStorage: make(Storage),
 		dirtyStorage:  make(Storage),
+		dirtyTX1:      make(map[common.Hash]struct{}),
 		onDirty:       onDirty,
 	}
 }
@@ -163,6 +170,99 @@ func (c *stateObject) touch() {
 		c.onDirty = nil
 	}
 	c.touched = true
+}
+
+func (c *stateObject) getTX1Trie(db Database) Trie {
+	if c.tx1Trie == nil {
+		var err error
+		c.tx1Trie, err = db.OpenTX1Trie(c.addrHash, c.data.TX1Root)
+		if err != nil {
+			c.tx1Trie, _ = db.OpenTX1Trie(c.addrHash, common.Hash{})
+			c.setError(fmt.Errorf("can't create TX1 trie: %v", err))
+		}
+	}
+	return c.tx1Trie
+}
+
+// HasTX1 returns true if tx1 is in account TX1 trie.
+func (self *stateObject) HasTX1(db Database, txHash common.Hash) bool {
+	// check the dirtyTX1 firstly.
+	_, ok := self.dirtyTX1[txHash]
+	if ok {
+		return true
+	}
+
+	// Load from DB in case it is missing.
+	enc, err := self.getTX1Trie(db).TryGet(txHash[:])
+	if err != nil {
+		return false
+	}
+	if len(enc) > 0 {
+		_, content, _, err := rlp.Split(enc)
+		if err != nil {
+			self.setError(err)
+			return false
+		}
+		if !bytes.Equal(content, txHash[:]) {
+			self.setError(fmt.Errorf("content mismatch the tx hash"))
+			return false
+		}
+
+		return true
+	}
+
+	return false
+}
+
+// AddUCTX adds a cross-chain tx in account UCTX trie.
+func (self *stateObject) AddTX1(db Database, txHash common.Hash) {
+	self.db.journal = append(self.db.journal, addTX1Change{
+		account: &self.address,
+		txHash:  txHash,
+	})
+	self.addTX1(txHash)
+}
+
+func (self *stateObject) addTX1(txHash common.Hash) {
+	self.dirtyTX1[txHash] = struct{}{}
+}
+
+func (self *stateObject) removeTX1(txHash common.Hash) {
+	delete(self.dirtyTX1, txHash)
+}
+
+// updateUCTXTrie writes cached UCTX modifications into the object's UCTX trie.
+func (self *stateObject) updateTX1Trie(db Database) Trie {
+	tr := self.getTX1Trie(db)
+
+	for tx1 := range self.dirtyTX1 {
+		delete(self.dirtyTX1, tx1)
+
+		// Encoding []byte cannot fail, ok to ignore the error.
+		v, _ := rlp.EncodeToBytes(bytes.TrimLeft(tx1[:], "\x00"))
+		self.setError(tr.TryUpdate(tx1[:], v))
+	}
+	return tr
+}
+
+// updateUCTXRoot sets the trie root to the current root hash
+func (self *stateObject) updateTX1Root(db Database) {
+	self.updateTX1Trie(db)
+	self.data.TX1Root = self.tx1Trie.Hash()
+}
+
+// CommitUCTXTrie the UCTX trie of the object to dwb.
+// This updates the trie root.
+func (self *stateObject) CommitTX1Trie(db Database) error {
+	self.updateTX1Trie(db)
+	if self.dbErr != nil {
+		return self.dbErr
+	}
+	root, err := self.tx1Trie.Commit(nil)
+	if err == nil {
+		self.data.TX1Root = root
+	}
+	return err
 }
 
 func (c *stateObject) getTrie(db Database) Trie {
@@ -306,12 +406,19 @@ func (self *stateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)
 	if self.trie != nil {
 		stateObject.trie = db.db.CopyTrie(self.trie)
 	}
+	if self.tx1Trie != nil {
+		stateObject.tx1Trie = db.db.CopyTrie(self.tx1Trie)
+	}
 	stateObject.code = self.code
 	stateObject.dirtyStorage = self.dirtyStorage.Copy()
 	stateObject.cachedStorage = self.dirtyStorage.Copy()
 	stateObject.suicided = self.suicided
 	stateObject.dirtyCode = self.dirtyCode
 	stateObject.deleted = self.deleted
+	stateObject.dirtyTX1 = make(map[common.Hash]struct{})
+	for tx1 := range self.dirtyTX1 {
+		stateObject.dirtyTX1[tx1] = struct{}{}
+	}
 	return stateObject
 }
 
