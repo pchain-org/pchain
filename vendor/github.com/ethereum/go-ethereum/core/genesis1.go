@@ -4,14 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"io"
 	"io/ioutil"
-	"math/big"
 )
 
 // WriteGenesisBlock writes the genesis block to the database as block number 0
@@ -54,7 +52,7 @@ func SetupGenesisBlockEx(db ethdb.Database, genesis *Genesis) (*types.Block, err
 
 	// Check whether the genesis block is already written.
 	if genesis != nil {
-		block = genesis.ToBlockEx(nil)
+		block = genesis.ToBlock(nil)
 		hash := block.Hash()
 		if hash != stored {
 			return nil, &GenesisMismatchError{stored, hash}
@@ -90,46 +88,4 @@ func SetupGenesisBlockEx(db ethdb.Database, genesis *Genesis) (*types.Block, err
 		return nil, compatErr
 	}
 	return block, err
-}
-
-// ToBlock creates the genesis block and writes state of a genesis specification
-// to the given database (or discards it if nil).
-func (g *Genesis) ToBlockEx(db ethdb.Database) *types.Block {
-	if db == nil {
-		db, _ = ethdb.NewMemDatabase()
-	}
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
-	for addr, account := range g.Alloc {
-		statedb.AddBalance(addr, account.Balance)
-		statedb.AddDepositBalance(addr, account.Amount)
-		statedb.SetCode(addr, account.Code)
-		statedb.SetNonce(addr, account.Nonce)
-		for key, value := range account.Storage {
-			statedb.SetState(addr, key, value)
-		}
-	}
-	root := statedb.IntermediateRoot(false)
-	head := &types.Header{
-		Number:     new(big.Int).SetUint64(g.Number),
-		Nonce:      types.EncodeNonce(g.Nonce),
-		Time:       new(big.Int).SetUint64(g.Timestamp),
-		ParentHash: g.ParentHash,
-		Extra:      g.ExtraData,
-		GasLimit:   g.GasLimit,
-		GasUsed:    g.GasUsed,
-		Difficulty: g.Difficulty,
-		MixDigest:  g.Mixhash,
-		Coinbase:   g.Coinbase,
-		Root:       root,
-	}
-	if g.GasLimit == 0 {
-		head.GasLimit = params.GenesisGasLimit
-	}
-	if g.Difficulty == nil {
-		head.Difficulty = params.GenesisDifficulty
-	}
-	statedb.Commit(false)
-	statedb.Database().TrieDB().Commit(root, true)
-
-	return types.NewBlock(head, nil, nil, nil)
 }
