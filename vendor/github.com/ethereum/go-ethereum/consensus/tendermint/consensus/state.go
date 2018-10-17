@@ -251,7 +251,6 @@ type PrivValidator interface {
 	GetAddress() []byte
 	SignVote(chainID string, vote *types.Vote) error
 	SignProposal(chainID string, proposal *types.Proposal) error
-	SignValidatorMsg(chainID string, msg *types.ValidatorMsg) error
 }
 
 // Tracks consensus state across block heights and rounds.

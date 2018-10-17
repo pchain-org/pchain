@@ -20,7 +20,6 @@ func GetTendermintConfig(chainId string, ctx *cli.Context) cfg.Config {
 
 	checkAndSet(config, ctx, "moniker")
 	checkAndSet(config, ctx, "node_laddr")
-	checkAndSet(config, ctx, "log_level")
 	checkAndSet(config, ctx, "seeds")
 	checkAndSet(config, ctx, "fast_sync")
 	checkAndSet(config, ctx, "skip_upnp")

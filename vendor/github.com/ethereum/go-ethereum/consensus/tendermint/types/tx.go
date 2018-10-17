@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 
-	abci "github.com/tendermint/abci/types"
 	"github.com/tendermint/go-merkle"
 )
 
@@ -100,14 +99,4 @@ func (tp TxProof) Validate(dataHash []byte) error {
 		return errors.New("Proof is not internally consistent")
 	}
 	return nil
-}
-
-// TxResult contains results of executing the transaction.
-//
-// One usage is indexing transaction results.
-type TxResult struct {
-	Height uint64                 `json:"height"`
-	Index  uint32                 `json:"index"`
-	Tx     Tx                     `json:"tx"`
-	Result abci.ResponseDeliverTx `json:"result"`
 }

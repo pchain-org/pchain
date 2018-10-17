@@ -36,12 +36,6 @@ var (
 		Usage: "Node listen address. (0.0.0.0:0 means any interface, any port)",
 	}
 
-	LogLevelFlag = cli.StringFlag{
-		Name:  "log_level",
-		Value: "info",
-		Usage: "Tendermint Log level",
-	}
-
 	SeedsFlag = cli.StringFlag{
 		Name:  "seeds",
 		Value: "",
@@ -62,17 +56,5 @@ var (
 		Name:  "rpc_laddr",
 		Value: "unix://@pchainrpcunixsock", //"tcp://0.0.0.0:46657",
 		Usage: "RPC listen address. Port required",
-	}
-
-	AddrFlag = cli.StringFlag{
-		Name:  "addr",
-		Value: "unix://@pchainappunixsock", //"tcp://0.0.0.0:46658",
-		Usage: "TMSP app listen address",
-	}
-
-	AbciFlag = cli.StringFlag{
-		Name:  "abci",
-		Value: "unix", //"socket"
-		Usage: "socket | grpc | unix",
 	}
 )

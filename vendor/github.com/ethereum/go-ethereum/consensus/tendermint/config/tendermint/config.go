@@ -7,9 +7,6 @@ import (
 
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
-	"time"
-	"github.com/pborman/uuid"
-	"strconv"
 )
 
 const (
@@ -17,7 +14,6 @@ const (
 	defaultConfigFileName  = "config.toml"
 	defaultGenesisJSONName = "genesis.json"
 )
-
 
 func getTMRoot(rootDir string) string {
 	if rootDir == "" {
@@ -87,7 +83,6 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 	mapConfig.SetDefault("priv_validator_file_root", filepath.Join(rootDir, chainId, "priv_validator"))
 	mapConfig.SetDefault("db_backend", "leveldb")
 	mapConfig.SetDefault("db_dir", filepath.Join(rootDir, chainId, defaultDataDir))
-	mapConfig.SetDefault("log_level", "info")
 	//mapConfig.SetDefault("rpc_laddr", "tcp://0.0.0.0:46657")
 	//mapConfig.SetDefault("rpc_laddr", calcRpcAddr())
 	mapConfig.SetDefault("grpc_laddr", "")
@@ -96,9 +91,6 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 	mapConfig.SetDefault("cs_wal_file", filepath.Join(rootDir, chainId, defaultDataDir, "cs.wal", "wal"))
 	mapConfig.SetDefault("cs_wal_light", false)
 	mapConfig.SetDefault("filter_peers", false)
-
-	//liaoyd
-	mapConfig.SetDefault("cs_val_file", filepath.Join(rootDir, chainId, defaultDataDir, "cs.val", "val"))
 
 	mapConfig.SetDefault("block_size", 10000)      // max number of txs
 	mapConfig.SetDefault("block_part_size", 65536) // part size 64K
@@ -135,23 +127,10 @@ node_laddr = "tcp://0.0.0.0:46656"
 seeds = ""
 fast_sync = true
 db_backend = "leveldb"
-log_level = "notice"
 #rpc_laddr = "tcp://0.0.0.0:46657"
 `
 
 func defaultConfig(moniker string) (defaultConfig string) {
 	defaultConfig = strings.Replace(defaultConfigTmpl, "__MONIKER__", moniker, -1)
 	return
-}
-
-func defaultAbci() string {
-	return "unix"
-}
-
-func calcAppAddr() string {
-	return defaultAbci() + "://" + strconv.Itoa(time.Now().Nanosecond()) + "-" + uuid.NewRandom().String()
-}
-
-func calcRpcAddr() string {
-	return defaultAbci() + "://" + strconv.Itoa(time.Now().Nanosecond()) + "-" + uuid.NewRandom().String()
 }
