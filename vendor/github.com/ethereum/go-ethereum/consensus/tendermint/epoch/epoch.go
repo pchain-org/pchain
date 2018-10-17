@@ -268,21 +268,13 @@ func (epoch *Epoch) ProposeNextEpoch(lastBlockHeight uint64, lastBlockTime time.
 			mtx: epoch.mtx,
 			db:  epoch.db,
 
-			rs: epoch.rs,
-
 			Number:         epoch.Number + 1,
 			RewardPerBlock: rewardPerBlock,
 			StartBlock:     epoch.EndBlock + 1,
 			EndBlock:       epoch.EndBlock + blocks,
-			//StartTime *big.Int
-			//EndTime *big.Int	//not accurate for current epoch
-			BlockGenerated:   0,
-			Status:           EPOCH_PROPOSED_NOT_VOTED,
-			Validators:       epoch.Validators.Copy(),    // Old Validators
-			validatorVoteSet: NewEpochValidatorVoteSet(), // New Validators with vote
-
-			previousEpoch: epoch,
-			nextEpoch:     nil,
+			BlockGenerated: 0,
+			Status:         EPOCH_PROPOSED_NOT_VOTED,
+			Validators:     epoch.Validators.Copy(), // Old Validators
 
 			logger: epoch.logger,
 		}

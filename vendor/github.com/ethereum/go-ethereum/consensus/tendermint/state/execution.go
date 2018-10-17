@@ -81,6 +81,8 @@ func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 		if epochInBlock.Number == currentEpoch.Number+1 {
 			// Save the next epoch
 			epochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
+			epochInBlock.SetRewardScheme(currentEpoch.GetRewardScheme())
+			epochInBlock.SetEpochValidatorVoteSet(ep.NewEpochValidatorVoteSet())
 			currentEpoch.SetNextEpoch(epochInBlock)
 			currentEpoch.Save()
 		} else if epochInBlock.Number == currentEpoch.Number {
