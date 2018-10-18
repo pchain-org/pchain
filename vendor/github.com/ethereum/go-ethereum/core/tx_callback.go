@@ -38,9 +38,6 @@ type CrossChainHelper interface {
 	// these should operate on the main chain db
 	MarkFromChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error
 	ValidateFromChildChainTx(from common.Address, chainId string, txHash common.Hash) CrossChainTxState
-	// these should operate on the child chain db
-	MarkTxUsedOnChildChain(from common.Address, chainId string, txHash common.Hash) error
-	IsTxUsedOnChildChain(from common.Address, chainId string, txHash common.Hash) bool
 }
 
 type EtdValidateCb func(tx *types.Transaction, state *state.StateDB, cch CrossChainHelper) error

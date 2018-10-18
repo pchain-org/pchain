@@ -545,24 +545,6 @@ func (cch *CrossChainHelper) ValidateFromChildChainTx(from common.Address, chain
 	return core.ValidateCrossChainTx(chainDb, core.ChildChainToMainChain, from, chainId, txHash)
 }
 
-func (cch *CrossChainHelper) MarkTxUsedOnChildChain(from common.Address, chainId string, txHash common.Hash) error {
-	chainMgr := GetCMInstance(nil)
-	chain := chainMgr.childChains[chainId]
-	ethereum := MustGetEthereumFromNode(chain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.MarkTxUsedOnChildChain(chainDb, from, chainId, txHash)
-}
-
-func (cch *CrossChainHelper) IsTxUsedOnChildChain(from common.Address, chainId string, txHash common.Hash) bool {
-	chainMgr := GetCMInstance(nil)
-	chain := chainMgr.childChains[chainId]
-	ethereum := MustGetEthereumFromNode(chain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.IsTxUsedOnChildChain(chainDb, from, chainId, txHash)
-}
-
 func MustGetEthereumFromNode(node *node.Node) *eth.Ethereum {
 	ethereum, err := getEthereumFromNode(node)
 	if err != nil {

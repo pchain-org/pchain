@@ -76,7 +76,6 @@ var (
 	txPrefix               = []byte("cc-tx")   // child-chain tx
 	toChildChainTxPrefix   = []byte("cc-to")   // txHash that deposit to child chain
 	fromChildChainTxPrefix = []byte("cc-from") // txHash that withdraw from child chain
-	childChainTxUsedPrefix = []byte("cc-used") // txHash that has been used in child chain
 
 	// errors
 	NotFoundErr = errors.New("not found") // general not found error
@@ -169,34 +168,6 @@ func ValidateCrossChainTx(db ethdb.Database, t CrossChainTxType, from common.Add
 	return CrossChainTxState(value[0])
 }
 
-func MarkTxUsedOnChildChain(db ethdb.Database, from common.Address, chainId string, txHash common.Hash) error {
-	log.Infof("MarkChildChainTxUsed: account: %x, chain: %s, tx: %x", from, chainId, txHash)
-
-	key := calcChildChainTxUsedKey(from, chainId, txHash)
-	err := db.Put(key, []byte{byte(CrossChainTxAlreadyUsed)})
-	if err != nil {
-		log.Warnf("MarkChildChainTxUsed db put error: %v", err)
-		return err
-	}
-	return nil
-}
-
-func IsTxUsedOnChildChain(db ethdb.Database, from common.Address, chainId string, txHash common.Hash) bool {
-	log.Infof("IsChildChainTxUsed: account: %x, chain: %s, tx: %x", from, chainId, txHash)
-
-	key := calcChildChainTxUsedKey(from, chainId, txHash)
-	value, err := db.Get(key)
-	if err != nil {
-		return false
-	}
-
-	if len(value) != 1 || value[0] != byte(CrossChainTxAlreadyUsed) {
-		return false
-	}
-
-	return true
-}
-
 func calcChildChainTxKey(chainId string, txHash common.Hash) []byte {
 	return append(txPrefix, []byte(fmt.Sprintf("-%s-%x", chainId, txHash))...)
 }
@@ -207,10 +178,6 @@ func calcCrossChainTxKey(t CrossChainTxType, from common.Address, chainId string
 	} else { // ChildChainToMainChain
 		return append(fromChildChainTxPrefix, []byte(fmt.Sprintf("%x-%s-%x", from, chainId, txHash))...)
 	}
-}
-
-func calcChildChainTxUsedKey(from common.Address, chainId string, txHash common.Hash) []byte {
-	return append(childChainTxUsedPrefix, []byte(fmt.Sprintf("%x-%s-%x", from, chainId, txHash))...)
 }
 
 func decodeTx(txBytes []byte) (*types.Transaction, error) {

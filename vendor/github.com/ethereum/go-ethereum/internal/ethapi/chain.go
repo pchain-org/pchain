@@ -398,6 +398,8 @@ func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 	state.SubBalance(from, args.Amount)
 	state.AddChainBalance(chainInfo.Owner, args.Amount)
+	// mark from -> tx1 on the main chain (to find all tx1 when given 'from').
+	state.AddTX1(from, tx.Hash())
 
 	return nil
 }
@@ -421,7 +423,7 @@ func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 		return fmt.Errorf("tx %x does not exist in main chain", args.TxHash)
 	}
 
-	if cch.IsTxUsedOnChildChain(from, args.ChainId, args.TxHash) {
+	if state.HasTX1(from, args.TxHash) {
 		return fmt.Errorf("tx %x already used in child chain", args.TxHash)
 	}
 
@@ -463,7 +465,7 @@ func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return fmt.Errorf("tx %x does not exist in main chain", args.TxHash)
 	}
 
-	if cch.IsTxUsedOnChildChain(from, args.ChainId, args.TxHash) {
+	if state.HasTX1(from, args.TxHash) {
 		return fmt.Errorf("tx %x already used in child chain", args.TxHash)
 	}
 
@@ -483,18 +485,9 @@ func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return errors.New("params are not consistent with tx in main chain")
 	}
 
-	op := types.MarkTxUsedOnChildChainOp{
-		CrossChainTx: types.CrossChainTx{
-			From:    from,
-			ChainId: args.ChainId,
-			TxHash:  args.TxHash,
-		},
-	}
-	if ok := ops.Append(&op); !ok {
-		return fmt.Errorf("pending ops conflict: %v", op)
-	}
-
 	state.AddBalance(dimcFrom, dimcArgs.Amount)
+	// mark from -> tx1 on the child chain (to indicate tx1's used).
+	state.AddTX1(from, args.TxHash)
 
 	return nil
 }

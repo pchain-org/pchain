@@ -32,8 +32,6 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 	case *types.RevealVoteOp:
 		ep := bc.engine.(consensus.Tendermint).GetEpoch()
 		return cch.RevealVote(ep, op.From, op.Pubkey, op.Amount, op.Salt, op.TxHash)
-	case *types.MarkTxUsedOnChildChainOp:
-		return cch.MarkTxUsedOnChildChain(op.From, op.ChainId, op.TxHash)
 	case *types.MarkChildChainToMainChainTxUsedOp:
 		return cch.MarkFromChildChainTx(op.From, op.ChainId, op.TxHash, true)
 	case *types.SaveDataToMainChainOp:
