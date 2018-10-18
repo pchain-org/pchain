@@ -326,6 +326,11 @@ func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Addr
 		return errors.New("your vote doesn't match your vote hash, please check your vote")
 	}
 
+	// Check Logic - Amount can't be 0 for new Validator
+	if !ep.Validators.HasAddress(from.Bytes()) && depositAmount.Sign() <= 0 {
+		return errors.New("invalid vote!!! new validator's vote amount must be greater than 0")
+	}
+
 	return nil
 }
 
