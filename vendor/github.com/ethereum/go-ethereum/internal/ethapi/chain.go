@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"github.com/pkg/errors"
 	"math/big"
@@ -195,6 +196,20 @@ func (s *PublicChainAPI) GetTxFromChildChainByHash(ctx context.Context, chainId 
 	}
 
 	return txHash, nil
+}
+
+func (s *PublicChainAPI) GetAllTX1(ctx context.Context, from common.Address, blockNr rpc.BlockNumber) ([]common.Hash, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	var tx1s []common.Hash
+	state.ForEachTX1(from, func(tx1 common.Hash) bool {
+		tx1s = append(tx1s, tx1)
+		return true
+	})
+	return tx1s, state.Error()
 }
 
 func init() {
