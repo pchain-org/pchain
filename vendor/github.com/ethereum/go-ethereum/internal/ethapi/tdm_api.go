@@ -51,7 +51,7 @@ func (api *PublicTdmAPI) RevealVote(ctx context.Context, from common.Address, pu
 
 	chainId := api.b.ChainConfig().PChainId
 
-	input, err := pabi.ChainABI.Pack(pabi.RevealVote.String(), chainId, pubkey, amount, salt)
+	input, err := pabi.ChainABI.Pack(pabi.RevealVote.String(), chainId, pubkey, (*big.Int)(amount), salt)
 	if err != nil {
 		return common.Hash{}, err
 	}
