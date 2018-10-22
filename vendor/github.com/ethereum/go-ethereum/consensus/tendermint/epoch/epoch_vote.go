@@ -3,6 +3,7 @@ package epoch
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
@@ -14,7 +15,7 @@ import (
 // Key   = string EpochValidatorVoteKey
 // Value = []byte EpochValidatorVoteSet
 // eg. Key: EpochValidatorVote_1, EpochValidatorVote_2
-func calcEpochValidatorVoteKey(epochNumber int) []byte {
+func calcEpochValidatorVoteKey(epochNumber uint64) []byte {
 	return []byte(fmt.Sprintf("EpochValidatorVote_%v", epochNumber))
 }
 
@@ -60,11 +61,11 @@ func (voteSet *EpochValidatorVoteSet) StoreVote(vote *EpochValidatorVote) {
 	}
 }
 
-func SaveEpochVoteSet(epochDB db.DB, epochNumber int, voteSet *EpochValidatorVoteSet) {
+func SaveEpochVoteSet(epochDB db.DB, epochNumber uint64, voteSet *EpochValidatorVoteSet) {
 	epochDB.SetSync(calcEpochValidatorVoteKey(epochNumber), wire.BinaryBytes(*voteSet))
 }
 
-func LoadEpochVoteSet(epochDB db.DB, epochNumber int) *EpochValidatorVoteSet {
+func LoadEpochVoteSet(epochDB db.DB, epochNumber uint64) *EpochValidatorVoteSet {
 	data := epochDB.Get(calcEpochValidatorVoteKey(epochNumber))
 	if len(data) == 0 {
 		return nil
@@ -72,7 +73,7 @@ func LoadEpochVoteSet(epochDB db.DB, epochNumber int) *EpochValidatorVoteSet {
 		var voteSet EpochValidatorVoteSet
 		err := wire.ReadBinaryBytes(data, &voteSet)
 		if err != nil {
-			logger.Errorln(err)
+			log.Error("Load Epoch Vote Set failed", "error", err)
 			return nil
 		}
 		// Fulfill the Vote Map
@@ -104,7 +105,7 @@ func (voteSet *EpochValidatorVoteSet) Copy() *EpochValidatorVoteSet {
 }
 
 func (voteSet *EpochValidatorVoteSet) IsEmpty() bool {
-	return len(voteSet.Votes) == 0
+	return voteSet == nil || len(voteSet.Votes) == 0
 }
 
 func (vote *EpochValidatorVote) Copy() *EpochValidatorVote {

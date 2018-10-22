@@ -2,31 +2,15 @@ package ethapi
 
 import (
 	"context"
+	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/tendermint/go-crypto"
+	pabi "github.com/pchain/abi"
 	"math/big"
-)
-
-const (
-	VNEFuncName = "VoteNextEpoch"
-	REVFuncName = "RevealVote"
-
-	// Vote Next Epoch Parameters
-	VNE_ARGS_FROM    = "from"
-	VNE_ARGS_HASH    = "voteHash"
-	VNE_ARGS_CHAINID = "currentChainId"
-
-	// Reveal Vote Parameters
-	REV_ARGS_FROM    = "from"
-	REV_ARGS_PUBKEY  = "pubkey"
-	REV_ARGS_DEPOSIT = "amount"
-	REV_ARGS_SALT    = "salt"
-	REV_ARGS_CHAINID = "currentChainId"
 )
 
 type PublicTdmAPI struct {
@@ -43,53 +27,43 @@ func NewPublicTdmAPI(b Backend) *PublicTdmAPI {
 
 func (api *PublicTdmAPI) VoteNextEpoch(ctx context.Context, from common.Address, voteHash common.Hash) (common.Hash, error) {
 
-	params := types.MakeKeyValueSet()
-	params.Set(VNE_ARGS_FROM, from)
-	params.Set(VNE_ARGS_HASH, voteHash)
-	params.Set(VNE_ARGS_CHAINID, api.b.ChainConfig().PChainId)
+	chainId := api.b.ChainConfig().PChainId
 
-	etd := &types.ExtendTxData{
-		FuncName: VNEFuncName,
-		Params:   params,
+	input, err := pabi.ChainABI.Pack(pabi.VoteNextEpoch.String(), chainId, voteHash)
+	if err != nil {
+		return common.Hash{}, err
 	}
 
 	args := SendTxArgs{
-		From:         from,
-		To:           nil,
-		Gas:          nil,
-		GasPrice:     nil,
-		Value:        nil,
-		Data:         nil,
-		Nonce:        nil,
-		ExtendTxData: etd,
+		From:     from,
+		To:       &pabi.ChainContractMagicAddr,
+		Gas:      nil,
+		GasPrice: nil,
+		Value:    nil,
+		Input:    (*hexutil.Bytes)(&input),
+		Nonce:    nil,
 	}
 
 	return api.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-func (api *PublicTdmAPI) RevealVote(ctx context.Context, from common.Address, pubkey string, amount *big.Int, salt string) (common.Hash, error) {
+func (api *PublicTdmAPI) RevealVote(ctx context.Context, from common.Address, pubkey string, amount *hexutil.Big, salt string) (common.Hash, error) {
 
-	params := types.MakeKeyValueSet()
-	params.Set(REV_ARGS_FROM, from)
-	params.Set(REV_ARGS_PUBKEY, pubkey)
-	params.Set(REV_ARGS_DEPOSIT, amount)
-	params.Set(REV_ARGS_SALT, salt)
-	params.Set(REV_ARGS_CHAINID, api.b.ChainConfig().PChainId)
+	chainId := api.b.ChainConfig().PChainId
 
-	etd := &types.ExtendTxData{
-		FuncName: REVFuncName,
-		Params:   params,
+	input, err := pabi.ChainABI.Pack(pabi.RevealVote.String(), chainId, pubkey, (*big.Int)(amount), salt)
+	if err != nil {
+		return common.Hash{}, err
 	}
 
 	args := SendTxArgs{
-		From:         from,
-		To:           nil,
-		Gas:          nil,
-		GasPrice:     nil,
-		Value:        nil,
-		Data:         nil,
-		Nonce:        nil,
-		ExtendTxData: etd,
+		From:     from,
+		To:       &pabi.ChainContractMagicAddr,
+		Gas:      nil,
+		GasPrice: nil,
+		Value:    nil,
+		Input:    (*hexutil.Bytes)(&input),
+		Nonce:    nil,
 	}
 
 	return api.b.GetInnerAPIBridge().SendTransaction(ctx, args)
@@ -97,97 +71,111 @@ func (api *PublicTdmAPI) RevealVote(ctx context.Context, from common.Address, pu
 
 func init() {
 	// Vote for Next Epoch
-	core.RegisterValidateCb(VNEFuncName, vne_ValidateCb)
-	core.RegisterApplyCb(VNEFuncName, vne_ApplyCb)
+	core.RegisterValidateCb(pabi.VoteNextEpoch, vne_ValidateCb)
+	core.RegisterApplyCb(pabi.VoteNextEpoch, vne_ApplyCb)
 
 	// Reveal Vote
-	core.RegisterValidateCb(REVFuncName, rev_ValidateCb)
-	core.RegisterApplyCb(REVFuncName, rev_ApplyCb)
+	core.RegisterValidateCb(pabi.RevealVote, rev_ValidateCb)
+	core.RegisterApplyCb(pabi.RevealVote, rev_ApplyCb)
 }
 
 func vne_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
-	chainId, _ := etd.GetString(VNE_ARGS_CHAINID)
 
-	_, err := cch.ValidateVoteNextEpoch(chainId)
+	var args pabi.VoteNextEpochArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.VoteNextEpoch.String(), data[4:]); err != nil {
+		return err
+	}
+
+	err := cch.ValidateVoteNextEpoch(args.ChainId)
 	return err
 }
 
-func vne_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
-	from, _ := etd.GetAddress(VNE_ARGS_FROM)
-	voteHash, _ := etd.GetHash(VNE_ARGS_HASH)
-	chainId, _ := etd.GetString(VNE_ARGS_CHAINID)
-	txhash := tx.Hash()
+func vne_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
-	ep, err := cch.ValidateVoteNextEpoch(chainId)
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.VoteNextEpochArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.VoteNextEpoch.String(), data[4:]); err != nil {
+		return err
+	}
+
+	err = cch.ValidateVoteNextEpoch(args.ChainId)
 	if err != nil {
 		return err
 	}
 
-	voteSet := ep.NextEpoch.GetEpochValidatorVoteSet()
-	vote, exist := voteSet.GetVoteByAddress(from)
+	op := types.VoteNextEpochOp{
+		From:     from,
+		VoteHash: args.VoteHash,
+		TxHash:   tx.Hash(),
+	}
 
-	if exist {
-		// Overwrite the Previous Hash Vote
-		vote.VoteHash = voteHash
-		vote.TxHash = txhash
-	} else {
-		// Create a new Hash Vote
-		vote = &epoch.EpochValidatorVote{
-			Address:  from,
-			VoteHash: voteHash,
-			TxHash:   txhash,
-		}
-		voteSet.StoreVote(vote)
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
 	}
 
 	return nil
 }
 
 func rev_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
 
-	from, _ := etd.GetAddress(REV_ARGS_FROM)
-	pubkey, _ := etd.GetString(REV_ARGS_PUBKEY)
-	depositAmount, _ := etd.GetBigInt(REV_ARGS_DEPOSIT)
-	salt, _ := etd.GetString(REV_ARGS_SALT)
-	chainId, _ := etd.GetString(REV_ARGS_CHAINID)
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.RevealVoteArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.RevealVote.String(), data[4:]); err != nil {
+		return err
+	}
 
 	// Check Balance (Available + Lock)
 	total := new(big.Int).Add(state.GetBalance(from), state.GetDepositBalance(from))
-	if total.Cmp(depositAmount) == -1 {
+	if total.Cmp(args.Amount) == -1 {
 		return core.ErrInsufficientFunds
 	}
 
-	_, err := cch.ValidateRevealVote(chainId, from, pubkey, depositAmount, salt)
+	err = cch.ValidateRevealVote(args.ChainId, from, args.PubKey, args.Amount, args.Salt)
 	return err
 }
 
-func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
+func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
-	from, _ := etd.GetAddress(REV_ARGS_FROM)
-	pubkey, _ := etd.GetString(REV_ARGS_PUBKEY)
-	depositAmount, _ := etd.GetBigInt(REV_ARGS_DEPOSIT)
-	salt, _ := etd.GetString(REV_ARGS_SALT)
-	chainId, _ := etd.GetString(REV_ARGS_CHAINID)
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.RevealVoteArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.RevealVote.String(), data[4:]); err != nil {
+		return err
+	}
 
 	// Check Balance (Available + Lock)
 	total := new(big.Int).Add(state.GetBalance(from), state.GetDepositBalance(from))
-	if total.Cmp(depositAmount) == -1 {
+	if total.Cmp(args.Amount) == -1 {
 		return core.ErrInsufficientFunds
 	}
 
-	ep, err := cch.ValidateRevealVote(chainId, from, pubkey, depositAmount, salt)
+	err = cch.ValidateRevealVote(args.ChainId, from, args.PubKey, args.Amount, args.Salt)
 	if err != nil {
 		return err
 	}
 
 	// Apply Logic
 	// if lock balance less than deposit amount, then add enough amount to locked balance
-	if state.GetDepositBalance(from).Cmp(depositAmount) == -1 {
-		difference := new(big.Int).Sub(depositAmount, state.GetDepositBalance(from))
+	if state.GetDepositBalance(from).Cmp(args.Amount) == -1 {
+		difference := new(big.Int).Sub(args.Amount, state.GetDepositBalance(from))
 		if state.GetBalance(from).Cmp(difference) == -1 {
 			return core.ErrInsufficientFunds
 		} else {
@@ -196,15 +184,16 @@ func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChai
 		}
 	}
 
-	voteSet := ep.NextEpoch.GetEpochValidatorVoteSet()
-	vote, exist := voteSet.GetVoteByAddress(from)
+	op := types.RevealVoteOp{
+		From:   from,
+		Pubkey: args.PubKey,
+		Amount: args.Amount,
+		Salt:   args.Salt,
+		TxHash: tx.Hash(),
+	}
 
-	if exist {
-		// Update the Hash Vote with Real Data
-		vote.PubKey = crypto.EthereumPubKey(common.FromHex(pubkey))
-		vote.Amount = depositAmount
-		vote.Salt = salt
-		vote.TxHash = tx.Hash()
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
 	}
 
 	return nil

@@ -9,52 +9,11 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rpc"
+	pabi "github.com/pchain/abi"
 	"github.com/pkg/errors"
+	"math/big"
 	"strings"
-)
-
-const (
-	CCCFuncName   = "CreateChildChain"
-	JCCFuncName   = "JoinChildChain"
-	DIMCFuncName  = "DepositInMainChain"
-	DICCFuncName  = "DepositInChildChain"
-	WFCCFuncName  = "WithdrawFromChildChain"
-	WFMCFuncName  = "WithdrawFromMainChain"
-	SB2MCFuncName = "SaveBlockToMainChain"
-
-	// Create Child Chain Parameters
-	CCC_ARGS_FROM                = "from"
-	CCC_ARGS_CHAINID             = "chainId"
-	CCC_ARGS_VALIDATOR_THRESHOLD = "validatorThreshold"
-	CCC_ARGS_TOKEN_THRESHOLD     = "tokenThreshold"
-	CCC_ARGS_START_BLOCK         = "startBlock"
-	CCC_ARGS_END_BLOCK           = "endBlock"
-
-	// Join Child Chain Parameters
-	JCC_ARGS_FROM    = "from"
-	JCC_ARGS_PUBKEY  = "pubkey"
-	JCC_ARGS_CHAINID = "chainId"
-	JCC_ARGS_DEPOSIT = "depositAmount"
-
-	// Deposit In Main Chain Parameters
-	DIMC_ARGS_FROM    = "from"
-	DIMC_ARGS_CHAINID = "chainId"
-	DIMC_ARGS_AMOUNT  = "amount"
-
-	// Deposit In Child Chain Parameters
-	DICC_ARGS_FROM    = "from"
-	DICC_ARGS_CHAINID = "chainId"
-	DICC_ARGS_TXHASH  = "txHash"
-
-	// Withdraw From Child Chain Parameters
-	WFCC_ARGS_FROM    = "from"
-	WFCC_ARGS_CHAINID = "chainId"
-	WFCC_ARGS_AMOUNT  = "amount"
-
-	// Withdraw From Main Chain Parameters
-	WFMC_ARGS_FROM    = "from"
-	WFMC_ARGS_CHAINID = "chainId"
-	WFMC_ARGS_TXHASH  = "txHash"
 )
 
 type PublicChainAPI struct {
@@ -77,28 +36,19 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
 	}
 
-	params := types.MakeKeyValueSet()
-	params.Set(CCC_ARGS_FROM, from)
-	params.Set(CCC_ARGS_CHAINID, chainId)
-	params.Set(CCC_ARGS_VALIDATOR_THRESHOLD, minValidators)
-	params.Set(CCC_ARGS_TOKEN_THRESHOLD, minDepositAmount)
-	params.Set(CCC_ARGS_START_BLOCK, startBlock)
-	params.Set(CCC_ARGS_END_BLOCK, endBlock)
-
-	etd := &types.ExtendTxData{
-		FuncName: CCCFuncName,
-		Params:   params,
+	input, err := pabi.ChainABI.Pack(pabi.CreateChildChain.String(), chainId, uint16(*minValidators), (*big.Int)(minDepositAmount), (*big.Int)(startBlock), (*big.Int)(endBlock))
+	if err != nil {
+		return common.Hash{}, err
 	}
 
 	args := SendTxArgs{
-		From:         from,
-		To:           nil,
-		Gas:          gas,
-		GasPrice:     gasPrice,
-		Value:        nil,
-		Data:         nil,
-		Nonce:        nil,
-		ExtendTxData: etd,
+		From:     from,
+		To:       &pabi.ChainContractMagicAddr,
+		Gas:      gas,
+		GasPrice: gasPrice,
+		Value:    nil,
+		Input:    (*hexutil.Bytes)(&input),
+		Nonce:    nil,
 	}
 
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
@@ -111,26 +61,19 @@ func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
 	}
 
-	params := types.MakeKeyValueSet()
-	params.Set(JCC_ARGS_FROM, from)
-	params.Set(JCC_ARGS_PUBKEY, pubkey)
-	params.Set(JCC_ARGS_CHAINID, chainId)
-	params.Set(JCC_ARGS_DEPOSIT, depositAmount)
-
-	etd := &types.ExtendTxData{
-		FuncName: JCCFuncName,
-		Params:   params,
+	input, err := pabi.ChainABI.Pack(pabi.JoinChildChain.String(), pubkey, chainId, (*big.Int)(depositAmount))
+	if err != nil {
+		return common.Hash{}, err
 	}
 
 	args := SendTxArgs{
-		From:         from,
-		To:           nil,
-		Gas:          gas,
-		GasPrice:     gasPrice,
-		Value:        nil,
-		Data:         nil,
-		Nonce:        nil,
-		ExtendTxData: etd,
+		From:     from,
+		To:       &pabi.ChainContractMagicAddr,
+		Gas:      gas,
+		GasPrice: gasPrice,
+		Value:    nil,
+		Input:    (*hexutil.Bytes)(&input),
+		Nonce:    nil,
 	}
 
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
@@ -151,25 +94,19 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 		return common.Hash{}, errors.New("this api can only be called in main chain - pchain")
 	}
 
-	params := types.MakeKeyValueSet()
-	params.Set(DIMC_ARGS_FROM, from)
-	params.Set(DIMC_ARGS_CHAINID, chainId)
-	params.Set(DIMC_ARGS_AMOUNT, amount)
-
-	etd := &types.ExtendTxData{
-		FuncName: DIMCFuncName,
-		Params:   params,
+	input, err := pabi.ChainABI.Pack(pabi.DepositInMainChain.String(), chainId, (*big.Int)(amount))
+	if err != nil {
+		return common.Hash{}, err
 	}
 
 	args := SendTxArgs{
-		From:         from,
-		To:           nil,
-		Gas:          gas,
-		GasPrice:     gasPrice,
-		Value:        nil,
-		Data:         nil,
-		Nonce:        nil,
-		ExtendTxData: etd,
+		From:     from,
+		To:       &pabi.ChainContractMagicAddr,
+		Gas:      gas,
+		GasPrice: gasPrice,
+		Value:    nil,
+		Input:    (*hexutil.Bytes)(&input),
+		Nonce:    nil,
 	}
 
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
@@ -182,25 +119,19 @@ func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Ad
 		return common.Hash{}, errors.New("this api can only be called in child chain")
 	}
 
-	params := types.MakeKeyValueSet()
-	params.Set(DICC_ARGS_FROM, from)
-	params.Set(DICC_ARGS_CHAINID, chainId)
-	params.Set(DICC_ARGS_TXHASH, txHash)
-
-	etd := &types.ExtendTxData{
-		FuncName: DICCFuncName,
-		Params:   params,
+	input, err := pabi.ChainABI.Pack(pabi.DepositInChildChain.String(), chainId, txHash)
+	if err != nil {
+		return common.Hash{}, err
 	}
 
 	args := SendTxArgs{
-		From:         from,
-		To:           nil,
-		Gas:          nil,
-		GasPrice:     nil,
-		Value:        nil,
-		Data:         nil,
-		Nonce:        nil,
-		ExtendTxData: etd,
+		From:     from,
+		To:       &pabi.ChainContractMagicAddr,
+		Gas:      nil,
+		GasPrice: nil,
+		Value:    nil,
+		Input:    (*hexutil.Bytes)(&input),
+		Nonce:    nil,
 	}
 
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
@@ -214,25 +145,19 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 		return common.Hash{}, errors.New("this api can only be called in child chain")
 	}
 
-	params := types.MakeKeyValueSet()
-	params.Set(WFCC_ARGS_FROM, from)
-	params.Set(WFCC_ARGS_CHAINID, chainId)
-	params.Set(WFCC_ARGS_AMOUNT, amount)
-
-	etd := &types.ExtendTxData{
-		FuncName: WFCCFuncName,
-		Params:   params,
+	input, err := pabi.ChainABI.Pack(pabi.WithdrawFromChildChain.String(), chainId, (*big.Int)(amount))
+	if err != nil {
+		return common.Hash{}, err
 	}
 
 	args := SendTxArgs{
-		From:         from,
-		To:           nil,
-		Gas:          gas,
-		GasPrice:     gasPrice,
-		Value:        nil,
-		Data:         nil,
-		Nonce:        nil,
-		ExtendTxData: etd,
+		From:     from,
+		To:       &pabi.ChainContractMagicAddr,
+		Gas:      gas,
+		GasPrice: gasPrice,
+		Value:    nil,
+		Input:    (*hexutil.Bytes)(&input),
+		Nonce:    nil,
 	}
 
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
@@ -244,25 +169,19 @@ func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.
 		return common.Hash{}, errors.New("argument can't be the main chain - pchain")
 	}
 
-	params := types.MakeKeyValueSet()
-	params.Set(WFMC_ARGS_FROM, from)
-	params.Set(WFMC_ARGS_CHAINID, chainId)
-	params.Set(WFMC_ARGS_TXHASH, txHash)
-
-	etd := &types.ExtendTxData{
-		FuncName: WFMCFuncName,
-		Params:   params,
+	input, err := pabi.ChainABI.Pack(pabi.WithdrawFromMainChain.String(), chainId, txHash)
+	if err != nil {
+		return common.Hash{}, err
 	}
 
 	args := SendTxArgs{
-		From:         from,
-		To:           nil,
-		Gas:          nil,
-		GasPrice:     nil,
-		Value:        nil,
-		Data:         nil,
-		Nonce:        nil,
-		ExtendTxData: etd,
+		From:     from,
+		To:       &pabi.ChainContractMagicAddr,
+		Gas:      nil,
+		GasPrice: nil,
+		Value:    nil,
+		Input:    (*hexutil.Bytes)(&input),
+		Nonce:    nil,
 	}
 
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
@@ -273,378 +192,502 @@ func (s *PublicChainAPI) GetTxFromChildChainByHash(ctx context.Context, chainId 
 
 	childTx := cch.GetTxFromChildChain(txHash, chainId)
 	if childTx == nil {
-		return common.Hash{}, errors.New(fmt.Sprintf("tx %x does not exist in child chain %s", txHash, chainId))
+		return common.Hash{}, fmt.Errorf("tx %x does not exist in child chain %s", txHash, chainId)
 	}
 
 	return txHash, nil
 }
 
+func (s *PublicChainAPI) GetAllTX1(ctx context.Context, from common.Address, blockNr rpc.BlockNumber) ([]common.Hash, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	var tx1s []common.Hash
+	state.ForEachTX1(from, func(tx1 common.Hash) bool {
+		tx1s = append(tx1s, tx1)
+		return true
+	})
+	return tx1s, state.Error()
+}
+
 func init() {
 	//CreateChildChain
-	core.RegisterValidateCb(CCCFuncName, ccc_ValidateCb)
-	core.RegisterApplyCb(CCCFuncName, ccc_ApplyCb)
+	core.RegisterValidateCb(pabi.CreateChildChain, ccc_ValidateCb)
+	core.RegisterApplyCb(pabi.CreateChildChain, ccc_ApplyCb)
 
 	//JoinChildChain
-	core.RegisterValidateCb(JCCFuncName, jcc_ValidateCb)
-	core.RegisterApplyCb(JCCFuncName, jcc_ApplyCb)
+	core.RegisterValidateCb(pabi.JoinChildChain, jcc_ValidateCb)
+	core.RegisterApplyCb(pabi.JoinChildChain, jcc_ApplyCb)
 
 	//DepositInMainChain
-	core.RegisterValidateCb(DIMCFuncName, dimc_ValidateCb)
-	core.RegisterApplyCb(DIMCFuncName, dimc_ApplyCb)
+	core.RegisterValidateCb(pabi.DepositInMainChain, dimc_ValidateCb)
+	core.RegisterApplyCb(pabi.DepositInMainChain, dimc_ApplyCb)
 
 	//DepositInChildChain
-	core.RegisterValidateCb(DICCFuncName, dicc_ValidateCb)
-	core.RegisterApplyCb(DICCFuncName, dicc_ApplyCb)
+	core.RegisterValidateCb(pabi.DepositInChildChain, dicc_ValidateCb)
+	core.RegisterApplyCb(pabi.DepositInChildChain, dicc_ApplyCb)
 
 	//WithdrawFromChildChain
-	core.RegisterValidateCb(WFCCFuncName, wfcc_ValidateCb)
-	core.RegisterApplyCb(WFCCFuncName, wfcc_ApplyCb)
+	core.RegisterValidateCb(pabi.WithdrawFromChildChain, wfcc_ValidateCb)
+	core.RegisterApplyCb(pabi.WithdrawFromChildChain, wfcc_ApplyCb)
 
 	//WithdrawFromMainChain
-	core.RegisterValidateCb(WFMCFuncName, wfmc_ValidateCb)
-	core.RegisterApplyCb(WFMCFuncName, wfmc_ApplyCb)
+	core.RegisterValidateCb(pabi.WithdrawFromMainChain, wfmc_ValidateCb)
+	core.RegisterApplyCb(pabi.WithdrawFromMainChain, wfmc_ApplyCb)
 
-	//SB2MCFuncName
-	core.RegisterValidateCb(SB2MCFuncName, sb2mc_ValidateCb)
-	core.RegisterApplyCb(SB2MCFuncName, sb2mc_ApplyCb)
+	//SD2MCFuncName
+	core.RegisterValidateCb(pabi.SaveDataToMainChain, sd2mc_ValidateCb)
+	core.RegisterApplyCb(pabi.SaveDataToMainChain, sd2mc_ApplyCb)
 }
 
 func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
 
-	from, _ := etd.GetAddress(CCC_ARGS_FROM)
-	chainId, _ := etd.GetString(CCC_ARGS_CHAINID)
-	minValidators, _ := etd.GetUInt(CCC_ARGS_VALIDATOR_THRESHOLD)
-	minDepositAmount, _ := etd.GetBigInt(CCC_ARGS_TOKEN_THRESHOLD)
-	startBlock, _ := etd.GetBigInt(CCC_ARGS_START_BLOCK)
-	endBlock, _ := etd.GetBigInt(CCC_ARGS_END_BLOCK)
-
-	err := cch.CanCreateChildChain(from, chainId, uint16(minValidators), minDepositAmount, startBlock, endBlock)
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
 	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.CreateChildChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CreateChildChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	if err := cch.CanCreateChildChain(from, args.ChainId, args.MinValidators, args.MinDepositAmount, args.StartBlock, args.EndBlock); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
+func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
-	from, _ := etd.GetAddress(CCC_ARGS_FROM)
-	chainId, _ := etd.GetString(CCC_ARGS_CHAINID)
-	minValidators, _ := etd.GetUInt(CCC_ARGS_VALIDATOR_THRESHOLD)
-	minDepositAmount, _ := etd.GetBigInt(CCC_ARGS_TOKEN_THRESHOLD)
-	startBlock, _ := etd.GetBigInt(CCC_ARGS_START_BLOCK)
-	endBlock, _ := etd.GetBigInt(CCC_ARGS_END_BLOCK)
-
-	if err := cch.CanCreateChildChain(from, chainId, uint16(minValidators), minDepositAmount, startBlock, endBlock); err != nil {
-		return err
-	}
-
-	err := cch.CreateChildChain(from, chainId, uint16(minValidators), minDepositAmount, startBlock, endBlock)
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
 	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.CreateChildChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CreateChildChain.String(), data[4:]); err != nil {
 		return err
 	}
 
+	if err := cch.CanCreateChildChain(from, args.ChainId, args.MinValidators, args.MinDepositAmount, args.StartBlock, args.EndBlock); err != nil {
+		return err
+	}
+
+	op := types.CreateChildChainOp{
+		From:             from,
+		ChainId:          args.ChainId,
+		MinValidators:    args.MinValidators,
+		MinDepositAmount: args.MinDepositAmount,
+		StartBlock:       args.StartBlock,
+		EndBlock:         args.EndBlock,
+	}
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
+	}
 	return nil
 }
 
 func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
 
-	from, _ := etd.GetAddress(JCC_ARGS_FROM)
-	pubkey, _ := etd.GetString(JCC_ARGS_PUBKEY)
-	chainId, _ := etd.GetString(JCC_ARGS_CHAINID)
-	depositAmount, _ := etd.GetBigInt(JCC_ARGS_DEPOSIT)
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.JoinChildChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.JoinChildChain.String(), data[4:]); err != nil {
+		return err
+	}
 
 	// Check Balance
-	if state.GetBalance(from).Cmp(depositAmount) == -1 {
+	if state.GetBalance(from).Cmp(args.DepositAmount) == -1 {
 		return core.ErrInsufficientFunds
 	}
 
-	if err := cch.ValidateJoinChildChain(from, pubkey, chainId, depositAmount); err != nil {
+	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, args.DepositAmount); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
+func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
-	from, _ := etd.GetAddress(JCC_ARGS_FROM)
-	pubkey, _ := etd.GetString(JCC_ARGS_PUBKEY)
-	chainId, _ := etd.GetString(JCC_ARGS_CHAINID)
-	depositAmount, _ := etd.GetBigInt(JCC_ARGS_DEPOSIT)
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.JoinChildChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.JoinChildChain.String(), data[4:]); err != nil {
+		return err
+	}
 
 	// Check Balance
-	if state.GetBalance(from).Cmp(depositAmount) == -1 {
+	if state.GetBalance(from).Cmp(args.DepositAmount) == -1 {
 		return core.ErrInsufficientFunds
 	}
 
-	if err := cch.ValidateJoinChildChain(from, pubkey, chainId, depositAmount); err != nil {
+	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, args.DepositAmount); err != nil {
 		return err
 	}
 
-	// Add the validator into Chain DB
-	err := cch.JoinChildChain(from, pubkey, chainId, depositAmount)
-	if err != nil {
-		return err
-	} else {
-		// Everything fine, Lock the Balance for this account
-		state.SubBalance(from, depositAmount)
-		state.AddChildChainDepositBalance(from, chainId, depositAmount)
+	op := types.JoinChildChainOp{
+		From:          from,
+		PubKey:        args.PubKey,
+		ChainId:       args.ChainId,
+		DepositAmount: args.DepositAmount,
 	}
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
+	}
+
+	// Everything fine, Lock the Balance for this account
+	state.SubBalance(from, args.DepositAmount)
+	state.AddChildChainDepositBalance(from, args.ChainId, args.DepositAmount)
 
 	return nil
 }
 
 func dimc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
 
-	from, _ := etd.GetAddress(DIMC_ARGS_FROM)
-	chainId, _ := etd.GetString(DIMC_ARGS_CHAINID)
-	amount, _ := etd.GetBigInt(DIMC_ARGS_AMOUNT)
-
-	running := core.CheckChildChainRunning(cch.GetChainInfoDB(), chainId)
-	if !running {
-		return errors.New(fmt.Sprintf("%s chain not running", chainId))
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
 	}
 
-	if state.GetBalance(from).Cmp(amount) < 0 {
-		return errors.New(fmt.Sprintf("%x has no enough balance for deposit", from))
+	var args pabi.DepositInMainChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.DepositInMainChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	running := core.CheckChildChainRunning(cch.GetChainInfoDB(), args.ChainId)
+	if !running {
+		return fmt.Errorf("%s chain not running", args.ChainId)
+	}
+
+	if state.GetBalance(from).Cmp(args.Amount) < 0 {
+		return fmt.Errorf("%x has no enough balance for deposit", from)
 	}
 
 	return nil
 }
 
-func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
+func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
-	from, _ := etd.GetAddress(DIMC_ARGS_FROM)
-	chainId, _ := etd.GetString(DIMC_ARGS_CHAINID)
-	amount, _ := etd.GetBigInt(DIMC_ARGS_AMOUNT)
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
 
-	running := core.CheckChildChainRunning(cch.GetChainInfoDB(), chainId)
+	var args pabi.DepositInMainChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.DepositInMainChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	running := core.CheckChildChainRunning(cch.GetChainInfoDB(), args.ChainId)
 	if !running {
-		return errors.New(fmt.Sprintf("%s chain not running", chainId))
+		return fmt.Errorf("%s chain not running", args.ChainId)
 	}
 
-	if state.GetBalance(from).Cmp(amount) < 0 {
-		return errors.New(fmt.Sprintf("%x has no enough balance for deposit", from))
+	if state.GetBalance(from).Cmp(args.Amount) < 0 {
+		return fmt.Errorf("%x has no enough balance for deposit", from)
 	}
 
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), chainId)
-	state.SubBalance(from, amount)
-	state.AddChainBalance(chainInfo.Owner, amount)
-
-	// record this cross chain tx
-	cch.AddToChildChainTx(chainId, from, tx.Hash())
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
+	state.SubBalance(from, args.Amount)
+	state.AddChainBalance(chainInfo.Owner, args.Amount)
+	// mark from -> tx1 on the main chain (to find all tx1 when given 'from').
+	state.AddTX1(from, tx.Hash())
 
 	return nil
 }
 
 func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
 
-	from, _ := etd.GetAddress(DICC_ARGS_FROM)
-	chainId, _ := etd.GetString(DICC_ARGS_CHAINID)
-	txHash, _ := etd.GetHash(DICC_ARGS_TXHASH)
-
-	mainTx := cch.GetTxFromMainChain(txHash)
-	if mainTx == nil {
-		return errors.New(fmt.Sprintf("tx %x does not exist in main chain", txHash))
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
 	}
 
-	// check from the main chain perspective
-	if !cch.HasToChildChainTx(chainId, from, txHash) {
-		return errors.New(fmt.Sprintf("tx %x already been used", txHash))
-	}
-	// check from the child chain perspective
-	if cch.HasUsedChildChainTx(chainId, from, txHash) {
-		return errors.New(fmt.Sprintf("tx %x already been used", txHash))
+	var args pabi.DepositInChildChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.DepositInChildChain.String(), data[4:]); err != nil {
+		return err
 	}
 
-	mainEtd := mainTx.ExtendTxData()
-	if mainEtd == nil || mainEtd.FuncName != DIMCFuncName {
-		return errors.New(fmt.Sprintf("not expected tx %s", mainEtd))
+	dimcTx := cch.GetTxFromMainChain(args.TxHash)
+	if dimcTx == nil {
+		return fmt.Errorf("tx %x does not exist in main chain", args.TxHash)
 	}
 
-	mainFrom, _ := mainEtd.GetAddress(DIMC_ARGS_FROM)
-	mainChainId, _ := mainEtd.GetString(DIMC_ARGS_CHAINID)
+	if state.HasTX1(from, args.TxHash) {
+		return fmt.Errorf("tx %x already used in child chain", args.TxHash)
+	}
 
-	if mainFrom != from || mainChainId != chainId {
+	signer2 := types.NewEIP155Signer(dimcTx.ChainId())
+	dimcFrom, err := types.Sender(signer2, dimcTx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var dimcArgs pabi.DepositInMainChainArgs
+	dimcData := dimcTx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&dimcArgs, pabi.DepositInMainChain.String(), dimcData[4:]); err != nil {
+		return err
+	}
+
+	if from != dimcFrom || args.ChainId != dimcArgs.ChainId {
 		return errors.New("params are not consistent with tx in main chain")
 	}
 
 	return nil
 }
 
-func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
+func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
-	from, _ := etd.GetAddress(DICC_ARGS_FROM)
-	chainId, _ := etd.GetString(DICC_ARGS_CHAINID)
-	txHash, _ := etd.GetHash(DICC_ARGS_TXHASH)
-
-	mainTx := cch.GetTxFromMainChain(txHash)
-	if mainTx == nil {
-		return errors.New(fmt.Sprintf("tx %x does not exist in main chain", txHash))
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
 	}
 
-	// check from the main chain perspective
-	if !cch.HasToChildChainTx(chainId, from, txHash) {
-		return errors.New(fmt.Sprintf("tx %x already been used", txHash))
-	}
-	// check from the child chain perspective
-	if cch.HasUsedChildChainTx(chainId, from, txHash) {
-		return errors.New(fmt.Sprintf("tx %x already been used", txHash))
+	var args pabi.DepositInChildChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.DepositInChildChain.String(), data[4:]); err != nil {
+		return err
 	}
 
-	mainEtd := mainTx.ExtendTxData()
-	if mainEtd == nil || mainEtd.FuncName != DIMCFuncName {
-		return errors.New(fmt.Sprintf("not expected tx %s", mainEtd))
+	dimcTx := cch.GetTxFromMainChain(args.TxHash)
+	if dimcTx == nil {
+		return fmt.Errorf("tx %x does not exist in main chain", args.TxHash)
 	}
 
-	mainFrom, _ := mainEtd.GetAddress(DIMC_ARGS_FROM)
-	mainChainId, _ := mainEtd.GetString(DIMC_ARGS_CHAINID)
-	mainAmount, _ := mainEtd.GetBigInt(DIMC_ARGS_AMOUNT)
+	if state.HasTX1(from, args.TxHash) {
+		return fmt.Errorf("tx %x already used in child chain", args.TxHash)
+	}
 
-	if mainFrom != from || mainChainId != chainId {
+	signer2 := types.NewEIP155Signer(dimcTx.ChainId())
+	dimcFrom, err := types.Sender(signer2, dimcTx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var dimcArgs pabi.DepositInMainChainArgs
+	dimcData := dimcTx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&dimcArgs, pabi.DepositInMainChain.String(), dimcData[4:]); err != nil {
+		return err
+	}
+
+	if from != dimcFrom || args.ChainId != dimcArgs.ChainId {
 		return errors.New("params are not consistent with tx in main chain")
 	}
 
-	cch.AppendUsedChildChainTx(chainId, from, txHash)
-	// the cross chain tx will be removed(in main chain db) when saving the child chain block to the main chain.
-
-	state.AddBalance(mainFrom, mainAmount)
+	state.AddBalance(dimcFrom, dimcArgs.Amount)
+	// mark from -> tx1 on the child chain (to indicate tx1's used).
+	state.AddTX1(from, args.TxHash)
 
 	return nil
 }
 
 func wfcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
 
-	from, _ := etd.GetAddress(WFCC_ARGS_FROM)
-	amount, _ := etd.GetBigInt(WFCC_ARGS_AMOUNT)
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
 
-	if state.GetBalance(from).Cmp(amount) < 0 {
+	var args pabi.WithdrawFromChildChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromChildChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	if state.GetBalance(from).Cmp(args.Amount) < 0 {
 		return errors.New("no enough balance to withdraw")
 	}
 
 	return nil
 }
 
-func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
+func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
-	from, _ := etd.GetAddress(WFCC_ARGS_FROM)
-	amount, _ := etd.GetBigInt(WFCC_ARGS_AMOUNT)
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
 
-	if state.GetBalance(from).Cmp(amount) < 0 {
+	var args pabi.WithdrawFromChildChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromChildChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	if state.GetBalance(from).Cmp(args.Amount) < 0 {
 		return errors.New("no enough balance to withdraw")
 	}
 
-	state.SubBalance(from, amount)
-
-	// the cross chain tx will be added(in main chain db) when saving the child chain block to the main chain.
+	state.SubBalance(from, args.Amount)
 
 	return nil
 }
 
 func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
 
-	from, _ := etd.GetAddress(WFMC_ARGS_FROM)
-	chainId, _ := etd.GetString(WFMC_ARGS_CHAINID)
-	txHash, _ := etd.GetHash(WFMC_ARGS_TXHASH)
-
-	childTx := cch.GetTxFromChildChain(txHash, chainId)
-	if childTx == nil {
-		return errors.New(fmt.Sprintf("tx %x does not exist in child chain %s", txHash, chainId))
-	}
-
-	if !cch.HasFromChildChainTx(chainId, from, txHash) {
-		return errors.New(fmt.Sprintf("tx %x already been used", txHash))
-	}
-
-	childEtd := childTx.ExtendTxData()
-	if childEtd == nil || childEtd.FuncName != WFCCFuncName {
-		return errors.New(fmt.Sprintf("not expected tx %s", childEtd))
-	}
-
-	childFrom, _ := childEtd.GetAddress(WFCC_ARGS_FROM)
-	childAmount, _ := childEtd.GetBigInt(WFCC_ARGS_AMOUNT)
-
-	if childFrom != from {
-		return errors.New("params are not consistent with tx in child chain")
-	}
-
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), chainId)
-	if state.GetChainBalance(chainInfo.Owner).Cmp(childAmount) < 0 {
-		return errors.New("no enough balance to withdraw")
-	}
-
-	return nil
-}
-
-func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	etd := tx.ExtendTxData()
-
-	from, _ := etd.GetAddress(WFMC_ARGS_FROM)
-	chainId, _ := etd.GetString(WFMC_ARGS_CHAINID)
-	txHash, _ := etd.GetHash(WFMC_ARGS_TXHASH)
-
-	childTx := cch.GetTxFromChildChain(txHash, chainId)
-	if childTx == nil {
-		return errors.New(fmt.Sprintf("tx %x does not exist in child chain %s", txHash, chainId))
-	}
-
-	if !cch.HasFromChildChainTx(chainId, from, txHash) {
-		return errors.New(fmt.Sprintf("tx %x already been used", txHash))
-	}
-
-	childEtd := childTx.ExtendTxData()
-	if childEtd == nil || childEtd.FuncName != WFCCFuncName {
-		return errors.New(fmt.Sprintf("not expected tx %s", childEtd))
-	}
-
-	childFrom, _ := childEtd.GetAddress(WFCC_ARGS_FROM)
-	childChainId, _ := childEtd.GetString(WFCC_ARGS_CHAINID)
-	childAmount, _ := childEtd.GetBigInt(WFCC_ARGS_AMOUNT)
-
-	if childFrom != from {
-		return errors.New("params are not consistent with tx in child chain")
-	}
-
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), chainId)
-	chainOwner := chainInfo.Owner
-	if state.GetChainBalance(chainOwner).Cmp(childAmount) < 0 {
-		return errors.New("no enough balance to withdraw")
-	}
-
-	// delete this cross chain tx
-	cch.RemoveFromChildChainTx(childChainId, childFrom, txHash)
-
-	state.SubChainBalance(chainOwner, childAmount)
-	state.AddBalance(from, childAmount)
-
-	return nil
-}
-
-func sb2mc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-
-	block := []byte(tx.Data())
-	err := cch.VerifyChildChainBlock(block)
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
 	if err != nil {
-		return errors.New("block does not pass verification")
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.WithdrawFromMainChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	wfccTx := cch.GetTxFromChildChain(args.TxHash, args.ChainId)
+	if wfccTx == nil {
+		return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
+	}
+
+	if s := cch.ValidateFromChildChainTx(from, args.ChainId, args.TxHash); s != core.CrossChainTxReady {
+		return fmt.Errorf("tx %x has wrong state: %v", args.TxHash, s)
+	}
+
+	signer2 := types.NewEIP155Signer(wfccTx.ChainId())
+	wfccFrom, err := types.Sender(signer2, wfccTx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var wfccArgs pabi.WithdrawFromChildChainArgs
+	wfccData := wfccTx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&wfccArgs, pabi.WithdrawFromChildChain.String(), wfccData[4:]); err != nil {
+		return err
+	}
+
+	if from != wfccFrom || args.ChainId != wfccArgs.ChainId {
+		return errors.New("params are not consistent with tx in child chain")
+	}
+
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), wfccArgs.ChainId)
+	if state.GetChainBalance(chainInfo.Owner).Cmp(wfccArgs.Amount) < 0 {
+		return errors.New("no enough balance to withdraw")
 	}
 
 	return nil
 }
 
-func sb2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-	block := []byte(tx.Data())
+func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
-	return cch.SaveChildChainBlockToMainChain(block)
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.WithdrawFromMainChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	wfccTx := cch.GetTxFromChildChain(args.TxHash, args.ChainId)
+	if wfccTx == nil {
+		return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
+	}
+
+	if s := cch.ValidateFromChildChainTx(from, args.ChainId, args.TxHash); s != core.CrossChainTxReady {
+		return fmt.Errorf("tx %x has wrong state: %v", args.TxHash, s)
+	}
+
+	signer2 := types.NewEIP155Signer(wfccTx.ChainId())
+	wfccFrom, err := types.Sender(signer2, wfccTx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var wfccArgs pabi.WithdrawFromChildChainArgs
+	wfccData := wfccTx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&wfccArgs, pabi.WithdrawFromChildChain.String(), wfccData[4:]); err != nil {
+		return err
+	}
+
+	if from != wfccFrom || args.ChainId != wfccArgs.ChainId {
+		return errors.New("params are not consistent with tx in child chain")
+	}
+
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), wfccArgs.ChainId)
+	if state.GetChainBalance(chainInfo.Owner).Cmp(wfccArgs.Amount) < 0 {
+		return errors.New("no enough balance to withdraw")
+	}
+
+	op := types.MarkChildChainToMainChainTxUsedOp{
+		CrossChainTx: types.CrossChainTx{
+			From:    from,
+			ChainId: args.ChainId,
+			TxHash:  args.TxHash,
+		},
+	}
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
+	}
+
+	state.SubChainBalance(chainInfo.Owner, wfccArgs.Amount)
+	state.AddBalance(wfccFrom, wfccArgs.Amount)
+
+	return nil
+}
+
+func sd2mc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+
+	var bs []byte
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&bs, pabi.SaveDataToMainChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	err := cch.VerifyChildChainProofData(bs)
+	if err != nil {
+		return fmt.Errorf("data can not pass verification: %v", err)
+	}
+
+	return nil
+}
+
+func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+	var bs []byte
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&bs, pabi.SaveDataToMainChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	op := types.SaveDataToMainChainOp{
+		Data: bs,
+	}
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
+	}
+
+	return nil
 }

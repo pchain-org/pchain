@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/pchain/p2p"
 	"github.com/pchain/rpc"
 	"github.com/pkg/errors"
@@ -89,24 +90,25 @@ func (cm *ChainManager) LoadChains() error {
 	<-cm.mainStartDone
 
 	childChainIds := core.GetChildChainIds(cm.cch.chainInfoDB)
-	logger.Printf("Before Load Child Chains, childChainIds is %v, len is %d", childChainIds, len(childChainIds))
+	log.Infof("Before Load Child Chains, childChainIds is %v, len is %d", childChainIds, len(childChainIds))
 
 	for _, chainId := range childChainIds {
-		ci := core.GetChainInfo(cm.cch.chainInfoDB, chainId)
-		// Check if we are in this child chain
-		if ci.Epoch == nil || !cm.checkCoinbaseInChildChain(ci.Epoch) {
-			continue
-		}
+		// TODO Check Validator Address in Tendermint
+		//ci := core.GetChainInfo(cm.cch.chainInfoDB, chainId)
+		//// Check if we are in this child chain
+		//if ci.Epoch == nil || !cm.checkCoinbaseInChildChain(ci.Epoch) {
+		//	continue
+		//}
 
-		logger.Infof("Start to Load Child Chain - %s", chainId)
+		log.Infof("Start to Load Child Chain - %s", chainId)
 		chain := LoadChildChain(cm.ctx, chainId, cm.p2pObj)
 		if chain == nil {
-			logger.Errorf("Load Child Chain - %s Failed.", chainId)
+			log.Errorf("Load Child Chain - %s Failed.", chainId)
 			continue
 		}
 
 		cm.childChains[chainId] = chain
-		logger.Infof("Load Child Chain - %s Success!", chainId)
+		log.Infof("Load Child Chain - %s Success!", chainId)
 	}
 
 	return nil
@@ -115,7 +117,7 @@ func (cm *ChainManager) LoadChains() error {
 func (cm *ChainManager) InitCrossChainHelper() {
 	cm.cch.chainInfoDB = dbm.NewDB("chaininfo",
 		cm.mainChain.Config.GetString("db_backend"),
-		cm.ctx.GlobalString(DataDirFlag.Name))
+		cm.ctx.GlobalString(utils.DataDirFlag.Name))
 	if cm.ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
 		host := "127.0.0.1" //cm.ctx.GlobalString(utils.RPCListenAddrFlag.Name)
 		port := cm.ctx.GlobalInt(utils.RPCPortFlag.Name)
@@ -123,7 +125,7 @@ func (cm *ChainManager) InitCrossChainHelper() {
 		url = "http://" + url + "/pchain"
 		client, err := ethclient.Dial(url)
 		if err != nil {
-			logger.Errorf("can't connect to %s, err: %v, exit", url, err)
+			log.Errorf("can't connect to %s, err: %v, exit", url, err)
 			os.Exit(0)
 		}
 
@@ -193,12 +195,12 @@ func (cm *ChainManager) StartInspectEvent() {
 		for {
 			select {
 			case event := <-createChildChainCh:
-				logger.Infof("CreateChildChainEvent received: %v", event)
+				log.Infof("CreateChildChainEvent received: %v", event)
 				chainId := event.ChainId
 
 				_, ok := cm.childChains[chainId]
 				if ok {
-					logger.Infof("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue", event)
+					log.Infof("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue", event)
 					continue
 				}
 
@@ -216,7 +218,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	// Load Child Chain data from pending data
 	cci := core.GetPendingChildChainData(cm.cch.chainInfoDB, chainId)
 	if cci == nil {
-		logger.Errorf("child chain: %s does not exist, can't load", chainId)
+		log.Errorf("child chain: %s does not exist, can't load", chainId)
 		return
 	}
 
@@ -248,7 +250,9 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	}
 
 	if !validator {
-		logger.Warnf("You are not in the validators of child chain %v, no need to start the child chain", chainId)
+		log.Warnf("You are not in the validators of child chain %v, no need to start the child chain", chainId)
+		// Update Child Chain to formal
+		cm.formalizeChildChain(chainId, *cci)
 		return
 	}
 
@@ -257,12 +261,12 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		// Load the KeyStore file from MainChain
 		wallet, walletErr := cm.mainChain.EthNode.AccountManager().Find(accounts.Account{Address: localEtherbase})
 		if walletErr != nil {
-			logger.Errorf("Failed to Find the Account %v, Error: %v", localEtherbase, walletErr)
+			log.Errorf("Failed to Find the Account %v, Error: %v", localEtherbase, walletErr)
 			return
 		}
 		keyJson, readKeyErr := ioutil.ReadFile(wallet.URL().Path)
 		if readKeyErr != nil {
-			logger.Errorf("Failed to Read the KeyStore %v, Error: %v", localEtherbase, readKeyErr)
+			log.Errorf("Failed to Read the KeyStore %v, Error: %v", localEtherbase, readKeyErr)
 			return
 		}
 
@@ -273,13 +277,13 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 		err := CreateChildChain(cm.ctx, chainId, *self, keyJson, validators)
 		if err != nil {
-			logger.Errorf("Create Child Chain %v failed! %v", chainId, err)
+			log.Errorf("Create Child Chain %v failed! %v", chainId, err)
 			return
 		}
 
 		chain = LoadChildChain(cm.ctx, chainId, cm.p2pObj)
 		if chain == nil {
-			logger.Errorf("Child Chain %v load failed!", chainId)
+			log.Errorf("Child Chain %v load failed!", chainId)
 			return
 		}
 	}
@@ -291,15 +295,20 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	// Start the new Child Chain, and it will start child chain reactors as well
 	quit := make(chan int)
 	cm.childQuits[chain.Id] = quit
+
+	// Add mine Flag if absent before child chain start
+	if !cm.ctx.GlobalIsSet(utils.MiningEnabledFlag.Name) {
+		cm.ctx.GlobalSet(utils.MiningEnabledFlag.Name, "true")
+	}
+
 	err := StartChain(cm.ctx, chain, nil, quit)
 	if err != nil {
 		return
 	}
 
 	// Child Chain start success, then delete the pending data in chain info db
-	core.DeletePendingChildChainData(cm.cch.chainInfoDB, chainId)
-	// Convert the Chain Info from Pending to Formal
-	core.SaveChainInfo(cm.cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: *cci})
+	cm.formalizeChildChain(chainId, *cci)
+
 	// Add Child Chain Id into Chain Manager
 	cm.childChains[chainId] = chain
 
@@ -310,6 +319,13 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	rpc.Hookup(chain.Id, chain.RpcHandler)
 
 	<-quit
+}
+
+func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainInfo) {
+	// Child Chain start success, then delete the pending data in chain info db
+	core.DeletePendingChildChainData(cm.cch.chainInfoDB, chainId)
+	// Convert the Chain Info from Pending to Formal
+	core.SaveChainInfo(cm.cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: cci})
 }
 
 func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool {

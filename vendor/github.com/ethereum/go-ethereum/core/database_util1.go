@@ -22,16 +22,14 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/pchain/common/plogger"
+	pabi "github.com/pchain/abi"
 )
 
-var logger = plogger.GetLogger("core")
-
-type CrossChainTxType int
+type CrossChainTxType byte
 
 const (
 	MainChainToChildChain CrossChainTxType = iota
@@ -49,12 +47,35 @@ func (t CrossChainTxType) String() string {
 	}
 }
 
+type CrossChainTxState byte
+
+const (
+	CrossChainTxNotFound CrossChainTxState = iota
+	CrossChainTxReady
+	CrossChainTxAlreadyUsed
+	CrossChainTxInvalid
+)
+
+func (s CrossChainTxState) String() string {
+	switch s {
+	case CrossChainTxNotFound:
+		return "NotFound"
+	case CrossChainTxReady:
+		return "Ready"
+	case CrossChainTxAlreadyUsed:
+		return "AlreadyUsed"
+	case CrossChainTxInvalid:
+		return "Invalid"
+	default:
+		return "UnKnown"
+	}
+}
+
 var (
 	// the prefix must not conflict with variables in database_util.go
 	txPrefix               = []byte("cc-tx")   // child-chain tx
 	toChildChainTxPrefix   = []byte("cc-to")   // txHash that deposit to child chain
 	fromChildChainTxPrefix = []byte("cc-from") // txHash that withdraw from child chain
-	usedChildChainTxPrefix = []byte("cc-used") // txHash that has been used in child chain
 
 	// errors
 	NotFoundErr = errors.New("not found") // general not found error
@@ -71,40 +92,30 @@ func GetChildChainTransactionByHash(db ethdb.Database, chainId string, txHash co
 	return decodeTx(bs)
 }
 
-func WriteChildChainBlock(db ethdb.Database, block *types.Block) error {
+func WriteChildChainTransaction(db ethdb.Database, chainId string, from common.Address, tx *types.Transaction) error {
 
-	tdmExtra, err := tdmTypes.ExtractTendermintExtra(block.Header())
-	if err != nil {
-		return err
-	}
+	if pabi.IsPChainContractAddr(tx.To()) {
+		data := tx.Data()
+		function, err := pabi.FunctionTypeFromId(data[:4])
+		if err != nil {
+			return err
+		}
 
-	txs := block.Transactions()
-	for _, tx := range txs {
-		etd := tx.ExtendTxData()
-		if etd.FuncName == "WithdrawFromChildChain" {
+		if function == pabi.WithdrawFromChildChain {
 			// write the entire tx
 			bs, err := rlp.EncodeToBytes(tx)
 			if err != nil {
 				return err
 			}
 			txHash := tx.Hash()
-			key := calcChildChainTxKey(tdmExtra.ChainID, txHash)
+			key := calcChildChainTxKey(chainId, txHash)
 			err = db.Put(key, bs)
 			if err != nil {
 				return err
 			}
 
-			// add 'child chain to main chain' tx.
-			from, _ := etd.GetAddress("from")
-			err = AddCrossChainTx(db, ChildChainToMainChain, tdmExtra.ChainID, from, txHash)
-			if err != nil {
-				return err
-			}
-		} else if etd.FuncName == "DepositInChildChain" {
-			from, _ := etd.GetAddress("from")
-			txHash, _ := etd.GetHash("txHash")
-			// remove 'main chain to child chain' tx.
-			err = RemoveCrossChainTx(db, MainChainToChildChain, tdmExtra.ChainID, from, txHash)
+			// mark 'child chain to main chain' tx.
+			err = MarkCrossChainTx(db, ChildChainToMainChain, from, chainId, txHash, false)
 			if err != nil {
 				return err
 			}
@@ -114,153 +125,58 @@ func WriteChildChainBlock(db ethdb.Database, block *types.Block) error {
 	return nil
 }
 
-func AddCrossChainTx(db ethdb.Database, t CrossChainTxType, chainId string, account common.Address, txHash common.Hash) error {
+func MarkCrossChainTx(db ethdb.Database, t CrossChainTxType, from common.Address, chainId string, txHash common.Hash, used bool) error {
+	log.Infof("MarkCrossChainTx %v: account: %x, chain: %s, tx: %x, used: %v", t, from, chainId, txHash, used)
 
-	logger.Infof("AddCrossChainTx %v: chain: %s, account: %x, tx: %x", t, chainId, account, txHash)
-	var hashes []common.Hash
-	key := calcCrossChainTxKey(t, chainId, account)
-	bs, err := db.Get(key)
-	if err == nil { // already exists
-		err = rlp.DecodeBytes(bs, &hashes)
-		if err != nil {
-			logger.Warnf("AddCrossChainTx decode error: %v", err)
-			return err
+	key := calcCrossChainTxKey(t, from, chainId, txHash)
+	var value []byte
+	if used {
+		// sanity check
+		s := ValidateCrossChainTx(db, t, from, chainId, txHash)
+		if s != CrossChainTxReady {
+			return fmt.Errorf("inconsistent state")
 		}
+		value = []byte{byte(CrossChainTxAlreadyUsed)}
+	} else {
+		value = []byte{byte(CrossChainTxReady)}
 	}
-	hashes = append(hashes, txHash)
-	bs, err = rlp.EncodeToBytes(hashes)
+	err := db.Put(key, value)
 	if err != nil {
-		logger.Warnf("AddCrossChainTx encode error: %v", err)
+		log.Warnf("MarkCrossChainTx db put error: %v", err)
 		return err
 	}
-	err = db.Put(key, bs)
-	if err != nil {
-		logger.Warnf("AddCrossChainTx db put error: %v", err)
-		return err
-	}
-	logger.Infof("AddCrossChainTx %v: chain: %s, account: %x, txs: %x", t, chainId, account, hashes)
 	return nil
 }
 
-func RemoveCrossChainTx(db ethdb.Database, t CrossChainTxType, chainId string, account common.Address, txHash common.Hash) error {
+func ValidateCrossChainTx(db ethdb.Database, t CrossChainTxType, from common.Address, chainId string, txHash common.Hash) CrossChainTxState {
+	log.Infof("ValidateCrossChainTx %v: account: %x, chain: %s, tx: %x", t, from, chainId, txHash)
 
-	logger.Infof("RemoveCrossChainTx %v: chain: %s, account: %x, tx: %x", t, chainId, account, txHash)
-	var hashes []common.Hash
-	key := calcCrossChainTxKey(t, chainId, account)
-	bs, err := db.Get(key)
+	key := calcCrossChainTxKey(t, from, chainId, txHash)
+	value, err := db.Get(key)
 	if err != nil {
-		logger.Warnf("RemoveCrossChainTx db get error: %v", err)
-		return err
+		return CrossChainTxNotFound
 	}
-	err = rlp.DecodeBytes(bs, &hashes)
-	if err != nil {
-		logger.Warnf("RemoveCrossChainTx decode error: %v", err)
-		return err
+
+	if len(value) != 1 {
+		return CrossChainTxInvalid
 	}
-	for i := range hashes {
-		if hashes[i] == txHash {
-			// remove element at index i
-			hashes[i] = hashes[len(hashes)-1]
-			hashes = hashes[:len(hashes)-1]
 
-			bs, err = rlp.EncodeToBytes(hashes)
-			if err != nil {
-				logger.Warnf("RemoveCrossChainTx encode error: %v", err)
-				return err
-			}
-
-			err = db.Put(key, bs)
-			if err != nil {
-				logger.Warnf("RemoveCrossChainTx db put error: %v", err)
-				return err
-			}
-
-			logger.Infof("RemoveCrossChainTx %v: chain: %s, account: %x, txs: %x", t, chainId, account, hashes)
-			return nil
-		}
+	if value[0] != byte(CrossChainTxReady) && value[0] != byte(CrossChainTxAlreadyUsed) {
+		return CrossChainTxInvalid
 	}
-	return fmt.Errorf("tx not found: %x", txHash)
+
+	return CrossChainTxState(value[0])
 }
 
-func HasCrossChainTx(db ethdb.Database, t CrossChainTxType, chainId string, account common.Address, txHash common.Hash) bool {
-	var hashes []common.Hash
-	key := calcCrossChainTxKey(t, chainId, account)
-	bs, err := db.Get(key)
-	if err != nil {
-		return false
-	}
-	err = rlp.DecodeBytes(bs, &hashes)
-	if err != nil {
-		return false
-	}
-	for i := range hashes {
-		if hashes[i] == txHash {
-			return true
-		}
-	}
-	return false
+func calcChildChainTxKey(chainId string, txHash common.Hash) []byte {
+	return append(txPrefix, []byte(fmt.Sprintf("-%s-%x", chainId, txHash))...)
 }
 
-func AppendUsedChildChainTx(db ethdb.Database, chainId string, account common.Address, txHash common.Hash) error {
-
-	logger.Infof("AppendUsedChildChainTx chain: %s, account: %x, tx: %x", chainId, account, txHash)
-	var hashes []common.Hash
-	key := calcUsedChildChainTxKey(chainId, account)
-	bs, err := db.Get(key)
-	if err == nil { // already exists
-		err = rlp.DecodeBytes(bs, &hashes)
-		if err != nil {
-			logger.Warnf("AppendUsedChildChainTx decode error: %v", err)
-			return err
-		}
-	}
-	hashes = append(hashes, txHash)
-	bs, err = rlp.EncodeToBytes(hashes)
-	if err != nil {
-		logger.Warnf("AppendUsedChildChainTx encode error: %v", err)
-		return err
-	}
-	err = db.Put(key, bs)
-	if err != nil {
-		logger.Warnf("AppendUsedChildChainTx db put error: %v", err)
-		return err
-	}
-	logger.Infof("AppendUsedChildChainTx chain: %s, account: %x, txs: %x", chainId, account, hashes)
-	return nil
-}
-
-func HasUsedChildChainTx(db ethdb.Database, chainId string, account common.Address, txHash common.Hash) bool {
-	var hashes []common.Hash
-	key := calcUsedChildChainTxKey(chainId, account)
-	bs, err := db.Get(key)
-	if err != nil {
-		return false
-	}
-	err = rlp.DecodeBytes(bs, &hashes)
-	if err != nil {
-		return false
-	}
-	for i := range hashes {
-		if hashes[i] == txHash {
-			return true
-		}
-	}
-	return false
-}
-
-func calcChildChainTxKey(chainId string, hash common.Hash) []byte {
-	return append(txPrefix, []byte(fmt.Sprintf("-%s-%x", chainId, hash))...)
-}
-
-func calcUsedChildChainTxKey(chainId string, account common.Address) []byte {
-	return append(usedChildChainTxPrefix, []byte(fmt.Sprintf("-%s-%x", chainId, account))...)
-}
-
-func calcCrossChainTxKey(t CrossChainTxType, chainId string, account common.Address) []byte {
+func calcCrossChainTxKey(t CrossChainTxType, from common.Address, chainId string, txHash common.Hash) []byte {
 	if t == MainChainToChildChain {
-		return append(toChildChainTxPrefix, []byte(fmt.Sprintf("-%s-%x", chainId, account))...)
+		return append(toChildChainTxPrefix, []byte(fmt.Sprintf("%x-%s-%x", from, chainId, txHash))...)
 	} else { // ChildChainToMainChain
-		return append(fromChildChainTxPrefix, []byte(fmt.Sprintf("-%s-%x", chainId, account))...)
+		return append(fromChildChainTxPrefix, []byte(fmt.Sprintf("%x-%s-%x", from, chainId, txHash))...)
 	}
 }
 

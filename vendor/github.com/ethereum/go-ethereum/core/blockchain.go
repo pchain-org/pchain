@@ -129,6 +129,8 @@ type BlockChain struct {
 	vmConfig  vm.Config
 
 	badBlocks *lru.Cache // Bad block cache
+
+	cch CrossChainHelper
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -161,6 +163,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:       engine,
 		vmConfig:     vmConfig,
 		badBlocks:    badBlocks,
+		cch:          cch,
 	}
 	bc.SetValidator(NewBlockValidator(chainConfig, bc, engine))
 	bc.SetProcessor(NewStateProcessor(chainConfig, bc, engine, cch))
@@ -499,7 +502,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 	log.Info(fmt.Sprintf("(bc *BlockChain) insert block number %v", block.NumberU64()))
 	ibCbMap := GetInsertBlockCbMap()
 	for _, cb := range ibCbMap {
-		cb(block)
+		cb(bc, block)
 	}
 }
 
@@ -1158,18 +1161,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			return i, events, coalescedLogs, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, childChainIds, err := bc.processor.Process(block, state, bc.vmConfig)
+		receipts, logs, usedGas, ops, err := bc.processor.Process(block, state, bc.vmConfig)
 		fmt.Printf("block insert 6 with error: %v\n", err)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return i, events, coalescedLogs, err
-		}
-
-		if len(childChainIds) != 0 {
-			// Add Events for Create Child Chain
-			for _, childChainId := range childChainIds {
-				events = append(events, CreateChildChainEvent{ChainId: childChainId})
-			}
 		}
 
 		// Validate the state using the default validator
@@ -1186,6 +1182,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		fmt.Printf("block insert 8 with error: %v\n", err)
 		if err != nil {
 			return i, events, coalescedLogs, err
+		}
+		// execute the pending ops.
+		for _, op := range ops.Ops() {
+			if err := ApplyOp(op, bc, bc.cch); err != nil {
+				log.Error("Failed executing op", op, "err", err)
+			}
 		}
 		switch status {
 		case CanonStatTy:

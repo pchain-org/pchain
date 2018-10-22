@@ -61,7 +61,7 @@ func NewPEXReactor(b *AddrBook) *PEXReactor {
 		msgCountByPeer:    cmn.NewCMap(),
 		maxMsgCountByPeer: defaultMaxMsgCountByPeer,
 	}
-	r.BaseReactor = *NewBaseReactor(logger, "PEXReactor", r)
+	r.BaseReactor = *NewBaseReactor(nil, "PEXReactor", r)
 	return r
 }
 

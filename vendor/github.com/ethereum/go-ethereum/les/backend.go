@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
@@ -43,7 +44,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/params"
 	rpc "github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/common/compiler"
 )
 
 type LightEthereum struct {
@@ -74,8 +74,8 @@ type LightEthereum struct {
 	engine         consensus.Engine
 	accountManager *accounts.Manager
 
-	solcPath       string
-	solc           *compiler.Solidity
+	solcPath string
+	solc     *compiler.Solidity
 
 	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI
@@ -83,7 +83,7 @@ type LightEthereum struct {
 	wg sync.WaitGroup
 }
 
-func New(ctx *node.ServiceContext, config *eth.Config, cch core.CrossChainHelper) (*LightEthereum, error) {
+func New(ctx *node.ServiceContext, config *eth.Config, cch core.CrossChainHelper, logger log.Logger) (*LightEthereum, error) {
 	chainDb, err := eth.CreateDB(ctx, config, "lightchaindata")
 	if err != nil {
 		return nil, err
@@ -105,7 +105,7 @@ func New(ctx *node.ServiceContext, config *eth.Config, cch core.CrossChainHelper
 		peers:            peers,
 		reqDist:          newRequestDistributor(peers, quitSync),
 		accountManager:   ctx.AccountManager,
-		engine:           eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb, nil, nil, cch),
+		engine:           eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb, nil, nil, cch, logger),
 		shutdownChan:     make(chan bool),
 		networkId:        config.NetworkId,
 		bloomRequests:    make(chan chan *bloombits.Retrieval),

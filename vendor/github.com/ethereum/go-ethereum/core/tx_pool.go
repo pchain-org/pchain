@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	pabi "github.com/pchain/abi"
 	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
@@ -582,22 +583,27 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrNonceTooLow
 	}
 
-	etd := tx.ExtendTxData()
-	if etd == nil || etd.FuncName == "" {
-		// Transactions can't be negative. This may never happen using RLP decoded
-		// transactions but may occur if you create a transaction using the RPC.
-		if tx.Value().Sign() < 0 {
-			return ErrNegativeValue
-		}
-		// Ensure the transaction doesn't exceed the current block limit gas.
-		if pool.currentMaxGas < tx.Gas() {
-			return ErrGasLimit
-		}
-		// Transactor should have enough funds to cover the costs
-		// cost == V + GP * GL
-		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
-			return ErrInsufficientFunds
-		}
+	// Transactions can't be negative. This may never happen using RLP decoded
+	// transactions but may occur if you create a transaction using the RPC.
+	if tx.Value().Sign() < 0 {
+		return ErrNegativeValue
+	}
+	// Ensure the transaction doesn't exceed the current block limit gas.
+	if pool.currentMaxGas < tx.Gas() {
+		return ErrGasLimit
+	}
+	// Transactor should have enough funds to cover the costs
+	// cost == V + GP * GL
+	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+		return ErrInsufficientFunds
+	}
+
+	// Not allow contract creation on PChain Main Chain
+	if pool.chainconfig.PChainId == "pchain" && tx.To() == nil {
+		return ErrNoContractOnMainChain
+	}
+
+	if !pabi.IsPChainContractAddr(tx.To()) {
 		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
 		if err != nil {
 			return err
@@ -606,8 +612,14 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			return ErrIntrinsicGas
 		}
 	} else {
-		log.Info("etd.FuncName", etd.FuncName)
-		if validateCb := GetValidateCb(etd.FuncName); validateCb != nil {
+		// the first 4 bytes is the function identifier
+		data := tx.Data()
+		function, err := pabi.FunctionTypeFromId(data[:4])
+		if err != nil {
+			return err
+		}
+		log.Info("validateTx Chain Function", function.String())
+		if validateCb := GetValidateCb(function); validateCb != nil {
 			pool.cch.GetMutex().Lock()
 			defer pool.cch.GetMutex().Unlock()
 			if err := validateCb(tx, pool.currentState, pool.cch); err != nil {
@@ -640,8 +652,10 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 		invalidTxCounter.Inc(1)
 		return false, err
 	}
+
 	// If the transaction pool is full, discard underpriced transactions
-	if uint64(len(pool.all)) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
+	if !params.GenCfg.PerfTest &&
+		uint64(len(pool.all)) >= pool.config.GlobalSlots+pool.config.GlobalQueue {
 		// If the new transaction is underpriced, don't accept it
 		if pool.priced.Underpriced(tx, pool.locals) {
 			log.Trace("Discarding underpriced transaction", "hash", hash, "price", tx.GasPrice())
@@ -656,6 +670,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 			pool.removeTx(tx.Hash())
 		}
 	}
+
 	// If the transaction is replacing an already pending one, do directly
 	from, _ := types.Sender(pool.signer, tx) // already validated
 	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
@@ -682,6 +697,7 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (bool, error) {
 
 		return old != nil, nil
 	}
+
 	// New transaction isn't replacing a pending one, push into queue
 	replace, err := pool.enqueueTx(hash, tx)
 	if err != nil {

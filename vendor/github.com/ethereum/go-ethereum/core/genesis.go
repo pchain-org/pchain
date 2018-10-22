@@ -84,6 +84,7 @@ type GenesisAccount struct {
 	Nonce      uint64                      `json:"nonce,omitempty"`
 	Amount     *big.Int                    `json:"amount,omitempty"`
 	PrivateKey []byte                      `json:"secretKey,omitempty"` // for tests
+	ConsensusPubKey string					`json:"consensusPubkey, omitempty"`
 }
 
 // field type overrides for gencodec
@@ -230,6 +231,8 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 	for addr, account := range g.Alloc {
 		statedb.AddBalance(addr, account.Balance)
+		// Deposit Balance for POS
+		statedb.AddDepositBalance(addr, account.Amount)
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {

@@ -107,7 +107,7 @@ func NewAddrBook(filePath string, routabilityStrict bool) *AddrBook {
 		routabilityStrict: routabilityStrict,
 	}
 	am.init()
-	am.BaseService = *NewBaseService(logger, "AddrBook", am)
+	am.BaseService = *NewBaseService(nil, "AddrBook", am)
 	return am
 }
 

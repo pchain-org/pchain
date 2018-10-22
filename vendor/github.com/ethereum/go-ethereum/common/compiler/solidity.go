@@ -163,7 +163,14 @@ func (s *Solidity) run(cmd *exec.Cmd, source string) (map[string]*Contract, erro
 		if err := json.Unmarshal([]byte(info.Devdoc), &devdoc); err != nil {
 			return nil, fmt.Errorf("solc: error reading dev doc: %v", err)
 		}
-		contracts[name] = &Contract{
+
+		var base string
+		base = name
+		fmt.Printf("runsolc(cmd *exec.Cmd, source string), name is %s\n", name)
+		if (strings.HasPrefix(name, "<stdin>:")) {
+			base = name[len("<stdin>:"):]
+		}
+		contracts[base] = &Contract{
 			Code: "0x" + info.Bin,
 			Info: ContractInfo{
 				Source:          source,

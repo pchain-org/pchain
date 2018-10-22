@@ -138,6 +138,11 @@ func NewType(t string) (typ Type, err error) {
 		typ.Type = address_t
 		typ.Size = 20
 		typ.T = AddressTy
+	case "hash":
+		typ.Kind = reflect.Array
+		typ.Type = hash_t
+		typ.Size = 32
+		typ.T = HashTy
 	case "string":
 		typ.Kind = reflect.String
 		typ.Type = reflect.TypeOf("")

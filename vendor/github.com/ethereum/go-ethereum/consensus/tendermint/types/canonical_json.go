@@ -3,7 +3,6 @@ package types
 // canonical json is go-wire's json for structs with fields in alphabetical order
 import (
 	crypto "github.com/tendermint/go-crypto"
-	"math/big"
 )
 
 type CanonicalJSONBlockID struct {
@@ -64,6 +63,7 @@ type CanonicalJSONOnceSignAggr struct {
 //author@liaoyd
 type CanonicalJSONOnceValidatorMsg struct {
 	ChainID string             `json:"chain_id"`
+	ValidatorMsg   CanonicalJSONValidatorMsg `json:"validator_msg"`
 }
 
 type CanonicalJSONValidatorMsg struct {
@@ -72,7 +72,7 @@ type CanonicalJSONValidatorMsg struct {
 	ValidatorIndex int           `json:"validator_index"`
 	Key            string        `json:"key"`
 	PubKey         crypto.PubKey `json:"pub_key"`
-	Power          *big.Int      `json:"power"`
+	Power          uint64        `json:"power"`
 	Action         string        `json:"action"`
         Target         string        `json:"target"`
 }

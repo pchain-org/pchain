@@ -15,12 +15,13 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
-	"golang.org/x/crypto/sha3"
 	"math/big"
 	"sync"
 	"time"
@@ -97,7 +98,7 @@ func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId st
 
 // CreateChildChain Save the Child Chain Data into the DB, the data will be used later during Block Commit Callback
 func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error {
-	logger.Debug("CreateChildChain - start")
+	log.Debug("CreateChildChain - start")
 
 	cci := &core.CoreChainInfo{
 		Owner:            from,
@@ -110,13 +111,13 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 	}
 	core.CreatePendingChildChainData(cch.chainInfoDB, cci)
 
-	logger.Debug("CreateChildChain - end")
+	log.Debug("CreateChildChain - end")
 	return nil
 }
 
 // ValidateJoinChildChain check the criteria whether it meets the join child chain requirement
 func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error {
-	logger.Debug("ValidateJoinChildChain - start")
+	log.Debug("ValidateJoinChildChain - start")
 
 	if chainId == MainChain {
 		return errors.New("you can't join PChain as a child chain, try use other name instead")
@@ -125,7 +126,11 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey 
 	// Check if "chainId" has been created/registered
 	ci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
 	if ci == nil {
-		return fmt.Errorf("Child Chain %s not exist, try use other name instead", chainId)
+		if core.GetChainInfo(cch.chainInfoDB, chainId) != nil {
+			return fmt.Errorf("chain %s has already created/started, try use other name instead", chainId)
+		} else {
+			return fmt.Errorf("child chain %s not exist, try use other name instead", chainId)
+		}
 	}
 
 	// Check PubKey match the Address
@@ -157,18 +162,18 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey 
 		return errors.New("deposit amount must be greater than 0")
 	}
 
-	logger.Debug("ValidateJoinChildChain - end")
+	log.Debug("ValidateJoinChildChain - end")
 	return nil
 }
 
 // JoinChildChain Join the Child Chain
 func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error {
-	logger.Debugln("JoinChildChain - start")
+	log.Debug("JoinChildChain - start")
 
 	// Load the Child Chain first
 	ci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
 	if ci == nil {
-		logger.Errorf("JoinChildChain - Child Chain %s not exist, you can't join the chain", chainId)
+		log.Errorf("JoinChildChain - Child Chain %s not exist, you can't join the chain", chainId)
 		return fmt.Errorf("Child Chain %s not exist, you can't join the chain", chainId)
 	}
 
@@ -182,32 +187,29 @@ func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, 
 
 	core.UpdatePendingChildChainData(cch.chainInfoDB, ci)
 
-	logger.Debugln("JoinChildChain - end")
+	log.Debug("JoinChildChain - end")
 	return nil
 }
 
-func (cch *CrossChainHelper) ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB) []string {
-	logger.Debugln("ReadyForLaunchChildChain - start")
+func (cch *CrossChainHelper) ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB) ([]string, []byte, []string) {
+	log.Debug("ReadyForLaunchChildChain - start")
 
-	readyId := core.GetChildChainForLaunch(cch.chainInfoDB, height, stateDB)
+	readyId, updateBytes, removedId := core.GetChildChainForLaunch(cch.chainInfoDB, height, stateDB)
 	if len(readyId) == 0 {
-		logger.Debugf("ReadyForLaunchChildChain - No child chain to be launch in Block %v", height)
+		log.Debugf("ReadyForLaunchChildChain - No child chain to be launch in Block %v", height)
 	} else {
-		logger.Infof("ReadyForLaunchChildChain - %v child chain(s) to be launch in Block %v. %v\n", len(readyId), height, readyId)
-		//for _, chainId := range readyId {
-		//	// Convert the Chain Info from Pending to Formal
-		//	cci := core.GetPendingChildChainData(cch.chainInfoDB, chainId)
-		//	core.SaveChainInfo(cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: *cci})
-		//	// Send Post to Chain Manager
-		//	cch.GetTypeMutex().Post(core.CreateChildChainEvent{ChainId: chainId})
-		//}
+		log.Infof("ReadyForLaunchChildChain - %v child chain(s) to be launch in Block %v. %v", len(readyId), height, readyId)
 	}
 
-	logger.Debugln("ReadyForLaunchChildChain - end")
-	return readyId
+	log.Debug("ReadyForLaunchChildChain - end")
+	return readyId, updateBytes, removedId
 }
 
-func (cch *CrossChainHelper) ValidateVoteNextEpoch(chainId string) (*epoch.Epoch, error) {
+func (cch *CrossChainHelper) ProcessPostPendingData(newPendingIdxBytes []byte, deleteChildChainIds []string) {
+	core.ProcessPostPendingData(cch.chainInfoDB, newPendingIdxBytes, deleteChildChainIds)
+}
+
+func (cch *CrossChainHelper) ValidateVoteNextEpoch(chainId string) error {
 
 	var ethereum *eth.Ethereum
 	if chainId == MainChain {
@@ -222,32 +224,55 @@ func (cch *CrossChainHelper) ValidateVoteNextEpoch(chainId string) (*epoch.Epoch
 	}
 
 	if ep == nil {
-		return nil, errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
+		return errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
 	}
 
 	// Check Epoch in Hash Vote stage
-	if ep.NextEpoch == nil {
-		return nil, errors.New("next Epoch is nil, You can't vote the next epoch")
+	if ep.GetNextEpoch() == nil {
+		return errors.New("next Epoch is nil, You can't vote the next epoch")
 	}
 
 	// Vote is valid between height 75% - 85%
 	height := ethereum.BlockChain().CurrentBlock().NumberU64()
 	if !ep.CheckInHashVoteStage(height) {
-		return nil, errors.New(fmt.Sprintf("you can't send the hash vote during this time, current height %v", height))
+		return errors.New(fmt.Sprintf("you can't send the hash vote during this time, current height %v", height))
 	}
-	return ep, nil
+	return nil
 }
 
-func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) (*epoch.Epoch, error) {
+func (cch *CrossChainHelper) VoteNextEpoch(ep *epoch.Epoch, from common.Address, voteHash common.Hash, txHash common.Hash) error {
+
+	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
+	vote, exist := voteSet.GetVoteByAddress(from)
+
+	if exist {
+		// Overwrite the Previous Hash Vote
+		vote.VoteHash = voteHash
+		vote.TxHash = txHash
+	} else {
+		// Create a new Hash Vote
+		vote = &epoch.EpochValidatorVote{
+			Address:  from,
+			VoteHash: voteHash,
+			TxHash:   txHash,
+		}
+		voteSet.StoreVote(vote)
+	}
+	// Save the VoteSet
+	epoch.SaveEpochVoteSet(ep.GetDB(), ep.GetNextEpoch().Number, voteSet)
+	return nil
+}
+
+func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) error {
 	// Check PubKey match the Address
 	pubkeySlice := ethcrypto.FromECDSAPub(ethcrypto.ToECDSAPub(common.FromHex(pubkey)))
 	if pubkeySlice == nil {
-		return nil, errors.New("your Public Key is not valid, please provide a valid Public Key")
+		return errors.New("your Public Key is not valid, please provide a valid Public Key")
 	}
 
 	validatorPubkey := crypto.EthereumPubKey(pubkeySlice)
 	if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
-		return nil, errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
+		return errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
 	}
 
 	var ethereum *eth.Ethereum
@@ -263,30 +288,30 @@ func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Addr
 	}
 
 	if ep == nil {
-		return nil, errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
+		return errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
 	}
 
 	// Check Epoch in Reveal Vote stage
-	if ep.NextEpoch == nil {
-		return nil, errors.New("next Epoch is nil, You can't vote the next epoch")
+	if ep.GetNextEpoch() == nil {
+		return errors.New("next Epoch is nil, You can't vote the next epoch")
 	}
 
 	// Vote is valid between height 85% - 95%
 	height := ethereum.BlockChain().CurrentBlock().NumberU64()
 	if !ep.CheckInRevealVoteStage(height) {
-		return nil, errors.New(fmt.Sprintf("you can't send the reveal vote during this time, current height %v", height))
+		return errors.New(fmt.Sprintf("you can't send the reveal vote during this time, current height %v", height))
 	}
 
-	voteSet := ep.NextEpoch.GetEpochValidatorVoteSet()
+	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
 	vote, exist := voteSet.GetVoteByAddress(from)
 
 	// Check Vote exist
 	if !exist {
-		return nil, errors.New(fmt.Sprintf("Can not found the vote for Address %x", from))
+		return errors.New(fmt.Sprintf("Can not found the vote for Address %x", from))
 	}
 
 	if len(vote.VoteHash) == 0 {
-		return nil, errors.New(fmt.Sprintf("Address %x doesn't has vote hash", from))
+		return errors.New(fmt.Sprintf("Address %x doesn't has vote hash", from))
 	}
 
 	// Check Vote Hash
@@ -296,12 +321,34 @@ func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Addr
 		depositAmount.Bytes(),
 		[]byte(salt),
 	}
-	voteHash := sha3.Sum256(concatCopyPreAllocate(byte_data))
+	voteHash := ethcrypto.Keccak256Hash(concatCopyPreAllocate(byte_data))
 	if vote.VoteHash != voteHash {
-		return nil, errors.New("your vote doesn't match your vote hash, please check your vote")
+		return errors.New("your vote doesn't match your vote hash, please check your vote")
 	}
 
-	return ep, nil
+	// Check Logic - Amount can't be 0 for new Validator
+	if !ep.Validators.HasAddress(from.Bytes()) && depositAmount.Sign() <= 0 {
+		return errors.New("invalid vote!!! new validator's vote amount must be greater than 0")
+	}
+
+	return nil
+}
+
+func (cch *CrossChainHelper) RevealVote(ep *epoch.Epoch, from common.Address, pubkey string, depositAmount *big.Int, salt string, txHash common.Hash) error {
+
+	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
+	vote, exist := voteSet.GetVoteByAddress(from)
+
+	if exist {
+		// Update the Hash Vote with Real Data
+		vote.PubKey = crypto.EthereumPubKey(common.FromHex(pubkey))
+		vote.Amount = depositAmount
+		vote.Salt = salt
+		vote.TxHash = txHash
+	}
+	// Save the VoteSet
+	epoch.SaveEpochVoteSet(ep.GetDB(), ep.GetNextEpoch().Number, voteSet)
+	return nil
 }
 
 func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Transaction {
@@ -326,17 +373,17 @@ func (cch *CrossChainHelper) GetTxFromChildChain(txHash common.Hash, chainId str
 
 // verify the signature of validators who voted for the block
 // most of the logic here is from 'VerifyHeader'
-func (cch *CrossChainHelper) VerifyChildChainBlock(bs []byte) error {
+func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
 
-	logger.Debugln("VerifyChildChainBlock - start")
+	log.Debug("VerifyChildChainProofData - start")
 
-	var block types.Block
-	err := rlp.DecodeBytes(bs, &block)
+	var proofData types.ChildChainProofData
+	err := rlp.DecodeBytes(bs, &proofData)
 	if err != nil {
 		return err
 	}
 
-	header := block.Header()
+	header := proofData.Header
 	// Don't waste time checking blocks from the future
 	if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
 		return errors.New("block in the future")
@@ -399,21 +446,33 @@ func (cch *CrossChainHelper) VerifyChildChainBlock(bs []byte) error {
 		return err
 	}
 
-	logger.Debugln("VerifyChildChainBlock - end")
+	// tx merkle proof verify
+	keybuf := new(bytes.Buffer)
+	for i, txIndex := range proofData.TxIndexs {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(txIndex))
+		_, err, _ := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Debug("VerifyChildChainProofData - end")
 	return nil
 }
 
-func (cch *CrossChainHelper) SaveChildChainBlockToMainChain(bs []byte) error {
+func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error {
 
-	logger.Debugln("SaveChildChainBlockToMainChain - start")
+	log.Debug("SaveChildChainProofDataToMainChain - start")
 
-	var block types.Block
-	err := rlp.DecodeBytes(bs, &block)
+	var proofData types.ChildChainProofData
+	err := rlp.DecodeBytes(bs, &proofData)
 	if err != nil {
 		return err
 	}
 
-	tdmExtra, err := tdmTypes.ExtractTendermintExtra(block.Header())
+	header := proofData.Header
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
 	if err != nil {
 		return err
 	}
@@ -426,12 +485,8 @@ func (cch *CrossChainHelper) SaveChildChainBlockToMainChain(bs []byte) error {
 	chainMgr := GetCMInstance(nil)
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
 	chainDb := ethereum.ChainDb()
-	err = core.WriteChildChainBlock(chainDb, &block)
-	if err != nil {
-		return err
-	}
 
-	//here is epoch update; should be a more general mechanism
+	// here is epoch update; should be a more general mechanism
 	if len(tdmExtra.EpochBytes) != 0 {
 		ep := epoch.FromBytes(tdmExtra.EpochBytes)
 		if ep != nil {
@@ -440,79 +495,59 @@ func (cch *CrossChainHelper) SaveChildChainBlockToMainChain(bs []byte) error {
 				ci.EpochNumber = ep.Number
 				ci.Epoch = ep
 				core.SaveChainInfo(cch.chainInfoDB, ci)
-				logger.Infof("Epoch saved from chain: %s, epoch: %v", chainId, ep)
+				log.Infof("Epoch saved from chain: %s, epoch: %v", chainId, ep)
 			}
 		}
 	}
 
-	logger.Debugln("SaveChildChainBlockToMainChain - end")
+	// here is the tx
+	keybuf := new(bytes.Buffer)
+	for i, txIndex := range proofData.TxIndexs {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(txIndex))
+		val, err, _ := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
+		if err != nil {
+			log.Error("SaveChildChainProofDataToMainChain VerifyProof error", "err", err)
+			continue
+		}
+
+		var tx types.Transaction
+		err = rlp.DecodeBytes(val, &tx)
+		if err != nil {
+			log.Error("SaveChildChainProofDataToMainChain decode tx error", "err", err)
+			continue
+		}
+
+		// retrieve 'from' here.
+		digest := ethcrypto.Keccak256([]byte(chainId))
+		signer := types.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
+		from, _ := types.Sender(signer, &tx)
+
+		err = core.WriteChildChainTransaction(chainDb, chainId, from, &tx)
+		if err != nil {
+			log.Error("SaveChildChainProofDataToMainChain write tx error", "err", err)
+			continue
+		}
+	}
+
+	log.Debug("SaveChildChainProofDataToMainChain - end")
 	return nil
 }
 
-func (cch *CrossChainHelper) AddToChildChainTx(chainId string, account common.Address, txHash common.Hash) error {
+func (cch *CrossChainHelper) MarkFromChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error {
 	chainMgr := GetCMInstance(nil)
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
 	chainDb := ethereum.ChainDb()
 
-	return core.AddCrossChainTx(chainDb, core.MainChainToChildChain, chainId, account, txHash)
+	return core.MarkCrossChainTx(chainDb, core.ChildChainToMainChain, from, chainId, txHash, used)
 }
 
-func (cch *CrossChainHelper) RemoveToChildChainTx(chainId string, account common.Address, txHash common.Hash) error {
+func (cch *CrossChainHelper) ValidateFromChildChainTx(from common.Address, chainId string, txHash common.Hash) core.CrossChainTxState {
 	chainMgr := GetCMInstance(nil)
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
 	chainDb := ethereum.ChainDb()
 
-	return core.RemoveCrossChainTx(chainDb, core.MainChainToChildChain, chainId, account, txHash)
-}
-
-func (cch *CrossChainHelper) HasToChildChainTx(chainId string, account common.Address, txHash common.Hash) bool {
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.HasCrossChainTx(chainDb, core.MainChainToChildChain, chainId, account, txHash)
-}
-
-func (cch *CrossChainHelper) AddFromChildChainTx(chainId string, account common.Address, txHash common.Hash) error {
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.AddCrossChainTx(chainDb, core.ChildChainToMainChain, chainId, account, txHash)
-}
-
-func (cch *CrossChainHelper) RemoveFromChildChainTx(chainId string, account common.Address, txHash common.Hash) error {
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.RemoveCrossChainTx(chainDb, core.ChildChainToMainChain, chainId, account, txHash)
-}
-
-func (cch *CrossChainHelper) HasFromChildChainTx(chainId string, account common.Address, txHash common.Hash) bool {
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.HasCrossChainTx(chainDb, core.ChildChainToMainChain, chainId, account, txHash)
-}
-
-func (cch *CrossChainHelper) AppendUsedChildChainTx(chainId string, account common.Address, txHash common.Hash) error {
-	chainMgr := GetCMInstance(nil)
-	chain := chainMgr.childChains[chainId]
-	ethereum := MustGetEthereumFromNode(chain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.AppendUsedChildChainTx(chainDb, chainId, account, txHash)
-}
-
-func (cch *CrossChainHelper) HasUsedChildChainTx(chainId string, account common.Address, txHash common.Hash) bool {
-	chainMgr := GetCMInstance(nil)
-	chain := chainMgr.childChains[chainId]
-	ethereum := MustGetEthereumFromNode(chain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.HasUsedChildChainTx(chainDb, chainId, account, txHash)
+	return core.ValidateCrossChainTx(chainDb, core.ChildChainToMainChain, from, chainId, txHash)
 }
 
 func MustGetEthereumFromNode(node *node.Node) *eth.Ethereum {

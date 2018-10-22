@@ -16,51 +16,51 @@ func TestCrossChainTx(t *testing.T) {
 	var tx1 = common.HexToHash("0x1234567890")
 	var tx2 = common.HexToHash("0x0123456789")
 
-	if ok := HasCrossChainTx(db, MainChainToChildChain, chainId, accountZ, tx1); ok {
+	if s := ValidateCrossChainTx(db, MainChainToChildChain, accountZ, chainId, tx1); s != CrossChainTxNotFound {
 		t.Fatalf("Non existent tx returned: %x", tx1)
 	}
 
-	if err := AddCrossChainTx(db, MainChainToChildChain, chainId, accountZ, tx1); err != nil {
-		t.Fatalf("Failed to add tx into database: %x", tx1)
+	if err := MarkCrossChainTx(db, MainChainToChildChain, accountZ, chainId, tx1, false); err != nil {
+		t.Fatalf("Failed to mark tx into database: %x", tx1)
 	}
 
-	if err := AddCrossChainTx(db, ChildChainToMainChain, chainId, accountP, tx2); err != nil {
+	if err := MarkCrossChainTx(db, ChildChainToMainChain, accountP, chainId, tx2, false); err != nil {
 		t.Fatalf("Failed to add tx into database: %x", tx2)
 	}
 
-	if ok := HasCrossChainTx(db, MainChainToChildChain, chainId, accountZ, tx1); !ok {
+	if s := ValidateCrossChainTx(db, MainChainToChildChain, accountZ, chainId, tx1); s != CrossChainTxReady {
 		t.Fatalf("Failed to retrieve tx: %x", tx1)
 	}
 
-	if ok := HasCrossChainTx(db, ChildChainToMainChain, chainId, accountZ, tx1); ok {
+	if s := ValidateCrossChainTx(db, ChildChainToMainChain, accountZ, chainId, tx1); s != CrossChainTxNotFound {
 		t.Fatalf("Non existent tx returned: %x", tx1)
 	}
 
-	if ok := HasCrossChainTx(db, ChildChainToMainChain, chainId, accountP, tx2); !ok {
+	if s := ValidateCrossChainTx(db, ChildChainToMainChain, accountP, chainId, tx2); s != CrossChainTxReady {
 		t.Fatalf("Failed to retrieve tx: %x", tx2)
 	}
 
-	if ok := HasCrossChainTx(db, MainChainToChildChain, chainId, accountP, tx2); ok {
+	if s := ValidateCrossChainTx(db, MainChainToChildChain, accountP, chainId, tx2); s != CrossChainTxNotFound {
 		t.Fatalf("Non existent tx returned: %x", tx2)
 	}
 
-	if err := RemoveCrossChainTx(db, MainChainToChildChain, chainId, accountZ, tx2); err == nil {
-		t.Fatalf("Remove non existent tx: %x", tx2)
+	if err := MarkCrossChainTx(db, MainChainToChildChain, accountZ, chainId, tx2, true); err == nil {
+		t.Fatalf("Mark non existent tx: %x as used", tx2)
 	}
 
-	if err := RemoveCrossChainTx(db, MainChainToChildChain, chainId, accountP, tx1); err == nil {
-		t.Fatalf("Remove non existent tx: %x", tx1)
+	if err := MarkCrossChainTx(db, MainChainToChildChain, accountP, chainId, tx1, true); err == nil {
+		t.Fatalf("Mark non existent tx: %x as used", tx1)
 	}
 
-	if err := RemoveCrossChainTx(db, MainChainToChildChain, chainId, accountZ, tx1); err != nil {
-		t.Fatalf("Failed to remove tx: %x", tx1)
+	if err := MarkCrossChainTx(db, MainChainToChildChain, accountZ, chainId, tx1, true); err != nil {
+		t.Fatalf("Failed to makr tx: %x as used", tx1)
 	}
 
-	if ok := HasCrossChainTx(db, MainChainToChildChain, chainId, accountZ, tx1); ok {
+	if s := ValidateCrossChainTx(db, MainChainToChildChain, accountZ, chainId, tx1); s != CrossChainTxAlreadyUsed {
 		t.Fatalf("Non existent tx returned: %x", tx1)
 	}
 
-	if ok := HasCrossChainTx(db, ChildChainToMainChain, chainId, accountP, tx2); !ok {
+	if s := ValidateCrossChainTx(db, ChildChainToMainChain, accountP, chainId, tx2); s != CrossChainTxReady {
 		t.Fatalf("Failed to retrieve tx: %x", tx2)
 	}
 }

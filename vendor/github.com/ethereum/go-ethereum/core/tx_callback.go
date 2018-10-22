@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	pabi "github.com/pchain/abi"
 	dbm "github.com/tendermint/go-db"
 	"math/big"
 	"sync"
@@ -21,50 +22,46 @@ type CrossChainHelper interface {
 	CreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error
 	ValidateJoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error
 	JoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error
-	ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB) []string
+	ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB) ([]string, []byte, []string)
+	ProcessPostPendingData(newPendingIdxBytes []byte, deleteChildChainIds []string)
 
-	ValidateVoteNextEpoch(chainId string) (*epoch.Epoch, error)
-	ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) (*epoch.Epoch, error)
+	ValidateVoteNextEpoch(chainId string) error
+	VoteNextEpoch(ep *epoch.Epoch, from common.Address, voteHash common.Hash, txHash common.Hash) error
+	ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) error
+	RevealVote(ep *epoch.Epoch, from common.Address, pubkey string, depositAmount *big.Int, salt string, txHash common.Hash) error
 
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
 	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction
-	VerifyChildChainBlock(bs []byte) error
-	SaveChildChainBlockToMainChain(bs []byte) error
+	VerifyChildChainProofData(bs []byte) error
+	SaveChildChainProofDataToMainChain(bs []byte) error
 
 	// these should operate on the main chain db
-	AddToChildChainTx(chainId string, account common.Address, txHash common.Hash) error
-	RemoveToChildChainTx(chainId string, account common.Address, txHash common.Hash) error
-	HasToChildChainTx(chainId string, account common.Address, txHash common.Hash) bool
-	AddFromChildChainTx(chainId string, account common.Address, txHash common.Hash) error
-	RemoveFromChildChainTx(chainId string, account common.Address, txHash common.Hash) error
-	HasFromChildChainTx(chainId string, account common.Address, txHash common.Hash) bool
-	// these should operate on the child chain db
-	AppendUsedChildChainTx(chainId string, account common.Address, txHash common.Hash) error
-	HasUsedChildChainTx(chainId string, account common.Address, txHash common.Hash) bool
+	MarkFromChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error
+	ValidateFromChildChainTx(from common.Address, chainId string, txHash common.Hash) CrossChainTxState
 }
 
 type EtdValidateCb func(tx *types.Transaction, state *state.StateDB, cch CrossChainHelper) error
-type EtdApplyCb func(tx *types.Transaction, state *state.StateDB, cch CrossChainHelper) error
-type EtdInsertBlockCb func(block *types.Block)
+type EtdApplyCb func(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch CrossChainHelper) error
+type EtdInsertBlockCb func(bc *BlockChain, block *types.Block)
 
-var validateCbMap = make(map[string]EtdValidateCb)
-var applyCbMap = make(map[string]EtdApplyCb)
+var validateCbMap = make(map[pabi.FunctionType]EtdValidateCb)
+var applyCbMap = make(map[pabi.FunctionType]EtdApplyCb)
 var insertBlockCbMap = make(map[string]EtdInsertBlockCb)
 
-func RegisterValidateCb(name string, validateCb EtdValidateCb) error {
+func RegisterValidateCb(function pabi.FunctionType, validateCb EtdValidateCb) error {
 
-	_, ok := validateCbMap[name]
+	_, ok := validateCbMap[function]
 	if ok {
 		return errors.New("the name has registered in validateCbMap")
 	}
 
-	validateCbMap[name] = validateCb
+	validateCbMap[function] = validateCb
 	return nil
 }
 
-func GetValidateCb(name string) EtdValidateCb {
+func GetValidateCb(function pabi.FunctionType) EtdValidateCb {
 
-	cb, ok := validateCbMap[name]
+	cb, ok := validateCbMap[function]
 	if ok {
 		return cb
 	}
@@ -72,21 +69,21 @@ func GetValidateCb(name string) EtdValidateCb {
 	return nil
 }
 
-func RegisterApplyCb(name string, applyCb EtdApplyCb) error {
+func RegisterApplyCb(function pabi.FunctionType, applyCb EtdApplyCb) error {
 
-	_, ok := applyCbMap[name]
+	_, ok := applyCbMap[function]
 	if ok {
 		return errors.New("the name has registered in applyCbMap")
 	}
 
-	applyCbMap[name] = applyCb
+	applyCbMap[function] = applyCb
 
 	return nil
 }
 
-func GetApplyCb(name string) EtdApplyCb {
+func GetApplyCb(function pabi.FunctionType) EtdApplyCb {
 
-	cb, ok := applyCbMap[name]
+	cb, ok := applyCbMap[function]
 	if ok {
 		return cb
 	}

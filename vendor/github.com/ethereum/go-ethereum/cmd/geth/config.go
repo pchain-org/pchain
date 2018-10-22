@@ -20,12 +20,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"io"
 	"os"
+	"path"
 	"reflect"
 	"unicode"
 
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/dashboard"
@@ -108,7 +110,6 @@ func defaultNodeConfig() node.Config {
 }
 
 func MakeConfigNode(ctx *cli.Context, chainId string) (*node.Node, gethConfig) {
-
 	return makeConfigNode(ctx, chainId)
 }
 
@@ -130,6 +131,11 @@ func makeConfigNode(ctx *cli.Context, chainId string) (*node.Node, gethConfig) {
 
 	// Apply flags.
 	cfg.Node.ChainId = chainId
+
+	// Setup Log
+	logDir := path.Join(ctx.GlobalString("logDir"), chainId)
+	cfg.Node.Logger = log.NewLogger(chainId, logDir, ctx.GlobalInt("verbosity"), ctx.GlobalBool("debug"), ctx.GlobalString("vmodule"), ctx.GlobalString("backtrace"))
+
 	utils.SetNodeConfig(ctx, &cfg.Node)
 	stack, err := node.New(&cfg.Node)
 	if err != nil {
@@ -142,6 +148,7 @@ func makeConfigNode(ctx *cli.Context, chainId string) (*node.Node, gethConfig) {
 
 	utils.SetShhConfig(ctx, stack, &cfg.Shh)
 	utils.SetDashboardConfig(ctx, &cfg.Dashboard)
+	utils.SetGeneralConfig(ctx)
 
 	return stack, cfg
 }

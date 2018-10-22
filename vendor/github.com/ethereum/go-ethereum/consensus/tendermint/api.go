@@ -15,12 +15,12 @@ type API struct {
 }
 
 // GetCurrentEpochNumber retrieves the current epoch number.
-func (api *API) GetCurrentEpochNumber() (int, error) {
+func (api *API) GetCurrentEpochNumber() (uint64, error) {
 	return api.tendermint.core.consensusState.Epoch.Number, nil
 }
 
 // GetEpoch retrieves the Epoch Detail by Number
-func (api *API) GetEpoch(number int) (*tdmTypes.EpochApi, error) {
+func (api *API) GetEpoch(number uint64) (*tdmTypes.EpochApi, error) {
 
 	var resultEpoch *epoch.Epoch
 	curEpoch := api.tendermint.core.consensusState.Epoch
@@ -31,7 +31,7 @@ func (api *API) GetEpoch(number int) (*tdmTypes.EpochApi, error) {
 	if number == curEpoch.Number {
 		resultEpoch = curEpoch
 	} else {
-		resultEpoch = epoch.LoadOneEpoch(curEpoch.GetDB(), number)
+		resultEpoch = epoch.LoadOneEpoch(curEpoch.GetDB(), number, nil)
 	}
 
 	validators := make([]tdmTypes.GenesisValidator, len(resultEpoch.Validators.Validators))
@@ -63,7 +63,7 @@ func (api *API) GetEpoch(number int) (*tdmTypes.EpochApi, error) {
 // GetEpochVote
 func (api *API) GetEpochVote() (*tdmTypes.EpochVotesApi, error) {
 
-	ep := api.tendermint.core.consensusState.GetRoundState().Epoch
+	ep := api.tendermint.core.consensusState.Epoch
 	if ep.GetNextEpoch() != nil {
 
 		votes := ep.GetNextEpoch().GetEpochValidatorVoteSet().Votes

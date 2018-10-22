@@ -554,6 +554,12 @@ var (
 		Usage: "Default minimum difference between two consecutive block's timestamps in seconds",
 		Value: eth.DefaultConfig.Istanbul.BlockPeriod,
 	}
+
+	//for performance test
+	PerfTestFlag = cli.BoolFlag{
+		Name:  "perftest",
+		Usage: "Whether doing performance test, will remove some limitations and cause system more frigile",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1166,16 +1172,20 @@ func SetDashboardConfig(ctx *cli.Context, cfg *dashboard.Config) {
 	cfg.Refresh = ctx.GlobalDuration(DashboardRefreshFlag.Name)
 }
 
+func SetGeneralConfig(ctx *cli.Context) {
+	params.GenCfg.PerfTest = ctx.GlobalBool(PerfTestFlag.Name)
+}
+
 // RegisterEthService adds an Ethereum client to the stack.
 func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 	var err error
 	if cfg.SyncMode == downloader.LightSync {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, cfg, nil)
+			return les.New(ctx, cfg, nil, stack.GetLogger())
 		})
 	} else {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			fullNode, err := eth.New(ctx, cfg, nil, nil, nil)
+			fullNode, err := eth.New(ctx, cfg, nil, nil, nil, stack.GetLogger())
 			if fullNode != nil && cfg.LightServ > 0 {
 				ls, _ := les.NewLesServer(fullNode, cfg)
 				fullNode.AddLesServer(ls)

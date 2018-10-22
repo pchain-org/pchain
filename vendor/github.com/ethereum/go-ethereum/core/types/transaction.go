@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"sync/atomic"
 
-	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -34,9 +33,8 @@ import (
 //go:generate gencodec -type txdata -field-override txdataMarshaling -out gen_tx_json.go
 
 var (
-	ErrInvalidSig            = errors.New("invalid transaction v, r, s values")
-	ErrExtendedDataWrongType = errors.New("wrong type when parsing extended data")
-	errNoSigner              = errors.New("missing signing methods")
+	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
+	errNoSigner   = errors.New("missing signing methods")
 )
 
 // deriveSigner makes a *best* guess about which signer to use.
@@ -48,53 +46,12 @@ func deriveSigner(V *big.Int) Signer {
 	}
 }
 
-type OriTransaction struct {
-	data oritxdata
-	// caches
-	hash atomic.Value
-	size atomic.Value
-	from atomic.Value
-}
-
-type oritxdata struct {
-	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
-	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
-	GasLimit     uint64          `json:"gas"      gencodec:"required"`
-	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
-	Amount       *big.Int        `json:"value"    gencodec:"required"`
-	Payload      []byte          `json:"input"    gencodec:"required"`
-
-	// Signature values
-	V *big.Int `json:"v" gencodec:"required"`
-	R *big.Int `json:"r" gencodec:"required"`
-	S *big.Int `json:"s" gencodec:"required"`
-
-	// This is only used when marshaling to JSON.
-	Hash *common.Hash `json:"hash" rlp:"-"`
-}
-
-type oriTxdataMarshaling struct {
-	AccountNonce hexutil.Uint64
-	Price        *hexutil.Big
-	GasLimit     hexutil.Uint64
-	Amount       *hexutil.Big
-	Payload      hexutil.Bytes
-	V            *hexutil.Big
-	R            *hexutil.Big
-	S            *hexutil.Big
-}
-
 type Transaction struct {
 	data txdata
 	// caches
 	hash atomic.Value
 	size atomic.Value
 	from atomic.Value
-}
-
-type ExtendTxData struct {
-	FuncName string
-	Params   KeyValueSet
 }
 
 type txdata struct {
@@ -104,7 +61,6 @@ type txdata struct {
 	Recipient    *common.Address `json:"to"       rlp:"nil"` // nil means contract creation
 	Amount       *big.Int        `json:"value"    gencodec:"required"`
 	Payload      []byte          `json:"input"    gencodec:"required"`
-	ExtendTxData *ExtendTxData
 
 	// Signature values
 	V *big.Int `json:"v" gencodec:"required"`
@@ -121,47 +77,13 @@ type txdataMarshaling struct {
 	GasLimit     hexutil.Uint64
 	Amount       *hexutil.Big
 	Payload      hexutil.Bytes
-	ExtendTxData *ExtendTxData `json:"extendTxData"`
 	V            *hexutil.Big
 	R            *hexutil.Big
 	S            *hexutil.Big
 }
 
-func OriToTransaction(oriTx *OriTransaction) *Transaction {
-
-	if oriTx == nil {
-		return nil
-	}
-
-	tx := &Transaction{
-		data: txdata{
-			AccountNonce: oriTx.data.AccountNonce,
-			Price:        oriTx.data.Price,
-			GasLimit:     oriTx.data.GasLimit,
-			Recipient:    oriTx.data.Recipient,
-			Amount:       oriTx.data.Amount,
-			Payload:      oriTx.data.Payload[:],
-			ExtendTxData: &ExtendTxData{},
-			V:            oriTx.data.V,
-			R:            oriTx.data.R,
-			S:            oriTx.data.S,
-			Hash:         oriTx.data.Hash,
-		},
-		hash: oriTx.hash,
-		size: oriTx.size,
-		from: oriTx.from,
-	}
-
-	return tx
-}
-
 func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
 	return newTransaction(nonce, &to, amount, gasLimit, gasPrice, data)
-}
-
-func NewTransactionEx(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte,
-	etd *ExtendTxData) *Transaction {
-	return newTransactionEx(nonce, to, amount, gasLimit, gasPrice, data, etd)
 }
 
 func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
@@ -176,35 +98,6 @@ func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit 
 		AccountNonce: nonce,
 		Recipient:    to,
 		Payload:      data,
-		ExtendTxData: new(ExtendTxData),
-		Amount:       new(big.Int),
-		GasLimit:     gasLimit,
-		Price:        new(big.Int),
-		V:            new(big.Int),
-		R:            new(big.Int),
-		S:            new(big.Int),
-	}
-	if amount != nil {
-		d.Amount.Set(amount)
-	}
-	if gasPrice != nil {
-		d.Price.Set(gasPrice)
-	}
-
-	return &Transaction{data: d}
-}
-
-func newTransactionEx(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte,
-	etd *ExtendTxData) *Transaction {
-
-	if len(data) > 0 {
-		data = common.CopyBytes(data)
-	}
-	d := txdata{
-		AccountNonce: nonce,
-		Recipient:    to,
-		Payload:      data,
-		ExtendTxData: etd,
 		Amount:       new(big.Int),
 		GasLimit:     gasLimit,
 		Price:        new(big.Int),
@@ -239,22 +132,6 @@ func isProtectedV(V *big.Int) bool {
 	}
 	// anything not 27 or 28 are considered unprotected
 	return true
-}
-
-// EncodeRLP implements rlp.Encoder
-func (tx *OriTransaction) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, &tx.data)
-}
-
-// DecodeRLP implements rlp.Decoder
-func (tx *OriTransaction) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	err := s.Decode(&tx.data)
-	if err == nil {
-		tx.size.Store(common.StorageSize(rlp.ListSize(size)))
-	}
-
-	return err
 }
 
 // EncodeRLP implements rlp.Encoder
@@ -301,13 +178,12 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-func (tx *Transaction) Data() []byte                { return common.CopyBytes(tx.data.Payload) }
-func (tx *Transaction) ExtendTxData() *ExtendTxData { return tx.data.ExtendTxData }
-func (tx *Transaction) Gas() uint64                 { return tx.data.GasLimit }
-func (tx *Transaction) GasPrice() *big.Int          { return new(big.Int).Set(tx.data.Price) }
-func (tx *Transaction) Value() *big.Int             { return new(big.Int).Set(tx.data.Amount) }
-func (tx *Transaction) Nonce() uint64               { return tx.data.AccountNonce }
-func (tx *Transaction) CheckNonce() bool            { return true }
+func (tx *Transaction) Data() []byte       { return common.CopyBytes(tx.data.Payload) }
+func (tx *Transaction) Gas() uint64        { return tx.data.GasLimit }
+func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Price) }
+func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
+func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
+func (tx *Transaction) CheckNonce() bool   { return true }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
@@ -432,7 +308,6 @@ func (tx *Transaction) String() string {
 		tx.data.GasLimit,
 		tx.data.Amount,
 		tx.data.Payload,
-		tx.data.ExtendTxData,
 		tx.data.V,
 		tx.data.R,
 		tx.data.S,
@@ -596,156 +471,3 @@ func (m Message) Gas() uint64          { return m.gasLimit }
 func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
-
-// Custom EncodeRLP for ExtendTxData
-func (e *ExtendTxData) EncodeRLP(w io.Writer) error {
-	sbyte, err := json.Marshal(e)
-	if err != nil {
-		return err
-	}
-	return rlp.Encode(w, sbyte)
-}
-
-// Custom DecodeRLP for ExtendTxData
-func (e *ExtendTxData) DecodeRLP(s *rlp.Stream) error {
-	kind, size, err := s.Kind()
-	if err != nil {
-		return err
-	}
-
-	if kind == rlp.String && size != 0 {
-		sbyte, err := s.Bytes()
-		if err != nil {
-			return err
-		}
-		err = json.Unmarshal(sbyte, e)
-	}
-	return err
-}
-
-func (e *ExtendTxData) GetString(key string) (string, error) {
-	v, err := e.Params.Get(key)
-	if err != nil {
-		return "", err
-	}
-
-	if vv, ok := v.(string); ok {
-		return vv, nil
-	} else {
-		return "", ErrExtendedDataWrongType
-	}
-}
-
-func (e *ExtendTxData) GetAddress(key string) (common.Address, error) {
-	v, err := e.Params.Get(key)
-	if err != nil {
-		return common.Address{}, err
-	}
-
-	switch vv := v.(type) {
-	case string:
-		return common.HexToAddress(vv), nil
-	case common.Address:
-		return vv, nil
-	default:
-		return common.Address{}, ErrExtendedDataWrongType
-	}
-}
-
-func (e *ExtendTxData) GetHash(key string) (common.Hash, error) {
-	v, err := e.Params.Get(key)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	switch vv := v.(type) {
-	case string:
-		return common.HexToHash(vv), nil
-	case common.Hash:
-		return vv, nil
-	default:
-		return common.Hash{}, ErrExtendedDataWrongType
-	}
-}
-
-func (e *ExtendTxData) GetBigInt(key string) (*big.Int, error) {
-	v, err := e.Params.Get(key)
-	if err != nil {
-		return nil, err
-	}
-
-	switch vv := v.(type) {
-	case string:
-		vvv, ok := new(big.Int).SetString(vv, 0)
-		if !ok {
-			return nil, errors.New("wrong type")
-		}
-		return vvv, nil
-	case *big.Int:
-		return vv, nil
-	case *hexutil.Big:
-		return (*big.Int)(vv), nil
-	default:
-		return nil, ErrExtendedDataWrongType
-	}
-}
-
-func (e *ExtendTxData) GetUInt64(key string) (uint64, error) {
-	v, err := e.Params.Get(key)
-	if err != nil {
-		return 0, err
-	}
-
-	switch vv := v.(type) {
-	case string:
-		var bs []byte
-		if vv[0] != '"' {
-			bs = make([]byte, 0, len(vv)+2)
-			bs = append(bs, '"')
-			bs = append(bs, []byte(vv)...)
-			bs = append(bs, '"')
-		} else {
-			bs = []byte(vv)
-		}
-		var vvv hexutil.Uint64
-		err := json.Unmarshal(bs, &vvv)
-		if err != nil {
-			return 0, err
-		}
-		return uint64(vvv), nil
-	case *hexutil.Uint64:
-		return uint64(*vv), nil
-	default:
-		return 0, ErrExtendedDataWrongType
-	}
-}
-
-func (e *ExtendTxData) GetUInt(key string) (uint, error) {
-	v, err := e.Params.Get(key)
-	if err != nil {
-		return 0, err
-	}
-
-	switch vv := v.(type) {
-	case string:
-		var bs []byte
-		if vv[0] != '"' {
-			bs = make([]byte, 0, len(vv)+2)
-			bs = append(bs, '"')
-			bs = append(bs, []byte(vv)...)
-			bs = append(bs, '"')
-		} else {
-			bs = []byte(vv)
-		}
-		var vvv hexutil.Uint
-		err := json.Unmarshal(bs, &vvv)
-		if err != nil {
-			return 0, err
-		}
-		return uint(vvv), nil
-	case *hexutil.Uint:
-		return uint(*vv), nil
-	default:
-		return 0, ErrExtendedDataWrongType
-	}
-}

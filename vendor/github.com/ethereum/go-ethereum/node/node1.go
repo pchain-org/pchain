@@ -3,6 +3,7 @@ package node
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"net/http"
@@ -171,7 +172,7 @@ func (n *Node) GetRPCHandler() (http.Handler, error) {
 			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
 				return nil, err
 			}
-			n.log.Info("HTTP registered %T under '%s'", api.Service, api.Namespace)
+			n.log.Debug("HTTP registered", "service", api.Service, "namespace", api.Namespace)
 		}
 	}
 
@@ -206,4 +207,8 @@ func (n *Node) startRPC1(services map[reflect.Type]Service) error {
 	}
 
 	return nil
+}
+
+func (n *Node) GetLogger() log.Logger {
+	return n.log
 }

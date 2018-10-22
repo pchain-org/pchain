@@ -6,6 +6,7 @@ import (
 
 	. "github.com/tendermint/go-common"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type RoundVoteSignAggr struct {
@@ -35,13 +36,15 @@ type HeightVoteSignAggr struct {
 	mtx			sync.Mutex
 	round			int                       // max tracked round
 	roundVoteSignAggrs	map[int]*RoundVoteSignAggr // keys: [0...round]
+	logger log.Logger
 
 	// peerCatchupRounds	map[string][]int          // keys: peer.Key; values: at most 2 rounds
 }
 
-func NewHeightVoteSignAggr(chainID string, height uint64, valSet *types.ValidatorSet) *HeightVoteSignAggr {
+func NewHeightVoteSignAggr(chainID string, height uint64, valSet *types.ValidatorSet, logger log.Logger) *HeightVoteSignAggr {
 	hvs := &HeightVoteSignAggr{
 		chainID: chainID,
+		logger: logger,
 	}
 	hvs.Reset(height, valSet)
 	return hvs
@@ -92,7 +95,7 @@ func (hvs *HeightVoteSignAggr) addRound(round int) {
 	if _, ok := hvs.roundVoteSignAggrs[round]; ok {
 		PanicSanity("addRound() for an existing round")
 	}
-	logger.Debug("addRound(round)", " round:", round)
+	hvs.logger.Debug("addRound(round)", " round:", round)
 
 	hvs.roundVoteSignAggrs[round] = &RoundVoteSignAggr{
 		Prevotes:   nil,
@@ -110,7 +113,7 @@ func (hvs *HeightVoteSignAggr) AddSignAggr(signAggr *types.SignAggr) (added bool
 	existing := hvs.getSignAggr(signAggr.Round, signAggr.Type)
 
 	if existing != nil {
-		logger.Warn("Found existing signature aggregation for (height %v round %v type %v)", signAggr.Height, signAggr.Round, signAggr.Type)
+		hvs.logger.Warn("Found existing signature aggregation for (height %v round %v type %v)", signAggr.Height, signAggr.Round, signAggr.Type)
 		return false, nil
 
 	}
@@ -126,7 +129,7 @@ func (hvs *HeightVoteSignAggr) AddSignAggr(signAggr *types.SignAggr) (added bool
 	} else if signAggr.Type == types.VoteTypePrecommit {
 		rvs.Precommits = signAggr
 	} else {
-		logger.Warn("Invalid signature aggregation for (height %v round %v type %v)", signAggr.Height, signAggr.Round, signAggr.Type)
+		hvs.logger.Warn("Invalid signature aggregation for (height %v round %v type %v)", signAggr.Height, signAggr.Round, signAggr.Type)
 		return false, nil
 	}
 

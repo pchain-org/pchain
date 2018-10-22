@@ -1,11 +1,15 @@
 package state
 
 import (
-	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	"github.com/pkg/errors"
-	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	. "github.com/tendermint/go-common"
+	"errors"
+	"github.com/ethereum/go-ethereum/consensus"
+
+	//"fmt"
+
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/core"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 //--------------------------------------------------
@@ -56,34 +60,40 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 }
 
 //-----------------------------------------------------------------------------
-// ApplyBlock applies the epoch infor from last block
-func (s *State) ApplyBlock(block *ethTypes.Block, epoch *ep.Epoch) *ep.Epoch {
 
+func init() {
+	core.RegisterInsertBlockCb("UpdateLocalEpoch", updateLocalEpoch)
+}
+
+func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 	if block.NumberU64() == 0 {
-		return epoch
+		return
 	}
 
 	tdmExtra, _ := types.ExtractTendermintExtra(block.Header())
 	//here handles the proposed next epoch
-	nextEpochInBlock := ep.FromBytes(tdmExtra.EpochBytes)
-	if nextEpochInBlock != nil {
-		epoch.SetNextEpoch(nextEpochInBlock)
-		epoch.NextEpoch.RS = s.Epoch.RS
-		epoch.NextEpoch.Status = ep.EPOCH_VOTED_NOT_SAVED
-		epoch.Save()
-	}
+	epochInBlock := ep.FromBytes(tdmExtra.EpochBytes)
 
-	//here handles if need to enter next epoch
-	ok, err := epoch.ShouldEnterNewEpoch(tdmExtra.Height)
-	if ok && err == nil {
-		// now update the block and validators
-		epoch, _, _ := epoch.EnterNewEpoch(tdmExtra.Height)
-		epoch.Save()
-	} else if err != nil {
-		logger.Error(Fmt("ApplyBlock(%v): Invalid epoch. Current epoch: %v, error: %v",
-			tdmExtra.Height, s.Epoch, err))
-		return nil
-	}
+	eng := bc.Engine().(consensus.Tendermint)
+	currentEpoch := eng.GetEpoch()
 
-	return epoch
+	if epochInBlock != nil {
+		if epochInBlock.Number == currentEpoch.Number+1 {
+			// Save the next epoch
+			epochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
+			epochInBlock.SetRewardScheme(currentEpoch.GetRewardScheme())
+			epochInBlock.SetEpochValidatorVoteSet(ep.NewEpochValidatorVoteSet())
+			currentEpoch.SetNextEpoch(epochInBlock)
+			currentEpoch.Save()
+		} else if epochInBlock.Number == currentEpoch.Number {
+			// Update the current epoch Start Time from proposer
+			currentEpoch.StartTime = epochInBlock.StartTime
+			currentEpoch.Save()
+
+			// Update the previous epoch End Time
+			if currentEpoch.Number > 0 {
+				ep.UpdateEpochEndTime(currentEpoch.GetDB(), currentEpoch.Number-1, epochInBlock.StartTime)
+			}
+		}
+	}
 }

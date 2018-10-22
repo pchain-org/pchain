@@ -32,7 +32,7 @@ type CoreChainInfo struct {
 	JoinedValidators []JoinedValidator
 
 	//validators - for stable phase; should be Epoch information
-	EpochNumber int
+	EpochNumber uint64
 
 	//the statitics for balance in & out
 	//depositInMainChain >= depositInChildChain
@@ -70,7 +70,7 @@ func calcCoreChainInfoKey(chainId string) []byte {
 	return []byte(chainInfoKey + ":" + chainId)
 }
 
-func calcEpochKey(number int, chainId string) []byte {
+func calcEpochKey(number uint64, chainId string) []byte {
 	return []byte(chainInfoKey + fmt.Sprintf("-%v-%s", number, chainId))
 }
 
@@ -150,7 +150,7 @@ func (cci *CoreChainInfo) TotalDeposit() *big.Int {
 	return sum
 }
 
-func loadEpoch(db dbm.DB, number int, chainId string) *ep.Epoch {
+func loadEpoch(db dbm.DB, number uint64, chainId string) *ep.Epoch {
 
 	mtx.Lock()
 	defer mtx.Unlock()
@@ -312,7 +312,7 @@ func DeletePendingChildChainData(db dbm.DB, chainId string) {
 }
 
 // GetChildChainForLaunch get the child chain for pending db for launch
-func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) []string {
+func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) (readyForLaunch []string, newPendingIdxBytes []byte, deleteChildChainIds []string) {
 	pendingChainMtx.Lock()
 	defer pendingChainMtx.Unlock()
 
@@ -324,11 +324,10 @@ func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) 
 	}
 
 	if len(idx) == 0 {
-		return nil
+		return
 	}
 
 	newPendingIdx := idx[:0]
-	readyForLaunch := make([]string, 0)
 
 	for _, v := range idx {
 		if v.Start.Cmp(height) > 0 {
@@ -342,8 +341,9 @@ func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) 
 				stateDB.AddBalance(jv.Address, jv.DepositAmount)
 			}
 
-			// remove it
-			db.DeleteSync(calcPendingChainInfoKey(v.ChainID))
+			// Add the Child Chain Id to Remove List, to be removed after the consensus
+			deleteChildChainIds = append(deleteChildChainIds, v.ChainID)
+			//db.DeleteSync(calcPendingChainInfoKey(v.ChainID))
 		} else {
 			// check condition
 			cci := GetPendingChildChainData(db, v.ChainID)
@@ -362,10 +362,26 @@ func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) 
 	}
 
 	if len(newPendingIdx) != len(idx) {
-		// Update the Pending Idx
-		db.SetSync(pendingChainIndexKey, wire.BinaryBytes(newPendingIdx))
+		// Set the Bytes to Update the Pending Idx
+		newPendingIdxBytes = wire.BinaryBytes(newPendingIdx)
+		//db.SetSync(pendingChainIndexKey, wire.BinaryBytes(newPendingIdx))
 	}
 
 	// Return the ready for launch Child Chain
-	return readyForLaunch
+	return
+}
+
+func ProcessPostPendingData(db dbm.DB, newPendingIdxBytes []byte, deleteChildChainIds []string) {
+	pendingChainMtx.Lock()
+	defer pendingChainMtx.Unlock()
+
+	// Remove the Child Chain
+	for _, id := range deleteChildChainIds {
+		db.DeleteSync(calcPendingChainInfoKey(id))
+	}
+
+	// Update the Idx Bytes
+	if newPendingIdxBytes != nil {
+		db.SetSync(pendingChainIndexKey, newPendingIdxBytes)
+	}
 }

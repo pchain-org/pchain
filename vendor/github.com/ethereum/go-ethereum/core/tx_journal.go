@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	pabi "github.com/pchain/abi"
 )
 
 // errNoActiveJournal is returned if a transaction is attempted to be inserted
@@ -88,8 +89,7 @@ func (journal *txJournal) load(add func(*types.Transaction) error) error {
 		}
 		// TODO: make our own tx to work.
 		// can't pass custom validate logic since Ethereum is still initializing.
-		etd := tx.ExtendTxData()
-		if etd != nil {
+		if pabi.IsPChainContractAddr(tx.To()) {
 			continue
 		}
 		// Import the transaction and bump the appropriate progress counters

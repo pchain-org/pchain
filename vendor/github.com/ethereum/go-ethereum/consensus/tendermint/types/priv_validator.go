@@ -15,6 +15,8 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
+	"bls"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
@@ -42,6 +44,9 @@ type PrivValidator struct {
 
 	// PrivKey should be empty if a Signer other than the default is being used.
 	PrivKey crypto.PrivKey `json:"priv_key"`
+	EthereumPubKey  crypto.PubKey `json:"ethereum_pub_key"`
+	EthereumPrivKey crypto.PrivKey `json:"ethereum_priv_key"`
+	EthereumAddress []byte         `json:"ethereum_address"`
 	Signer  `json:"-"`
 
 	// For persistence.
@@ -87,14 +92,28 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 	}
 	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
 	privKey := crypto.EthereumPrivKey(ethcrypto.FromECDSA(newKey.PrivateKey))
-	return &PrivValidator{
-		Address:  pubKey.Address(),
-		PubKey:   pubKey,
-		PrivKey:  privKey,
-		filePath: "",
-		Signer:   NewDefaultSigner(privKey),
-	}, newKey
 
+
+	keyPair := bls.GenerateKey()
+	blsPrivKey := crypto.BLSPrivKey(keyPair.Private().Marshal())
+	blsPubKey := blsPrivKey.PubKey()
+	fmt.Println(common.ToHex(blsPrivKey.Bytes()))
+	fmt.Println(common.ToHex(blsPrivKey.PubKey().Bytes()))
+	msg := "hello world"
+	sign := blsPrivKey.Sign([]byte(msg))
+	fmt.Println("verify:", blsPrivKey.PubKey().VerifyBytes([]byte(msg), sign))
+	fmt.Println(common.ToHex(blsPrivKey.PubKey().Bytes()))
+	return &PrivValidator{
+		Address:       blsPubKey.Address(),
+		PubKey:        blsPubKey,
+		PrivKey:       blsPrivKey,
+		EthereumAddress:    pubKey.Address(),
+		EthereumPrivKey:    privKey,
+		EthereumPubKey:     pubKey,
+
+		filePath: "",
+		Signer:   NewDefaultSigner(blsPrivKey),
+	}, newKey
 }
 
 // Generates a new validator with private key.
@@ -108,18 +127,32 @@ func GenPrivValidator(keydir string) *PrivValidator {
 		return nil
 	}
 	a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
-	if err := ks.StoreKey(a.URL.Path, newKey, ""); err != nil {
+	if err := ks.StoreKey(a.URL.Path, newKey, "pchain"); err != nil {
 		return nil
 	}
 	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
 	privKey := crypto.EthereumPrivKey(ethcrypto.FromECDSA(newKey.PrivateKey))
-	fmt.Println(len(privKey), len(pubKey), len(pubKey.Address()))
+
+
+	keyPair := bls.GenerateKey()
+	blsPrivKey := crypto.BLSPrivKey(keyPair.Private().Marshal())
+	blsPubKey := blsPrivKey.PubKey()
+	fmt.Println(common.ToHex(blsPrivKey.Bytes()))
+	fmt.Println(common.ToHex(blsPrivKey.PubKey().Bytes()))
+	msg := "hello world"
+	sign := blsPrivKey.Sign([]byte(msg))
+	fmt.Println("verify:", blsPrivKey.PubKey().VerifyBytes([]byte(msg), sign))
+	fmt.Println(common.ToHex(blsPrivKey.PubKey().Bytes()))
 	return &PrivValidator{
-		Address:  pubKey.Address(),
-		PubKey:   pubKey,
-		PrivKey:  privKey,
+		Address:       blsPubKey.Address(),
+		PubKey:        blsPubKey,
+		PrivKey:       blsPrivKey,
+		EthereumAddress:    pubKey.Address(),
+		EthereumPrivKey:    privKey,
+		EthereumPubKey:     pubKey,
+
 		filePath: "",
-		Signer:   NewDefaultSigner(privKey),
+		Signer:   NewDefaultSigner(blsPrivKey),
 	}
 }
 
@@ -141,12 +174,12 @@ func LoadOrGenPrivValidator(filePath, keydir string) *PrivValidator {
 	var privValidator *PrivValidator
 	if _, err := os.Stat(filePath); err == nil {
 		privValidator = LoadPrivValidator(filePath)
-		logger.Infoln("Loaded PrivValidator", "file", filePath, "privValidator", privValidator)
+		//logger.Infoln("Loaded PrivValidator", "file", filePath, "privValidator", privValidator)
 	} else {
 		privValidator = GenPrivValidator(keydir)
 		privValidator.SetFile(filePath)
 		privValidator.Save()
-		logger.Infoln("Generated PrivValidator", "file", filePath)
+		//logger.Infoln("Generated PrivValidator", "file", filePath)
 	}
 	return privValidator
 }
@@ -221,14 +254,4 @@ func (pvs PrivValidatorsByAddress) Swap(i, j int) {
 	it := pvs[i]
 	pvs[i] = pvs[j]
 	pvs[j] = it
-}
-
-//---------------------
-//author@liaoyd
-func (privVal *PrivValidator) SignValidatorMsg(chainID string, msg *ValidatorMsg) error {
-	privVal.mtx.Lock()
-	defer privVal.mtx.Unlock()
-	signature := privVal.Sign(SignBytes(chainID, msg))
-	msg.Signature = signature
-	return nil
 }

@@ -5,12 +5,18 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/pchain/chain"
-	"github.com/pchain/common/plogger"
 	"github.com/pchain/version"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/urfave/cli.v1"
 	"os"
 	"path/filepath"
+	"runtime"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/metrics"
+	"time"
+	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/bridge"
+	"path"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func main() {
@@ -58,23 +64,37 @@ func main() {
 	cliApp.HideVersion = true // we have a command to print the version
 
 	cliApp.Before = func(ctx *cli.Context) error {
+
 		// Log Folder
-		logFolderFlag := ctx.GlobalString(chain.LogDirFlag.Name)
-		plogger.SetLogFolder(logFolderFlag)
+		logFolderFlag := ctx.GlobalString(LogDirFlag.Name)
 
-		// Log Level
-		logLevelFlag := ctx.GlobalString(chain.LogLevelFlag.Name)
-		logLevel, err := logrus.ParseLevel(logLevelFlag)
-		if err != nil {
-			fmt.Println("unknown log level, default level should be info")
-			return err
-		}
-		plogger.SetVerbosity(logLevel)
-
-		plogger.InitLogWriter()
+		// Setup the Global Logger
+		commonLogDir := path.Join(logFolderFlag, "common")
+		log.NewLogger("", commonLogDir, ctx.GlobalInt(verbosityFlag.Name), ctx.GlobalBool(debugFlag.Name), ctx.GlobalString(vmoduleFlag.Name), ctx.GlobalString(backtraceAtFlag.Name))
 
 		// Tendermint Config
 		chain.Config = chain.GetTendermintConfig(chain.MainChain, ctx)
+
+		runtime.GOMAXPROCS(runtime.NumCPU())
+
+		logdir := ""
+		if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
+			logdir = (&node.Config{DataDir: utils.MakeDataDir(ctx)}).ResolvePath("logs")
+		}
+		if err := bridge.Debug_Setup(ctx, logdir); err != nil {
+			return err
+		}
+
+		// Start system runtime metrics collection
+		go metrics.CollectProcessMetrics(3 * time.Second)
+
+		utils.SetupNetwork(ctx)
+		return nil
+	}
+
+	cliApp.After = func(ctx *cli.Context) error {
+		bridge.Debug_Exit()
+		console.Stdin.Close() // Resets terminal mode.
 		return nil
 	}
 
@@ -99,7 +119,7 @@ func newCliApp(version, usage string) *cli.App {
 		utils.BootnodesFlag,
 		utils.BootnodesV4Flag,
 		utils.BootnodesV5Flag,
-		//utils.DataDirFlag,
+		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
 		utils.NoUSBFlag,
 		utils.DashboardEnabledFlag,
@@ -183,20 +203,21 @@ func newCliApp(version, usage string) *cli.App {
 		utils.WhisperMaxMessageSizeFlag,
 		utils.WhisperMinPOWFlag,
 
-		chain.LogLevelFlag,
-		chain.LogDirFlag,
-		chain.DataDirFlag, // so we control defaults
+		utils.PerfTestFlag,
 
-		//ethermint flags
-		chain.MonikerFlag,
-		chain.NodeLaddrFlag,
-		chain.SeedsFlag,
-		chain.FastSyncFlag,
-		chain.SkipUpnpFlag,
-		chain.RpcLaddrFlag,
-		chain.AddrFlag,
-		chain.AbciFlag,
+		LogDirFlag,
+
+		//Tendermint flags
+		MonikerFlag,
+		NodeLaddrFlag,
+		SeedsFlag,
+		FastSyncFlag,
+		SkipUpnpFlag,
+		RpcLaddrFlag,
+		AddrFlag,
 	}
+	app.Flags = append(app.Flags, DebugFlags...)
+
 	return app
 }
 

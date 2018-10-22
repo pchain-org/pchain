@@ -33,8 +33,6 @@ type OneEpochDoc struct {
 	RewardPerBlock string             `json:"reward_per_block"`
 	StartBlock     string             `json:"start_block"`
 	EndBlock       string             `json:"end_block"`
-	StartTime      string             `json:"start_time"`
-	EndTime        string             `json:"end_time"`
 	BlockGenerated string             `json:"block_generated"`
 	Status         string             `json:"status"`
 	Validators     []GenesisValidator `json:"validators"`

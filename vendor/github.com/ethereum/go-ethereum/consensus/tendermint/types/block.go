@@ -23,12 +23,13 @@ type TdmBlock struct {
 }
 
 func MakeBlock(height uint64, chainID string, commit *Commit,
-	block *types.Block, valHash []byte, epochBytes []byte, partSize int) (*TdmBlock, *PartSet) {
+	block *types.Block, valHash []byte, epochNumber uint64, epochBytes []byte, partSize int) (*TdmBlock, *PartSet) {
 
 	TdmExtra := &TendermintExtra{
 		ChainID:        chainID,
 		Height:         uint64(height),
 		Time:           time.Now(),
+		EpochNumber:    epochNumber,
 		ValidatorsHash: valHash,
 		SeenCommit:     commit,
 		EpochBytes:     epochBytes,
@@ -241,12 +242,6 @@ func (commit *Commit) ValidateBasic() error {
 
 func (commit *Commit) Hash() []byte {
 	if commit.hash == nil {
-/*
-		bs := make([]interface{}, len(commit.Precommits))
-		for i, precommit := range commit.Precommits {
-			bs[i] = precommit
-		}
-*/
 		hash := merkle.SimpleHashFromBinary(*commit)
 		commit.hash = hash
 	}
@@ -275,7 +270,7 @@ func (commit *Commit) StringIndented(indent string) string {
 //--------------------------------------------------------------------------------
 
 type BlockID struct {
-	Hash        []byte       `json:"hash"`
+	Hash        []byte        `json:"hash"`
 	PartsHeader PartSetHeader `json:"parts"`
 }
 

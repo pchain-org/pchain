@@ -2,8 +2,8 @@ package state
 
 import (
 	"bytes"
+	"github.com/ethereum/go-ethereum/log"
 	"io/ioutil"
-	//"sync"
 	"time"
 
 	. "github.com/tendermint/go-common"
@@ -32,15 +32,15 @@ type State struct {
 	//db  dbm.DB
 
 	// should not change
-	GenesisDoc *types.GenesisDoc
+	//GenesisDoc *types.GenesisDoc
 
 	/*
-	ChainID    string
-	Height     uint64 // Genesis state has this set to 0.  So, Block(H=0) does not exist.
-	Time       time.Time
-	BlockID    types.BlockID
-	NeedToSave 	bool //record the number of the block which should be saved to main chain
-	EpochNumber	uint64
+		ChainID    string
+		Height     uint64 // Genesis state has this set to 0.  So, Block(H=0) does not exist.
+		Time       time.Time
+		BlockID    types.BlockID
+		NeedToSave 	bool //record the number of the block which should be saved to main chain
+		EpochNumber	uint64
 	*/
 	TdmExtra *types.TendermintExtra
 
@@ -56,7 +56,14 @@ type State struct {
 	// Intermediate results from processing
 	// Persisted separately from the state
 	//abciResponses *ABCIResponses
+
+	logger log.Logger
 }
+
+func NewState(logger log.Logger) *State {
+	return &State{logger: logger}
+}
+
 /*
 func LoadState(stateDB dbm.DB) *State {
 	state := loadState(stateDB, stateKey)
@@ -87,23 +94,25 @@ func (s *State) Copy() *State {
 
 	return &State{
 		//db:              s.db,
-		GenesisDoc:      s.GenesisDoc,
+		//GenesisDoc: s.GenesisDoc,
 		/*
-		ChainID:         s.ChainID,
-		Height:			 s.Height,
-		BlockID:         s.BlockID,
-		Time: 		     s.Time,
-		EpochNumber:     s.EpochNumber,
-		NeedToSave:      s.NeedToSave,
+			ChainID:         s.ChainID,
+			Height:			 s.Height,
+			BlockID:         s.BlockID,
+			Time: 		     s.Time,
+			EpochNumber:     s.EpochNumber,
+			NeedToSave:      s.NeedToSave,
 		*/
-		TdmExtra:        s.TdmExtra.Copy(),
-		Epoch:           s.Epoch.Copy(),
+		TdmExtra: s.TdmExtra.Copy(),
+		Epoch:    s.Epoch.Copy(),
 		//Validators:      s.Validators.Copy(),
 		//LastValidators:  s.LastValidators.Copy(),
 		//AppHash:         s.AppHash,
 		//TxIndexer:       s.TxIndexer, // pointer here, not value
+		logger: s.logger,
 	}
 }
+
 /*
 func (s *State) Save() {
 	s.mtx.Lock()
@@ -132,8 +141,8 @@ func (s *State) GetValidators() (*types.ValidatorSet, *types.ValidatorSet, error
 
 	if s.TdmExtra.EpochNumber == uint64(s.Epoch.Number) {
 		return s.Epoch.Validators, s.Epoch.Validators, nil
-	} else if s.TdmExtra.EpochNumber == uint64(s.Epoch.Number - 1) {
-		return s.Epoch.PreviousEpoch.Validators, s.Epoch.Validators, nil
+	} else if s.TdmExtra.EpochNumber == uint64(s.Epoch.Number-1) {
+		return s.Epoch.GetPreviousEpoch().Validators, s.Epoch.Validators, nil
 	}
 
 	return nil, nil, errors.New("epoch information error")
@@ -145,7 +154,7 @@ func (s *State) GetValidators() (*types.ValidatorSet, *types.ValidatorSet, error
 // MakeGenesisStateFromFile reads and unmarshals state from the given file.
 //
 // Used during replay and in tests.
-func MakeGenesisStateFromFile(/*db dbm.DB, */genDocFile string) *State {
+func MakeGenesisStateFromFile( /*db dbm.DB, */ genDocFile string) *State {
 	genDocJSON, err := ioutil.ReadFile(genDocFile)
 	if err != nil {
 		Exit(Fmt("Couldn't read GenesisDoc file: %v", err))
@@ -154,42 +163,42 @@ func MakeGenesisStateFromFile(/*db dbm.DB, */genDocFile string) *State {
 	if err != nil {
 		Exit(Fmt("Error reading GenesisDoc: %v", err))
 	}
-	return MakeGenesisState(/*db, */genDoc)
+	return MakeGenesisState( /*db, */ genDoc.ChainID, nil)
 }
 
 // MakeGenesisState creates state from types.GenesisDoc.
 //
 // Used in tests.
-func MakeGenesisState(/*db dbm.DB, */genDoc *types.GenesisDoc) *State {
-	if len(genDoc.CurrentEpoch.Validators) == 0 {
-		Exit(Fmt("The genesis file has no validators"))
-	}
-
-	if genDoc.GenesisTime.IsZero() {
-		genDoc.GenesisTime = time.Now()
-	}
+func MakeGenesisState( /*db dbm.DB,  genDoc *types.GenesisDoc,*/ chainID string, logger log.Logger) *State {
+	//if len(genDoc.CurrentEpoch.Validators) == 0 {
+	//	Exit(Fmt("The genesis file has no validators"))
+	//}
+	//
+	//if genDoc.GenesisTime.IsZero() {
+	//	genDoc.GenesisTime = time.Now()
+	//}
 
 	// Make validators slice
-	validators := make([]*types.Validator, len(genDoc.CurrentEpoch.Validators))
-	for i, val := range genDoc.CurrentEpoch.Validators {
-		pubKey := val.PubKey
-		address := pubKey.Address()
-
-		// Make validator
-		validators[i] = &types.Validator{
-			Address:     address,
-			PubKey:      pubKey,
-			VotingPower: val.Amount,
-		}
-	}
+	//validators := make([]*types.Validator, len(genDoc.CurrentEpoch.Validators))
+	//for i, val := range genDoc.CurrentEpoch.Validators {
+	//	pubKey := val.PubKey
+	//	address := pubKey.Address()
+	//
+	//	// Make validator
+	//	validators[i] = &types.Validator{
+	//		Address:     address,
+	//		PubKey:      pubKey,
+	//		VotingPower: val.Amount,
+	//	}
+	//}
 
 	return &State{
 		//db:              db,
-		GenesisDoc:      genDoc,
-		TdmExtra:        &types.TendermintExtra{
-			ChainID:     genDoc.ChainID,
+		//GenesisDoc: genDoc,
+		TdmExtra: &types.TendermintExtra{
+			ChainID:     chainID,
 			Height:      0,
-			Time:        genDoc.GenesisTime,
+			Time:        time.Now(),
 			EpochNumber: 0,
 			NeedToSave:  false,
 		},
@@ -197,6 +206,7 @@ func MakeGenesisState(/*db dbm.DB, */genDoc *types.GenesisDoc) *State {
 		//LastValidators:  types.NewValidatorSet(nil),
 		//AppHash:         genDoc.AppHash,
 		//TxIndexer:       &null.TxIndex{}, // we do not need indexer during replay and in tests
+		logger: logger,
 	}
 }
 

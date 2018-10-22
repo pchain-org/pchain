@@ -114,7 +114,7 @@ func newPeerFromConnAndConfig(rawConn net.Conn, outbound bool, switchChainRouter
 
 	p.mconn = createMConnection(conn, p, switchChainRouter, onPeerError, config.MConfig)
 
-	p.BaseService = *cmn.NewBaseService(logger, "Peer", p)
+	p.BaseService = *cmn.NewBaseService(log.Root(), "Peer", p)
 
 	return p, nil
 }
@@ -155,7 +155,7 @@ func (p *Peer) HandshakeTimeout(ourNodeInfo *NodeInfo, timeout time.Duration) er
 		func() {
 			var n int
 			wire.ReadBinary(peerNodeInfo, p.conn, maxNodeInfoSize, &n, &err2)
-			logger.Info("Peer handshake", " peerNodeInfo:", peerNodeInfo)
+			log.Info("Peer handshake", " peerNodeInfo:", peerNodeInfo)
 		})
 	if err1 != nil {
 		return errors.Wrap(err1, "Error during handshake/write")
@@ -193,9 +193,10 @@ func (p *Peer) Addr() net.Addr {
 	return p.conn.RemoteAddr()
 }
 
-// Returns the peer's IP address and port.
-func (p *Peer) PeerNetAddr() string {
-	return p.ListenAddr
+// Key returns the peer's id key.
+func (p *Peer) PeerKey() string {
+	//	return p.nodeInfo.ListenAddr // XXX: should probably be PubKey.KeyString()
+	return p.ListenAddr // XXX: should probably be PubKey.KeyString()
 }
 
 // PubKey returns peer's public key.
@@ -285,11 +286,6 @@ func (p *Peer) Equals(other *Peer) bool {
 // Get the data for a given key.
 func (p *Peer) Get(key string) interface{} {
 	return p.Data.Get(key)
-}
-
-// Key returns the peer's id key.
-func (p *Peer) PeerKey() string {
-	return p.Key
 }
 
 // IsInTheSameNetwork Check the Peer if it's in the same chain

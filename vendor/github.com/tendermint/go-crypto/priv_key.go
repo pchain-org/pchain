@@ -212,7 +212,10 @@ func (privKey EthereumPrivKey) Bytes() []byte {
 }
 
 func (privKey EthereumPrivKey) Sign(msg []byte) Signature {
-	priv,err := ethcrypto.ToECDSA(privKey)
+	priv, err := ethcrypto.ToECDSA(privKey)
+	if err != nil {
+		return nil
+	}
 	msg = ethcrypto.Keccak256(msg)
 	sig, err := ethcrypto.Sign(msg, priv)
 	if err != nil {
@@ -222,11 +225,11 @@ func (privKey EthereumPrivKey) Sign(msg []byte) Signature {
 }
 
 func (privKey EthereumPrivKey) PubKey() PubKey {
-	priv,err := ethcrypto.ToECDSA(privKey)
-	pubKey := ethcrypto.FromECDSAPub(&priv.PublicKey)
+	priv, err := ethcrypto.ToECDSA(privKey)
 	if err != nil {
-		return nil
+		panic(err)
 	}
+	pubKey := ethcrypto.FromECDSAPub(&priv.PublicKey)
 	return EthereumPubKey(pubKey)
 }
 
@@ -284,6 +287,84 @@ func GenPrivKeySecp256k1FromSecret(secret []byte) PrivKeySecp256k1 {
 
 
 //-------------------------------------
+// Implements PrivKey
+/*
+func init() {
+	paramsString := "type a\n"+
+		"q 6810019449936382487924444340676335792486684152989565749316517380074446105713919870191983352817997578314362713972330796409852501768474201988787261287855671\n"+
+		"h 9319208786345675094887650862530830862537242472377645595444311486184402577395907493359426358133397009566152\n"+
+		"r 730750818665452757176057050065048642452048576511\n"+
+		"exp2 159\n"+
+		"exp1 110\n"+
+		"sign1 1\n"+
+		"sign0 -1\n"
+	gString := "0x22a80aa68ea4a9777a7417bd3e9508a6f9f4fe1d6b2c729e04cbdcf85f44e84be91edc6ee1fd10567cd784d0afc2b23ae14ec363ca300113b8b0553d399997942bdb71a1366b807ffa573eccb7d26ef61bf022d7d24a19a14ac605e092cea37cb5b59804e2d7aa9db9bf572904142c0652883c6d300a1c02dc6c4fdf4ca44585"
+	pairing_, pair_err := pbc.NewPairingFromString(paramsString)
+	if pair_err != nil {
+
+	}
+	g_ := pairing_.NewG2().SetBytes(common.FromHex(gString))
+	pairing = pairing_
+	g = g_
+}
+
+var pairing *pbc.Pairing
+var g *pbc.Element
+
+func Pairing() *pbc.Pairing {
+	return pairing
+}
+
+type BLSPrivKey []byte
+
+func CreateBLSPrivKey() BLSPrivKey {
+	privKey := pairing.NewZr().Rand()
+	return privKey.Bytes()
+}
+
+func (privKey BLSPrivKey) Bytes() []byte {
+	return privKey
+}
+
+
+func (privKey BLSPrivKey) getElement() *pbc.Element {
+	return pairing.NewZr().SetBytes(privKey)
+}
+
+func (privKey BLSPrivKey) GetElement() *pbc.Element {
+	return pairing.NewZr().SetBytes(privKey)
+}
+
+func (privKey BLSPrivKey) PubKey() PubKey {
+	pubKey := pairing.NewG2().PowZn(g, privKey.getElement())
+	return BLSPubKey(pubKey.Bytes())
+}
+
+func (privKey BLSPrivKey) Sign(msg []byte) Signature {
+	h := pairing.NewG1().SetFromStringHash(string(msg), sha256.New())
+	signature := pairing.NewG2().PowZn(h, privKey.getElement())
+	return BLSSignature(signature.Bytes())
+}
+
+func (privKey BLSPrivKey) Equals(other PrivKey) bool {
+	if otherKey,ok := other.(BLSPrivKey); ok {
+		return privKey.getElement().Equals(otherKey.getElement())
+	} else {
+		return false
+	}
+}
+
+func (privKey BLSPrivKey) MarshalJSON() ([]byte, error) {
+	return data.Encoder.Marshal(privKey)
+}
+
+func (privKey *BLSPrivKey) UnmarshalJSON(enc []byte) error {
+	var ref []byte
+	err := data.Encoder.Unmarshal(&ref, enc)
+	copy(*privKey, ref)
+	return err
+}*/
+
 type BLSPrivKey []byte
 func (privKey BLSPrivKey) Bytes() []byte {
 	return privKey

@@ -61,19 +61,21 @@ type Miner struct {
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
 
-	cch core.CrossChainHelper
+	logger log.Logger
+	cch    core.CrossChainHelper
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, cch core.CrossChainHelper) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, cch core.CrossChainHelper, logger log.Logger) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
-		worker:   newWorker(config, engine, common.Address{}, eth, mux, cch),
+		worker:   newWorker(config, engine, common.Address{}, eth, mux, cch, logger),
 		canStart: 1,
+		logger:   logger,
 		cch:      cch,
 	}
-	miner.Register(NewCpuAgent(eth.BlockChain(), engine))
+	miner.Register(NewCpuAgent(eth.BlockChain(), engine, logger))
 	go miner.update()
 
 	return miner
@@ -94,7 +96,7 @@ out:
 			if self.Mining() {
 				self.Stop()
 				atomic.StoreInt32(&self.shouldStart, 1)
-				log.Info("Mining aborted due to sync")
+				self.logger.Info("Mining aborted due to sync")
 			}
 		case downloader.DoneEvent, downloader.FailedEvent:
 
@@ -119,12 +121,12 @@ func (self *Miner) Start(coinbase common.Address) {
 	self.SetEtherbase(coinbase)
 
 	if atomic.LoadInt32(&self.canStart) == 0 {
-		log.Info("Network syncing, will start miner afterwards")
+		self.logger.Info("Network syncing, will start miner afterwards")
 		return
 	}
 	atomic.StoreInt32(&self.mining, 1)
 
-	log.Info("Starting mining operation")
+	self.logger.Info("Starting mining operation")
 	self.worker.start()
 	self.worker.commitNewWork()
 }

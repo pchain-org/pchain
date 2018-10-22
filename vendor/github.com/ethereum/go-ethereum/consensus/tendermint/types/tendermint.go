@@ -2,8 +2,8 @@ package types
 
 import (
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/tendermint/go-merkle"
+	"github.com/tendermint/go-wire"
 	"time"
 )
 
@@ -68,13 +68,14 @@ func (te *TendermintExtra) Hash() []byte {
 		return nil
 	}
 	return merkle.SimpleHashFromMap(map[string]interface{}{
-		"ChainID":    te.ChainID,
-		"Height":     te.Height,
-		"Time":       te.Time,
-		"SeenCommit": te.SeenCommitHash,
-		"Validators": te.ValidatorsHash,
-		"NeedToSave": te.NeedToSave,
-		"EpochBytes": te.EpochBytes,
+		"ChainID":     te.ChainID,
+		"Height":      te.Height,
+		"Time":        te.Time,
+		"NeedToSave":  te.NeedToSave,
+		"EpochNumber": te.EpochNumber,
+		"SeenCommit":  te.SeenCommitHash,
+		"Validators":  te.ValidatorsHash,
+		"EpochBytes":  te.EpochBytes,
 	})
 }
 
@@ -88,7 +89,8 @@ func ExtractTendermintExtra(h *ethTypes.Header) (*TendermintExtra, error) {
 	}
 
 	var tdmExtra = TendermintExtra{}
-	err := rlp.DecodeBytes(h.Extra[:], &tdmExtra)
+	err := wire.ReadBinaryBytes(h.Extra[:], &tdmExtra)
+	//err := rlp.DecodeBytes(h.Extra[:], &tdmExtra)
 	if err != nil {
 		return nil, err
 	}

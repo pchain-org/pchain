@@ -6,11 +6,10 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"runtime"
 	"sync"
 
-	"io/ioutil"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/go-stack/stack"
@@ -77,8 +76,9 @@ func FileHandler(path string, fmtr Format) (Handler, error) {
 
 // countingWriter wraps a WriteCloser object in order to count the written bytes.
 type countingWriter struct {
-	w     io.WriteCloser // the wrapped object
-	count uint           // number of bytes written
+	sync.RWMutex                // read write locker for rotate log file
+	w            io.WriteCloser // the wrapped object
+	count        uint           // number of bytes written
 }
 
 // Write increments the byte counter by the number of bytes written.
@@ -124,10 +124,18 @@ func prepFile(path string) (*countingWriter, error) {
 	if err != nil {
 		return nil, err
 	}
-	ns := fi.Size() - cut
-	if err = f.Truncate(ns); err != nil {
-		return nil, err
+
+	var ns int64
+	if runtime.GOOS == "windows" || cut == 0 {
+		// Do not truncate file in windows, as append flag will cause Access Denied error
+		ns = fi.Size()
+	} else {
+		ns = fi.Size() - cut
+		if err = f.Truncate(ns); err != nil {
+			return nil, err
+		}
 	}
+
 	return &countingWriter{w: f, count: uint(ns)}, nil
 }
 
@@ -138,43 +146,57 @@ func RotatingFileHandler(path string, limit uint, formatter Format) (Handler, er
 	if err := os.MkdirAll(path, 0700); err != nil {
 		return nil, err
 	}
-	files, err := ioutil.ReadDir(path)
-	if err != nil {
-		return nil, err
-	}
-	re := regexp.MustCompile(`\.log$`)
-	last := len(files) - 1
-	for last >= 0 && (!files[last].Mode().IsRegular() || !re.MatchString(files[last].Name())) {
-		last--
-	}
-	var counter *countingWriter
-	if last >= 0 && files[last].Size() < int64(limit) {
-		// Open the last file, and continue to write into it until it's size reaches the limit.
-		if counter, err = prepFile(filepath.Join(path, files[last].Name())); err != nil {
+	/*
+		files, err := ioutil.ReadDir(path)
+		if err != nil {
 			return nil, err
 		}
-	}
-	if counter == nil {
-		counter = new(countingWriter)
-	}
+		re := regexp.MustCompile(`\.log$`)
+		last := len(files) - 1
+		for last >= 0 && (!files[last].Mode().IsRegular() || !re.MatchString(files[last].Name())) {
+			last--
+		}
+		var counter *countingWriter
+		if last >= 0 && files[last].Size() < int64(limit) {
+			// Open the last file, and continue to write into it until it's size reaches the limit.
+			if counter, err = prepFile(filepath.Join(path, files[last].Name())); err != nil {
+				return nil, err
+			}
+		}
+		if counter == nil {
+			counter = new(countingWriter)
+		}*/
+	counter := new(countingWriter)
 	h := StreamHandler(counter, formatter)
 
 	return FuncHandler(func(r *Record) error {
-		if counter.count > limit {
-			counter.Close()
-			counter.w = nil
-		}
-		if counter.w == nil {
-			f, err := os.OpenFile(
-				filepath.Join(path, fmt.Sprintf("%s.log", strings.Replace(r.Time.Format("060102150405.00"), ".", "", 1))),
-				os.O_CREATE|os.O_APPEND|os.O_WRONLY,
-				0600,
-			)
-			if err != nil {
-				return err
+		counter.RLock()
+		defer counter.RUnlock()
+
+		if counter.count > limit || counter.w == nil {
+			counter.RUnlock()
+			// Hold Write Lock to Reset the Log Counter
+			counter.Lock()
+			if counter.count > limit {
+				counter.Close()
+				counter.w = nil
 			}
-			counter.w = f
-			counter.count = 0
+
+			// Hold Write Lock to Create a new log file
+			if counter.w == nil {
+				f, err := os.OpenFile(
+					filepath.Join(path, fmt.Sprintf("%s.log", strings.Replace(r.Time.Format("2006-01-02_150405.000"), ".", "_", 1))),
+					os.O_CREATE|os.O_APPEND|os.O_WRONLY,
+					0600,
+				)
+				if err != nil {
+					return err
+				}
+				counter.w = f
+				counter.count = 0
+			}
+			counter.Unlock()
+			counter.RLock()
 		}
 		return h.Log(r)
 	}), nil

@@ -48,13 +48,15 @@ type unconfirmedBlocks struct {
 	depth  uint            // Depth after which to discard previous blocks
 	blocks *ring.Ring      // Block infos to allow canonical chain cross checks
 	lock   sync.RWMutex    // Protects the fields from concurrent access
+	logger log.Logger
 }
 
 // newUnconfirmedBlocks returns new data structure to track currently unconfirmed blocks.
-func newUnconfirmedBlocks(chain headerRetriever, depth uint) *unconfirmedBlocks {
+func newUnconfirmedBlocks(chain headerRetriever, depth uint, logger log.Logger) *unconfirmedBlocks {
 	return &unconfirmedBlocks{
-		chain: chain,
-		depth: depth,
+		chain:  chain,
+		depth:  depth,
+		logger: logger,
 	}
 }
 
@@ -79,7 +81,7 @@ func (set *unconfirmedBlocks) Insert(index uint64, hash common.Hash) {
 		set.blocks.Move(-1).Link(item)
 	}
 	// Display a log for the user to notify of a new mined block unconfirmed
-	log.Info("🔨 mined potential block", "number", index, "hash", hash)
+	set.logger.Info("🔨 mined potential block", "number", index, "hash", hash)
 }
 
 // Shift drops all unconfirmed blocks from the set which exceed the unconfirmed sets depth
@@ -99,11 +101,11 @@ func (set *unconfirmedBlocks) Shift(height uint64) {
 		header := set.chain.GetHeaderByNumber(next.index)
 		switch {
 		case header == nil:
-			log.Warn("Failed to retrieve header of mined block", "number", next.index, "hash", next.hash)
+			set.logger.Warn("Failed to retrieve header of mined block", "number", next.index, "hash", next.hash)
 		case header.Hash() == next.hash:
-			log.Info("🔗 block reached canonical chain", "number", next.index, "hash", next.hash)
+			set.logger.Info("🔗 block reached canonical chain", "number", next.index, "hash", next.hash)
 		default:
-			log.Info("⑂ block  became a side fork", "number", next.index, "hash", next.hash)
+			set.logger.Info("⑂ block  became a side fork", "number", next.index, "hash", next.hash)
 		}
 		// Drop the block out of the ring
 		if set.blocks.Value == set.blocks.Next().Value {

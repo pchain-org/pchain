@@ -67,13 +67,13 @@ func (info *NodeInfo) CompatibleWith(other *NodeInfo) error {
 	return nil
 }
 
+func (info *NodeInfo) ListenAddres() string {
+	return info.ListenAddr
+}
+
 func (info *NodeInfo) ListenHost() string {
 	host, _, _ := net.SplitHostPort(info.ListenAddr)
 	return host
-}
-
-func (info *NodeInfo) ListenAddres() string {
-	return info.ListenAddr
 }
 
 func (info *NodeInfo) ListenPort() int {

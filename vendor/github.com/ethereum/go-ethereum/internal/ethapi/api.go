@@ -40,16 +40,14 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	pabi "github.com/pchain/abi"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const (
-	defaultGasPrice = 50 * params.Shannon
+	defaultGasPrice = params.GWei
 )
-
-const defaultMCGas = 42000
-const defaultMCGasPrice = 20000000000
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
@@ -1099,7 +1097,7 @@ func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transacti
 	if config := s.b.ChainConfig(); config.IsEIP155(s.b.CurrentBlock().Number()) {
 		chainID = config.ChainId
 	}
-	return wallet.SignTx(account, tx, chainID)
+	return wallet.SignTxWithAddress(account, tx, chainID)
 }
 
 // SendTxArgs represents the arguments to sumbit a new transaction into the transaction pool.
@@ -1112,59 +1110,66 @@ type SendTxArgs struct {
 	Nonce    *hexutil.Uint64 `json:"nonce"`
 	// We accept "data" and "input" for backwards-compatibility reasons. "input" is the
 	// newer name and should be preferred by clients.
-	Data         *hexutil.Bytes      `json:"data"`
-	Input        *hexutil.Bytes      `json:"input"`
-	ExtendTxData *types.ExtendTxData `json:"extendTxData"`
+	Data  *hexutil.Bytes `json:"data"`
+	Input *hexutil.Bytes `json:"input"`
 }
 
 // setDefaults is a helper function that fills in default values for unspecified tx fields.
 func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 
-	etd := args.ExtendTxData
-	if etd == nil {
+	var function = pabi.Unknown
+	if pabi.IsPChainContractAddr(args.To) {
+		var input []byte
+		if args.Data != nil {
+			input = *args.Data
+		} else if args.Input != nil {
+			input = *args.Input
+		}
+		if len(input) == 0 {
+			return errors.New(`pchain contract without any data provided`)
+		}
+
+		var err error
+		function, err = pabi.FunctionTypeFromId(input[:4])
+		if err != nil {
+			return err
+		}
+	}
+
+	// force GasLimit to 0 for DepositInChildChain/WithdrawFromMainChain/SaveDataToMainChain in order to avoid being dropped by TxPool.
+	if function == pabi.DepositInChildChain || function == pabi.WithdrawFromMainChain || function == pabi.SaveDataToMainChain {
+		args.Gas = new(hexutil.Uint64)
+		*(*uint64)(args.Gas) = 0
+	} else {
 		if args.Gas == nil {
 			args.Gas = new(hexutil.Uint64)
 			*(*uint64)(args.Gas) = 90000
 		}
-		if args.GasPrice == nil {
-			price, err := b.SuggestPrice(ctx)
-			if err != nil {
-				return err
-			}
-			args.GasPrice = (*hexutil.Big)(price)
+	}
+
+	if args.GasPrice == nil {
+		price, err := b.SuggestPrice(ctx)
+		if err != nil {
+			return err
 		}
-		if args.Value == nil {
-			args.Value = new(hexutil.Big)
+		args.GasPrice = (*hexutil.Big)(price)
+	}
+	if args.Value == nil {
+		args.Value = new(hexutil.Big)
+	}
+	if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
+		return errors.New(`Both "data" and "input" are set and not equal. Please use "input" to pass transaction call data.`)
+	}
+	if args.To == nil {
+		// Contract creation
+		var input []byte
+		if args.Data != nil {
+			input = *args.Data
+		} else if args.Input != nil {
+			input = *args.Input
 		}
-		if args.Data != nil && args.Input != nil && !bytes.Equal(*args.Data, *args.Input) {
-			return errors.New(`Both "data" and "input" are set and not equal. Please use "input" to pass transaction call data.`)
-		}
-		if args.To == nil {
-			// Contract creation
-			var input []byte
-			if args.Data != nil {
-				input = *args.Data
-			} else if args.Input != nil {
-				input = *args.Input
-			}
-			if len(input) == 0 {
-				return errors.New(`contract creation without any data provided`)
-			}
-		}
-	} else {
-		// TODO: adjust the gas/gasPrice for multi-chain tx
-		// DICCFuncName and WFMCFuncName tx has no Gas/GasPrice because the account may not have enough money.
-		// SB2MCFuncName costs no Gas/GasPrice
-		if etd.FuncName == DICCFuncName || etd.FuncName == WFMCFuncName || etd.FuncName == SB2MCFuncName {
-			var gas hexutil.Uint64 = 0
-			args.Gas = &gas
-			args.GasPrice = nil
-		} else {
-			var gas hexutil.Uint64 = defaultMCGas // temporarily force to 'defaultMCGas'.
-			args.Gas = &gas
-			if args.GasPrice == nil {
-				args.GasPrice = (*hexutil.Big)(big.NewInt(defaultMCGasPrice))
-			}
+		if len(input) == 0 {
+			return errors.New(`contract creation without any data provided`)
 		}
 	}
 
@@ -1186,14 +1191,10 @@ func (args *SendTxArgs) toTransaction() *types.Transaction {
 	} else if args.Input != nil {
 		input = *args.Input
 	}
-	if args.ExtendTxData == nil {
-		if args.To == nil {
-			return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), input)
-		}
-		return types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), input)
-	} else {
-		return types.NewTransactionEx(uint64(*args.Nonce), args.To, (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), input, args.ExtendTxData)
+	if args.To == nil {
+		return types.NewContractCreation(uint64(*args.Nonce), (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), input)
 	}
+	return types.NewTransaction(uint64(*args.Nonce), *args.To, (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), input)
 }
 
 // submitTransaction is a helper function that submits tx to txPool and logs a message.
@@ -1245,7 +1246,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Sen
 	if config := s.b.ChainConfig(); config.IsEIP155(s.b.CurrentBlock().Number()) {
 		chainID = config.ChainId
 	}
-	signed, err := wallet.SignTx(account, tx, chainID)
+	signed, err := wallet.SignTxWithAddress(account, tx, chainID)
 	if err != nil {
 		return common.Hash{}, err
 	}

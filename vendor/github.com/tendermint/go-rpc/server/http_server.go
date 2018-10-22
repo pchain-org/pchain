@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/pkg/errors"
 	types "github.com/tendermint/go-rpc/types"
 )
@@ -20,7 +21,7 @@ func StartHTTPServer(listenAddr string, handler http.Handler) (listener net.List
 	var proto, addr string
 	parts := strings.SplitN(listenAddr, "://", 2)
 	if len(parts) != 2 {
-		logger.Warn("WARNING (go-rpc): Please use fully formed listening addresses, including the tcp:// or unix:// prefix")
+		log.Warn("WARNING (go-rpc): Please use fully formed listening addresses, including the tcp:// or unix:// prefix")
 		// we used to allow addrs without tcp/unix prefix by checking for a colon
 		// TODO: Deprecate
 		proto = types.SocketType(listenAddr)
@@ -30,7 +31,7 @@ func StartHTTPServer(listenAddr string, handler http.Handler) (listener net.List
 		proto, addr = parts[0], parts[1]
 	}
 
-	logger.Info("Starting RPC HTTP server on ", proto, " socket ", addr)
+	log.Info("Starting RPC HTTP server on", "socket", proto, "address", addr)
 	listener, err = net.Listen(proto, addr)
 	if err != nil {
 		return nil, errors.Errorf("Failed to listen to ", listenAddr, err)
@@ -41,7 +42,7 @@ func StartHTTPServer(listenAddr string, handler http.Handler) (listener net.List
 			listener,
 			RecoverAndLogHandler(handler),
 		)
-		logger.Fatal("RPC HTTP server stopped", " result:", res)
+		log.Warn("RPC HTTP server stopped", " result:", res)
 	}()
 	return listener, nil
 }
@@ -86,7 +87,7 @@ func RecoverAndLogHandler(handler http.Handler) http.Handler {
 					WriteRPCResponseHTTP(rww, res)
 				} else {
 					// For the rest,
-					logger.Error("Panic in RPC HTTP handler", " error:", e, " stack:", string(debug.Stack()))
+					log.Error("Panic in RPC HTTP handler", " error:", e, " stack:", string(debug.Stack()))
 					rww.WriteHeader(http.StatusInternalServerError)
 					WriteRPCResponseHTTP(rww, types.NewRPCResponse("", nil, fmt.Sprintf("Internal Server Error: %v", e)))
 				}
@@ -97,7 +98,7 @@ func RecoverAndLogHandler(handler http.Handler) http.Handler {
 			if rww.Status == -1 {
 				rww.Status = 200
 			}
-			logger.Info("Served RPC HTTP response",
+			log.Info("Served RPC HTTP response",
 				" method:", r.Method, " url:", r.URL,
 				" status:", rww.Status, " duration:", durationMS,
 				" remoteAddr:", r.RemoteAddr,

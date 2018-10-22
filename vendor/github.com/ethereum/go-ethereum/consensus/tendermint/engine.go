@@ -8,10 +8,10 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru"
 	"github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/tendermint/go-wire"
 	"math/big"
 	"time"
 )
@@ -82,7 +82,7 @@ func (sb *backend) APIs(chain consensus.ChainReader) []rpc.API {
 // Start implements consensus.Tendermint.Start
 func (sb *backend) Start(chain consensus.ChainReader, currentBlock func() *types.Block, hasBadBlock func(hash common.Hash) bool) error {
 
-	logger.Info("Tendermint (backend) Start, add logic here")
+	sb.logger.Info("Tendermint (backend) Start, add logic here")
 
 	sb.coreMu.Lock()
 	defer sb.coreMu.Unlock()
@@ -113,7 +113,7 @@ func (sb *backend) Start(chain consensus.ChainReader, currentBlock func() *types
 // Stop implements consensus.Tendermint.Stop
 func (sb *backend) Stop() error {
 
-	logger.Info("Tendermint (backend) Stop, add logic here")
+	sb.logger.Info("Tendermint (backend) Stop, add logic here")
 
 	//debug.PrintStack()
 
@@ -135,7 +135,7 @@ func (sb *backend) Stop() error {
 // engine is based on signatures.
 func (sb *backend) Author(header *types.Header) (common.Address, error) {
 
-	logger.Info("Tendermint (backend) Author, add logic here")
+	sb.logger.Info("Tendermint (backend) Author, add logic here")
 
 	return common.HexToAddress("0x136c0e42f4e1b4efd930d2d88a3f3aa4996b6e2e"), nil
 	//return common.Address{}, nil
@@ -146,7 +146,7 @@ func (sb *backend) Author(header *types.Header) (common.Address, error) {
 // via the VerifySeal method.
 func (sb *backend) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
 
-	logger.Info("Tendermint (backend) VerifyHeader, add logic here")
+	sb.logger.Info("Tendermint (backend) VerifyHeader, add logic here")
 
 	return sb.verifyHeader(chain, header, nil)
 }
@@ -243,7 +243,7 @@ func (sb *backend) VerifyHeaders(chain consensus.ChainReader, headers []*types.H
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
 
-	logger.Info("Tendermint (backend) VerifyHeaders, add logic here")
+	sb.logger.Info("Tendermint (backend) VerifyHeaders, add logic here")
 
 	go func() {
 		for i, header := range headers {
@@ -273,7 +273,7 @@ func (sb *backend) VerifyUncles(chain consensus.ChainReader, block *types.Block)
 // verifySigner checks whether the signer is in parent's validator set
 func (sb *backend) verifySigner(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
 
-	logger.Info("Tendermint (backend) verifySigner, add logic here")
+	sb.logger.Info("Tendermint (backend) verifySigner, add logic here")
 
 	//no need to verify signer here, the proposer has been verified when reaching consensus
 	return nil
@@ -282,25 +282,29 @@ func (sb *backend) verifySigner(chain consensus.ChainReader, header *types.Heade
 // verifyCommittedSeals checks whether every committed seal is signed by one of the parent's validators
 func (sb *backend) verifyCommittedSeals(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
 
-	logger.Info("Tendermint (backend) verifyCommittedSeals, add logic here")
+	sb.logger.Info("Tendermint (backend) verifyCommittedSeals, add logic here")
 
 	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
 	if err != nil {
 		return errInvalidExtraDataFormat
 	}
 
-	epoch := sb.core.consensusState.Epoch.GetEpochByBlockNumber(tdmExtra.Height)
+	epoch := sb.core.consensusState.Epoch
 	if epoch == nil || epoch.Validators == nil {
+		sb.logger.Errorf("verifyCommittedSeals error. Epoch %v", epoch)
 		return errInconsistentValidatorSet
 	}
 
 	valSet := epoch.Validators
 	if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
+		sb.logger.Errorf("verifyCommittedSeals error. Our Validator Set %x, tdmExtra Valdiator %x", valSet.Hash(), tdmExtra.ValidatorsHash)
 		return errInconsistentValidatorSet
 	}
 
 	seenCommit := tdmExtra.SeenCommit
 	if !bytes.Equal(tdmExtra.SeenCommitHash, seenCommit.Hash()) {
+		sb.logger.Errorf("verifyCommittedSeals SeenCommit is %#+v", seenCommit)
+		sb.logger.Errorf("verifyCommittedSeals error. Our SeenCommitHash %x, tdmExtra SeenCommitHash %x", seenCommit.Hash(), tdmExtra.SeenCommitHash)
 		return errInvalidCommittedSeals
 	}
 
@@ -332,7 +336,7 @@ func (sb *backend) VerifySeal(chain consensus.ChainReader, header *types.Header)
 // rules of a particular engine. The changes are executed inline.
 func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) error {
 
-	logger.Info("Tendermint (backend) Prepare, add logic here")
+	sb.logger.Info("Tendermint (backend) Prepare, add logic here")
 
 	header.Coinbase = common.Address{}
 	header.Nonce = types.TendermintEmptyNonce
@@ -401,14 +405,38 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 // Note, the block header and state database might be updated to reflect any
 // consensus rules that happen at finalization (e.g. block rewards).
 func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt) (*types.Block, []string, error) {
+	uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
 
-	logger.Infof("Tendermint (backend) Finalize, receipts are: %v", receipts)
+	sb.logger.Infof("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
-	var childChainIdForLaunch []string
+	// Check if any Child Chain need to be launch and Update their account balance accordingly
 	if chain.Config().PChainId == "pchain" {
 		// Check the Child Chain Start
-		childChainIdForLaunch = sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
+		readyId, updateBytes, removedId := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
+		if len(readyId) > 0 || updateBytes != nil || len(removedId) > 0 {
+			if ok := ops.Append(&types.LaunchChildChainsOp{
+				ChildChainIds:       readyId,
+				NewPendingIdx:       updateBytes,
+				DeleteChildChainIds: removedId,
+			}); !ok {
+				// This should not happened
+				sb.logger.Error("Tendermint (backend) Finalize, Fail to append LaunchChildChainsOp, only one LaunchChildChainsOp is allowed in each block")
+			}
+		}
+	}
+
+	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
+	if ok, newValidators, refunds, _ := sb.core.consensusState.Epoch.ShouldEnterNewEpoch(header.Number.Uint64()); ok {
+		// Create a new Change Epoch Op. (Epoch Op should be the last one to be execute)
+		for _, r := range refunds {
+			state.SubDepositBalance(r.Address, r.Amount)
+			state.AddBalance(r.Address, r.Amount)
+		}
+
+		ops.Append(&tdmTypes.SwitchEpochOp{
+			NewValidators: newValidators,
+		})
+
 	}
 
 	// Calculate the rewards, and drop the uncles
@@ -418,14 +446,14 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	header.UncleHash = types.TendermintNilUncleHash
 
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts), childChainIdForLaunch, nil
+	return types.NewBlock(header, txs, nil, receipts), nil
 }
 
 // Seal generates a new block for the given input block with the local miner's
 // seal place on top.
 func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error) {
 
-	logger.Info("Tendermint (backend) Seal, add logic here")
+	sb.logger.Info("Tendermint (backend) Seal, add logic here")
 
 	// update the block header timestamp and signature and propose the block to core engine
 	header := block.Header()
@@ -465,7 +493,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 	defer clear()
 
 	// post block into Istanbul engine
-	logger.Infof("Tendermint (backend) Seal, before fire event with block height: %d", block.NumberU64())
+	sb.logger.Infof("Tendermint (backend) Seal, before fire event with block height: %d", block.NumberU64())
 	go tdmTypes.FireEventRequest(sb.core.EventSwitch(), tdmTypes.EventDataRequest{Proposal: block})
 	//go sb.EventMux().Post(tdmTypes.RequestEvent{
 	//	Proposal: block,
@@ -476,15 +504,15 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 		case result, ok := <-sb.commitCh:
 
 			if ok {
-				logger.Infof("Tendermint (backend) Seal, got result with block.Hash: %x, result.Hash: %x", block.Hash(), result.Hash())
+				sb.logger.Infof("Tendermint (backend) Seal, got result with block.Hash: %x, result.Hash: %x", block.Hash(), result.Hash())
 				// if the block hash and the hash from channel are the same,
 				// return the result. Otherwise, keep waiting the next hash.
 				if block.Hash() == result.Hash() {
 					return result, nil
 				}
-				logger.Info("Tendermint (backend) Seal, hash are different")
+				sb.logger.Info("Tendermint (backend) Seal, hash are different")
 			} else {
-				logger.Info("Tendermint (backend) Seal, has been restart, just return")
+				sb.logger.Info("Tendermint (backend) Seal, has been restart, just return")
 				return nil, nil
 			}
 
@@ -518,8 +546,8 @@ func (sb *backend) Commit(proposal *tdmTypes.TdmBlock, seals [][]byte) error {
 	// update block's header
 	block = block.WithSeal(h)
 
-	logger.Infof("Tendermint (backend) Commit, hash: %x, number: %v", block.Hash(), block.Number().Int64())
-	logger.Infof("Tendermint (backend) Commit, block: %s", block.String())
+	sb.logger.Infof("Tendermint (backend) Commit, hash: %x, number: %v", block.Hash(), block.Number().Int64())
+	sb.logger.Infof("Tendermint (backend) Commit, block: %s", block.String())
 
 	// - if the proposed and committed blocks are the same, send the proposed hash
 	//   to commit channel, which is being watched inside the engine.Seal() function.
@@ -532,7 +560,7 @@ func (sb *backend) Commit(proposal *tdmTypes.TdmBlock, seals [][]byte) error {
 		sb.commitCh <- block
 		return nil
 	}
-	logger.Info("Tendermint (backend) Commit, sb.broadcaster is %v", sb.broadcaster)
+	sb.logger.Infof("Tendermint (backend) Commit, sb.broadcaster is %v", sb.broadcaster)
 	if sb.broadcaster != nil {
 		sb.broadcaster.Enqueue(fetcherID, block)
 	}
@@ -550,10 +578,15 @@ func (sb *backend) GetEpoch() *epoch.Epoch {
 	return sb.core.consensusState.Epoch
 }
 
+// SetEpoch Set Epoch to Tendermint Engine
+func (sb *backend) SetEpoch(ep *epoch.Epoch) {
+	sb.core.consensusState.Epoch = ep
+}
+
 // update timestamp and signature of the block based on its number of transactions
 func (sb *backend) updateBlock(parent *types.Header, block *types.Block) (*types.Block, error) {
 
-	logger.Info("Tendermint (backend) updateBlock, add logic here")
+	sb.logger.Info("Tendermint (backend) updateBlock, add logic here")
 
 	header := block.Header()
 	/*
@@ -582,7 +615,7 @@ func (sb *backend) updateBlock(parent *types.Header, block *types.Block) (*types
 // or not), which could be abused to produce different hashes for the same header.
 func sigHash(header *types.Header) (hash common.Hash) {
 
-	logger.Info("Tendermint (backend) sigHash, add logic here")
+	//logger.Info("Tendermint (backend) sigHash, add logic here")
 
 	return common.Hash{}
 }
@@ -590,7 +623,7 @@ func sigHash(header *types.Header) (hash common.Hash) {
 // ecrecover extracts the Ethereum account address from a signed header.
 func ecrecover(header *types.Header) (common.Address, error) {
 
-	logger.Info("Tendermint (backend) ecrecover, add logic here")
+	//logger.Info("Tendermint (backend) ecrecover, add logic here")
 
 	return common.Address{}, nil
 }
@@ -598,7 +631,7 @@ func ecrecover(header *types.Header) (common.Address, error) {
 // prepareExtra returns a extra-data of the given header and validators
 func prepareExtra(header *types.Header, vals []common.Address) ([]byte, error) {
 
-	logger.Info("Tendermint (backend) prepareExtra, add logic here")
+	//logger.Info("Tendermint (backend) prepareExtra, add logic here")
 
 	header.Extra = types.MagicExtra
 	return nil, nil
@@ -608,7 +641,7 @@ func prepareExtra(header *types.Header, vals []common.Address) ([]byte, error) {
 // suggest to rename to writeSeal.
 func writeSeal(h *types.Header, seal []byte) error {
 
-	logger.Info("Tendermint (backend) writeSeal, add logic here")
+	//logger.Info("Tendermint (backend) writeSeal, add logic here")
 
 	/*
 		if len(seal)%types.IstanbulExtraSeal != 0 {
@@ -636,7 +669,7 @@ func writeSeal(h *types.Header, seal []byte) error {
 // writeCommittedSeals writes the extra-data field of a block header with given committed seals.
 func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) error {
 
-	logger.Info("Tendermint (backend) writeCommittedSeals, add logic here")
+	//logger.Info("Tendermint (backend) writeCommittedSeals, add logic here")
 
 	/*
 		if len(committedSeals) == 0 {
@@ -654,10 +687,11 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 			return err
 		}
 	*/
-	payload, err := rlp.EncodeToBytes(tdmExtra)
-	if err != nil {
-		return err
-	}
+	payload := wire.BinaryBytes(*tdmExtra)
+	//payload, err := rlp.EncodeToBytes(tdmExtra)
+	//if err != nil {
+	//	return err
+	//}
 
 	h.Extra = payload
 	return nil
