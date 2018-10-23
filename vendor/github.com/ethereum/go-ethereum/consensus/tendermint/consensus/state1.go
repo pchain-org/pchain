@@ -79,6 +79,9 @@ func (cs *ConsensusState) Initialize() {
 	cs.LockedBlock = nil
 	cs.LockedBlockParts = nil
 	cs.Votes = nil
+	cs.VoteSignAggr = nil
+	cs.PrevoteMaj23SignAggr = nil
+	cs.PrecommitMaj23SignAggr = nil
 	cs.CommitRound = -1
 	cs.LastCommit = nil
 	cs.state = nil
@@ -119,6 +122,7 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 
 	cs.Validators = validators
 	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators, cs.logger)
+	cs.VoteSignAggr = NewHeightVoteSignAggr(cs.config.GetString("chain_id"), height, validators, cs.logger)
 	cs.LastCommit = lastPrecommits
 
 	cs.state = state

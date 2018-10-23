@@ -82,7 +82,7 @@ func (b *TdmBlock) Hash() []byte {
 	if b == nil || b.TdmExtra.SeenCommit == nil {
 		return nil
 	}
-	b.FillSeenCommitHash()
+	//b.FillSeenCommitHash()
 	return b.TdmExtra.Hash()
 }
 

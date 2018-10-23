@@ -104,6 +104,7 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 
 	validators := createPriValidators(config, len(balanceAmounts))
 
+	params.MainnetChainConfig.ChainId = big.NewInt(3)
 	var coreGenesis = core.Genesis{
 		Config:     params.MainnetChainConfig,
 		Nonce:      0xdeadbeefdeadbeef,
@@ -134,6 +135,13 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 		utils.Fatalf("marshal coreGenesis failed")
 		return err
 	}
+	var object interface{}
+	err = json.Unmarshal(contents, &object)
+	if err != nil {
+
+		utils.Fatalf("write eth_genesis_file failed")
+	}
+	contents, err = json.MarshalIndent(object, "", "\t")
 	ethGenesisPath := config.GetString("eth_genesis_file")
 	if err = ioutil.WriteFile(ethGenesisPath, contents, 0654); err != nil {
 		utils.Fatalf("write eth_genesis_file failed")

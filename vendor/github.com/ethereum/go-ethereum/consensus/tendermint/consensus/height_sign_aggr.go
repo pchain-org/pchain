@@ -121,6 +121,7 @@ func (hvs *HeightVoteSignAggr) AddSignAggr(signAggr *types.SignAggr) (added bool
 	rvs, ok := hvs.roundVoteSignAggrs[signAggr.Round]
 
 	if !ok {
+		hvs.logger.Debugf("round is not existing")
 		return false, nil
 	}
 

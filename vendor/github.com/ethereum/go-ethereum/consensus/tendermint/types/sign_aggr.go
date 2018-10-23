@@ -198,9 +198,11 @@ func (va *SignAggr) StringIndented(indent string) string {
 %s  %v
 %s  %v
 %s  %v
+%s  %v
 }`,
 		indent, va.Height,
 		indent, va.Round,
 		indent, va.Type,
-		indent, va.NumValidators)
+		indent, va.NumValidators,
+		indent, va.BlockID)
 }

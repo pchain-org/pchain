@@ -125,12 +125,12 @@ func (n *Node) OnStart() error {
 
 	// Add ChainID to P2P Node Info
 	n.sw.NodeInfo().AddNetwork(n.config.GetString("chain_id"))
-
 	// Start the Reactors for this Chain
 	n.sw.StartChainReactor(n.config.GetString("chain_id") /*state.TdmExtra.ChainID*/)
 
 	// run the profile server
 	profileHost := n.config.GetString("prof_laddr")
+	n.consensusState.SetNodeInfo(n.sw.NodeInfo())
 	if profileHost != "" {
 
 		go func() {
@@ -168,6 +168,7 @@ func (n *Node) OnStop() {
 //
 //	n.consensusState.StartNewHeight()
 //}
+
 
 func (n *Node) RunForever() {
 	// Sleep forever and then...
