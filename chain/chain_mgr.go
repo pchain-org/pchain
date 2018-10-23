@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pchain/p2p"
 	"github.com/pchain/rpc"
@@ -20,6 +21,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"path"
 )
 
 type ChainManager struct {
@@ -118,6 +120,7 @@ func (cm *ChainManager) InitCrossChainHelper() {
 	cm.cch.chainInfoDB = dbm.NewDB("chaininfo",
 		cm.mainChain.Config.GetString("db_backend"),
 		cm.ctx.GlobalString(utils.DataDirFlag.Name))
+	cm.cch.localTX3CacheDB, _ = ethdb.NewLDBDatabase(path.Join(cm.ctx.GlobalString(utils.DataDirFlag.Name), "tx3cache"), 0, 0)
 	if cm.ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
 		host := "127.0.0.1" //cm.ctx.GlobalString(utils.RPCListenAddrFlag.Name)
 		port := cm.ctx.GlobalInt(utils.RPCPortFlag.Name)

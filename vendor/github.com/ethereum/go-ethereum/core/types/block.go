@@ -475,6 +475,14 @@ type ChildChainProofData struct {
 	TxProofs []*BSKeyValueSet
 }
 
+// TX3ProofData represents proof of tx3 from child chain to the main chain.
+type TX3ProofData struct {
+	Header *Header
+
+	TxIndexs []uint
+	TxProofs []*BSKeyValueSet
+}
+
 func NewChildChainProofData(block *Block) (*ChildChainProofData, error) {
 	ret := &ChildChainProofData{
 		Header: block.Header(),
