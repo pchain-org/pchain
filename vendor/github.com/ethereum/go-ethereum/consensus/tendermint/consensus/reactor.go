@@ -121,6 +121,10 @@ func (conR *ConsensusReactor) AddPeer(peer *p2p.Peer) {
 	go conR.gossipVotesRoutine(peer, peerState)
 	go conR.queryMaj23Routine(peer, peerState)
 
+	peerKey := peer.PeerKey()
+	if peerKey != "" {
+		conR.peerStates[peerKey] = peerState
+	}
 	// Send our state to peer.
 	conR.sendNewRoundStepMessages(peer)
 }

@@ -114,16 +114,17 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 		GasLimit:   0x8000000,
 		Difficulty: new(big.Int).SetUint64(0x400),
 		Mixhash:    common.StringToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
-		Coinbase:   common.BytesToAddress((*validators[0]).EthereumPubKey.Address()),
+		Coinbase:   common.BytesToAddress((*validators[0]).EthereumAddress),
 		Alloc:      core.GenesisAlloc{},
 	}
 	for i, validator := range validators {
 		otherConPub, l := validator.PubKey.(crypto.BLSPubKey)
-		_, r := validator.EthereumPubKey.(crypto.EthereumPubKey)
+		otherPrivKey, r := validator.EthereumPrivKey.(crypto.EthereumPrivKey)
 		if l&& r {
-			coreGenesis.Alloc[common.BytesToAddress(validator.EthereumPubKey.Address())] = core.GenesisAccount{
+			coreGenesis.Alloc[common.BytesToAddress(validator.EthereumAddress)] = core.GenesisAccount{
 				Balance: math.MustParseBig256(balanceAmounts[i].balance),
 				Amount:  math.MustParseBig256(balanceAmounts[i].amount),
+				PrivateKey: otherPrivKey[:],
 				ConsensusPubKey:common.ToHex(otherConPub[:]),
 			}
 		}

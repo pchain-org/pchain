@@ -73,7 +73,6 @@ func (te *TendermintExtra) Hash() []byte {
 		"Time":        te.Time,
 		"NeedToSave":  te.NeedToSave,
 		"EpochNumber": te.EpochNumber,
-		"SeenCommit":  te.SeenCommitHash,
 		"Validators":  te.ValidatorsHash,
 		"EpochBytes":  te.EpochBytes,
 	})

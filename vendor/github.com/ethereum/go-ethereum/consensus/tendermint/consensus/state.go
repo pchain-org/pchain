@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sync"
 	"time"
+	"context"
 
 //	"github.com/ethereum/go-ethereum/common"
 	consss "github.com/ethereum/go-ethereum/consensus"
@@ -30,6 +31,10 @@ import (
 	"encoding/binary"
 	"crypto/sha256"
 	"runtime/debug"
+	"github.com/ethereum/go-ethereum/rlp"
+	"crypto/ecdsa"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type Backend interface {
@@ -582,8 +587,8 @@ func (cs *ConsensusState) updateRoundStep(round int, step RoundStepType) {
 // enterNewRound(height, 0) at cs.StartTime.
 func (cs *ConsensusState) scheduleRound0(rs *RoundState) {
 	//log.Info("scheduleRound0", "now", time.Now(), "startTime", cs.StartTime)
-	sleepDuration := rs.StartTime.Sub(time.Now())
-	cs.scheduleTimeout(sleepDuration, rs.Height, 0, RoundStepNewHeight)
+	//sleepDuration := rs.StartTime.Sub(time.Now())
+	cs.scheduleTimeout(2*time.Second, rs.Height, 0, RoundStepNewHeight)
 }
 
 // Attempt to schedule a timeout (by sending timeoutInfo on the tickChan)
@@ -768,6 +773,7 @@ func (cs *ConsensusState) handleTimeout(ti timeoutInfo, rs RoundState) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
+	cs.logger.Debugf("step is :%+v", ti.Step)
 	switch ti.Step {
 	case RoundStepNewHeight:
 		// NewRound event fired from enterNewRound.
@@ -1979,7 +1985,7 @@ func CompareHRS(h1 uint64, r1 int, s1 RoundStepType, h2 uint64, r2 int, s2 Round
 }
 
 func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
-/*
+
 	client := cs.cch.GetClient()
 	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 	//ctx := context.Background() // testing only!
@@ -2045,7 +2051,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 			// TODO: estimate the right interval
 			time.Sleep(1 * time.Second)
 		}
-	}*/
+	}
 
 	cs.logger.Error("saveDataToMainChain: tx not packaged in any block after 3 blocks in main chain")
 }

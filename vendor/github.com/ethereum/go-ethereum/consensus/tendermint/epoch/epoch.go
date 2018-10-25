@@ -135,6 +135,7 @@ func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc, logger log.Logger) *
 
 	validators := make([]*tmTypes.Validator, len(oneEpoch.Validators))
 	for i, val := range oneEpoch.Validators {
+		panic("get out")
 		pubKey := val.PubKey
 		address := pubKey.Address()
 		//TODO: very important, here the address should be the ethereum account,
