@@ -37,7 +37,6 @@ type ConsensusReactor struct {
 	conS    *ConsensusState
 	evsw    types.EventSwitch
 	peerStates    map[string]*PeerState
-	peers 		  []*p2p.Peer
 	logger log.Logger
 }
 
@@ -107,9 +106,11 @@ func (conR *ConsensusReactor) GetChannels() []*p2p.ChannelDescriptor {
 
 // Implements Reactor
 func (conR *ConsensusReactor) AddPeer(peer *p2p.Peer) {
+	conR.logger.Debug("add peer ============================================================")
 	if !conR.IsRunning() {
 		return
 	}
+	conR.logger.Debug("add peer ============================================================")
 
 	// Create peerState for peer
 	peerState := NewPeerState(peer, conR.logger)
@@ -121,10 +122,13 @@ func (conR *ConsensusReactor) AddPeer(peer *p2p.Peer) {
 	go conR.gossipVotesRoutine(peer, peerState)
 	go conR.queryMaj23Routine(peer, peerState)
 
-	peerKey := peer.PeerKey()
+	conR.logger.Debugf("peer is:%+v", peer)
+	conR.logger.Debugf("peer key is:%+v", peer.PeerKey())	
+	peerKey := peer.PubKey().KeyString()
 	if peerKey != "" {
 		conR.peerStates[peerKey] = peerState
 	}
+
 	// Send our state to peer.
 	conR.sendNewRoundStepMessages(peer)
 }
@@ -375,7 +379,8 @@ func (conR *ConsensusReactor) broadcastNewRoundStep(rs *RoundState) {
 
 func (conR *ConsensusReactor) broadcastProposalBlockParts(proposal *types.Proposal, parts *types.PartSet) {
 	if proposal != nil && parts != nil {
-		for _, peer := range conR.peers {
+		peers := conR.Switch.Peers().List()
+		for _, peer := range peers {
 			go conR.sendProposalBlockParts(peer, proposal, parts)
 		}
 	}
@@ -385,22 +390,28 @@ func (conR *ConsensusReactor) sendProposalBlockParts(peer *p2p.Peer, proposal *t
 	if peer != nil && proposal != nil && parts != nil {
 		propsalMsg := &ProposalMessage{Proposal: proposal}
 		success := false
-		peerState, ok := conR.peerStates[peer.Key]
+		peerState, ok := conR.peerStates[peer.PubKey().KeyString()]
 		i := int64(0)
-		for ;!success; {
+		for ;success==false; {
 			rs := conR.conS.getRoundState() //copy (snapshot)
 			if proposal.Height+1 < rs.Height {
 				break
 			}
 			if (proposal.Height == rs.Height && proposal.Round == rs.Round) ||
 				(proposal.Height+1 == rs.Height && proposal.Round == rs.LastCommit.Round){
+				conR.logger.Debugf("get here 0")
 				if peer.Send(conR.conS.config.GetString("chain_id"), DataChannel,struct{ ConsensusMessage }{ propsalMsg}) {
+					conR.logger.Debugf("get here 1")
 					peerState.SetHasProposal(proposal)
 					success = true
 				} else {
+					conR.logger.Debugf("get here 2")
 					time.Sleep(time.Duration(i)*peerGossipSleepDuration)
 					i *= 2
 				}
+			}
+			if success {
+				break
 			}
 		}
 		if success {
@@ -427,8 +438,9 @@ func (conR *ConsensusReactor) sendProposalBlockParts(peer *p2p.Peer, proposal *t
 func (conR *ConsensusReactor) broadcastProposal(proposal *types.Proposal) {
 	if proposal != nil {
 		msg := &ProposalMessage{Proposal: proposal}
-		for _, peer := range conR.peers {
-			peerState, ok := conR.peerStates[peer.Key]
+		peers := conR.Switch.Peers().List()
+		for _, peer := range peers {
+			peerState, ok := conR.peerStates[peer.PubKey().KeyString()]
 			if ok {
 				go func(peer *p2p.Peer, peerState *PeerState) {
 					if peer.Send(conR.conS.config.GetString("chain_id"), DataChannel, struct{ ConsensusMessage }{msg}) {
@@ -447,8 +459,9 @@ func (conR *ConsensusReactor) broadcastBlockPart(round int, height uint64, part 
 			Round:  round,  // This tells peer that this part applies to us.
 			Part:   part,
 		}
-		for _, peer := range conR.peers {
-			peerState, ok := conR.peerStates[peer.PeerKey()]
+		peers := conR.Switch.Peers().List()
+		for _, peer := range peers {
+			peerState, ok := conR.peerStates[peer.PubKey().KeyString()]
 			if ok {
 				go func(peer *p2p.Peer, peerState *PeerState) {
 					if peer.Send(conR.conS.config.GetString("chain_id"), DataChannel, struct{ ConsensusMessage }{msg}) {
@@ -463,8 +476,9 @@ func (conR *ConsensusReactor) broadcastBlockPart(round int, height uint64, part 
 func (conR *ConsensusReactor) broadcastSignAggr(sign *types.SignAggr) {
 	if sign != nil {
 		msg := &Maj23SignAggrMessage{Maj23SignAggr: sign}
-		for _, peer := range conR.peers {
-			peerState, ok := conR.peerStates[peer.PeerKey()]
+		peers := conR.Switch.Peers().List()
+		for _, peer := range peers {
+			peerState, ok := conR.peerStates[peer.PubKey().KeyString()]
 			if ok {
 				go func(peer *p2p.Peer, peerState *PeerState) {
 					if peer.Send(conR.conS.config.GetString("chain_id"), DataChannel, struct{ ConsensusMessage }{msg}) {
@@ -482,7 +496,12 @@ func (conR *ConsensusReactor) sendVote2Proposer(vote *types.Vote, proposerKey st
 		if ok {
 			msg := &VoteMessage{vote}
 			peerState.Peer.Send(conR.conS.config.GetString("chain_id"), VoteChannel, struct{ ConsensusMessage }{msg})
+		} else {
+			fmt.Printf("proposerKey is :%+v\n", proposerKey)
+			panic("can't find the proposerKey")
 		}
+	} else {
+		panic("vote is nil")
 	}
 }
 
@@ -1037,6 +1056,9 @@ func (ps *PeerState) GetHeight() uint64 {
 }
 
 func (ps *PeerState) SetHasProposal(proposal *types.Proposal) {
+	if ps == nil {
+		panic("ps.mtx is nil")
+	}
 	ps.mtx.Lock()
 	defer ps.mtx.Unlock()
 

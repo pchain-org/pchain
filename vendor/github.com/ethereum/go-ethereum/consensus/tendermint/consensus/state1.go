@@ -8,6 +8,7 @@ import (
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	cmn "github.com/tendermint/go-common"
 	"time"
+	"fmt"
 )
 
 // The +2/3 and other Precommit-votes for block at `height`.
@@ -94,12 +95,17 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	// Reset fields based on state.
 	_, validators, _ := state.GetValidators()
 	lastPrecommits := (*types.SignAggr)(nil)
-	if cs.CommitRound > -1 && cs.Votes != nil {
-		if !cs.Votes.Precommits(cs.CommitRound).HasTwoThirdsMajority() {
-			cmn.PanicSanity("updateToState(state) called but last Precommit round didn't have +2/3")
-		}
-		lastPrecommits = cs.VoteSignAggr.Precommits(cs.CommitRound)
+	if cs.CommitRound > -1 && cs.PrecommitMaj23SignAggr != nil {
+		lastPrecommits = cs.PrecommitMaj23SignAggr
+		fmt.Println("set lastcommit")
+	} else {
+		fmt.Println("nil")
 	}
+	
+	fmt.Printf("commit round:+%v\n", cs.CommitRound)
+	 
+	fmt.Printf("lastPrecommit is:%+v\n", lastPrecommits)
+	fmt.Printf("lastPrecommit height:%+v\n", cs.Height)
 
 	cs.Initialize()
 

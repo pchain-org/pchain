@@ -441,12 +441,15 @@ func (cs *ConsensusState) updateProposer() {
 	n :=big.NewInt(int64(cs.Validators.Size()))
 	n.Mod(hash, n)
 	idx := int(n.Int64())
+	idx = 0
 	if idx >= cs.Validators.Size() {
 		cs.proposer.Proposer = nil
 		PanicConsensus(Fmt("The index of proposer out of range", "index:", idx, "range:", cs.Validators.Size()))
 	} else {
 		cs.proposer.Proposer =  cs.Validators.Validators[idx].Copy()
 	}
+	fmt.Println("height:", cs.Height,  " round:", cs.Round)
+	fmt.Println("validator idx is:", idx)
 }
 
 // Sets our private validator account for signing votes.
@@ -1885,6 +1888,13 @@ func (cs *ConsensusState) signAddVote(type_ byte, hash []byte, header types.Part
 	}
 	vote, err := cs.signVote(type_, hash, header)
 	if err == nil {
+		if !cs.IsProposer() && cs.ProposerPeerKey != "" {
+			v2pMsg := types.EventDataVote2Proposer{vote, cs.ProposerPeerKey}
+			types.FireEventVote2Proposer(cs.evsw, v2pMsg)
+		}
+		if cs.ProposerPeerKey == " " {
+			panic("Proposer key is nil")
+		}
 		cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
 		cs.logger.Info("Signed and pushed vote", "height", cs.Height, "round", cs.Round, "vote", vote, "error", err)
 		debug.PrintStack()
