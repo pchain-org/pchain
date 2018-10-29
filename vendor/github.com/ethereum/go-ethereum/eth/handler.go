@@ -794,6 +794,15 @@ func (pm *ProtocolManager) BroadcastTX3ProofData(height uint64, proofData *types
 	log.Trace("Broadcast TX3ProofData", "height", height, "recipients", len(peers))
 }
 
+func (pm *ProtocolManager) BroadcastMessage(msgcode uint64, data interface{}) {
+	recipients := 0
+	for _, peer := range pm.peers.Peers() {
+		peer.Send(msgcode, data)
+		recipients++
+	}
+	log.Trace("Broadcast p2p message", "code", msgcode, "recipients", recipients)
+}
+
 // Mined broadcast loop
 func (self *ProtocolManager) minedBroadcastLoop() {
 	// automatically stops if unsubscribe

@@ -36,12 +36,6 @@ import (
 	"github.com/prometheus/prometheus/util/flock"
 )
 
-type EthP2PServer interface {
-	Hookup(chainId string, node *Node) error
-	Takeoff(chainId string) error
-	Server() *p2p.Server
-}
-
 // Node is a container on which services can be registered.
 type Node struct {
 	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
@@ -51,9 +45,8 @@ type Node struct {
 	ephemeralKeystore string         // if non-empty, the key directory that will be removed by Stop
 	instanceDirLock   flock.Releaser // prevents concurrent use of instance directory
 
-	serverConfig p2p.Config
+	serverConfig p2p.Config  // Not used in PChain
 	server       *p2p.Server // Currently running P2P networking layer
-	p2pServer    EthP2PServer
 
 	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
 	services     map[reflect.Type]Service // Currently running services
@@ -660,8 +653,8 @@ func (n *Node) ResolvePath(x string) string {
 	return n.config.ResolvePath(x)
 }
 
-func (n *Node) SetP2PServer(p2pServer EthP2PServer) {
-	n.p2pServer = p2pServer
+func (n *Node) SetP2PServer(p2pServer *p2p.Server) {
+	n.server = p2pServer
 }
 
 // apis returns the collection of RPC descriptors this node offers.

@@ -17,6 +17,12 @@ var (
 		Value: utils.DirectoryString{"log"},
 	}
 
+	// Child Chain Flag
+	ChildChainFlag = cli.StringFlag{
+		Name:  "childChain",
+		Usage: "Specify one or more child chain should be start. Ex: child-1,child-2",
+	}
+
 	// ----------------------------
 	// Tendermint Flags
 

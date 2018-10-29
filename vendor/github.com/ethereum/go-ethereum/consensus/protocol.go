@@ -54,10 +54,22 @@ type Broadcaster interface {
 	FindPeers(map[common.Address]bool) map[common.Address]Peer
 	// BroadcastBlock broadcast Block
 	BroadcastBlock(block *types.Block, propagate bool)
+	// BroadcastMessage broadcast Message to P2P network
+	BroadcastMessage(msgcode uint64, data interface{})
 }
 
 // Peer defines the interface to communicate with peer
 type Peer interface {
 	// Send sends the message to this peer
 	Send(msgcode uint64, data interface{}) error
+	// GetPeerState return the Peer State during consensus
+	GetPeerState() PeerState
+	// GetKey return the short Public Key of peer
+	GetKey() string
+	// PeerState set the Peer State
+	SetPeerState(ps PeerState)
+}
+
+type PeerState interface {
+	GetHeight() uint64
 }

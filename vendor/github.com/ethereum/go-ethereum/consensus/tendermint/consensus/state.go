@@ -287,8 +287,6 @@ type ConsensusState struct {
 	blockFromMiner *ethTypes.Block
 	backend        Backend
 
-	node Node
-
 	logger log.Logger
 }
 
@@ -304,7 +302,6 @@ func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.C
 		done:             make(chan struct{}),
 		blockFromMiner:   nil,
 		backend:          backend,
-		node:             nil,
 		logger:           backend.GetLogger(),
 	}
 
@@ -331,14 +328,6 @@ func (cs *ConsensusState) SetEventSwitch(evsw types.EventSwitch) {
 func (cs *ConsensusState) String() string {
 	// better not to access shared variables
 	return Fmt("ConsensusState") //(H:%v R:%v S:%v", cs.Height, cs.Round, cs.Step)
-}
-
-func (cs *ConsensusState) SetNode(node Node) {
-	cs.node = node
-}
-
-func (cs *ConsensusState) GetNode() Node {
-	return cs.node
 }
 
 func (cs *ConsensusState) GetState() *sm.State {

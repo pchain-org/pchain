@@ -18,7 +18,6 @@ package tendermint
 
 import (
 	"errors"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -39,19 +38,31 @@ func (sb *backend) Protocol() consensus.Protocol {
 
 	sb.logger.Info("Tendermint (backend) Protocol, add logic here")
 
+	var protocolName string
+	if sb.chainConfig.PChainId == "pchain" {
+		protocolName = sb.chainConfig.PChainId
+	} else {
+		protocolName = "pchain_" + sb.chainConfig.PChainId
+	}
+
 	return consensus.Protocol{
-		Name:     "pchain" + sb.chainConfig.PChainId,
+		Name:     protocolName,
 		Versions: []uint{64},
 		Lengths:  []uint64{64},
 	}
 }
 
 // HandleMsg implements consensus.Handler.HandleMsg
-func (sb *backend) HandleMsg(addr common.Address, msg p2p.Msg) (bool, error) {
+func (sb *backend) HandleMsg(src consensus.Peer, msg p2p.Msg) (bool, error) {
 	sb.coreMu.Lock()
 	defer sb.coreMu.Unlock()
 
 	sb.logger.Info("Tendermint (backend) HandleMsg, add logic here")
+	sb.logger.Infof("P2P msg: %v", msg)
+
+	//sb.
+
+	// (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte) {
 
 	return false, nil
 }

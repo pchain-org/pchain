@@ -2,21 +2,20 @@ package main
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/bridge"
 	"github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/pchain/chain"
 	"github.com/pchain/version"
 	"gopkg.in/urfave/cli.v1"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/metrics"
 	"time"
-	"github.com/ethereum/go-ethereum/console"
-	"github.com/ethereum/go-ethereum/bridge"
-	"path"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 func main() {
@@ -77,11 +76,7 @@ func main() {
 
 		runtime.GOMAXPROCS(runtime.NumCPU())
 
-		logdir := ""
-		if ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
-			logdir = (&node.Config{DataDir: utils.MakeDataDir(ctx)}).ResolvePath("logs")
-		}
-		if err := bridge.Debug_Setup(ctx, logdir); err != nil {
+		if err := bridge.Debug_Setup(ctx, logFolderFlag); err != nil {
 			return err
 		}
 
@@ -206,6 +201,7 @@ func newCliApp(version, usage string) *cli.App {
 		utils.PerfTestFlag,
 
 		LogDirFlag,
+		ChildChainFlag,
 
 		//Tendermint flags
 		MonikerFlag,

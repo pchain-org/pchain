@@ -1,7 +1,6 @@
 package node
 
 import (
-	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -22,33 +21,15 @@ func (n *Node) Start1() error {
 		return err
 	}
 
-	// Short circuit if the node's already running
-	if n.p2pServer == nil {
+	// Short circuit if the node's server not set
+	if n.server == nil {
 		return ErrNodeStopped
 	}
-
-	/*
-		p2pConfig, protocols, err := n.GatherP2PConfigAndProtocols()
-		if err != nil {
-			return err
-		}
-	*/
-	//running := &p2p.Server{Config: n.serverConfig}
-	//n.log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
-	/*
-		for _, service := range services {
-			running.Protocols = append(running.Protocols, service.Protocols()...)
-		}
-
-		if err := running.Start(); err != nil {
-			return convertFileLockError(err)
-		}
-	*/
 
 	//service should be gathered before
 	services := n.services
 	//server should be started before
-	running := n.p2pServer.Server()
+	running := n.server
 	// Start each of the services
 	started := []reflect.Type{}
 	for kind, service := range services {
@@ -113,43 +94,14 @@ func (n *Node) GatherServices() error {
 	return nil
 }
 
-func (n *Node) GatherP2PConfigAndProtocols() (p2p.Config, []p2p.Protocol, error) {
-
-	// Short circuit if the node's already running
-	if n.server != nil {
-		return p2p.Config{}, nil, ErrNodeRunning
-	}
-
-	if n.services == nil || len(n.services) == 0 {
-		return p2p.Config{}, nil, errors.New("no service gathered for node yet")
-	}
-
-	// Initialize the p2p server. This creates the node key and
-	// discovery databases.
-	n.serverConfig = n.config.P2P
-	n.serverConfig.PrivateKey = n.config.NodeKey()
-	n.serverConfig.Name = n.config.NodeName()
-	n.serverConfig.Logger = n.log
-	if n.serverConfig.StaticNodes == nil {
-		n.serverConfig.StaticNodes = n.config.StaticNodes()
-	}
-	if n.serverConfig.TrustedNodes == nil {
-		n.serverConfig.TrustedNodes = n.config.TrustedNodes()
-	}
-	if n.serverConfig.NodeDatabase == "" {
-		n.serverConfig.NodeDatabase = n.config.NodeDB()
-	}
-
-	//running := &p2p.Server{Config: n.serverConfig}
-	n.log.Info("Starting peer-to-peer node", "instance", n.serverConfig.Name)
-
+func (n *Node) GatherProtocols() []p2p.Protocol {
 	// Gather the protocols and start the freshly assembled P2P server
 	protocols := make([]p2p.Protocol, 0)
 	for _, service := range n.services {
 		protocols = append(protocols, service.Protocols()...)
 	}
 
-	return n.serverConfig, protocols, nil
+	return protocols
 }
 
 func (n *Node) GetRPCHandler() (http.Handler, error) {
