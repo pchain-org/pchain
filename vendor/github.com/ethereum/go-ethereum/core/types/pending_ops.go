@@ -94,42 +94,6 @@ func (op *LaunchChildChainsOp) String() string {
 		op.ChildChainIds, len(op.NewPendingIdx), op.DeleteChildChainIds)
 }
 
-// CrossChainTx
-type CrossChainTx struct {
-	From    common.Address
-	ChainId string
-	TxHash  common.Hash
-}
-
-func (cct *CrossChainTx) Equal(cct1 *CrossChainTx) bool {
-	if cct == nil && cct1 == nil {
-		return true
-	}
-
-	if cct == nil || cct1 == nil {
-		return false
-	}
-
-	return cct.From == cct1.From && cct.ChainId == cct1.ChainId && cct.TxHash == cct1.TxHash
-}
-
-// MarkChildChainToMainChainTxUsed op
-type MarkChildChainToMainChainTxUsedOp struct {
-	CrossChainTx
-}
-
-func (op *MarkChildChainToMainChainTxUsedOp) Conflict(op1 PendingOp) bool {
-	if op1, ok := op1.(*MarkChildChainToMainChainTxUsedOp); ok {
-		return op.CrossChainTx.Equal(&op1.CrossChainTx)
-	}
-	return false
-}
-
-func (op *MarkChildChainToMainChainTxUsedOp) String() string {
-	return fmt.Sprintf("MarkChildChainToMainChainTxUsedOp - From: %x, ChainId: %s, TxHash: %x",
-		op.From, op.ChainId, op.TxHash)
-}
-
 // SaveBlockToMainChain op
 type SaveDataToMainChainOp struct {
 	Data []byte

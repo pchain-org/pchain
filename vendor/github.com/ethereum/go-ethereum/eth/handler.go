@@ -97,11 +97,13 @@ type ProtocolManager struct {
 	wg sync.WaitGroup
 
 	engine consensus.Engine
+
+	cch core.CrossChainHelper
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkId uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database) (*ProtocolManager, error) {
+func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkId uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, cch core.CrossChainHelper) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkId:   networkId,
@@ -115,6 +117,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		txsyncCh:    make(chan *txsync),
 		quitSync:    make(chan struct{}),
 		engine:      engine,
+		cch:         cch,
 	}
 
 	if handler, ok := manager.engine.(consensus.Handler); ok {
@@ -702,6 +705,27 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		fmt.Printf("msg.Code == TxMsg here 3\n")
 		pm.txpool.AddRemotes(txs)
 		fmt.Printf("msg.Code == TxMsg here 4\n")
+
+	case msg.Code == TX3ProofDataMsg:
+		log.Info("TX3ProofDataMsg received")
+		var proofDatas []*types.TX3ProofData
+		if err := msg.Decode(&proofDatas); err != nil {
+			log.Error("TX3ProofDataMsg decode error", "msg", msg, "error", err)
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		for _, proofData := range proofDatas {
+			// Validate and mark the remote TX3ProofData
+			if err := pm.cch.ValidateTX3ProofData(proofData); err != nil {
+				log.Error("TX3ProofDataMsg validate error", "msg", msg, "error", err)
+				return errResp(ErrTX3ValidateFail, "msg %v: %v", msg, err)
+			}
+			p.MarkTX3ProofData(proofData.Header.Number.Uint64())
+			// Write the remote TX3ProofData
+			if err := pm.cch.WriteTX3ProofData(proofData); err != nil {
+				log.Error("TX3ProofDataMsg write error", "msg", msg, "error", err)
+			}
+		}
+
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
@@ -757,6 +781,17 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 		peer.SendTransactions(types.Transactions{tx})
 	}
 	log.Trace("Broadcast transaction", "hash", hash, "recipients", len(peers))
+}
+
+// BroadcastTX3ProofData will propagate a TX3ProofData to all peers which are not known to
+// already have the given TX3ProofData.
+func (pm *ProtocolManager) BroadcastTX3ProofData(height uint64, proofData *types.TX3ProofData) {
+	// Broadcast TX3ProofData to a batch of peers not knowing about it
+	peers := pm.peers.PeersWithoutTX3ProofData(height)
+	for _, peer := range peers {
+		peer.SendTX3ProofData([]*types.TX3ProofData{proofData})
+	}
+	log.Trace("Broadcast TX3ProofData", "height", height, "recipients", len(peers))
 }
 
 // Mined broadcast loop

@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"github.com/pkg/errors"
@@ -190,7 +191,7 @@ func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.
 func (s *PublicChainAPI) GetTxFromChildChainByHash(ctx context.Context, chainId string, txHash common.Hash) (common.Hash, error) {
 	cch := s.b.GetCrossChainHelper()
 
-	childTx := cch.GetTxFromChildChain(txHash, chainId)
+	childTx := cch.GetTX3(chainId, txHash)
 	if childTx == nil {
 		return common.Hash{}, fmt.Errorf("tx %x does not exist in child chain %s", txHash, chainId)
 	}
@@ -210,6 +211,29 @@ func (s *PublicChainAPI) GetAllTX1(ctx context.Context, from common.Address, blo
 		return true
 	})
 	return tx1s, state.Error()
+}
+
+func (s *PublicChainAPI) BroadcastTX3ProofData(ctx context.Context, bs hexutil.Bytes) error {
+	chainId := s.b.ChainConfig().PChainId
+	if chainId != "pchain" {
+		return errors.New("this api can only be called in the main chain")
+	}
+
+	var proofData types.TX3ProofData
+	if err := rlp.DecodeBytes(bs, &proofData); err != nil {
+		return err
+	}
+
+	cch := s.b.GetCrossChainHelper()
+	if err := cch.ValidateTX3ProofData(&proofData); err != nil {
+		return err
+	}
+
+	// Write to local TX3 cache first.
+	cch.WriteTX3ProofData(&proofData)
+	// Broadcast the TX3ProofData to all peers in the main chain.
+	s.b.BroadcastTX3ProofData(&proofData)
+	return nil
 }
 
 func init() {
@@ -565,13 +589,9 @@ func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 		return err
 	}
 
-	wfccTx := cch.GetTxFromChildChain(args.TxHash, args.ChainId)
+	wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
 	if wfccTx == nil {
 		return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
-	}
-
-	if s := cch.ValidateFromChildChainTx(from, args.ChainId, args.TxHash); s != core.CrossChainTxReady {
-		return fmt.Errorf("tx %x has wrong state: %v", args.TxHash, s)
 	}
 
 	signer2 := types.NewEIP155Signer(wfccTx.ChainId())
@@ -612,13 +632,9 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return err
 	}
 
-	wfccTx := cch.GetTxFromChildChain(args.TxHash, args.ChainId)
+	wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
 	if wfccTx == nil {
 		return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
-	}
-
-	if s := cch.ValidateFromChildChainTx(from, args.ChainId, args.TxHash); s != core.CrossChainTxReady {
-		return fmt.Errorf("tx %x has wrong state: %v", args.TxHash, s)
 	}
 
 	signer2 := types.NewEIP155Signer(wfccTx.ChainId())
@@ -640,17 +656,6 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), wfccArgs.ChainId)
 	if state.GetChainBalance(chainInfo.Owner).Cmp(wfccArgs.Amount) < 0 {
 		return errors.New("no enough balance to withdraw")
-	}
-
-	op := types.MarkChildChainToMainChainTxUsedOp{
-		CrossChainTx: types.CrossChainTx{
-			From:    from,
-			ChainId: args.ChainId,
-			TxHash:  args.TxHash,
-		},
-	}
-	if ok := ops.Append(&op); !ok {
-		return fmt.Errorf("pending ops conflict: %v", op)
 	}
 
 	state.SubChainBalance(chainInfo.Owner, wfccArgs.Amount)

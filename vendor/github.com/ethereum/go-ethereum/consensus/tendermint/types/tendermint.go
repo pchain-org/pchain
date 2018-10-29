@@ -8,15 +8,16 @@ import (
 )
 
 type TendermintExtra struct {
-	ChainID        string    `json:"chain_id"`
-	Height         uint64    `json:"height"`
-	Time           time.Time `json:"time"`
-	NeedToSave     bool      `json:"need_to_save"`
-	EpochNumber    uint64    `json:"epoch_number"`
-	SeenCommitHash []byte    `json:"last_commit_hash"` // commit from validators from the last block
-	ValidatorsHash []byte    `json:"validators_hash"`  // validators for the current block
-	SeenCommit     *Commit   `json:"seen_commit"`
-	EpochBytes     []byte    `json:"epoch_bytes"`
+	ChainID         string    `json:"chain_id"`
+	Height          uint64    `json:"height"`
+	Time            time.Time `json:"time"`
+	NeedToSave      bool      `json:"need_to_save"`
+	NeedToBroadcast bool      `json:"need_to_broadcast"`
+	EpochNumber     uint64    `json:"epoch_number"`
+	SeenCommitHash  []byte    `json:"last_commit_hash"` // commit from validators from the last block
+	ValidatorsHash  []byte    `json:"validators_hash"`  // validators for the current block
+	SeenCommit      *Commit   `json:"seen_commit"`
+	EpochBytes      []byte    `json:"epoch_bytes"`
 }
 
 /*
@@ -50,15 +51,16 @@ func (te *TendermintExtra) Copy() *TendermintExtra {
 	//debug.PrintStack()
 
 	return &TendermintExtra{
-		ChainID:        te.ChainID,
-		Height:         te.Height,
-		Time:           te.Time,
-		NeedToSave:     te.NeedToSave,
-		EpochNumber:    te.EpochNumber,
-		SeenCommitHash: te.SeenCommitHash,
-		ValidatorsHash: te.ValidatorsHash,
-		SeenCommit:     te.SeenCommit,
-		EpochBytes:     te.EpochBytes,
+		ChainID:         te.ChainID,
+		Height:          te.Height,
+		Time:            te.Time,
+		NeedToSave:      te.NeedToSave,
+		NeedToBroadcast: te.NeedToBroadcast,
+		EpochNumber:     te.EpochNumber,
+		SeenCommitHash:  te.SeenCommitHash,
+		ValidatorsHash:  te.ValidatorsHash,
+		SeenCommit:      te.SeenCommit,
+		EpochBytes:      te.EpochBytes,
 	}
 }
 
@@ -68,14 +70,15 @@ func (te *TendermintExtra) Hash() []byte {
 		return nil
 	}
 	return merkle.SimpleHashFromMap(map[string]interface{}{
-		"ChainID":     te.ChainID,
-		"Height":      te.Height,
-		"Time":        te.Time,
-		"NeedToSave":  te.NeedToSave,
-		"EpochNumber": te.EpochNumber,
-		"SeenCommit":  te.SeenCommitHash,
-		"Validators":  te.ValidatorsHash,
-		"EpochBytes":  te.EpochBytes,
+		"ChainID":         te.ChainID,
+		"Height":          te.Height,
+		"Time":            te.Time,
+		"NeedToSave":      te.NeedToSave,
+		"NeedToBroadcast": te.NeedToBroadcast,
+		"EpochNumber":     te.EpochNumber,
+		"SeenCommit":      te.SeenCommitHash,
+		"Validators":      te.ValidatorsHash,
+		"EpochBytes":      te.EpochBytes,
 	})
 }
 

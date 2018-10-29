@@ -42,13 +42,10 @@ type CrossChainHelper interface {
 	RevealVote(ep *epoch.Epoch, from common.Address, pubkey string, depositAmount *big.Int, salt string, txHash common.Hash) error
 
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
-	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction
+
+	// for epoch only
 	VerifyChildChainProofData(bs []byte) error
 	SaveChildChainProofDataToMainChain(bs []byte) error
-
-	// these should operate on the main chain db
-	MarkFromChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error
-	ValidateFromChildChainTx(from common.Address, chainId string, txHash common.Hash) CrossChainTxState
 
 	TX3LocalCache
 }

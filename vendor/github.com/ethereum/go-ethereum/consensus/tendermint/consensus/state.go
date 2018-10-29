@@ -784,6 +784,14 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 			cs.state.TdmExtra.NeedToSave = false
 		}
 	}
+	if cs.state.TdmExtra.NeedToBroadcast {
+		if cs.privValidator != nil && bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
+			cs.logger.Infof("enterPropose: broadcastTX3ProofDataToMainChain height: %v", cs.state.TdmExtra.Height)
+			lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
+			cs.broadcastTX3ProofDataToMainChain(lastBlock)
+			cs.state.TdmExtra.NeedToBroadcast = false
+		}
+	}
 
 	// If we don't get the proposal and all block parts quick enough, enterPrevote
 	cs.scheduleTimeout(cs.timeoutParams.Propose(round), height, round, RoundStepPropose)
@@ -1248,22 +1256,21 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 			if len(block.TdmExtra.EpochBytes) > 0 {
 				block.TdmExtra.NeedToSave = true
 				cs.logger.Infof("NeedToSave set to true due to epoch. Chain: %s, Height: %v", block.TdmExtra.ChainID, block.TdmExtra.Height)
-			} else {
-				// check special cross-chain tx
-				txs := block.Block.Transactions()
-				for _, tx := range txs {
-					if pabi.IsPChainContractAddr(tx.To()) {
-						data := tx.Data()
-						function, err := pabi.FunctionTypeFromId(data[:4])
-						if err != nil {
-							continue
-						}
+			}
+			// check special cross-chain tx
+			txs := block.Block.Transactions()
+			for _, tx := range txs {
+				if pabi.IsPChainContractAddr(tx.To()) {
+					data := tx.Data()
+					function, err := pabi.FunctionTypeFromId(data[:4])
+					if err != nil {
+						continue
+					}
 
-						if function == pabi.WithdrawFromChildChain {
-							block.TdmExtra.NeedToSave = true
-							cs.logger.Infof("NeedToSave set to true due to tx. Tx: %s, Chain: %s, Height: %v", function.String(), block.TdmExtra.ChainID, block.TdmExtra.Height)
-							break
-						}
+					if function == pabi.WithdrawFromChildChain {
+						block.TdmExtra.NeedToBroadcast = true
+						cs.logger.Infof("NeedToBroadcast set to true due to tx. Tx: %s, Chain: %s, Height: %v", function.String(), block.TdmExtra.ChainID, block.TdmExtra.Height)
+						break
 					}
 				}
 			}
@@ -1607,4 +1614,29 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 	}
 
 	cs.logger.Error("saveDataToMainChain: tx not packaged in any block after 3 blocks in main chain")
+}
+
+func (cs *ConsensusState) broadcastTX3ProofDataToMainChain(block *ethTypes.Block) {
+	client := cs.cch.GetClient()
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	//ctx := context.Background() // testing only!
+
+	proofData, err := ethTypes.NewTX3ProofData(block)
+	if err != nil {
+		cs.logger.Error("broadcastTX3ProofDataToMainChain: failed to create proof data", "block", block, "err", err)
+		return
+	}
+
+	bs, err := rlp.EncodeToBytes(proofData)
+	if err != nil {
+		cs.logger.Error("broadcastTX3ProofDataToMainChain: failed to encode proof data", "proof data", proofData, "err", err)
+		return
+	}
+	cs.logger.Infof("broadcastTX3ProofDataToMainChain proof data length: %d", len(bs))
+
+	err = client.BroadcastDataToMainChain(ctx, cs.state.TdmExtra.ChainID, bs)
+	if err != nil {
+		cs.logger.Error("broadcastTX3ProofDataToMainChain(rpc) failed", "err", err)
+		return
+	}
 }

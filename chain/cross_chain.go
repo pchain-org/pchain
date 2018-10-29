@@ -363,16 +363,6 @@ func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Trans
 	return tx
 }
 
-func (cch *CrossChainHelper) GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction {
-
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	tx, _ := core.GetChildChainTransactionByHash(chainDb, chainId, txHash)
-	return tx
-}
-
 // verify the signature of validators who voted for the block
 // most of the logic here is from 'VerifyHeader'
 func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
@@ -534,22 +524,6 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 
 	log.Debug("SaveChildChainProofDataToMainChain - end")
 	return nil
-}
-
-func (cch *CrossChainHelper) MarkFromChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error {
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.MarkCrossChainTx(chainDb, core.ChildChainToMainChain, from, chainId, txHash, used)
-}
-
-func (cch *CrossChainHelper) ValidateFromChildChainTx(from common.Address, chainId string, txHash common.Hash) core.CrossChainTxState {
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	return core.ValidateCrossChainTx(chainDb, core.ChildChainToMainChain, from, chainId, txHash)
 }
 
 // TX3LocalCache start

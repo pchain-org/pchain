@@ -37,9 +37,10 @@ var (
 )
 
 const (
-	maxKnownTxs      = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
-	maxKnownBlocks   = 1024  // Maximum block hashes to keep in the known list (prevent DOS)
-	handshakeTimeout = 5 * time.Second
+	maxKnownTxs          = 32768 // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownBlocks       = 1024  // Maximum block hashes to keep in the known list (prevent DOS)
+	maxKnownTX3ProofData = 32768 // Maximum TX3ProofData heights to keep in the known list (prevent DOS)
+	handshakeTimeout     = 5 * time.Second
 )
 
 // PeerInfo represents a short summary of the Ethereum sub-protocol metadata known
@@ -63,20 +64,22 @@ type peer struct {
 	td   *big.Int
 	lock sync.RWMutex
 
-	knownTxs    *set.Set // Set of transaction hashes known to be known by this peer
-	knownBlocks *set.Set // Set of block hashes known to be known by this peer
+	knownTxs           *set.Set // Set of transaction hashes known to be known by this peer
+	knownBlocks        *set.Set // Set of block hashes known to be known by this peer
+	knownTX3ProofDatas *set.Set // Set of TX3ProofData height known to be known by this peer
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	id := p.ID()
 
 	return &peer{
-		Peer:        p,
-		rw:          rw,
-		version:     version,
-		id:          fmt.Sprintf("%x", id[:8]),
-		knownTxs:    set.New(),
-		knownBlocks: set.New(),
+		Peer:               p,
+		rw:                 rw,
+		version:            version,
+		id:                 fmt.Sprintf("%x", id[:8]),
+		knownTxs:           set.New(),
+		knownBlocks:        set.New(),
+		knownTX3ProofDatas: set.New(),
 	}
 }
 
@@ -128,6 +131,16 @@ func (p *peer) MarkTransaction(hash common.Hash) {
 		p.knownTxs.Pop()
 	}
 	p.knownTxs.Add(hash)
+}
+
+// MarkTX3ProofData marks a TX3ProofData as known for the peer, ensuring that it
+// will never be propagated to this particular peer.
+func (p *peer) MarkTX3ProofData(height uint64) {
+	// If we reached the memory allowance, drop a previously known TX3ProofData height
+	for p.knownTX3ProofDatas.Size() >= maxKnownTX3ProofData {
+		p.knownTX3ProofDatas.Pop()
+	}
+	p.knownTX3ProofDatas.Add(height)
 }
 
 // Send writes an RLP-encoded message with the given code.
@@ -191,6 +204,14 @@ func (p *peer) SendNodeData(data [][]byte) error {
 // ones requested from an already RLP encoded format.
 func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 	return p2p.Send(p.rw, ReceiptsMsg, receipts)
+}
+
+// SendTX3ProofData sends a batch of TX3ProofData to the remote peer.
+func (p *peer) SendTX3ProofData(proofDatas []*types.TX3ProofData) error {
+	for _, proofData := range proofDatas {
+		p.knownTX3ProofDatas.Add(proofData.Header.Number.Uint64())
+	}
+	return p2p.Send(p.rw, TX3ProofDataMsg, proofDatas)
 }
 
 // RequestOneHeader is a wrapper around the header query functions to fetch a
@@ -399,6 +420,19 @@ func (ps *peerSet) PeersWithoutTx(hash common.Hash) []*peer {
 	list := make([]*peer, 0, len(ps.peers))
 	for _, p := range ps.peers {
 		if !p.knownTxs.Has(hash) {
+			list = append(list, p)
+		}
+	}
+	return list
+}
+
+func (ps *peerSet) PeersWithoutTX3ProofData(height uint64) []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		if !p.knownTX3ProofDatas.Has(height) {
 			list = append(list, p)
 		}
 	}

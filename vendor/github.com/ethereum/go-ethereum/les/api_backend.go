@@ -32,16 +32,16 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/light"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 type LesApiBackend struct {
-	eth *LightEthereum
-	gpo *gasprice.Oracle
-	apiBridge ethapi.InnerAPIBridge
+	eth              *LightEthereum
+	gpo              *gasprice.Oracle
+	apiBridge        ethapi.InnerAPIBridge
 	crossChainHelper core.CrossChainHelper
 }
 
@@ -201,7 +201,11 @@ func (b *LesApiBackend) SetInnerAPIBridge(inBridge ethapi.InnerAPIBridge) {
 func (b *LesApiBackend) GetInnerAPIBridge() ethapi.InnerAPIBridge {
 	return b.apiBridge
 }
+
 func (b *LesApiBackend) GetCrossChainHelper() core.CrossChainHelper {
 	return b.crossChainHelper
 }
 
+func (b *LesApiBackend) BroadcastTX3ProofData(proofData *types.TX3ProofData) {
+	panic("not supported")
+}

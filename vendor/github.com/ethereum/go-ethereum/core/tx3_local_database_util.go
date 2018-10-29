@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	tx3Prefix       = []byte("f") // tx3Prefix + chainId + txHash -> tx3
+	tx3Prefix       = []byte("t") // tx3Prefix + chainId + txHash -> tx3
 	tx3LookupPrefix = []byte("k") // tx3LookupPrefix + chainId + txHash -> tx3 lookup metadata
 	tx3ProofPrefix  = []byte("p") // tx3ProofPrefix + chainId + height -> proof data
 )
@@ -172,8 +172,8 @@ func WriteTX3(db ethdb.Putter, chainId string, header *types.Header, txIndex uin
 		if function == pabi.WithdrawFromChildChain {
 			txHash := tx.Hash()
 			key1 := append(tx3Prefix, append([]byte(chainId), txHash.Bytes()...)...)
-			bs, _ := rlp.EncodeToBytes(tx)
-			if err := db.Put(key1, bs); err != nil {
+			bs, _ := rlp.EncodeToBytes(&tx)
+			if err = db.Put(key1, bs); err != nil {
 				return err
 			}
 
