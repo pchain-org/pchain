@@ -343,12 +343,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	fmt.Printf("(pm *ProtocolManager) handleMsg, recevied msg: %v", msg)
 
 	if handler, ok := pm.engine.(consensus.Handler); ok {
-		pubKey, err := p.ID().Pubkey()
-		if err != nil {
-			return err
-		}
-		addr := crypto.PubkeyToAddress(*pubKey)
-		handled, err := handler.HandleMsg(addr, msg)
+		handled, err := handler.HandleMsg(p, msg)
 		if handled {
 			return err
 		}
