@@ -19,9 +19,9 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path"
 	"strconv"
 	"sync"
-	"path"
 )
 
 type ChainManager struct {
@@ -67,6 +67,9 @@ func (cm *ChainManager) LoadMainChain(ctx *cli.Context) error {
 }
 
 func (cm *ChainManager) LoadChains(childIds []string) error {
+
+	// Wait for Main Chain Start Complete
+	<-cm.mainStartDone
 
 	childChainIds := core.GetChildChainIds(cm.cch.chainInfoDB)
 	log.Infof("Before Load Child Chains, childChainIds is %v, len is %d", childChainIds, len(childChainIds))
@@ -148,14 +151,19 @@ func (cm *ChainManager) StartMainChain() error {
 
 func (cm *ChainManager) StartChains() error {
 
-	// Wait for Main Chain Start Complete
-	<-cm.mainStartDone
-
 	for _, chain := range cm.childChains {
 		// Start each Chain
 		quit := make(chan int)
 		cm.childQuits[chain.Id] = quit
-		chain.EthNode.SetP2PServer(cm.server.Server())
+
+		srv := cm.server.Server()
+		childProtocols := chain.EthNode.GatherProtocols()
+		// Add Child Protocols to P2P Server Protocols
+		srv.Protocols = append(srv.Protocols, childProtocols...)
+		// Add Child Protocols to P2P Server Caps
+		srv.AddChildProtocolCaps(childProtocols)
+
+		chain.EthNode.SetP2PServer(srv)
 		err := StartChain(cm.ctx, chain, nil, quit)
 		if err != nil {
 			return err
