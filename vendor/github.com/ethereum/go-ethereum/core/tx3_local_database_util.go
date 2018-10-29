@@ -18,7 +18,7 @@ var (
 	tx3ProofPrefix  = []byte("p") // tx3ProofPrefix + chainId + height -> proof data
 )
 
-// Tx3LookupEntry is a positional metadata to help looking up the tx3 proof content given only its chainId and hash.
+// TX3LookupEntry is a positional metadata to help looking up the tx3 proof content given only its chainId and hash.
 type TX3LookupEntry struct {
 	BlockIndex uint64
 	TxIndex    uint64
@@ -119,8 +119,8 @@ func GetAllTX3ProofData(db ethdb.Database) []*types.TX3ProofData {
 	return ret
 }
 
-// WriteTX3ProofData serializes ChildChainProof block into the database.
-func WriteTX3ProofData(db ethdb.Putter, proofData *types.TX3ProofData) error {
+// WriteTX3ProofData serializes TX3ProofData into the database.
+func WriteTX3ProofData(db ethdb.Database, proofData *types.TX3ProofData) error {
 	header := proofData.Header
 	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
 	if err != nil {
@@ -135,17 +135,56 @@ func WriteTX3ProofData(db ethdb.Putter, proofData *types.TX3ProofData) error {
 	num := header.Number.Uint64()
 	encNum := encodeBlockNumber(num)
 	key1 := append(tx3ProofPrefix, append([]byte(chainId), encNum...)...)
-	bs, _ := rlp.EncodeToBytes(proofData)
-	if err := db.Put(key1, bs); err != nil {
-		return err
-	}
-
-	for i, txIndex := range proofData.TxIndexs {
-		if err := WriteTX3(db, chainId, header, txIndex, proofData.TxProofs[i]); err != nil {
+	bs, err := db.Get(key1)
+	if len(bs) == 0 || err != nil { // not exists yet.
+		bss, _ := rlp.EncodeToBytes(proofData)
+		if err := db.Put(key1, bss); err != nil {
 			return err
 		}
+
+		for i, txIndex := range proofData.TxIndexs {
+			if err := WriteTX3(db, chainId, header, txIndex, proofData.TxProofs[i]); err != nil {
+				return err
+			}
+		}
+	} else { // merge to the existing one.
+		var existProofData types.TX3ProofData
+		err = rlp.DecodeBytes(bs, &existProofData)
+		if err != nil {
+			return err
+		}
+
+		var update bool
+		for i, txIndex := range proofData.TxIndexs {
+			if !hasTxIndex(&existProofData, txIndex) {
+				if err := WriteTX3(db, chainId, header, txIndex, proofData.TxProofs[i]); err != nil {
+					return err
+				}
+
+				existProofData.TxIndexs = append(existProofData.TxIndexs, txIndex)
+				existProofData.TxProofs = append(existProofData.TxProofs, proofData.TxProofs[i])
+				update = true
+			}
+		}
+
+		if update {
+			bss, _ := rlp.EncodeToBytes(existProofData)
+			if err := db.Put(key1, bss); err != nil {
+				return err
+			}
+		}
 	}
+
 	return nil
+}
+
+func hasTxIndex(proofData *types.TX3ProofData, target uint) bool {
+	for _, txIndex := range proofData.TxIndexs {
+		if txIndex == target {
+			return true
+		}
+	}
+	return false
 }
 
 func WriteTX3(db ethdb.Putter, chainId string, header *types.Header, txIndex uint, txProofData *types.BSKeyValueSet) error {
