@@ -35,13 +35,6 @@ func pchainCmd(ctx *cli.Context) error {
 	//set the event.TypeMutex to cch
 	chainMgr.InitCrossChainHelper()
 
-	// Load Child Chain
-	err = chainMgr.LoadChains(requestChildChain)
-	if err != nil {
-		log.Errorf("Load Child Chains failed. %v", err)
-		return err
-	}
-
 	// Start P2P Server
 	err = chainMgr.StartP2PServer()
 	if err != nil {
@@ -51,6 +44,13 @@ func pchainCmd(ctx *cli.Context) error {
 
 	// Start Main Chain
 	err = chainMgr.StartMainChain()
+
+	// Load Child Chain
+	err = chainMgr.LoadChains(requestChildChain)
+	if err != nil {
+		log.Errorf("Load Child Chains failed. %v", err)
+		return err
+	}
 
 	// Start Child Chain
 	err = chainMgr.StartChains()
