@@ -181,7 +181,7 @@ func (c *Config) IPCEndpoint() string {
 
 // NodeDB returns the path to the discovery node database.
 func (c *Config) NodeDB() string {
-	if c.DataDir == "" {
+	if c.GeneralDataDir == "" {
 		return "" // ephemeral
 	}
 	return c.ResolvePath(datadirNodeDatabase)
@@ -318,7 +318,7 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 		return c.P2P.PrivateKey
 	}
 	// Generate ephemeral key if no datadir is being used.
-	if c.DataDir == "" {
+	if c.GeneralDataDir == "" {
 		key, err := crypto.GenerateKey()
 		if err != nil {
 			log.Crit(fmt.Sprintf("Failed to generate ephemeral node key: %v", err))

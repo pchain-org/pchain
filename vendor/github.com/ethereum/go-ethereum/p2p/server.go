@@ -506,6 +506,13 @@ func (srv *Server) Start() (err error) {
 	return nil
 }
 
+// AddHandshakeCaps Add the Child Protocol Caps after create the child chain and before launch it
+func (srv *Server) AddChildProtocolCaps(childProtocols []Protocol) {
+	for _, p := range childProtocols {
+		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
+	}
+}
+
 func (srv *Server) startListening() error {
 	// Launch the TCP listener.
 	listener, err := net.Listen("tcp", srv.ListenAddr)

@@ -4,6 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pchain/chain"
 	"gopkg.in/urfave/cli.v1"
+	"strings"
 )
 
 func pchainCmd(ctx *cli.Context) error {
@@ -18,25 +19,40 @@ func pchainCmd(ctx *cli.Context) error {
 
 	chainMgr := chain.GetCMInstance(ctx)
 
-	err := chainMgr.StartP2P()
-	if err != nil {
-		log.Error("start p2p failed")
-		return err
-	}
+	// ChildChainFlag flag
+	requestChildChain := strings.Split(ctx.GlobalString(ChildChainFlag.Name), ",")
 
-	err = chainMgr.LoadAndStartMainChain(ctx)
+	// Initial P2P Server
+	chainMgr.InitP2P()
+
+	// Load Main Chain
+	err := chainMgr.LoadMainChain(ctx)
 	if err != nil {
-		log.Errorf("Load and start main chain failed. %v", err)
+		log.Errorf("Load Main Chain failed. %v", err)
 		return nil
 	}
 
-	// Load PChain Child Node
-	err = chainMgr.LoadChains()
+	//set the event.TypeMutex to cch
+	chainMgr.InitCrossChainHelper()
+
+	// Load Child Chain
+	err = chainMgr.LoadChains(requestChildChain)
 	if err != nil {
-		log.Error("load chains failed")
+		log.Errorf("Load Child Chains failed. %v", err)
 		return err
 	}
 
+	// Start P2P Server
+	err = chainMgr.StartP2PServer()
+	if err != nil {
+		log.Errorf("Start P2P Server failed. %v", err)
+		return err
+	}
+
+	// Start Main Chain
+	err = chainMgr.StartMainChain()
+
+	// Start Child Chain
 	err = chainMgr.StartChains()
 	if err != nil {
 		log.Error("start chains failed")

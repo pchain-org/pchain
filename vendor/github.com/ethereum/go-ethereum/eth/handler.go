@@ -340,12 +340,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	fmt.Printf("(pm *ProtocolManager) handleMsg, recevied msg: %v", msg)
 
 	if handler, ok := pm.engine.(consensus.Handler); ok {
-		pubKey, err := p.ID().Pubkey()
-		if err != nil {
-			return err
-		}
-		addr := crypto.PubkeyToAddress(*pubKey)
-		handled, err := handler.HandleMsg(addr, msg)
+		handled, err := handler.HandleMsg(p, msg)
 		if handled {
 			return err
 		}
@@ -757,6 +752,15 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 		peer.SendTransactions(types.Transactions{tx})
 	}
 	log.Trace("Broadcast transaction", "hash", hash, "recipients", len(peers))
+}
+
+func (pm *ProtocolManager) BroadcastMessage(msgcode uint64, data interface{}) {
+	recipients := 0
+	for _, peer := range pm.peers.Peers() {
+		peer.Send(msgcode, data)
+		recipients++
+	}
+	log.Trace("Broadcast p2p message", "code", msgcode, "recipients", recipients)
 }
 
 // Mined broadcast loop

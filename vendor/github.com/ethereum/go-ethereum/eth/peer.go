@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus"
 	"math/big"
 	"sync"
 	"time"
@@ -65,6 +66,8 @@ type peer struct {
 
 	knownTxs    *set.Set // Set of transaction hashes known to be known by this peer
 	knownBlocks *set.Set // Set of block hashes known to be known by this peer
+
+	peerState consensus.PeerState
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -130,11 +133,26 @@ func (p *peer) MarkTransaction(hash common.Hash) {
 	p.knownTxs.Add(hash)
 }
 
+// ---------- PChain P2P peer function - Start ----------
 // Send writes an RLP-encoded message with the given code.
 // data should encode as an RLP list.
 func (p *peer) Send(msgcode uint64, data interface{}) error {
 	return p2p.Send(p.rw, msgcode, data)
 }
+
+func (p *peer) GetPeerState() consensus.PeerState {
+	return p.peerState
+}
+
+func (p *peer) GetKey() string {
+	return p.id
+}
+
+func (p *peer) SetPeerState(ps consensus.PeerState) {
+	p.peerState = ps
+}
+
+// ---------- PChain P2P peer function - End ----------
 
 // SendTransactions sends transactions to the peer and includes the hashes
 // in its transaction hash set for future reference.
