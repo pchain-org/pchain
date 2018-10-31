@@ -264,7 +264,7 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, height uint64, commit *
 	}
 
 	quorum := big.NewInt(0)
-	quorum.Mul(valSet.totalVotingPower, big.NewInt(2))
+	quorum.Mul(valSet.TotalVotingPower(), big.NewInt(2))
 	quorum.Div(quorum, big.NewInt(3))
 	quorum.Add(quorum, big.NewInt(1))
 	if talliedVotingPower.Cmp(quorum) >= 0 {
