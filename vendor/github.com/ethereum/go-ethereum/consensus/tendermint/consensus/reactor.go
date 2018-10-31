@@ -398,7 +398,7 @@ func (conR *ConsensusReactor) sendProposalBlockParts(peer *p2p.Peer, proposal *t
 				break
 			}
 			if (proposal.Height == rs.Height && proposal.Round == rs.Round) ||
-				(proposal.Height+1 == rs.Height && proposal.Round == rs.LastCommit.Round){
+				(proposal.Height+1 == rs.Height){
 				conR.logger.Debugf("get here 0")
 				if peer.Send(conR.conS.config.GetString("chain_id"), DataChannel,struct{ ConsensusMessage }{ propsalMsg}) {
 					conR.logger.Debugf("get here 1")
