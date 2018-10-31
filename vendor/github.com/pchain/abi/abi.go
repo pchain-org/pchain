@@ -129,6 +129,7 @@ type WithdrawFromChildChainArgs struct {
 
 type WithdrawFromMainChainArgs struct {
 	ChainId string
+	Amount  *big.Int
 	TxHash  common.Hash
 }
 
@@ -245,6 +246,10 @@ const jsonChainABI = `
 			{
 				"name": "chainId",
 				"type": "string"
+			},
+			{
+				"name": "amount",
+				"type": "uint256"
 			},
 			{
 				"name": "txHash",

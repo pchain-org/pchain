@@ -164,13 +164,13 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.Address, chainId string, txHash common.Hash) (common.Hash, error) {
+func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.Address, amount *hexutil.Big, chainId string, txHash common.Hash) (common.Hash, error) {
 
 	if chainId == "pchain" {
 		return common.Hash{}, errors.New("argument can't be the main chain - pchain")
 	}
 
-	input, err := pabi.ChainABI.Pack(pabi.WithdrawFromMainChain.String(), chainId, txHash)
+	input, err := pabi.ChainABI.Pack(pabi.WithdrawFromMainChain.String(), chainId, (*big.Int)(amount), txHash)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -606,7 +606,7 @@ func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 		return err
 	}
 
-	if from != wfccFrom || args.ChainId != wfccArgs.ChainId {
+	if from != wfccFrom || args.ChainId != wfccArgs.ChainId || args.Amount.Cmp(wfccArgs.Amount) != 0 {
 		return errors.New("params are not consistent with tx in child chain")
 	}
 
