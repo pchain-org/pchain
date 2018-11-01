@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	pabi "github.com/pchain/abi"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"math/big"
@@ -526,15 +527,6 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 	return nil
 }
 
-// TX3LocalCache start
-func (cch *CrossChainHelper) GetTX3(chainId string, txHash common.Hash) *types.Transaction {
-	return core.GetTX3(cch.localTX3CacheDB, chainId, txHash)
-}
-
-func (cch *CrossChainHelper) DeleteTX3(chainId string, txHash common.Hash) {
-	core.DeleteTX3(cch.localTX3CacheDB, chainId, txHash)
-}
-
 func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData) error {
 	log.Debug("ValidateTX3ProofData - start")
 
@@ -614,6 +606,81 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 
 	log.Debug("ValidateTX3ProofData - end")
 	return nil
+}
+
+func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transaction, tx3ProofData *types.TX3ProofData) error {
+	// TX4
+	signer := types.NewEIP155Signer(tx4.ChainId())
+	from, err := types.Sender(signer, tx4)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.WithdrawFromMainChainArgs
+
+	if !pabi.IsPChainContractAddr(tx4.To()) {
+		return errors.New("invalid TX4: wrong To()")
+	}
+
+	data := tx4.Data()
+	function, err := pabi.FunctionTypeFromId(data[:4])
+	if err != nil {
+		return err
+	}
+
+	if function != pabi.WithdrawFromMainChain {
+		return errors.New("invalid TX4: wrong function")
+	}
+
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	// TX3
+	header := tx3ProofData.Header
+	if err != nil {
+		return err
+	}
+	keybuf := new(bytes.Buffer)
+	rlp.Encode(keybuf, tx3ProofData.TxIndexs[0])
+	val, err, _ := trie.VerifyProof(header.TxHash, keybuf.Bytes(), tx3ProofData.TxProofs[0])
+	if err != nil {
+		return err
+	}
+
+	var tx3 types.Transaction
+	err = rlp.DecodeBytes(val, &tx3)
+	if err != nil {
+		return err
+	}
+
+	signer2 := types.NewEIP155Signer(tx3.ChainId())
+	tx3From, err := types.Sender(signer2, &tx3)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var tx3Args pabi.WithdrawFromChildChainArgs
+	tx3Data := tx3.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&tx3Args, pabi.WithdrawFromChildChain.String(), tx3Data[4:]); err != nil {
+		return err
+	}
+
+	// Does TX3 & TX4 Match
+	if from != tx3From || args.ChainId != tx3Args.ChainId || args.Amount.Cmp(tx3Args.Amount) != 0 {
+		return errors.New("params are not consistent with tx in child chain")
+	}
+
+	return nil
+}
+
+// TX3LocalCache start
+func (cch *CrossChainHelper) GetTX3(chainId string, txHash common.Hash) *types.Transaction {
+	return core.GetTX3(cch.localTX3CacheDB, chainId, txHash)
+}
+
+func (cch *CrossChainHelper) DeleteTX3(chainId string, txHash common.Hash) {
+	core.DeleteTX3(cch.localTX3CacheDB, chainId, txHash)
 }
 
 func (cch *CrossChainHelper) WriteTX3ProofData(proofData *types.TX3ProofData) error {

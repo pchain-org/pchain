@@ -904,8 +904,34 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 
 		cs.blockFromMiner = nil
 
+		// retrieve TX3ProofData for TX4
+		var tx3ProofData []*ethTypes.TX3ProofData
+		txs := ethBlock.Transactions()
+		for _, tx := range txs {
+			if pabi.IsPChainContractAddr(tx.To()) {
+				data := tx.Data()
+				function, err := pabi.FunctionTypeFromId(data[:4])
+				if err != nil {
+					continue
+				}
+
+				if function == pabi.WithdrawFromMainChain {
+					var args pabi.WithdrawFromMainChainArgs
+					data := tx.Data()
+					if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+						continue
+					}
+
+					proof := cs.cch.GetTX3ProofData(args.ChainId, args.TxHash)
+					if proof != nil {
+						tx3ProofData = append(tx3ProofData, proof)
+					}
+				}
+			}
+		}
+
 		return types.MakeBlock(cs.Height, cs.state.TdmExtra.ChainID, commit,
-			ethBlock, val.Hash(), cs.Epoch.Number, epochBytes,
+			ethBlock, val.Hash(), cs.Epoch.Number, epochBytes, tx3ProofData,
 			cs.config.GetInt("block_part_size"))
 	} else {
 		cs.logger.Warn("block from miner should not be nil, let's start another round")
@@ -962,8 +988,17 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 		return
 	}
 
-	// Valdiate proposal block
+	// Validate proposal block
 	err := cs.ProposalBlock.ValidateBasic(cs.state.TdmExtra)
+	if err != nil {
+		// ProposalBlock is invalid, prevote nil.
+		cs.logger.Warnf("enterPrevote: ProposalBlock is invalid, error: %v", err)
+		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+		return
+	}
+
+	// Validate TX4
+	err = cs.ValidateTX4(cs.ProposalBlock)
 	if err != nil {
 		// ProposalBlock is invalid, prevote nil.
 		cs.logger.Warnf("enterPrevote: ProposalBlock is invalid, error: %v", err)
@@ -1532,6 +1567,40 @@ func CompareHRS(h1 uint64, r1 int, s1 RoundStepType, h2 uint64, r2 int, s2 Round
 		return 1
 	}
 	return 0
+}
+
+func (cs *ConsensusState) ValidateTX4(b *types.TdmBlock) error {
+	var index int
+
+	txs := b.Block.Transactions()
+	for _, tx := range txs {
+		if pabi.IsPChainContractAddr(tx.To()) {
+			data := tx.Data()
+			function, err := pabi.FunctionTypeFromId(data[:4])
+			if err != nil {
+				continue
+			}
+
+			if function == pabi.WithdrawFromMainChain {
+				// index of tx4 and tx3ProofData should exactly match one by one.
+				if index >= len(b.TX3ProofData) {
+					return errors.New("tx3 proof data missing")
+				}
+				tx3ProofData := b.TX3ProofData[index]
+				index++
+
+				if err := cs.cch.ValidateTX3ProofData(tx3ProofData); err != nil {
+					return err
+				}
+
+				if err := cs.cch.ValidateTX4WithInMemTX3ProofData(tx, tx3ProofData); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {

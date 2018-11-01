@@ -632,34 +632,15 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return err
 	}
 
-	wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
-	if wfccTx == nil {
-		return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
-	}
+	// Notice: there's no validation logic here, it's moved to the vote phase of the consensus engine.
 
-	signer2 := types.NewEIP155Signer(wfccTx.ChainId())
-	wfccFrom, err := types.Sender(signer2, wfccTx)
-	if err != nil {
-		return core.ErrInvalidSender
-	}
-
-	var wfccArgs pabi.WithdrawFromChildChainArgs
-	wfccData := wfccTx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&wfccArgs, pabi.WithdrawFromChildChain.String(), wfccData[4:]); err != nil {
-		return err
-	}
-
-	if from != wfccFrom || args.ChainId != wfccArgs.ChainId {
-		return errors.New("params are not consistent with tx in child chain")
-	}
-
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), wfccArgs.ChainId)
-	if state.GetChainBalance(chainInfo.Owner).Cmp(wfccArgs.Amount) < 0 {
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
+	if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
 		return errors.New("no enough balance to withdraw")
 	}
 
-	state.SubChainBalance(chainInfo.Owner, wfccArgs.Amount)
-	state.AddBalance(wfccFrom, wfccArgs.Amount)
+	state.SubChainBalance(chainInfo.Owner, args.Amount)
+	state.AddBalance(from, args.Amount)
 
 	return nil
 }

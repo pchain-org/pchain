@@ -17,7 +17,6 @@ type TX3LocalCache interface {
 	GetTX3(chainId string, txHash common.Hash) *types.Transaction
 	DeleteTX3(chainId string, txHash common.Hash)
 
-	ValidateTX3ProofData(proofData *types.TX3ProofData) error
 	WriteTX3ProofData(proofData *types.TX3ProofData) error
 
 	GetTX3ProofData(chainId string, txHash common.Hash) *types.TX3ProofData
@@ -48,6 +47,8 @@ type CrossChainHelper interface {
 	SaveChildChainProofDataToMainChain(bs []byte) error
 
 	TX3LocalCache
+	ValidateTX3ProofData(proofData *types.TX3ProofData) error
+	ValidateTX4WithInMemTX3ProofData(tx4 *types.Transaction, tx3ProofData *types.TX3ProofData) error
 }
 
 type EtdValidateCb func(tx *types.Transaction, state *state.StateDB, cch CrossChainHelper) error
