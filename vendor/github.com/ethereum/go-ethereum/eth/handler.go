@@ -336,18 +336,17 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	}
 	defer msg.Discard()
 
-	fmt.Printf("(pm *ProtocolManager) handleMsg(p *peer)\n")
-	fmt.Printf("(pm *ProtocolManager) handleMsg, recevied msg: %v", msg)
-
-	if handler, ok := pm.engine.(consensus.Handler); ok {
-		handled, err := handler.HandleMsg(p, msg)
-		if handled {
-			return err
-		}
-	}
-
 	// Handle the message depending on its contents
 	switch {
+	// PChain Consensus Message
+	case msg.Code >= 0x20 && msg.Code <= 0x23:
+		fmt.Printf("(pm *ProtocolManager) handleMsg(p *peer)\n")
+		fmt.Printf("(pm *ProtocolManager) handleMsg, recevied msg: %v", msg)
+
+		if handler, ok := pm.engine.(consensus.Handler); ok {
+			handler.HandleMsg(p, msg)
+		}
+
 	case msg.Code == StatusMsg:
 		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")

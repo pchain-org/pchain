@@ -138,7 +138,7 @@ func (conR *ConsensusReactor) RemovePeer(peer consensus.Peer, reason interface{}
 // Peer state updates can happen in parallel, but processing of
 // proposals, block parts, and votes are ordered by the receiveRoutine
 // NOTE: blocks on consensus state for proposals, block parts, and votes
-func (conR *ConsensusReactor) Receive(chID byte, src consensus.Peer, msgBytes []byte) {
+func (conR *ConsensusReactor) Receive(chID uint64, src consensus.Peer, msgBytes []byte) {
 	if !conR.IsRunning() {
 		conR.logger.Debug("Receive", "src", src, "chId", chID, "bytes", msgBytes)
 		return

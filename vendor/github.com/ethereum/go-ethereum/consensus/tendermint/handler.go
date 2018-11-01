@@ -22,10 +22,7 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-)
-
-const (
-	tendemrintMsg = 0x12
+	"io/ioutil"
 )
 
 var (
@@ -58,11 +55,14 @@ func (sb *backend) HandleMsg(src consensus.Peer, msg p2p.Msg) (bool, error) {
 	defer sb.coreMu.Unlock()
 
 	sb.logger.Info("Tendermint (backend) HandleMsg, add logic here")
-	sb.logger.Infof("P2P msg: %v", msg)
+	sb.logger.Debugf("P2P msg: %v", msg)
 
-	//sb.
+	msgBytes, readByteErr := ioutil.ReadAll(msg.Payload)
+	if readByteErr != nil {
+		sb.logger.Errorf("Error when read bytes from P2P msg payload: %v", readByteErr)
+	}
 
-	// (conR *ConsensusReactor) Receive(chID byte, src *p2p.Peer, msgBytes []byte) {
+	sb.core.consensusReactor.Receive(msg.Code, src, msgBytes)
 
 	return false, nil
 }
