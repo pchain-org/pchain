@@ -123,6 +123,10 @@ type Handler interface {
 
 	// GetBroadcaster gets the broadcaster to send message to peers
 	GetBroadcaster() Broadcaster
+
+	AddPeer(src Peer)
+
+	RemovePeer(src Peer)
 }
 
 // PoW is a consensus engine based on proof-of-work.

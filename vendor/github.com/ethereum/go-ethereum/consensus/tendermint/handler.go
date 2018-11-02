@@ -93,3 +93,11 @@ func (sb *backend) NewChainHead() error {
 func (sb *backend) GetLogger() log.Logger {
 	return sb.logger
 }
+
+func (sb *backend) AddPeer(src consensus.Peer) {
+	sb.core.consensusReactor.AddPeer(src)
+}
+
+func (sb *backend) RemovePeer(src consensus.Peer) {
+	sb.core.consensusReactor.RemovePeer(src, nil)
+}

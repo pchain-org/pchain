@@ -295,6 +295,11 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// after this will be sent via broadcasts.
 	pm.syncTransactions(p)
 
+	// Add Peer to Consensus Engine
+	if handler, ok := pm.engine.(consensus.Handler); ok {
+		handler.AddPeer(p)
+	}
+
 	// If we're DAO hard-fork aware, validate any remote peer with regard to the hard-fork
 	if daoBlock := pm.chainconfig.DAOForkBlock; daoBlock != nil {
 		// Request the peer's DAO fork header for extra-data validation
