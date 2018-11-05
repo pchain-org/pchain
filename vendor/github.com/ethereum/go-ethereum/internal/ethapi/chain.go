@@ -213,6 +213,20 @@ func (s *PublicChainAPI) GetAllTX1(ctx context.Context, from common.Address, blo
 	return tx1s, state.Error()
 }
 
+func (s *PublicChainAPI) GetAllTX3(ctx context.Context, from common.Address, blockNr rpc.BlockNumber) ([]common.Hash, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	var tx3s []common.Hash
+	state.ForEachTX3(from, func(tx3 common.Hash) bool {
+		tx3s = append(tx3s, tx3)
+		return true
+	})
+	return tx3s, state.Error()
+}
+
 func (s *PublicChainAPI) BroadcastTX3ProofData(ctx context.Context, bs hexutil.Bytes) error {
 	chainId := s.b.ChainConfig().PChainId
 	if chainId != "pchain" {
@@ -434,11 +448,12 @@ func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return fmt.Errorf("%x has no enough balance for deposit", from)
 	}
 
+	// mark from -> tx1 on the main chain (to find all tx1 when given 'from').
+	state.AddTX1(from, tx.Hash())
+
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 	state.SubBalance(from, args.Amount)
 	state.AddChainBalance(chainInfo.Owner, args.Amount)
-	// mark from -> tx1 on the main chain (to find all tx1 when given 'from').
-	state.AddTX1(from, tx.Hash())
 
 	return nil
 }
@@ -524,9 +539,10 @@ func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return errors.New("params are not consistent with tx in main chain")
 	}
 
-	state.AddBalance(dimcFrom, dimcArgs.Amount)
 	// mark from -> tx1 on the child chain (to indicate tx1's used).
 	state.AddTX1(from, args.TxHash)
+
+	state.AddBalance(dimcFrom, dimcArgs.Amount)
 
 	return nil
 }
@@ -570,6 +586,9 @@ func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return errors.New("no enough balance to withdraw")
 	}
 
+	// mark from -> tx3 on the child chain (to find all tx3 when given 'from').
+	state.AddTX3(from, tx.Hash())
+
 	state.SubBalance(from, args.Amount)
 
 	return nil
@@ -592,6 +611,10 @@ func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 	wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
 	if wfccTx == nil {
 		return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
+	}
+
+	if state.HasTX3(from, args.TxHash) {
+		return fmt.Errorf("tx %x already used in the main chain", args.TxHash)
 	}
 
 	signer2 := types.NewEIP155Signer(wfccTx.ChainId())
@@ -632,13 +655,19 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return err
 	}
 
+	if state.HasTX3(from, args.TxHash) {
+		return fmt.Errorf("tx %x already used in the main chain", args.TxHash)
+	}
+
 	// Notice: there's no validation logic here, it's moved to the vote phase of the consensus engine.
+
+	// mark from -> tx3 on the main chain (to indicate tx3's used).
+	state.AddTX3(from, args.TxHash)
 
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 	if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
 		return errors.New("no enough balance to withdraw")
 	}
-
 	state.SubChainBalance(chainInfo.Owner, args.Amount)
 	state.AddBalance(from, args.Amount)
 

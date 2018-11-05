@@ -82,8 +82,10 @@ type stateObject struct {
 
 	// Write caches.
 	tx1Trie Trie // tx1 trie, which become non-nil on first access
+	tx3Trie Trie // tx3 trie, which become non-nil on first access
 
 	dirtyTX1 map[common.Hash]struct{} // tx1 entries that need to be flushed to disk
+	dirtyTX3 map[common.Hash]struct{} // tx3 entries that need to be flushed to disk
 
 	// Cache flags.
 	// When an object is marked suicided it will be delete from the trie
@@ -110,6 +112,7 @@ type Account struct {
 	ChainBalance             *big.Int                    // only valid in main chain for child chain owner, can not be consumed
 	Root                     common.Hash                 // merkle root of the storage trie
 	TX1Root                  common.Hash                 // merkle root of the TX1 trie
+	TX3Root                  common.Hash                 // merkle root of the TX3 trie
 	CodeHash                 []byte
 }
 
@@ -135,6 +138,7 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 		cachedStorage: make(Storage),
 		dirtyStorage:  make(Storage),
 		dirtyTX1:      make(map[common.Hash]struct{}),
+		dirtyTX3:      make(map[common.Hash]struct{}),
 		onDirty:       onDirty,
 	}
 }
@@ -214,7 +218,7 @@ func (self *stateObject) HasTX1(db Database, txHash common.Hash) bool {
 	return false
 }
 
-// AddUCTX adds a cross-chain tx in account UCTX trie.
+// AddTX1 adds a tx1 in account tx1 trie.
 func (self *stateObject) AddTX1(db Database, txHash common.Hash) {
 	self.db.journal = append(self.db.journal, addTX1Change{
 		account: &self.address,
@@ -231,7 +235,7 @@ func (self *stateObject) removeTX1(txHash common.Hash) {
 	delete(self.dirtyTX1, txHash)
 }
 
-// updateUCTXTrie writes cached UCTX modifications into the object's UCTX trie.
+// updateTX1Trie writes cached tx1 modifications into the object's tx1 trie.
 func (self *stateObject) updateTX1Trie(db Database) Trie {
 	tr := self.getTX1Trie(db)
 
@@ -245,13 +249,13 @@ func (self *stateObject) updateTX1Trie(db Database) Trie {
 	return tr
 }
 
-// updateUCTXRoot sets the trie root to the current root hash
+// updateTX1Root sets the trie root to the current root hash
 func (self *stateObject) updateTX1Root(db Database) {
 	self.updateTX1Trie(db)
 	self.data.TX1Root = self.tx1Trie.Hash()
 }
 
-// CommitUCTXTrie the UCTX trie of the object to dwb.
+// CommitTX1Trie the tx1 trie of the object to dwb.
 // This updates the trie root.
 func (self *stateObject) CommitTX1Trie(db Database) error {
 	self.updateTX1Trie(db)
@@ -261,6 +265,99 @@ func (self *stateObject) CommitTX1Trie(db Database) error {
 	root, err := self.tx1Trie.Commit(nil)
 	if err == nil {
 		self.data.TX1Root = root
+	}
+	return err
+}
+
+func (c *stateObject) getTX3Trie(db Database) Trie {
+	if c.tx3Trie == nil {
+		var err error
+		c.tx3Trie, err = db.OpenTX3Trie(c.addrHash, c.data.TX3Root)
+		if err != nil {
+			c.tx3Trie, _ = db.OpenTX3Trie(c.addrHash, common.Hash{})
+			c.setError(fmt.Errorf("can't create TX3 trie: %v", err))
+		}
+	}
+	return c.tx3Trie
+}
+
+// HasTX3 returns true if tx3 is in account TX3 trie.
+func (self *stateObject) HasTX3(db Database, txHash common.Hash) bool {
+	// check the dirtyTX3 firstly.
+	_, ok := self.dirtyTX3[txHash]
+	if ok {
+		return true
+	}
+
+	// Load from DB in case it is missing.
+	enc, err := self.getTX3Trie(db).TryGet(txHash[:])
+	if err != nil {
+		return false
+	}
+	if len(enc) > 0 {
+		_, content, _, err := rlp.Split(enc)
+		if err != nil {
+			self.setError(err)
+			return false
+		}
+		if !bytes.Equal(content, txHash[:]) {
+			self.setError(fmt.Errorf("content mismatch the tx hash"))
+			return false
+		}
+
+		return true
+	}
+
+	return false
+}
+
+// AddTX3 adds a tx3 in account tx3 trie.
+func (self *stateObject) AddTX3(db Database, txHash common.Hash) {
+	self.db.journal = append(self.db.journal, addTX3Change{
+		account: &self.address,
+		txHash:  txHash,
+	})
+	self.addTX3(txHash)
+}
+
+func (self *stateObject) addTX3(txHash common.Hash) {
+	self.dirtyTX3[txHash] = struct{}{}
+}
+
+func (self *stateObject) removeTX3(txHash common.Hash) {
+	delete(self.dirtyTX3, txHash)
+}
+
+// updateTX3Trie writes cached tx3 modifications into the object's tx3 trie.
+func (self *stateObject) updateTX3Trie(db Database) Trie {
+	tr := self.getTX3Trie(db)
+
+	for tx3 := range self.dirtyTX3 {
+		delete(self.dirtyTX3, tx3)
+
+		// Encoding []byte cannot fail, ok to ignore the error.
+		v, _ := rlp.EncodeToBytes(bytes.TrimLeft(tx3[:], "\x00"))
+		self.setError(tr.TryUpdate(tx3[:], v))
+	}
+	return tr
+}
+
+// updateTX3Root sets the trie root to the current root hash
+func (self *stateObject) updateTX3Root(db Database) {
+	self.updateTX3Trie(db)
+	self.data.TX3Root = self.tx3Trie.Hash()
+}
+
+// CommitTX3Trie the tx3 trie of the object to dwb.
+// This updates the trie root.
+func (self *stateObject) CommitTX3Trie(db Database) error {
+	self.updateTX3Trie(db)
+	if self.dbErr != nil {
+		return self.dbErr
+	}
+	root, err := self.tx3Trie.Commit(nil)
+	if err == nil {
+		self.data.TX3Root = root
 	}
 	return err
 }
@@ -409,6 +506,9 @@ func (self *stateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)
 	if self.tx1Trie != nil {
 		stateObject.tx1Trie = db.db.CopyTrie(self.tx1Trie)
 	}
+	if self.tx3Trie != nil {
+		stateObject.tx3Trie = db.db.CopyTrie(self.tx3Trie)
+	}
 	stateObject.code = self.code
 	stateObject.dirtyStorage = self.dirtyStorage.Copy()
 	stateObject.cachedStorage = self.dirtyStorage.Copy()
@@ -418,6 +518,10 @@ func (self *stateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)
 	stateObject.dirtyTX1 = make(map[common.Hash]struct{})
 	for tx1 := range self.dirtyTX1 {
 		stateObject.dirtyTX1[tx1] = struct{}{}
+	}
+	stateObject.dirtyTX3 = make(map[common.Hash]struct{})
+	for tx3 := range self.dirtyTX3 {
+		stateObject.dirtyTX3[tx3] = struct{}{}
 	}
 	return stateObject
 }

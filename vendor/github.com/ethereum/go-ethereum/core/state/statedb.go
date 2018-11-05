@@ -251,6 +251,14 @@ func (self *StateDB) HasTX1(a common.Address, txHash common.Hash) bool {
 	return false
 }
 
+func (self *StateDB) HasTX3(a common.Address, txHash common.Hash) bool {
+	stateObject := self.getStateObject(a)
+	if stateObject != nil {
+		return stateObject.HasTX3(self.db, txHash)
+	}
+	return false
+}
+
 // Database retrieves the low level database supporting the lower level trie ops.
 func (self *StateDB) Database() Database {
 	return self.db
@@ -276,6 +284,17 @@ func (self *StateDB) TX1Trie(a common.Address) Trie {
 	}
 	cpy := stateObject.deepCopy(self, nil)
 	return cpy.updateTX1Trie(self.db)
+}
+
+// TX3Trie returns the TX3 trie of an account.
+// The return value is a copy and is nil for non-existent accounts.
+func (self *StateDB) TX3Trie(a common.Address) Trie {
+	stateObject := self.getStateObject(a)
+	if stateObject == nil {
+		return nil
+	}
+	cpy := stateObject.deepCopy(self, nil)
+	return cpy.updateTX3Trie(self.db)
 }
 
 func (self *StateDB) HasSuicided(addr common.Address) bool {
@@ -338,6 +357,13 @@ func (self *StateDB) AddTX1(addr common.Address, txHash common.Hash) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.AddTX1(self.db, txHash)
+	}
+}
+
+func (self *StateDB) AddTX3(addr common.Address, txHash common.Hash) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.AddTX3(self.db, txHash)
 	}
 }
 
@@ -497,6 +523,21 @@ func (db *StateDB) ForEachTX1(addr common.Address, cb func(tx1 common.Hash) bool
 	}
 }
 
+func (db *StateDB) ForEachTX3(addr common.Address, cb func(tx3 common.Hash) bool) {
+	so := db.getStateObject(addr)
+	if so == nil {
+		return
+	}
+
+	it := trie.NewIterator(so.getTX3Trie(db.db).NodeIterator(nil))
+	for it.Next() {
+		key := common.BytesToHash(db.trie.GetKey(it.Key)) // key is the tx3 hash
+		if ret := cb(key); !ret {
+			break
+		}
+	}
+}
+
 // Copy creates a deep, independent copy of the state.
 // Snapshots of the copied state cannot be applied to the copy.
 func (self *StateDB) Copy() *StateDB {
@@ -573,6 +614,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		} else {
 			stateObject.updateRoot(s.db)
 			stateObject.updateTX1Root(s.db)
+			stateObject.updateTX3Root(s.db)
 			s.updateStateObject(stateObject)
 		}
 	}
@@ -649,6 +691,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 			if err := stateObject.CommitTX1Trie(s.db); err != nil {
 				return common.Hash{}, err
 			}
+			// Write any TX3 changes in the state object to its TX3 trie.
+			if err := stateObject.CommitTX3Trie(s.db); err != nil {
+				return common.Hash{}, err
+			}
 			// Update the object in the main account trie.
 			s.updateStateObject(stateObject)
 		}
@@ -665,6 +711,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		}
 		if account.TX1Root != emptyState {
 			s.db.TrieDB().Reference(account.TX1Root, parent)
+		}
+		if account.TX3Root != emptyState {
+			s.db.TrieDB().Reference(account.TX3Root, parent)
 		}
 		code := common.BytesToHash(account.CodeHash)
 		if code != emptyCode {

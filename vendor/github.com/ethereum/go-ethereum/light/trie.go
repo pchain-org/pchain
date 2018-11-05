@@ -56,6 +56,10 @@ func (db *odrDatabase) OpenTX1Trie(addrHash, root common.Hash) (state.Trie, erro
 	return &odrTrie{db: db, id: StorageTrieID(db.id, addrHash, root)}, nil
 }
 
+func (db *odrDatabase) OpenTX3Trie(addrHash, root common.Hash) (state.Trie, error) {
+	return &odrTrie{db: db, id: StorageTrieID(db.id, addrHash, root)}, nil
+}
+
 func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 	switch t := t.(type) {
 	case *odrTrie:
