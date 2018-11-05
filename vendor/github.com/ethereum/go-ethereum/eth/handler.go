@@ -345,9 +345,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	switch {
 	// PChain Consensus Message
 	case msg.Code >= 0x20 && msg.Code <= 0x23:
-		fmt.Printf("(pm *ProtocolManager) handleMsg(p *peer)\n")
-		fmt.Printf("(pm *ProtocolManager) handleMsg, recevied msg: %v", msg)
-
 		if handler, ok := pm.engine.(consensus.Handler); ok {
 			var msgBytes, consensusMsgBytes []byte
 			if err := msg.Decode(&msgBytes); err != nil {

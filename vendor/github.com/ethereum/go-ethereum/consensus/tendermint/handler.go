@@ -52,8 +52,6 @@ func (sb *backend) HandleMsg(chID uint64, src consensus.Peer, msgBytes []byte) (
 	sb.coreMu.Lock()
 	defer sb.coreMu.Unlock()
 
-	sb.logger.Info("Tendermint (backend) HandleMsg, add logic here")
-
 	sb.core.consensusReactor.Receive(chID, src, msgBytes)
 
 	return false, nil
