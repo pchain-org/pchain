@@ -21,8 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-	"io/ioutil"
 )
 
 var (
@@ -50,19 +48,13 @@ func (sb *backend) Protocol() consensus.Protocol {
 }
 
 // HandleMsg implements consensus.Handler.HandleMsg
-func (sb *backend) HandleMsg(src consensus.Peer, msg p2p.Msg) (bool, error) {
+func (sb *backend) HandleMsg(chID uint64, src consensus.Peer, msgBytes []byte) (bool, error) {
 	sb.coreMu.Lock()
 	defer sb.coreMu.Unlock()
 
 	sb.logger.Info("Tendermint (backend) HandleMsg, add logic here")
-	sb.logger.Debugf("P2P msg: %v", msg)
 
-	msgBytes, readByteErr := ioutil.ReadAll(msg.Payload)
-	if readByteErr != nil {
-		sb.logger.Errorf("Error when read bytes from P2P msg payload: %v", readByteErr)
-	}
-
-	sb.core.consensusReactor.Receive(msg.Code, src, msgBytes)
+	sb.core.consensusReactor.Receive(chID, src, msgBytes)
 
 	return false, nil
 }

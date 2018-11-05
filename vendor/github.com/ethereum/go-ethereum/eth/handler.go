@@ -349,7 +349,16 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		fmt.Printf("(pm *ProtocolManager) handleMsg, recevied msg: %v", msg)
 
 		if handler, ok := pm.engine.(consensus.Handler); ok {
-			handler.HandleMsg(p, msg)
+			var msgBytes, consensusMsgBytes []byte
+			if err := msg.Decode(&msgBytes); err != nil {
+				return errResp(ErrDecode, "msg %v: %v", msg, err)
+			}
+
+			if err := rlp.DecodeBytes(msgBytes, &consensusMsgBytes); err != nil {
+				return errResp(ErrDecode, "Consensus msg %v: %v", msg, err)
+			}
+
+			handler.HandleMsg(msg.Code, p, consensusMsgBytes)
 		}
 
 	case msg.Code == StatusMsg:
