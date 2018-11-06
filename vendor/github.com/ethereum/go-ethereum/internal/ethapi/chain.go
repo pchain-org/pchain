@@ -608,33 +608,14 @@ func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 		return err
 	}
 
-	wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
-	if wfccTx == nil {
-		return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
-	}
-
 	if state.HasTX3(from, args.TxHash) {
 		return fmt.Errorf("tx %x already used in the main chain", args.TxHash)
 	}
 
-	signer2 := types.NewEIP155Signer(wfccTx.ChainId())
-	wfccFrom, err := types.Sender(signer2, wfccTx)
-	if err != nil {
-		return core.ErrInvalidSender
-	}
+	// Notice: there's no validation logic for tx3 here, it's moved to the vote phase of the consensus engine.
 
-	var wfccArgs pabi.WithdrawFromChildChainArgs
-	wfccData := wfccTx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&wfccArgs, pabi.WithdrawFromChildChain.String(), wfccData[4:]); err != nil {
-		return err
-	}
-
-	if from != wfccFrom || args.ChainId != wfccArgs.ChainId || args.Amount.Cmp(wfccArgs.Amount) != 0 {
-		return errors.New("params are not consistent with tx in child chain")
-	}
-
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), wfccArgs.ChainId)
-	if state.GetChainBalance(chainInfo.Owner).Cmp(wfccArgs.Amount) < 0 {
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
+	if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
 		return errors.New("no enough balance to withdraw")
 	}
 
@@ -661,13 +642,14 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 
 	// Notice: there's no validation logic here, it's moved to the vote phase of the consensus engine.
 
-	// mark from -> tx3 on the main chain (to indicate tx3's used).
-	state.AddTX3(from, args.TxHash)
-
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 	if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
 		return errors.New("no enough balance to withdraw")
 	}
+
+	// mark from -> tx3 on the main chain (to indicate tx3's used).
+	state.AddTX3(from, args.TxHash)
+
 	state.SubChainBalance(chainInfo.Owner, args.Amount)
 	state.AddBalance(from, args.Amount)
 
