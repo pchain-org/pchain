@@ -31,8 +31,9 @@ type ChainManager struct {
 	mainQuit      chan int
 	mainStartDone chan int
 
-	childChains map[string]*Chain
-	childQuits  map[string]chan int
+	createChildChainLock sync.Mutex
+	childChains          map[string]*Chain
+	childQuits           map[string]chan int
 
 	server *p2p.PChainP2PServer
 	cch    *CrossChainHelper
@@ -203,14 +204,17 @@ func (cm *ChainManager) StartInspectEvent() {
 				log.Infof("CreateChildChainEvent received: %v", event)
 				chainId := event.ChainId
 
-				_, ok := cm.childChains[chainId]
-				if ok {
-					log.Infof("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue", event)
-					continue
-				}
+				go func() {
+					cm.createChildChainLock.Lock()
+					defer cm.createChildChainLock.Unlock()
 
-				go cm.LoadChildChainInRT(event.ChainId)
-
+					_, ok := cm.childChains[chainId]
+					if ok {
+						log.Infof("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue", event)
+					} else {
+						cm.LoadChildChainInRT(event.ChainId)
+					}
+				}()
 			case <-createChildChainSub.Err():
 				return
 			}
