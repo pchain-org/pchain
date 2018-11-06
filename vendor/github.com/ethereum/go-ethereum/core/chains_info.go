@@ -298,6 +298,13 @@ func storePendingChildChainData(db dbm.DB, cci *CoreChainInfo, create bool) {
 		if pendingIdxByteSlice != nil {
 			wire.ReadBinaryBytes(pendingIdxByteSlice, &idx)
 		}
+		// Check if chain id has been added already
+		for _, v := range idx {
+			if v.ChainID == cci.ChainId {
+				return
+			}
+		}
+		// Pass the check, add the key to idx
 		idx = append(idx, pendingIdxData{cci.ChainId, cci.StartBlock, cci.EndBlock})
 		db.SetSync(pendingChainIndexKey, wire.BinaryBytes(idx))
 	}
