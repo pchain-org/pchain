@@ -40,12 +40,9 @@ type OneEpochDoc struct {
 
 type RewardSchemeDoc struct {
 	TotalReward        string `json:"total_reward"`
-	PreAllocated       string `json:"pre_allocated"`
-	AddedPerYear       string `json:"added_per_year"`
 	RewardFirstYear    string `json:"reward_first_year"`
-	DescendPerYear     string `json:"descend_per_year"`
-	Allocated          string `json:"allocated"`
 	EpochNumberPerYear string `json:"epoch_no_per_year"`
+	TotalYear          string `json:"total_year"`
 }
 
 type GenesisDoc struct {

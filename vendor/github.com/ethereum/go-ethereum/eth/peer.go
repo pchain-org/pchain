@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/tendermint/go-wire"
 	"math/big"
 	"sync"
 	"time"
@@ -150,7 +151,13 @@ func (p *peer) MarkTX3ProofData(height uint64) {
 // Send writes an RLP-encoded message with the given code.
 // data should encode as an RLP list.
 func (p *peer) Send(msgcode uint64, data interface{}) error {
-	return p2p.Send(p.rw, msgcode, data)
+	wirebytes := wire.BinaryBytes(data)
+	rlpMsg, encErr := rlp.EncodeToBytes(wirebytes)
+	if encErr != nil {
+		p.Log().Errorf("P2P msg error: %v", encErr)
+		return encErr
+	}
+	return p2p.Send(p.rw, msgcode, rlpMsg)
 }
 
 func (p *peer) GetPeerState() consensus.PeerState {

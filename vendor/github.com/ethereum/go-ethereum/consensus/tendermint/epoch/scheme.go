@@ -18,12 +18,9 @@ type RewardScheme struct {
 	db  dbm.DB
 
 	TotalReward        *big.Int
-	PreAllocated       *big.Int
 	RewardFirstYear    *big.Int
-	AddedPerYear       *big.Int
-	DescendPerYear     *big.Int
-	Allocated          *big.Int
 	EpochNumberPerYear uint64
+	TotalYear          uint64
 }
 
 // Load Reward Scheme
@@ -46,22 +43,16 @@ func LoadRewardScheme(db dbm.DB) *RewardScheme {
 func MakeRewardScheme(db dbm.DB, rsDoc *tmTypes.RewardSchemeDoc) *RewardScheme {
 
 	totalReward, _ := new(big.Int).SetString(rsDoc.TotalReward, 10)
-	preAllocated, _ := new(big.Int).SetString(rsDoc.PreAllocated, 10)
-	addedPerYear, _ := new(big.Int).SetString(rsDoc.AddedPerYear, 10)
 	rewardFirstYear, _ := new(big.Int).SetString(rsDoc.RewardFirstYear, 10)
-	descendPerYear, _ := new(big.Int).SetString(rsDoc.DescendPerYear, 10)
-	allocated, _ := new(big.Int).SetString(rsDoc.Allocated, 10)
 	epochNumberPerYear, _ := strconv.ParseUint(rsDoc.EpochNumberPerYear, 10, 64)
+	totalYear, _ := strconv.ParseUint(rsDoc.TotalYear, 10, 64)
 
 	rs := &RewardScheme{
 		db:                 db,
 		TotalReward:        totalReward,
-		PreAllocated:       preAllocated,
 		RewardFirstYear:    rewardFirstYear,
-		AddedPerYear:       addedPerYear,
-		DescendPerYear:     descendPerYear,
-		Allocated:          allocated,
 		EpochNumberPerYear: epochNumberPerYear,
+		TotalYear:          totalYear,
 	}
 
 	return rs
@@ -78,18 +69,10 @@ func (rs *RewardScheme) String() string {
 
 	return fmt.Sprintf("RewardScheme : {"+
 		"totalReward : %v,\n"+
-		"preAllocated : %v,\n"+
 		"rewardFirstYear : %v,\n"+
-		"addedPerYear : %v,\n"+
-		"descendPerYear : %v,\n"+
-		"allocated : %v,\n"+
 		"epochNumberPerYear : %v,\n"+
 		"}",
 		rs.TotalReward,
-		rs.PreAllocated,
 		rs.RewardFirstYear,
-		rs.AddedPerYear,
-		rs.DescendPerYear,
-		rs.Allocated,
 		rs.EpochNumberPerYear)
 }

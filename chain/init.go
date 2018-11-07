@@ -30,6 +30,11 @@ import (
 	"time"
 )
 
+const (
+	POSReward  = "315000000000000000000000000"
+	LockReward = "11500000000000000000000000" // 11.5m
+)
+
 type BalaceAmount struct {
 	balance string
 	amount  string
@@ -211,30 +216,27 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 
 		var rewardScheme types.RewardSchemeDoc
 		if chainId == MainChain {
+			posReward, _ := new(big.Int).SetString(POSReward, 10)
+			LockReward, _ := new(big.Int).SetString(LockReward, 10)
+			totalReward := new(big.Int).Sub(posReward, LockReward)
 			rewardScheme = types.RewardSchemeDoc{
-				TotalReward:        "2100000000000000000000000000",
-				PreAllocated:       "1785000000000000000000000000",
-				AddedPerYear:       "0",
-				RewardFirstYear:    "572730000000000000000000000",
-				DescendPerYear:     "57273000000000000000000000",
-				Allocated:          "0",
+				TotalReward:        totalReward.String(),
+				RewardFirstYear:    new(big.Int).Div(totalReward, big.NewInt(8)).String(),
 				EpochNumberPerYear: "12",
+				TotalYear:          "23",
 			}
 		} else {
 			rewardScheme = types.RewardSchemeDoc{
 				TotalReward:        "0",
-				PreAllocated:       "0",
-				AddedPerYear:       "0",
 				RewardFirstYear:    "0",
-				DescendPerYear:     "0",
-				Allocated:          "0",
 				EpochNumberPerYear: "12",
+				TotalYear:          "0",
 			}
 		}
 
 		var rewardPerBlock string
 		if chainId == MainChain {
-			rewardPerBlock = "1841338734567901234"
+			rewardPerBlock = "1219698431069958847"
 		} else {
 			rewardPerBlock = "0"
 		}

@@ -180,6 +180,12 @@ func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, 
 		return fmt.Errorf("Child Chain %s not exist, you can't join the chain", chainId)
 	}
 
+	for _, joined := range ci.JoinedValidators {
+		if from == joined.Address {
+			return nil
+		}
+	}
+
 	jv := core.JoinedValidator{
 		PubKey:        crypto.EtherumPubKey(common.FromHex(pubkey)),
 		Address:       from,

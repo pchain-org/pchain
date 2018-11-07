@@ -34,7 +34,7 @@ func main() {
 		{
 			Action:      chain.InitEthGenesis,
 			Name:        "init_eth_genesis",
-			Usage:       "init_eth_genesis balance:\"10,10,10\"",
+			Usage:       "init_eth_genesis balance:{\"1000000\",\"100\"}",
 			Description: "Initialize the balance of accounts",
 		},
 

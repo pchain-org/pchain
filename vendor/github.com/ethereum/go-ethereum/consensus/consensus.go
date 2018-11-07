@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"math/big"
@@ -116,13 +115,17 @@ type Handler interface {
 	NewChainHead() error
 
 	// HandleMsg handles a message from peer
-	HandleMsg(src Peer, data p2p.Msg) (bool, error)
+	HandleMsg(chID uint64, src Peer, msgBytes []byte) (bool, error)
 
 	// SetBroadcaster sets the broadcaster to send message to peers
 	SetBroadcaster(Broadcaster)
 
 	// GetBroadcaster gets the broadcaster to send message to peers
 	GetBroadcaster() Broadcaster
+
+	AddPeer(src Peer)
+
+	RemovePeer(src Peer)
 }
 
 // PoW is a consensus engine based on proof-of-work.

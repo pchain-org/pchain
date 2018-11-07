@@ -298,6 +298,11 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// after this will be sent via broadcasts.
 	pm.syncTransactions(p)
 
+	// Add Peer to Consensus Engine
+	if handler, ok := pm.engine.(consensus.Handler); ok {
+		handler.AddPeer(p)
+	}
+
 	// If we're DAO hard-fork aware, validate any remote peer with regard to the hard-fork
 	if daoBlock := pm.chainconfig.DAOForkBlock; daoBlock != nil {
 		// Request the peer's DAO fork header for extra-data validation
@@ -339,18 +344,23 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	}
 	defer msg.Discard()
 
-	fmt.Printf("(pm *ProtocolManager) handleMsg(p *peer)\n")
-	fmt.Printf("(pm *ProtocolManager) handleMsg, recevied msg: %v", msg)
-
-	if handler, ok := pm.engine.(consensus.Handler); ok {
-		handled, err := handler.HandleMsg(p, msg)
-		if handled {
-			return err
-		}
-	}
-
 	// Handle the message depending on its contents
 	switch {
+	// PChain Consensus Message
+	case msg.Code >= 0x20 && msg.Code <= 0x23:
+		if handler, ok := pm.engine.(consensus.Handler); ok {
+			var msgBytes, consensusMsgBytes []byte
+			if err := msg.Decode(&msgBytes); err != nil {
+				return errResp(ErrDecode, "msg %v: %v", msg, err)
+			}
+
+			if err := rlp.DecodeBytes(msgBytes, &consensusMsgBytes); err != nil {
+				return errResp(ErrDecode, "Consensus msg %v: %v", msg, err)
+			}
+
+			handler.HandleMsg(msg.Code, p, consensusMsgBytes)
+		}
+
 	case msg.Code == StatusMsg:
 		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")

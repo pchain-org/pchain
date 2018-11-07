@@ -3,6 +3,7 @@ package chain
 import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
@@ -31,8 +32,9 @@ type ChainManager struct {
 	mainQuit      chan int
 	mainStartDone chan int
 
-	childChains map[string]*Chain
-	childQuits  map[string]chan int
+	createChildChainLock sync.Mutex
+	childChains          map[string]*Chain
+	childQuits           map[string]chan int
 
 	server *p2p.PChainP2PServer
 	cch    *CrossChainHelper
@@ -203,14 +205,17 @@ func (cm *ChainManager) StartInspectEvent() {
 				log.Infof("CreateChildChainEvent received: %v", event)
 				chainId := event.ChainId
 
-				_, ok := cm.childChains[chainId]
-				if ok {
-					log.Infof("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue", event)
-					continue
-				}
+				go func() {
+					cm.createChildChainLock.Lock()
+					defer cm.createChildChainLock.Unlock()
 
-				go cm.LoadChildChainInRT(event.ChainId)
-
+					_, ok := cm.childChains[chainId]
+					if ok {
+						log.Infof("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue", event)
+					} else {
+						cm.LoadChildChainInRT(event.ChainId)
+					}
+				}()
 			case <-createChildChainSub.Err():
 				return
 			}
@@ -257,7 +262,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	if !validator {
 		log.Warnf("You are not in the validators of child chain %v, no need to start the child chain", chainId)
 		// Update Child Chain to formal
-		cm.formalizeChildChain(chainId, *cci)
+		cm.formalizeChildChain(chainId, *cci, nil)
 		return
 	}
 
@@ -315,8 +320,11 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		return
 	}
 
+	var childEthereum *eth.Ethereum
+	chain.EthNode.Service(&childEthereum)
+	firstEpoch := childEthereum.Engine().(consensus.Tendermint).GetEpoch()
 	// Child Chain start success, then delete the pending data in chain info db
-	cm.formalizeChildChain(chainId, *cci)
+	cm.formalizeChildChain(chainId, *cci, firstEpoch)
 
 	// Add Child Chain Id into Chain Manager
 	cm.childChains[chainId] = chain
@@ -330,11 +338,11 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	<-quit
 }
 
-func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainInfo) {
+func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainInfo, ep *epoch.Epoch) {
 	// Child Chain start success, then delete the pending data in chain info db
 	core.DeletePendingChildChainData(cm.cch.chainInfoDB, chainId)
 	// Convert the Chain Info from Pending to Formal
-	core.SaveChainInfo(cm.cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: cci})
+	core.SaveChainInfo(cm.cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: cci, Epoch: ep})
 }
 
 func checkChildIdInRequestID(childId string, requestChildId []string) bool {

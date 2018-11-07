@@ -531,13 +531,9 @@ func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
 
 func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime time.Time) (rewardPerBlock *big.Int, blocksOfNextEpoch uint64) {
 
-	//var totalReward          = 210000000e+18
-	//var preAllocated         = 100000000e+18
-	var rewardFirstYear = epoch.rs.RewardFirstYear //20000000e+18 //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
-	var addedPerYear = epoch.rs.AddedPerYear       //0
-	var descendPerYear = epoch.rs.DescendPerYear   //2000000e+18
-	//var allocated            = epoch.RS.allocated //0
+	var rewardFirstYear = epoch.rs.RewardFirstYear       //20000000e+18 //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
 	var epochNumberPerYear = epoch.rs.EpochNumberPerYear //12
+	var totalYear = epoch.rs.TotalYear                   // 23
 
 	zeroEpoch := loadOneEpoch(epoch.db, 0, epoch.logger)
 	initStartTime := zeroEpoch.StartTime
@@ -567,7 +563,7 @@ func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime t
 			epoch.logger.Crit("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
 		}
 
-		rewardPerEpochNextYear := calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear, int64(nextYear), int64(epochNumberPerYear))
+		rewardPerEpochNextYear := calculateRewardPerEpochByYear(rewardFirstYear, int64(nextYear), int64(totalYear), int64(epochNumberPerYear))
 
 		rewardPerBlock = new(big.Int).Div(rewardPerEpochNextYear, big.NewInt(int64(blocksOfNextEpoch)))
 
@@ -588,7 +584,7 @@ func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime t
 			"initStartTime %v ; nextYearStartTime %v\n"+
 			"Time Left This year %v, timePerBlockThisEpoch %v, blocksOfNextEpoch %v\n", epoch.Number, thisYear, nextYear, epochNumberPerYear, epochLeftThisYear, initStartTime, nextYearStartTime, timeLeftThisYear, timePerBlockThisEpoch, blocksOfNextEpoch)
 
-		rewardPerEpochThisYear := calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear, int64(thisYear), int64(epochNumberPerYear))
+		rewardPerEpochThisYear := calculateRewardPerEpochByYear(rewardFirstYear, int64(thisYear), int64(totalYear), int64(epochNumberPerYear))
 
 		rewardPerBlock = new(big.Int).Div(rewardPerEpochThisYear, big.NewInt(int64(blocksOfNextEpoch)))
 
@@ -598,11 +594,34 @@ func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime t
 
 /*
 	Abstract function to calculate the reward of each Epoch by year
-	rewardPerEpochNextYear := (rewardFirstYear + (addedPerYear - descendPerYear) * year) / epochNumberPerYear
+
+	factor = year / 4
+switch factor
+case 5
+	factor = 4
+default:
+	rewardYear = rewardFirstYear / 2 ^ factor
+
+	rewardYear / epochNumberPerYear (12)
 */
-func calculateRewardPerEpochByYear(rewardFirstYear, addedPerYear, descendPerYear *big.Int, year, epochNumberPerYear int64) *big.Int {
-	result := new(big.Int).Sub(addedPerYear, descendPerYear)
-	return result.Mul(result, big.NewInt(year)).Add(result, rewardFirstYear).Div(result, big.NewInt(epochNumberPerYear))
+func calculateRewardPerEpochByYear(rewardFirstYear *big.Int, year, totalYear, epochNumberPerYear int64) *big.Int {
+	if year > totalYear {
+		return big.NewInt(0)
+	}
+
+	var rewardYear *big.Int
+
+	power := year / 4
+	switch power {
+	case 5:
+		power = 4
+		fallthrough
+	default:
+		exp := new(big.Int).Exp(big.NewInt(2), big.NewInt(power), nil)
+		rewardYear = new(big.Int).Div(rewardFirstYear, exp)
+	}
+
+	return new(big.Int).Div(rewardYear, big.NewInt(epochNumberPerYear))
 }
 
 func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool {
