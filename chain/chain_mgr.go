@@ -134,9 +134,9 @@ func (cm *ChainManager) StartP2PServer() error {
 	// Append Main Chain Protocols
 	srv.Protocols = append(srv.Protocols, cm.mainChain.EthNode.GatherProtocols()...)
 	// Append Child Chain Protocols
-	for _, chain := range cm.childChains {
-		srv.Protocols = append(srv.Protocols, chain.EthNode.GatherProtocols()...)
-	}
+	//for _, chain := range cm.childChains {
+	//	srv.Protocols = append(srv.Protocols, chain.EthNode.GatherProtocols()...)
+	//}
 	// Start the server
 	return srv.Start()
 }
@@ -329,8 +329,8 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	// Add Child Chain Id into Chain Manager
 	cm.childChains[chainId] = chain
 
-	//TODO Broadcast Child ID to all peers
-	//cm.p2pObj.BroadcastChildChainID(chainId)
+	//TODO Broadcast Child ID to all Main Chain peers
+	go cm.server.BroadcastNewChildChainMsg(chainId)
 
 	//hookup rpc
 	rpc.Hookup(chain.Id, chain.RpcHandler)
