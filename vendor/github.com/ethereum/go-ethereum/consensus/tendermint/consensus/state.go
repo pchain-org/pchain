@@ -828,7 +828,6 @@ func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
 		*/
 
 		cs.logger.Infof("Signed proposal block, height: %v", block.TdmExtra.Height)
-		cs.logger.Infof("Signed proposal block, height: %v", block.TX3ProofData)
 		// send proposal and block parts on internal msg queue
 		cs.sendInternalMessage(msgInfo{&ProposalMessage{proposal}, ""})
 		for i := 0; i < blockParts.Total(); i++ {
@@ -906,7 +905,6 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 		cs.blockFromMiner = nil
 
 		// retrieve TX3ProofData for TX4
-		cs.logger.Info("createProposalBlock: retrieve TX3ProofData for TX4")
 		var tx3ProofData []*ethTypes.TX3ProofData
 		txs := ethBlock.Transactions()
 		for _, tx := range txs {
@@ -924,10 +922,9 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 						continue
 					}
 
-					cs.logger.Info("createProposalBlock: Try Get TX3ProofData")
 					proof := cs.cch.GetTX3ProofData(args.ChainId, args.TxHash)
 					if proof != nil {
-						cs.logger.Info("createProposalBlock: Append TX3ProofData")
+						cs.logger.Info("createProposalBlock: append TX3ProofData")
 						tx3ProofData = append(tx3ProofData, proof)
 					}
 				}
@@ -1005,7 +1002,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	err = cs.ValidateTX4(cs.ProposalBlock)
 	if err != nil {
 		// ProposalBlock is invalid, prevote nil.
-		cs.logger.Warnf("enterPrevote: ProposalBlock is invalid, validate tx4 error: %v", err)
+		cs.logger.Warnf("enterPrevote: ProposalBlock is invalid, ValidateTX4 error: %v", err)
 		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
 		return
 	}
@@ -1377,9 +1374,9 @@ func (cs *ConsensusState) addProposalBlockPart(height uint64, part *types.Part, 
 		tdmBlock := &types.TdmBlock{}
 		cs.ProposalBlock, err = tdmBlock.FromBytes(cs.ProposalBlockParts.GetReader())
 		if err != nil {
-			cs.logger.Errorf("addProposalBlockPart FromBytes err: %v", err)
-		} else {
-			cs.logger.Infof("addProposalBlockPart ProposalBlock: %v", cs.ProposalBlock)
+			cs.logger.Errorf("addProposalBlockPart: FromBytes err: %v", err)
+		} else if cs.ProposalBlock.TX3ProofData != nil {
+			cs.logger.Infof("addProposalBlockPart: #TX3ProofData in ProposalBlock: %d", len(cs.ProposalBlock.TX3ProofData))
 		}
 
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
