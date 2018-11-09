@@ -138,13 +138,13 @@ func (p *peer) MarkTransaction(hash common.Hash) {
 // Send writes an RLP-encoded message with the given code.
 // data should encode as an RLP list.
 func (p *peer) Send(msgcode uint64, data interface{}) error {
-	wirebytes := wire.BinaryBytes(data)
-	rlpMsg, encErr := rlp.EncodeToBytes(wirebytes)
-	if encErr != nil {
-		p.Log().Errorf("P2P msg error: %v", encErr)
-		return encErr
+	if msgcode >= 0x20 && msgcode <= 0x23 {
+		wirebytes := wire.BinaryBytes(data)
+		return p2p.Send(p.rw, msgcode, wirebytes)
+	} else {
+		return p2p.Send(p.rw, msgcode, data)
 	}
-	return p2p.Send(p.rw, msgcode, rlpMsg)
+
 }
 
 func (p *peer) GetPeerState() consensus.PeerState {

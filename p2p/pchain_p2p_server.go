@@ -55,3 +55,7 @@ func (srv *PChainP2PServer) Server() *p2p.Server {
 func (srv *PChainP2PServer) Stop() {
 	srv.server.Stop()
 }
+
+func (srv *PChainP2PServer) BroadcastNewChildChainMsg(childId string) {
+	srv.server.BroadcastMsg(p2p.BroadcastNewChildChainMsg, childId)
+}

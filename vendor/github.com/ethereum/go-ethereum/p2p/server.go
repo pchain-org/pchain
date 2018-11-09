@@ -897,6 +897,9 @@ func (srv *Server) runPeer(p *Peer) {
 		Peer: p.ID(),
 	})
 
+	// Set the server protocol, this should link with p2p server's protocol and auto-update if changed
+	p.srvProtocols = &srv.Protocols
+
 	// run the protocol
 	remoteRequested, err := p.run()
 
@@ -973,4 +976,12 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	return infos
+}
+
+// BroadcastMsg broadcast the message to all connected peers, this is low level func compare with Eth Protocol Manager
+func (srv *Server) BroadcastMsg(msgCode uint64, data interface{}) {
+	peers := srv.Peers()
+	for _, p := range peers {
+		Send(p.rw, BroadcastNewChildChainMsg, data)
+	}
 }

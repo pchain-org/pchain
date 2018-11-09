@@ -47,8 +47,10 @@ const (
 	discMsg      = 0x01
 	pingMsg      = 0x02
 	pongMsg      = 0x03
-	getPeersMsg  = 0x04
-	peersMsg     = 0x05
+
+	// PChain message belonging to pchain/64
+	BroadcastNewChildChainMsg = 0x04
+	ConfirmNewChildChainMsg   = 0x05
 )
 
 // protoHandshake is the RLP structure of the protocol handshake.
@@ -109,6 +111,9 @@ type Peer struct {
 
 	// events receives message send / receive events if set
 	events *event.Feed
+
+	// srvProtocols must link with Server Protocols
+	srvProtocols *[]Protocol
 }
 
 // NewPeer returns a peer for testing purposes.
@@ -277,6 +282,33 @@ func (p *Peer) handle(msg Msg) error {
 		// check errors because, the connection will be closed after it.
 		rlp.Decode(msg.Payload, &reason)
 		return reason[0]
+	case msg.Code == BroadcastNewChildChainMsg:
+		// Got New Child Chain message from peer
+		var chainId string
+		if err := msg.Decode(&chainId); err != nil {
+			return err
+		}
+
+		p.log.Infof("Got new child chain msg from Peer %v, Before add protocol. Caps %v, Running Proto %+v", p.String(), p.Caps(), p.Info().Protocols)
+
+		newRunning := p.checkAndUpdateProtocol(chainId)
+		if newRunning {
+			// Add new protocol to peer, tell back to the peer
+			go Send(p.rw, ConfirmNewChildChainMsg, chainId)
+		}
+
+		// Add the cap to the peer, start the protocol
+		p.log.Infof("Got new child chain msg After add protocol. Caps %v, Running Proto %+v", p.Caps(), p.Info().Protocols)
+
+	case msg.Code == ConfirmNewChildChainMsg:
+		// Got New Child Chain message from peer
+		var chainId string
+		if err := msg.Decode(&chainId); err != nil {
+			return err
+		}
+		p.log.Infof("Got confirm msg from Peer %v, Before add protocol. Caps %v, Running Proto %+v", p.String(), p.Caps(), p.Info().Protocols)
+		p.checkAndUpdateProtocol(chainId)
+		p.log.Infof("Got confirm msg After add protocol. Caps %v, Running Proto %+v", p.Caps(), p.Info().Protocols)
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
 		return msg.Discard()
@@ -294,6 +326,31 @@ func (p *Peer) handle(msg Msg) error {
 		}
 	}
 	return nil
+}
+
+func (p *Peer) checkAndUpdateProtocol(chainId string) bool {
+
+	childProtocolName := "pchain_" + chainId
+	p.log.Infof("got message from %v", childProtocolName)
+
+	// Check childChainId already added
+	// TODO Protoect the changing of running under multi-thread env
+	if _, exist := p.running[childProtocolName]; exist {
+		return false
+	}
+
+	// Check we are support the same child chain or not
+	childProtocolOffset := getLargestOffset(p.running)
+	if match, protoRW := matchServerProtocol(*p.srvProtocols, childProtocolName, childProtocolOffset, p.rw); match {
+		// Start the ProtoRW and add it to running protoRW
+		p.startChildChainProtocol(protoRW)
+		// Add the protoRW to peer
+		p.running[childProtocolName] = protoRW
+		p.rw.caps = append(p.rw.caps, protoRW.cap())
+		return true
+	}
+
+	return false
 }
 
 func countMatchingProtocols(protocols []Protocol, caps []Cap) int {
@@ -333,6 +390,28 @@ outer:
 	return result
 }
 
+// matchServerProtocol creates structures for matching named subprotocols.
+func matchServerProtocol(protocols []Protocol, name string, offset uint64, rw MsgReadWriter) (bool, *protoRW) {
+	for _, proto := range protocols {
+		if proto.Name == name {
+			// return the new protoRW
+			return true, &protoRW{Protocol: proto, offset: offset, in: make(chan Msg), w: rw}
+		}
+	}
+	return false, nil
+}
+
+func getLargestOffset(running map[string]*protoRW) uint64 {
+	var largestOffset uint64 = 0
+	for _, proto := range running {
+		offsetEnd := proto.offset + proto.Length
+		if offsetEnd > largestOffset {
+			largestOffset = offsetEnd
+		}
+	}
+	return largestOffset
+}
+
 func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error) {
 	p.wg.Add(len(p.running))
 	for _, proto := range p.running {
@@ -357,6 +436,31 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 			p.wg.Done()
 		}()
 	}
+}
+
+func (p *Peer) startChildChainProtocol(proto *protoRW) {
+	p.wg.Add(1)
+
+	proto.closed = p.closed
+	proto.wstart = p.running["pchain"].wstart
+	proto.werr = p.running["pchain"].werr
+
+	var rw MsgReadWriter = proto
+	if p.events != nil {
+		rw = newMsgEventer(rw, p.events, p.ID(), proto.Name)
+	}
+	p.log.Trace(fmt.Sprintf("Starting protocol %s/%d", proto.Name, proto.Version))
+	go func() {
+		err := proto.Run(p, rw)
+		if err == nil {
+			p.log.Trace(fmt.Sprintf("Protocol %s/%d returned", proto.Name, proto.Version))
+			err = errProtocolReturned
+		} else if err != io.EOF {
+			p.log.Trace(fmt.Sprintf("Protocol %s/%d failed", proto.Name, proto.Version), "err", err)
+		}
+		p.protoErr <- err
+		p.wg.Done()
+	}()
 }
 
 // getProto finds the protocol responsible for handling

@@ -346,18 +346,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	// PChain Consensus Message
 	case msg.Code >= 0x20 && msg.Code <= 0x23:
 		if handler, ok := pm.engine.(consensus.Handler); ok {
-			var msgBytes, consensusMsgBytes []byte
+			var msgBytes []byte
 			if err := msg.Decode(&msgBytes); err != nil {
 				return errResp(ErrDecode, "msg %v: %v", msg, err)
 			}
-
-			if err := rlp.DecodeBytes(msgBytes, &consensusMsgBytes); err != nil {
-				return errResp(ErrDecode, "Consensus msg %v: %v", msg, err)
-			}
-
-			handler.HandleMsg(msg.Code, p, consensusMsgBytes)
+			handler.HandleMsg(msg.Code, p, msgBytes)
 		}
-
 	case msg.Code == StatusMsg:
 		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
