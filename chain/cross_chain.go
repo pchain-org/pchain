@@ -587,6 +587,7 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 	}
 	ep := ci.Epoch
 	log.Debug("ValidateTX3ProofData - check2.3")
+	log.Debug("ValidateTX3ProofData - check2.3.5")
 	log.Debugf("ValidateTX3ProofData - check2.3, ep.Number: %v, height: %v", ep.Number, tdmExtra.Height)
 	epoch := ci.GetEpochByBlockNumber(tdmExtra.Height)
 	if epoch == nil {
