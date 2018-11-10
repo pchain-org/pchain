@@ -552,6 +552,7 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 		return fmt.Errorf("invalid child chain id: %s", chainId)
 	}
 
+	log.Debug("ValidateTX3ProofData - check1")
 	if header.Nonce != (types.TendermintEmptyNonce) && !bytes.Equal(header.Nonce[:], types.TendermintNonce) {
 		return errors.New("invalid nonce")
 	}
@@ -564,6 +565,7 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 		return errors.New("invalid uncle Hash")
 	}
 
+	log.Debug("ValidateTX3ProofData - check2")
 	if header.Difficulty == nil || header.Difficulty.Cmp(types.TendermintDefaultDifficulty) != 0 {
 		return errors.New("invalid difficulty")
 	}
@@ -590,6 +592,7 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 		return errors.New("inconsistent validator set")
 	}
 
+	log.Debug("ValidateTX3ProofData - check3")
 	seenCommit := tdmExtra.SeenCommit
 	if !bytes.Equal(tdmExtra.SeenCommitHash, seenCommit.Hash()) {
 		return errors.New("invalid committed seals")
@@ -599,9 +602,12 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 		return err
 	}
 
+	log.Debug("ValidateTX3ProofData - check4")
 	// tx merkle proof verify
 	keybuf := new(bytes.Buffer)
+	log.Infof("ValidateTX3ProofData - proofData: %#v", proofData)
 	for i, txIndex := range proofData.TxIndexs {
+		log.Debug("ValidateTX3ProofData - check5, i: %v, txIndex: %v", i, txIndex)
 		keybuf.Reset()
 		rlp.Encode(keybuf, uint(txIndex))
 		_, err, _ := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
