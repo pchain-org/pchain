@@ -999,7 +999,9 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	}
 
 	// Validate TX4
+	cs.logger.Info("defaultDoPrevote: ValidateTX4 start")
 	err = cs.ValidateTX4(cs.ProposalBlock)
+	cs.logger.Infof("defaultDoPrevote: ValidateTX4 end, err: %v", err)
 	if err != nil {
 		// ProposalBlock is invalid, prevote nil.
 		cs.logger.Warnf("enterPrevote: ProposalBlock is invalid, ValidateTX4 error: %v", err)
@@ -1007,6 +1009,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 		return
 	}
 
+	cs.logger.Info("defaultDoPrevote: check1")
 	// Valdiate proposal block
 	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.TdmExtra.EpochBytes)
 	if proposedNextEpoch != nil && proposedNextEpoch.Number == cs.Epoch.Number+1 {
@@ -1021,6 +1024,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 		}
 	}
 
+	cs.logger.Info("defaultDoPrevote: check2")
 	// Prevote cs.ProposalBlock
 	// NOTE: the proposal signature is validated when it is received,
 	// and the proposal block parts are validated as they are received (against the merkle hash in the proposal)
@@ -1578,6 +1582,7 @@ func CompareHRS(h1 uint64, r1 int, s1 RoundStepType, h2 uint64, r2 int, s2 Round
 func (cs *ConsensusState) ValidateTX4(b *types.TdmBlock) error {
 	var index int
 
+	cs.logger.Info("ValidateTX4 start")
 	txs := b.Block.Transactions()
 	for _, tx := range txs {
 		if pabi.IsPChainContractAddr(tx.To()) {
@@ -1588,6 +1593,7 @@ func (cs *ConsensusState) ValidateTX4(b *types.TdmBlock) error {
 			}
 
 			if function == pabi.WithdrawFromMainChain {
+				cs.logger.Info("ValidateTX4 find TX4")
 				// index of tx4 and tx3ProofData should exactly match one by one.
 				if index >= len(b.TX3ProofData) {
 					return errors.New("tx3 proof data missing")
@@ -1595,10 +1601,12 @@ func (cs *ConsensusState) ValidateTX4(b *types.TdmBlock) error {
 				tx3ProofData := b.TX3ProofData[index]
 				index++
 
+				cs.logger.Info("ValidateTX4 ValidateTX3ProofData")
 				if err := cs.cch.ValidateTX3ProofData(tx3ProofData); err != nil {
 					return err
 				}
 
+				cs.logger.Info("ValidateTX4 ValidateTX4WithInMemTX3ProofData")
 				if err := cs.cch.ValidateTX4WithInMemTX3ProofData(tx, tx3ProofData); err != nil {
 					return err
 				}
@@ -1606,6 +1614,7 @@ func (cs *ConsensusState) ValidateTX4(b *types.TdmBlock) error {
 		}
 	}
 
+	cs.logger.Info("ValidateTX4 end")
 	return nil
 }
 
