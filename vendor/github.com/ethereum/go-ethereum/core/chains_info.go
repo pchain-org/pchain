@@ -175,7 +175,12 @@ func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
 			return epoch
 		}
 
-		for number := epoch.Number - 1; number >= 0; number-- {
+		number := epoch.Number
+		for {
+			if number == 0 {
+				break
+			}
+			number--
 
 			ep := loadEpoch(ci.db, number, ci.ChainId)
 			if ep == nil {
