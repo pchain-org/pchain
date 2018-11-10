@@ -585,7 +585,9 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 	if ci == nil {
 		return fmt.Errorf("chain info %s not found", chainId)
 	}
+	ep := ci.Epoch
 	log.Debug("ValidateTX3ProofData - check2.3")
+	log.Debugf("ValidateTX3ProofData - check2.3, ep.Number: %v, height: %v", ep.Number, tdmExtra.Height)
 	epoch := ci.GetEpochByBlockNumber(tdmExtra.Height)
 	if epoch == nil {
 		return fmt.Errorf("could not get epoch for block height %v", tdmExtra.Height)
