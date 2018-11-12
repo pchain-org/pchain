@@ -137,6 +137,10 @@ func NewEIP155Signer(chainId *big.Int) EIP155Signer {
 	}
 }
 
+func (s EIP155Signer) ChainId() *big.Int {
+	return s.chainId
+}
+
 func (s EIP155Signer) Equal(s2 Signer) bool {
 	eip155, ok := s2.(EIP155Signer)
 	return ok && eip155.chainId.Cmp(s.chainId) == 0

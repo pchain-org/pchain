@@ -565,12 +565,10 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 		return errors.New("invalid uncle Hash")
 	}
 
-	log.Debug("ValidateTX3ProofData - check2")
 	if header.Difficulty == nil || header.Difficulty.Cmp(types.TendermintDefaultDifficulty) != 0 {
 		return errors.New("invalid difficulty")
 	}
 
-	log.Debug("ValidateTX3ProofData - check2.1")
 	// special case: epoch 0 update
 	// TODO: how to verify this block which includes epoch 0?
 	if tdmExtra.EpochBytes != nil && len(tdmExtra.EpochBytes) != 0 {
@@ -580,26 +578,21 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 		}
 	}
 
-	log.Debug("ValidateTX3ProofData - check2.2")
 	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
 	if ci == nil {
 		return fmt.Errorf("chain info %s not found", chainId)
 	}
 	ep := ci.Epoch
-	log.Debug("ValidateTX3ProofData - check2.3")
-	log.Debug("ValidateTX3ProofData - check2.3.5")
-	log.Debugf("ValidateTX3ProofData - check2.3, ep.Number: %v, height: %v", ep.Number, tdmExtra.Height)
+	log.Debugf("ValidateTX3ProofData - ci.Epoch == nil: %v", ep == nil)
 	epoch := ci.GetEpochByBlockNumber(tdmExtra.Height)
 	if epoch == nil {
 		return fmt.Errorf("could not get epoch for block height %v", tdmExtra.Height)
 	}
-	log.Debug("ValidateTX3ProofData - check2.4")
 	valSet := epoch.Validators
 	if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
 		return errors.New("inconsistent validator set")
 	}
 
-	log.Debug("ValidateTX3ProofData - check3")
 	seenCommit := tdmExtra.SeenCommit
 	if !bytes.Equal(tdmExtra.SeenCommitHash, seenCommit.Hash()) {
 		return errors.New("invalid committed seals")
