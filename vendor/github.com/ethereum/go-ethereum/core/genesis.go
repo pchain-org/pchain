@@ -153,6 +153,7 @@ func (e *GenesisMismatchError) Error() string {
 // The returned chain configuration is never nil.
 func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
+		log.Info("SetupGenesisBlock return 1")
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
 
@@ -166,6 +167,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 			log.Info("Writing custom genesis block")
 		}
 		block, err := genesis.Commit(db)
+		log.Info("SetupGenesisBlock return 2")
 		return genesis.Config, block.Hash(), err
 	}
 
@@ -173,6 +175,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 	if genesis != nil {
 		hash := genesis.ToBlock(nil).Hash()
 		if hash != stored {
+			log.Info("SetupGenesisBlock return 3")
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
 	}
@@ -186,12 +189,14 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 			log.Warn("Found genesis block without chain config")
 			err = WriteChainConfig(db, stored, newcfg)
 		}
+		log.Info("SetupGenesisBlock return 4")
 		return newcfg, stored, err
 	}
 	// Special case: don't change the existing config of a non-mainnet chain if no new
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
 	// if we just continued here.
 	if genesis == nil && stored != params.MainnetGenesisHash {
+		log.Info("SetupGenesisBlock return 5")
 		return storedcfg, stored, nil
 	}
 
@@ -199,12 +204,15 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 	// are returned to the caller unless we're already at block zero.
 	height := GetBlockNumber(db, GetHeadHeaderHash(db))
 	if height == missingNumber {
+		log.Info("SetupGenesisBlock return 6")
 		return newcfg, stored, fmt.Errorf("missing block number for head header hash")
 	}
 	compatErr := storedcfg.CheckCompatible(newcfg, height)
 	if compatErr != nil && height != 0 && compatErr.RewindTo != 0 {
+		log.Info("SetupGenesisBlock return 7")
 		return newcfg, stored, compatErr
 	}
+	log.Info("SetupGenesisBlock return 8")
 	return newcfg, stored, WriteChainConfig(db, stored, newcfg)
 }
 
