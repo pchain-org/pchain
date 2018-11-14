@@ -301,6 +301,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// Add Peer to Consensus Engine
 	if handler, ok := pm.engine.(consensus.Handler); ok {
 		handler.AddPeer(p)
+		p.Log().Infof("Philip Test, success add peer, peer state %v", p.peerState)
 	}
 
 	// If we're DAO hard-fork aware, validate any remote peer with regard to the hard-fork

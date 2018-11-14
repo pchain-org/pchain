@@ -334,8 +334,6 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 	//hookup rpc
 	rpc.Hookup(chain.Id, chain.RpcHandler)
-
-	<-quit
 }
 
 func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainInfo, ep *epoch.Epoch) {

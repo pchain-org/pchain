@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/log"
+	"time"
 )
 
 var (
@@ -85,7 +86,24 @@ func (sb *backend) GetLogger() log.Logger {
 }
 
 func (sb *backend) AddPeer(src consensus.Peer) {
-	sb.core.consensusReactor.AddPeer(src)
+	if !sb.shouldStart {
+		return
+	}
+
+	for i := 0; i < 10; i++ {
+		sb.coreMu.RLock()
+		started := sb.coreStarted
+		sb.coreMu.RUnlock()
+
+		if started {
+			sb.core.consensusReactor.AddPeer(src)
+			return
+		} else {
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	sb.logger.Error("Wait for 10 sec, Consensus Engine (Tendermint) still not start, unable to add the peer to Engine")
 }
 
 func (sb *backend) RemovePeer(src consensus.Peer) {

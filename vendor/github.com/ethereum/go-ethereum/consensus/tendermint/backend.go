@@ -39,6 +39,7 @@ func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 		//recents:          recents,
 		candidates:  make(map[common.Address]bool),
 		coreStarted: false,
+		shouldStart: cliCtx.GlobalBool("mine") || cliCtx.GlobalBool("dev"),
 		//recentMessages:   recentMessages,
 		//knownMessages:    knownMessages,
 	}
@@ -63,6 +64,7 @@ type backend struct {
 	commitCh          chan *types.Block
 	proposedBlockHash common.Hash
 	sealMu            sync.Mutex
+	shouldStart       bool
 	coreStarted       bool
 	coreMu            sync.RWMutex
 

@@ -331,11 +331,11 @@ func (p *Peer) handle(msg Msg) error {
 func (p *Peer) checkAndUpdateProtocol(chainId string) bool {
 
 	childProtocolName := "pchain_" + chainId
-	p.log.Infof("got message from %v", childProtocolName)
 
 	// Check childChainId already added
 	// TODO Protoect the changing of running under multi-thread env
 	if _, exist := p.running[childProtocolName]; exist {
+		p.log.Infof("Child Chain %v is already running on peer", childProtocolName)
 		return false
 	}
 
@@ -350,6 +350,7 @@ func (p *Peer) checkAndUpdateProtocol(chainId string) bool {
 		return true
 	}
 
+	p.log.Infof("No Local Server Protocol matched, perhaps local server has not start the child chain %v yet.", childProtocolName)
 	return false
 }
 
