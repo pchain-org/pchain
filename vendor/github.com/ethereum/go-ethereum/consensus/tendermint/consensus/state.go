@@ -1006,6 +1006,16 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 		return
 	}
 
+	if cv, ok := cs.backend.ChainReader().(consss.ChainValidator); ok {
+		_, _, _, _, err := cv.ValidateBlock(cs.ProposalBlock.Block)
+		if err != nil {
+			// ProposalBlock is invalid, prevote nil.
+			cs.logger.Warnf("enterPrevote: ValidateBlock fail, error: %v", err)
+			cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+			return
+		}
+	}
+
 	// Valdiate proposal block
 	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.TdmExtra.EpochBytes)
 	if proposedNextEpoch != nil && proposedNextEpoch.Number == cs.Epoch.Number+1 {

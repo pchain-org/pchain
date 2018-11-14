@@ -57,6 +57,11 @@ type ChainReader interface {
 	CurrentBlock() *types.Block
 }
 
+// ChainValidator execute and validate the block with the current latest block.
+type ChainValidator interface {
+	ValidateBlock(block *types.Block) (types.Receipts, []*types.Log, uint64, *types.PendingOps, error)
+}
+
 // Engine is an algorithm agnostic consensus engine.
 type Engine interface {
 	// Author retrieves the Ethereum address of the account that minted the given
@@ -158,6 +163,9 @@ type Tendermint interface {
 	EngineStartStop
 
 	GetEpoch() *epoch.Epoch
-
 	SetEpoch(ep *epoch.Epoch)
+
+	// VerifyHeader checks whether a header conforms to the consensus rules of a given engine.
+	VerifyHeaderBeforeConsensus(chain ChainReader, header *types.Header, seal bool) error
+	VerifyHeaderAfterConsensus(chain ChainReader, header *types.Header, seal bool) error
 }

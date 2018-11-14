@@ -235,6 +235,44 @@ func (sb *backend) verifyCascadingFields(chain consensus.ChainReader, header *ty
 	return err
 }
 
+func (sb *backend) VerifyHeaderBeforeConsensus(chain consensus.ChainReader, header *types.Header, seal bool) error {
+	sb.logger.Info("Tendermint (backend) VerifyHeaderBeforeConsensus, add logic here")
+
+	if header.Number == nil {
+		return errUnknownBlock
+	}
+
+	// Don't waste time checking blocks from the future
+	if header.Time.Cmp(big.NewInt(now().Unix())) > 0 {
+		return consensus.ErrFutureBlock
+	}
+
+	// Ensure that the coinbase is valid
+	if header.Nonce != (types.TendermintEmptyNonce) && !bytes.Equal(header.Nonce[:], types.TendermintNonce) {
+		return errInvalidNonce
+	}
+	// Ensure that the mix digest is zero as we don't have fork protection currently
+	if header.MixDigest != types.TendermintDigest {
+		return errInvalidMixDigest
+	}
+	// Ensure that the block doesn't contain any uncles which are meaningless in Istanbul
+	if header.UncleHash != types.TendermintNilUncleHash {
+		return errInvalidUncleHash
+	}
+	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
+	if header.Difficulty == nil || header.Difficulty.Cmp(types.TendermintDefaultDifficulty) != 0 {
+		return errInvalidDifficulty
+	}
+
+	return nil
+}
+
+func (sb *backend) VerifyHeaderAfterConsensus(chain consensus.ChainReader, header *types.Header, seal bool) error {
+	sb.logger.Info("Tendermint (backend) VerifyHeaderAfterConsensus, add logic here")
+
+	return sb.verifyHeader(chain, header, nil)
+}
+
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications (the order is that of
