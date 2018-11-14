@@ -91,7 +91,7 @@ func vne_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 	return err
 }
 
-func vne_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+func vne_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
 	signer := types.NewEIP155Signer(tx.ChainId())
 	from, err := types.Sender(signer, tx)
@@ -147,7 +147,7 @@ func rev_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 	return err
 }
 
-func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
 	signer := types.NewEIP155Signer(tx.ChainId())
 	from, err := types.Sender(signer, tx)
