@@ -57,7 +57,7 @@ type ChainReader interface {
 	CurrentBlock() *types.Block
 }
 
-// ChainValidator execute and validate the block with the current latest block.
+// ChainValidator execute and validate the block with the current latest block as parent.
 type ChainValidator interface {
 	ValidateBlock(block *types.Block) (types.Receipts, []*types.Log, uint64, *types.PendingOps, error)
 }

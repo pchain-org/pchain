@@ -997,22 +997,26 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 		return
 	}
 
-	// Validate TX4
-	err = cs.ValidateTX4(cs.ProposalBlock)
-	if err != nil {
-		// ProposalBlock is invalid, prevote nil.
-		cs.logger.Warnf("enterPrevote: ProposalBlock is invalid, error: %v", err)
-		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
-		return
-	}
-
-	if cv, ok := cs.backend.ChainReader().(consss.ChainValidator); ok {
-		_, _, _, _, err := cv.ValidateBlock(cs.ProposalBlock.Block)
+	// non-proposer should validate tx4 and execute block here.
+	// proposer will validate tx4 when mining the block.
+	if !(cs.privValidator != nil && bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress())) {
+		// Validate TX4
+		err = cs.ValidateTX4(cs.ProposalBlock)
 		if err != nil {
 			// ProposalBlock is invalid, prevote nil.
-			cs.logger.Warnf("enterPrevote: ValidateBlock fail, error: %v", err)
+			cs.logger.Warnf("enterPrevote: ProposalBlock is invalid, error: %v", err)
 			cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
 			return
+		}
+
+		if cv, ok := cs.backend.ChainReader().(consss.ChainValidator); ok {
+			_, _, _, _, err := cv.ValidateBlock(cs.ProposalBlock.Block)
+			if err != nil {
+				// ProposalBlock is invalid, prevote nil.
+				cs.logger.Warnf("enterPrevote: ValidateBlock fail, error: %v", err)
+				cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+				return
+			}
 		}
 	}
 
