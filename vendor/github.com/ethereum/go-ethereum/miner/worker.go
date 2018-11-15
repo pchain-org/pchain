@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -85,8 +86,9 @@ type Work struct {
 }
 
 type Result struct {
-	Work  *Work
-	Block *types.Block
+	Work         *Work
+	Block        *types.Block
+	Intermediate *tdmTypes.IntermediateBlockResult
 }
 
 // worker is the main object which takes care of applying messages to the new state
@@ -326,26 +328,45 @@ func (self *worker) wait() {
 			if result == nil {
 				continue
 			}
-			block := result.Block
-			work := result.Work
 
-			// Update the block hash in all logs since it is now available and not when the
-			// receipt/log of individual transactions were created.
-			for _, r := range work.receipts {
-				for _, l := range r.Logs {
-					l.BlockHash = block.Hash()
+			var block *types.Block
+			var receipts types.Receipts
+			var state *state.StateDB
+			var ops *types.PendingOps
+
+			if result.Work != nil {
+				block = result.Block
+
+				work := result.Work
+				// Update the block hash in all logs since it is now available and not when the
+				// receipt/log of individual transactions were created.
+				for _, r := range work.receipts {
+					for _, l := range r.Logs {
+						l.BlockHash = block.Hash()
+					}
 				}
+				for _, log := range work.state.Logs() {
+					log.BlockHash = block.Hash()
+				}
+				receipts = work.receipts
+				state = work.state
+				ops = work.ops
+			} else if result.Intermediate != nil {
+				block = result.Intermediate.Block
+				receipts = result.Intermediate.Receipts
+				state = result.Intermediate.State
+				ops = result.Intermediate.Ops
+			} else {
+				continue
 			}
-			for _, log := range work.state.Logs() {
-				log.BlockHash = block.Hash()
-			}
-			stat, err := self.chain.WriteBlockWithState(block, work.receipts, work.state)
+
+			stat, err := self.chain.WriteBlockWithState(block, receipts, state)
 			if err != nil {
 				self.logger.Error("Failed writing block to chain", "err", err)
 				continue
 			}
 			// execute the pending ops.
-			for _, op := range work.ops.Ops() {
+			for _, op := range ops.Ops() {
 				if err := core.ApplyOp(op, self.chain, self.cch); err != nil {
 					log.Error("Failed executing op", op, "err", err)
 				}
@@ -359,7 +380,7 @@ func (self *worker) wait() {
 			self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			var (
 				events []interface{}
-				logs   = work.state.Logs()
+				logs   = state.Logs()
 			)
 			events = append(events, core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 			if stat == core.CanonStatTy {

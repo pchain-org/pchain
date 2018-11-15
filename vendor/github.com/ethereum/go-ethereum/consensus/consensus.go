@@ -59,7 +59,7 @@ type ChainReader interface {
 
 // ChainValidator execute and validate the block with the current latest block as parent.
 type ChainValidator interface {
-	ValidateBlock(block *types.Block) (types.Receipts, []*types.Log, uint64, *types.PendingOps, error)
+	ValidateBlock(block *types.Block) (*state.StateDB, types.Receipts, *types.PendingOps, error)
 }
 
 // Engine is an algorithm agnostic consensus engine.
@@ -101,7 +101,7 @@ type Engine interface {
 
 	// Seal generates a new block for the given input block with the local miner's
 	// seal place on top.
-	Seal(chain ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error)
+	Seal(chain ChainReader, block *types.Block, stop <-chan struct{}) (interface{}, error)
 
 	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 	// that a new block should have.

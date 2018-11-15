@@ -1010,12 +1010,17 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 		}
 
 		if cv, ok := cs.backend.ChainReader().(consss.ChainValidator); ok {
-			_, _, _, _, err := cv.ValidateBlock(cs.ProposalBlock.Block)
+			state, receipts, ops, err := cv.ValidateBlock(cs.ProposalBlock.Block)
 			if err != nil {
 				// ProposalBlock is invalid, prevote nil.
 				cs.logger.Warnf("enterPrevote: ValidateBlock fail, error: %v", err)
 				cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
 				return
+			}
+			cs.ProposalBlock.IntermediateResult = &types.IntermediateBlockResult{
+				State:    state,
+				Receipts: receipts,
+				Ops:      ops,
 			}
 		}
 	}

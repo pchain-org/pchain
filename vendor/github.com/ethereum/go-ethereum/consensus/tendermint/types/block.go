@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	. "github.com/tendermint/go-common"
@@ -17,10 +18,20 @@ import (
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 
+// IntermediateBlockResult represents intermediate block execute result.
+type IntermediateBlockResult struct {
+	Block *types.Block
+	// followed by block execute result
+	State    *state.StateDB
+	Receipts types.Receipts
+	Ops      *types.PendingOps
+}
+
 type TdmBlock struct {
-	Block        *types.Block          `json:"block"`
-	TdmExtra     *TendermintExtra      `json:"tdmexdata"`
-	TX3ProofData []*types.TX3ProofData `json:"tx3proofdata"`
+	Block              *types.Block             `json:"block"`
+	TdmExtra           *TendermintExtra         `json:"tdmexdata"`
+	TX3ProofData       []*types.TX3ProofData    `json:"tx3proofdata"`
+	IntermediateResult *IntermediateBlockResult `json:"-"`
 }
 
 func MakeBlock(height uint64, chainID string, commit *Commit,

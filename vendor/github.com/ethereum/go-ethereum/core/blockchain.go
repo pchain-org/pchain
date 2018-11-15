@@ -634,42 +634,42 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 }
 
 // ChainValidator execute and validate the block with the current latest block.
-func (bc *BlockChain) ValidateBlock(block *types.Block) (types.Receipts, []*types.Log, uint64, *types.PendingOps, error) {
+func (bc *BlockChain) ValidateBlock(block *types.Block) (*state.StateDB, types.Receipts, *types.PendingOps, error) {
 	// If the header is a banned one, straight out abort
 	if BadHashes[block.Hash()] {
-		return nil, nil, 0, nil, ErrBlacklistedHash
+		return nil, nil, nil, ErrBlacklistedHash
 	}
 
 	// Header verify
 	if err := bc.engine.(consensus.Tendermint).VerifyHeaderBeforeConsensus(bc, block.Header(), true); err != nil {
-		return nil, nil, 0, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Body verify
 	if err := bc.Validator().ValidateBody(block); err != nil {
-		return nil, nil, 0, nil, err
+		return nil, nil, nil, err
 	}
 
 	var parent *types.Block
 	parent = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	state, err := state.New(parent.Root(), bc.stateCache)
 	if err != nil {
-		return nil, nil, 0, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Process block using the parent state as reference point.
-	receipts, logs, usedGas, ops, err := bc.processor.Process(block, state, bc.vmConfig)
+	receipts, _, usedGas, ops, err := bc.processor.Process(block, state, bc.vmConfig)
 	if err != nil {
-		return nil, nil, 0, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Validate the state using the default validator
 	err = bc.Validator().ValidateState(block, parent, state, receipts, usedGas)
 	if err != nil {
-		return nil, nil, 0, nil, err
+		return nil, nil, nil, err
 	}
 
-	return receipts, logs, usedGas, ops, nil
+	return state, receipts, ops, nil
 }
 
 // TrieNode retrieves a blob of data associated with a trie node (or code hash)

@@ -96,6 +96,10 @@ func (sb *backend) Start(chain consensus.ChainReader, currentBlock func() *types
 		close(sb.commitCh)
 	}
 	sb.commitCh = make(chan *types.Block, 1)
+	if sb.vcommitCh != nil {
+		close(sb.vcommitCh)
+	}
+	sb.vcommitCh = make(chan *tdmTypes.IntermediateBlockResult, 1)
 
 	sb.chain = chain
 	sb.currentBlock = currentBlock
@@ -489,7 +493,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 // Seal generates a new block for the given input block with the local miner's
 // seal place on top.
-func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error) {
+func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (interface{}, error) {
 
 	sb.logger.Info("Tendermint (backend) Seal, add logic here")
 
@@ -554,6 +558,19 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 				return nil, nil
 			}
 
+		case iresult, ok := <-sb.vcommitCh:
+
+			if ok {
+				sb.logger.Infof("Tendermint (backend) Seal, v got result with block.Hash: %x, result.Hash: %x", block.Hash(), iresult.Block.Hash())
+				if block.Hash() != iresult.Block.Hash() {
+					return iresult, nil
+				}
+				sb.logger.Info("Tendermint (backend) Seal, v hash are the same")
+			} else {
+				sb.logger.Info("Tendermint (backend) Seal, v has been restart, just return")
+				return nil, nil
+			}
+
 		case <-stop:
 			return nil, nil
 		}
@@ -593,16 +610,24 @@ func (sb *backend) Commit(proposal *tdmTypes.TdmBlock, seals [][]byte) error {
 	// -- if success, the ChainHeadEvent event will be broadcasted, try to build
 	//    the next block and the previous Seal() will be stopped.
 	// -- otherwise, a error will be returned and a round change event will be fired.
-	if sb.proposedBlockHash == block.Hash() {
+	if sb.proposedBlockHash == block.Hash() { // for proposer
 		// feed block hash to Seal() and wait the Seal() result
+		sb.logger.Infof("Tendermint (backend) Commit, proposer | feed to Seal: %x", block.Hash())
 		sb.commitCh <- block
 		return nil
+	} else { // for other validators
+		if proposal.IntermediateResult != nil {
+			sb.logger.Infof("Tendermint (backend) Commit, validator | feed to Seal: %x", block.Hash())
+			proposal.IntermediateResult.Block = block
+			sb.vcommitCh <- proposal.IntermediateResult
+		} else {
+			sb.logger.Infof("Tendermint (backend) Commit, validator | fetcher enqueue: %x", block.Hash())
+			if sb.broadcaster != nil {
+				sb.broadcaster.Enqueue(fetcherID, block)
+			}
+		}
+		return nil
 	}
-	sb.logger.Infof("Tendermint (backend) Commit, sb.broadcaster is %v", sb.broadcaster)
-	if sb.broadcaster != nil {
-		sb.broadcaster.Enqueue(fetcherID, block)
-	}
-	return nil
 }
 
 // Stop implements consensus.Istanbul.Stop

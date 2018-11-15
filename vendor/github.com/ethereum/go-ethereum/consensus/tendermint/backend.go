@@ -4,8 +4,9 @@ import (
 	"crypto/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -33,9 +34,10 @@ func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 		privateKey:         privateKey,
 		//address:          crypto.PubkeyToAddress(privateKey.PublicKey),
 		//core:             node,
-		logger:   logger,
-		db:       db,
-		commitCh: make(chan *types.Block, 1),
+		logger:    logger,
+		db:        db,
+		commitCh:  make(chan *ethTypes.Block, 1),
+		vcommitCh: make(chan *types.IntermediateBlockResult, 1),
 		//recents:          recents,
 		candidates:  make(map[common.Address]bool),
 		coreStarted: false,
@@ -57,11 +59,12 @@ type backend struct {
 	logger             log.Logger
 	db                 ethdb.Database
 	chain              consensus.ChainReader
-	currentBlock       func() *types.Block
+	currentBlock       func() *ethTypes.Block
 	hasBadBlock        func(hash common.Hash) bool
 
 	// the channels for istanbul engine notifications
-	commitCh          chan *types.Block
+	commitCh          chan *ethTypes.Block
+	vcommitCh         chan *types.IntermediateBlockResult
 	proposedBlockHash common.Hash
 	sealMu            sync.Mutex
 	shouldStart       bool
