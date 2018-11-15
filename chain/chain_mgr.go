@@ -30,7 +30,7 @@ type ChainManager struct {
 
 	mainChain     *Chain
 	mainQuit      chan int
-	mainStartDone chan int
+	mainStartDone chan struct{}
 
 	createChildChainLock sync.Mutex
 	childChains          map[string]*Chain
@@ -144,10 +144,10 @@ func (cm *ChainManager) StartP2PServer() error {
 func (cm *ChainManager) StartMainChain() error {
 	// Start the Main Chain
 	cm.mainQuit = make(chan int)
-	cm.mainStartDone = make(chan int)
+	cm.mainStartDone = make(chan struct{})
 
 	cm.mainChain.EthNode.SetP2PServer(cm.server.Server())
-	err := StartChain(cm.ctx, cm.mainChain, cm.mainStartDone, cm.mainQuit)
+	err := StartChain(cm.ctx, cm.mainChain, cm.mainStartDone)
 	return err
 }
 
@@ -166,10 +166,12 @@ func (cm *ChainManager) StartChains() error {
 		srv.AddChildProtocolCaps(childProtocols)
 
 		chain.EthNode.SetP2PServer(srv)
-		err := StartChain(cm.ctx, chain, nil, quit)
-		if err != nil {
-			return err
-		}
+
+		startDone := make(chan struct{})
+		StartChain(cm.ctx, chain, startDone)
+		<-startDone
+		// Tell other peers that we have added into a new child chain
+		cm.server.BroadcastNewChildChainMsg(chain.Id)
 	}
 
 	return nil
@@ -315,7 +317,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		cm.ctx.GlobalSet(utils.MiningEnabledFlag.Name, "true")
 	}
 
-	err = StartChain(cm.ctx, chain, nil, quit)
+	err = StartChain(cm.ctx, chain, nil)
 	if err != nil {
 		return
 	}

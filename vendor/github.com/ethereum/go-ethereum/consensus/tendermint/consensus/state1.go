@@ -118,7 +118,7 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	}
 
 	cs.Validators = validators
-	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators, cs.logger)
+	cs.Votes = NewHeightVoteSet(cs.chainConfig.PChainId, height, validators, cs.logger)
 	cs.LastCommit = lastPrecommits
 
 	cs.state = state

@@ -99,11 +99,13 @@ type ProtocolManager struct {
 	engine consensus.Engine
 
 	cch core.CrossChainHelper
+
+	logger log.Logger
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkId uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, cch core.CrossChainHelper) (*ProtocolManager, error) {
+func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkId uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, cch core.CrossChainHelper, logger log.Logger) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
 		networkId:   networkId,
@@ -118,6 +120,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 		quitSync:    make(chan struct{}),
 		engine:      engine,
 		cch:         cch,
+		logger:      logger,
 	}
 
 	if handler, ok := manager.engine.(consensus.Handler); ok {
@@ -126,7 +129,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 
 	// Figure out whether to allow fast sync or not
 	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {
-		log.Warn("Blockchain not empty, fast sync disabled")
+		logger.Warn("Blockchain not empty, fast sync disabled")
 		mode = downloader.FullSync
 	}
 	if mode == downloader.FastSync {
@@ -147,7 +150,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 			Version: version,
 			Length:  protocol.Lengths[i],
 			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-				peer := manager.newPeer(int(version), p, rw)
+				peer := manager.newPeer(protocol.Name, int(version), p, rw)
 				select {
 				case manager.newPeerCh <- peer:
 					manager.wg.Add(1)
@@ -183,7 +186,7 @@ func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, ne
 	inserter := func(blocks types.Blocks) (int, error) {
 		// If fast sync is running, deny importing weird blocks
 		if atomic.LoadUint32(&manager.fastSync) == 1 {
-			log.Warn("Discarded bad propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
+			logger.Warn("Discarded bad propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
 			return 0, nil
 		}
 		atomic.StoreUint32(&manager.acceptTxs, 1) // Mark initial sync done on any fetcher import
@@ -200,12 +203,12 @@ func (pm *ProtocolManager) removePeer(id string) {
 	if peer == nil {
 		return
 	}
-	log.Debug("Removing Ethereum peer", "peer", id)
+	pm.logger.Debug("Removing Ethereum peer", "peer", id)
 
 	// Unregister the peer from the downloader and Ethereum peer set
 	pm.downloader.UnregisterPeer(id)
 	if err := pm.peers.Unregister(id); err != nil {
-		log.Error("Peer removal failed", "peer", id, "err", err)
+		pm.logger.Error("Peer removal failed", "peer", id, "err", err)
 	}
 	// Hard disconnect at the networking layer
 	if peer != nil {
@@ -231,7 +234,7 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 }
 
 func (pm *ProtocolManager) Stop() {
-	log.Info("Stopping Ethereum protocol")
+	pm.logger.Info("Stopping Ethereum protocol")
 
 	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
@@ -252,11 +255,11 @@ func (pm *ProtocolManager) Stop() {
 	// Wait for all peer handler goroutines and the loops to come down.
 	pm.wg.Wait()
 
-	log.Info("Ethereum protocol stopped")
+	pm.logger.Info("Ethereum protocol stopped")
 }
 
-func (pm *ProtocolManager) newPeer(pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
-	return newPeer(pv, p, newMeteredMsgWriter(rw))
+func (pm *ProtocolManager) newPeer(pn string, pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+	return newPeer(pn, pv, p, newMeteredMsgWriter(rw))
 }
 
 // handle is the callback invoked to manage the life cycle of an eth peer. When
@@ -301,7 +304,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// Add Peer to Consensus Engine
 	if handler, ok := pm.engine.(consensus.Handler); ok {
 		handler.AddPeer(p)
-		p.Log().Infof("Philip Test, success add peer, peer state %v", p.peerState)
 	}
 
 	// If we're DAO hard-fork aware, validate any remote peer with regard to the hard-fork
@@ -488,7 +490,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if len(headers) > 0 || !filter {
 			err := pm.downloader.DeliverHeaders(p.id, headers)
 			if err != nil {
-				log.Debug("Failed to deliver headers", "err", err)
+				pm.logger.Debug("Failed to deliver headers", "err", err)
 			}
 		}
 
@@ -541,7 +543,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if len(trasactions) > 0 || len(uncles) > 0 || !filter {
 			err := pm.downloader.DeliverBodies(p.id, trasactions, uncles)
 			if err != nil {
-				log.Debug("Failed to deliver bodies", "err", err)
+				pm.logger.Debug("Failed to deliver bodies", "err", err)
 			}
 		}
 
@@ -580,7 +582,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Deliver all to the downloader
 		if err := pm.downloader.DeliverNodeData(p.id, data); err != nil {
-			log.Debug("Failed to deliver node state data", "err", err)
+			pm.logger.Debug("Failed to deliver node state data", "err", err)
 		}
 
 	case p.version >= consensus.Eth63 && msg.Code == GetReceiptsMsg:
@@ -611,7 +613,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			// If known, encode and queue for response packet
 			if encoded, err := rlp.EncodeToBytes(results); err != nil {
-				log.Error("Failed to encode receipt", "err", err)
+				pm.logger.Error("Failed to encode receipt", "err", err)
 			} else {
 				receipts = append(receipts, encoded)
 				bytes += len(encoded)
@@ -627,7 +629,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		// Deliver all to the downloader
 		if err := pm.downloader.DeliverReceipts(p.id, receipts); err != nil {
-			log.Debug("Failed to deliver receipts", "err", err)
+			pm.logger.Debug("Failed to deliver receipts", "err", err)
 		}
 
 	case msg.Code == NewBlockHashesMsg:
@@ -707,22 +709,22 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		fmt.Printf("msg.Code == TxMsg here 4\n")
 
 	case msg.Code == TX3ProofDataMsg:
-		log.Info("TX3ProofDataMsg received")
+		pm.logger.Info("TX3ProofDataMsg received")
 		var proofDatas []*types.TX3ProofData
 		if err := msg.Decode(&proofDatas); err != nil {
-			log.Error("TX3ProofDataMsg decode error", "msg", msg, "error", err)
+			pm.logger.Error("TX3ProofDataMsg decode error", "msg", msg, "error", err)
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		for _, proofData := range proofDatas {
 			// Validate and mark the remote TX3ProofData
 			if err := pm.cch.ValidateTX3ProofData(proofData); err != nil {
-				log.Error("TX3ProofDataMsg validate error", "msg", msg, "error", err)
+				pm.logger.Error("TX3ProofDataMsg validate error", "msg", msg, "error", err)
 				return errResp(ErrTX3ValidateFail, "msg %v: %v", msg, err)
 			}
 			p.MarkTX3ProofData(proofData.Header.Number.Uint64())
 			// Write the remote TX3ProofData
 			if err := pm.cch.WriteTX3ProofData(proofData); err != nil {
-				log.Error("TX3ProofDataMsg write error", "msg", msg, "error", err)
+				pm.logger.Error("TX3ProofDataMsg write error", "msg", msg, "error", err)
 			}
 		}
 
@@ -749,7 +751,7 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 		if parent := pm.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
 			td = new(big.Int).Add(block.Difficulty(), pm.blockchain.GetTd(block.ParentHash(), block.NumberU64()-1))
 		} else {
-			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
+			pm.logger.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
 			return
 		}
 		// Send the block to a subset of our peers
@@ -757,7 +759,7 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 		for _, peer := range transfer {
 			peer.SendNewBlock(block, td)
 		}
-		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		pm.logger.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
@@ -765,7 +767,7 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 		for _, peer := range peers {
 			peer.SendNewBlockHashes([]common.Hash{hash}, []uint64{block.NumberU64()})
 		}
-		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		pm.logger.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 }
 
@@ -780,7 +782,7 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 	for _, peer := range peers {
 		peer.SendTransactions(types.Transactions{tx})
 	}
-	log.Trace("Broadcast transaction", "hash", hash, "recipients", len(peers))
+	pm.logger.Trace("Broadcast transaction", "hash", hash, "recipients", len(peers))
 }
 
 // BroadcastTX3ProofData will propagate a TX3ProofData to all peers which are not known to
@@ -791,7 +793,7 @@ func (pm *ProtocolManager) BroadcastTX3ProofData(height uint64, proofData *types
 	for _, peer := range peers {
 		peer.SendTX3ProofData([]*types.TX3ProofData{proofData})
 	}
-	log.Trace("Broadcast TX3ProofData", "height", height, "recipients", len(peers))
+	pm.logger.Trace("Broadcast TX3ProofData", "height", height, "recipients", len(peers))
 }
 
 func (pm *ProtocolManager) BroadcastMessage(msgcode uint64, data interface{}) {
@@ -800,7 +802,7 @@ func (pm *ProtocolManager) BroadcastMessage(msgcode uint64, data interface{}) {
 		peer.Send(msgcode, data)
 		recipients++
 	}
-	log.Trace("Broadcast p2p message", "code", msgcode, "recipients", recipients)
+	pm.logger.Trace("Broadcast p2p message", "code", msgcode, "recipients", recipients, "msg", data)
 }
 
 // Mined broadcast loop

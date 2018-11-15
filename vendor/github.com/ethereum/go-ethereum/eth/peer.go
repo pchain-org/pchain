@@ -59,6 +59,7 @@ type peer struct {
 	*p2p.Peer
 	rw p2p.MsgReadWriter
 
+	pname    string      // Protocol name
 	version  int         // Protocol version negotiated
 	forkDrop *time.Timer // Timed connection dropper if forks aren't validated in time
 
@@ -73,12 +74,13 @@ type peer struct {
 	peerState consensus.PeerState
 }
 
-func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+func newPeer(name string, version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	id := p.ID()
 
 	return &peer{
 		Peer:               p,
 		rw:                 rw,
+		pname:              name,
 		version:            version,
 		id:                 fmt.Sprintf("%x", id[:8]),
 		knownTxs:           set.New(),
@@ -345,7 +347,7 @@ func (p *peer) readStatus(network uint64, status *statusData, genesis common.Has
 // String implements fmt.Stringer.
 func (p *peer) String() string {
 	return fmt.Sprintf("Peer %s [%s]", p.id,
-		fmt.Sprintf("eth/%2d", p.version),
+		fmt.Sprintf("%v/%2d", p.pname, p.version),
 	)
 }
 

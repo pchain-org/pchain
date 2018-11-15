@@ -513,7 +513,7 @@ func (cs *ConsensusState) ReconstructLastCommit(state *sm.State) {
 	seenCommit := state.TdmExtra.SeenCommit
 
 	lastValidators, _, _ := state.GetValidators()
-	lastPrecommits := types.NewVoteSet(cs.config.GetString("chain_id"), state.TdmExtra.Height, seenCommit.Round(), types.VoteTypePrecommit, lastValidators)
+	lastPrecommits := types.NewVoteSet(cs.chainConfig.PChainId, state.TdmExtra.Height, seenCommit.Round(), types.VoteTypePrecommit, lastValidators)
 
 	cs.logger.Infof("ReconstructLastCommit. seenCommit: %v, lastPrecommits: %v", seenCommit, lastPrecommits)
 
@@ -792,9 +792,9 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 	}
 
 	if !bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
-		cs.logger.Info("enterPropose: Not our turn to propose", "proposer", cs.Validators.GetProposer().Address, "privValidator", cs.privValidator)
+		cs.logger.Info("enterPropose: Not our turn to propose", "proposer", common.Bytes2Hex(cs.Validators.GetProposer().Address), "privValidator", cs.privValidator)
 	} else {
-		cs.logger.Info("enterPropose: Our turn to propose", "proposer", cs.Validators.GetProposer().Address, "privValidator", cs.privValidator)
+		cs.logger.Info("enterPropose: Our turn to propose", "proposer", common.Bytes2Hex(cs.Validators.GetProposer().Address), "privValidator", cs.privValidator)
 		cs.decideProposal(height, round)
 	}
 }
@@ -1372,6 +1372,8 @@ func (cs *ConsensusState) addProposalBlockPart(height uint64, part *types.Part, 
 		// Added and completed!
 		tdmBlock := &types.TdmBlock{}
 		cs.ProposalBlock, err = tdmBlock.FromBytes(cs.ProposalBlockParts.GetReader())
+
+		cs.logger.Info("Received complete proposal block", "block", cs.ProposalBlock.String(), "err", err)
 
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
 		//log.Info("Received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())

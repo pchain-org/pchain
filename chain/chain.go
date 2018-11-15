@@ -80,7 +80,7 @@ func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
 	return chain
 }
 
-func StartChain(ctx *cli.Context, chain *Chain, startDone, quit chan int) error {
+func StartChain(ctx *cli.Context, chain *Chain, startDone chan<- struct{}) error {
 
 	log.Infof("Start Chain: %s", chain.Id)
 	go func() {
@@ -91,7 +91,7 @@ func StartChain(ctx *cli.Context, chain *Chain, startDone, quit chan int) error 
 		//chainMgr.p2pObj.AddNetwork(chain.Id)
 
 		if startDone != nil {
-			startDone <- 1
+			startDone <- struct{}{}
 		}
 	}()
 
