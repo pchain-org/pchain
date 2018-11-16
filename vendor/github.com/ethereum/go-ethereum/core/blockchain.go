@@ -499,7 +499,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 		bc.currentFastBlock.Store(block)
 	}
 
-	log.Info(fmt.Sprintf("(bc *BlockChain) insert block number %v", block.NumberU64()))
+	log.Info(fmt.Sprintf("(bc *BlockChain) insert block number %v, hash: %x", block.NumberU64(), block.Hash()))
 	ibCbMap := GetInsertBlockCbMap()
 	for _, cb := range ibCbMap {
 		cb(bc, block)

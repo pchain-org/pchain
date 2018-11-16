@@ -279,6 +279,7 @@ func (self *worker) update() {
 		select {
 		// Handle ChainHeadEvent
 		case <-self.chainHeadCh:
+			self.logger.Info("miner/worker: received chainHead")
 			if h, ok := self.engine.(consensus.Handler); ok {
 				h.NewChainHead()
 			}

@@ -572,6 +572,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 			}
 
 		case <-stop:
+			sb.logger.Info("Tendermint (backend) Seal, stop")
 			return nil, nil
 		}
 	}
