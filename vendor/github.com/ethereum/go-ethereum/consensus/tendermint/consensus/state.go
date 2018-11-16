@@ -1001,6 +1001,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	// proposer will validate tx4 when mining the block.
 	if !(cs.privValidator != nil && bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress())) {
 		// Validate TX4
+		cs.logger.Info("enterPrevote: ValidateTX4")
 		err = cs.ValidateTX4(cs.ProposalBlock)
 		if err != nil {
 			// ProposalBlock is invalid, prevote nil.
@@ -1010,6 +1011,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 		}
 
 		if cv, ok := cs.backend.ChainReader().(consss.ChainValidator); ok {
+			cs.logger.Info("enterPrevote: Validate/Execute Block")
 			state, receipts, ops, err := cv.ValidateBlock(cs.ProposalBlock.Block)
 			if err != nil {
 				// ProposalBlock is invalid, prevote nil.
@@ -1017,6 +1019,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 				cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
 				return
 			}
+			cs.logger.Info("enterPrevote: Validate/Execute Block, Setup the IntermediateBlockResult")
 			cs.ProposalBlock.IntermediateResult = &types.IntermediateBlockResult{
 				State:    state,
 				Receipts: receipts,

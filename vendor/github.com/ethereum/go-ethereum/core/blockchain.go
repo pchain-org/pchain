@@ -635,6 +635,7 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 
 // ChainValidator execute and validate the block with the current latest block.
 func (bc *BlockChain) ValidateBlock(block *types.Block) (*state.StateDB, types.Receipts, *types.PendingOps, error) {
+	log.Info("ValidateBlock checkpoint 0")
 	// If the header is a banned one, straight out abort
 	if BadHashes[block.Hash()] {
 		return nil, nil, nil, ErrBlacklistedHash
@@ -646,6 +647,7 @@ func (bc *BlockChain) ValidateBlock(block *types.Block) (*state.StateDB, types.R
 	}
 
 	// Body verify
+	log.Info("ValidateBlock checkpoint 1")
 	if err := bc.Validator().ValidateBody(block); err != nil {
 		return nil, nil, nil, err
 	}
@@ -658,17 +660,20 @@ func (bc *BlockChain) ValidateBlock(block *types.Block) (*state.StateDB, types.R
 	}
 
 	// Process block using the parent state as reference point.
+	log.Info("ValidateBlock checkpoint 2")
 	receipts, _, usedGas, ops, err := bc.processor.Process(block, state, bc.vmConfig)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	// Validate the state using the default validator
+	log.Info("ValidateBlock checkpoint 3")
 	err = bc.Validator().ValidateState(block, parent, state, receipts, usedGas)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
+	log.Info("ValidateBlock checkpoint 4")
 	return state, receipts, ops, nil
 }
 
