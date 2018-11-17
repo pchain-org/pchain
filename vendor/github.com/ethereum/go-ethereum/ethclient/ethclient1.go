@@ -78,6 +78,19 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data 
 	return hash, err
 }
 
+// SaveBlockToMainChain save a block to main chain through eth_sendRawTransaction
+func (ec *Client) BroadcastDataToMainChain(ctx context.Context, chainId string, data []byte) error {
+	if chainId == "" || chainId == "pchain" {
+		return errors.New("invalid child chainId")
+	}
+
+	err := retry(1, time.Millisecond*200, func() error {
+		return ec.c.CallContext(ctx, nil, "chain_broadcastTX3ProofData", common.ToHex(data))
+	})
+
+	return err
+}
+
 func retry(attemps int, sleep time.Duration, fn func() error) error {
 
 	if err := fn(); err != nil {

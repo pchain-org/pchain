@@ -175,7 +175,12 @@ func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
 			return epoch
 		}
 
-		for number := epoch.Number - 1; number >= 0; number-- {
+		number := epoch.Number
+		for {
+			if number == 0 {
+				break
+			}
+			number--
 
 			ep := loadEpoch(ci.db, number, ci.ChainId)
 			if ep == nil {
@@ -298,6 +303,13 @@ func storePendingChildChainData(db dbm.DB, cci *CoreChainInfo, create bool) {
 		if pendingIdxByteSlice != nil {
 			wire.ReadBinaryBytes(pendingIdxByteSlice, &idx)
 		}
+		// Check if chain id has been added already
+		for _, v := range idx {
+			if v.ChainID == cci.ChainId {
+				return
+			}
+		}
+		// Pass the check, add the key to idx
 		idx = append(idx, pendingIdxData{cci.ChainId, cci.StartBlock, cci.EndBlock})
 		db.SetSync(pendingChainIndexKey, wire.BinaryBytes(idx))
 	}

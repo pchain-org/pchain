@@ -109,7 +109,7 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
-	pNode tendermintBackend.PChainP2P, cch core.CrossChainHelper, logger log.Logger) (*Ethereum, error) {
+	cch core.CrossChainHelper, logger log.Logger) (*Ethereum, error) {
 
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -134,7 +134,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb, cliCtx, pNode, cch, logger),
+		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb, cliCtx, cch, logger),
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		networkId:      config.NetworkId,
@@ -180,7 +180,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain, cch)
 
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
+	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, cch, logger); err != nil {
 		return nil, err
 	}
 	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine, cch, logger)
@@ -227,7 +227,7 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
 func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig *params.ChainConfig, db ethdb.Database,
-	cliCtx *cli.Context, pNode tendermintBackend.PChainP2P, cch core.CrossChainHelper, logger log.Logger) consensus.Engine {
+	cliCtx *cli.Context, cch core.CrossChainHelper, logger log.Logger) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
@@ -243,10 +243,10 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 	// If Tendermint is requested, set it up
 	if chainConfig.Tendermint != nil {
 		if chainConfig.Tendermint.Epoch != 0 {
-			config.Istanbul.Epoch = chainConfig.Tendermint.Epoch
+			config.Tendermint.Epoch = chainConfig.Tendermint.Epoch
 		}
 		config.Tendermint.ProposerPolicy = tendermint.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
-		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), db, pNode, cch, logger)
+		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), db, cch, logger)
 	}
 
 	// Otherwise assume proof-of-work

@@ -11,13 +11,13 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"log"
 	"math/big"
 	"strconv"
 	"strings"
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil/base58"
-	"github.com/pchain/common/plogger"
 	"github.com/tendermint/go-crypto"
 	"golang.org/x/crypto/ripemd160"
 )
@@ -29,8 +29,6 @@ const (
 	CHAINPATH_PREFIX_SWEEP     = 2
 	CHAINPATH_PREFIX_SWEEP_DRY = 102
 )
-
-var logger = plogger.GetLogger("crypto")
 
 func ComputeAddress(coin string, pubKeyHex string, chainHex string, path string, index int32) string {
 	pubKeyBytes := DerivePublicKeyForPath(
@@ -103,8 +101,11 @@ func printKeyInfo(privKeyBytes []byte, pubKeyBytes []byte, chain []byte) {
 		pubKeyBytes = PubKeyBytesFromPrivKeyBytes(privKeyBytes, true)
 	}
 	addr := AddrFromPubKeyBytes("BTC", pubKeyBytes)
-	logger.Debug("\nprikey:\t", HexEncode(privKeyBytes), "\npubKeyBytes:\t", HexEncode(pubKeyBytes),
-		"\naddr:\t", addr, "\nchain:\t", HexEncode(chain))
+	log.Println("\nprikey:\t%v\npubKeyBytes:\t%v\naddr:\t%v\nchain:\t%v",
+		HexEncode(privKeyBytes),
+		HexEncode(pubKeyBytes),
+		addr,
+		HexEncode(chain))
 }
 
 func DerivePrivateKeyForPath(privKeyBytes []byte, chain []byte, path string) []byte {

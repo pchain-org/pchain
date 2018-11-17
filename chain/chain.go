@@ -8,9 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	eth "github.com/ethereum/go-ethereum/node"
 	"github.com/pchain/ethereum"
-	"github.com/pchain/p2p"
 	"github.com/pchain/version"
-	cmn "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	"gopkg.in/urfave/cli.v1"
 	"net/http"
@@ -29,7 +27,7 @@ type Chain struct {
 	RpcHandler http.Handler
 }
 
-func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chain {
+func LoadMainChain(ctx *cli.Context, chainId string) *Chain {
 
 	chain := &Chain{Id: chainId}
 	config := GetTendermintConfig(chainId, ctx)
@@ -37,7 +35,7 @@ func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chai
 
 	//always start ethereum
 	log.Info("ethereum.MakeSystemNode")
-	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, pNode, GetCMInstance(ctx).cch)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, GetCMInstance(ctx).cch)
 	chain.EthNode = stack
 
 	rpcHandler, err := stack.GetRPCHandler()
@@ -50,17 +48,17 @@ func LoadMainChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chai
 	return chain
 }
 
-func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Chain {
+func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
 
 	log.Infof("now load child: %s", chainId)
 
-	chainDir := ChainDir(ctx, chainId)
-	empty, err := cmn.IsDirEmpty(chainDir)
-	log.Infof("chainDir is : %s, empty is %v", chainDir, empty)
-	if empty || err != nil {
-		log.Errorf("directory %s not exist or with error %v", chainDir, err)
-		return nil
-	}
+	//chainDir := ChainDir(ctx, chainId)
+	//empty, err := cmn.IsDirEmpty(chainDir)
+	//log.Infof("chainDir is : %s, empty is %v", chainDir, empty)
+	//if empty || err != nil {
+	//	log.Errorf("directory %s not exist or with error %v", chainDir, err)
+	//	return nil
+	//}
 	chain := &Chain{Id: chainId}
 	config := GetTendermintConfig(chainId, ctx)
 	chain.Config = config
@@ -68,7 +66,7 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 	//always start ethereum
 	log.Infof("chainId: %s, ethereum.MakeSystemNode", chainId)
 	cch := GetCMInstance(ctx).cch
-	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, pNode, cch)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, cch)
 	chain.EthNode = stack
 
 	rpcHandler, err := stack.GetRPCHandler()
@@ -82,18 +80,18 @@ func LoadChildChain(ctx *cli.Context, chainId string, pNode *p2p.PChainP2P) *Cha
 	return chain
 }
 
-func StartChain(ctx *cli.Context, chain *Chain, startDone, quit chan int) error {
+func StartChain(ctx *cli.Context, chain *Chain, startDone chan<- struct{}) error {
 
-	log.Infof("start chain: %s\n", chain.Id)
+	log.Infof("Start Chain: %s", chain.Id)
 	go func() {
 		log.Info("StartChain()->utils.StartNode(stack)")
 		utils.StartNodeEx(ctx, chain.EthNode)
 
 		// Add ChainID to Tendermint P2P Node Info
-		chainMgr.p2pObj.AddNetwork(chain.Id)
+		//chainMgr.p2pObj.AddNetwork(chain.Id)
 
 		if startDone != nil {
-			startDone <- 1
+			startDone <- struct{}{}
 		}
 	}()
 

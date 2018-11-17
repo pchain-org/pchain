@@ -734,7 +734,7 @@ func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.Transaction
 func (env *Work) commitTransactionEx(tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool, totalUsedMoney *big.Int, cch core.CrossChainHelper) (error, []*types.Log) {
 	snap := env.state.Snapshot()
 
-	receipt, _, err := core.ApplyTransactionEx(env.config, bc, nil, gp, env.state, env.ops, env.header, tx, &env.header.GasUsed, totalUsedMoney, vm.Config{}, cch)
+	receipt, _, err := core.ApplyTransactionEx(env.config, bc, nil, gp, env.state, env.ops, env.header, tx, &env.header.GasUsed, totalUsedMoney, vm.Config{}, cch, true)
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		return err, nil

@@ -15,11 +15,13 @@ import (
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
+	pabi "github.com/pchain/abi"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"math/big"
@@ -33,8 +35,9 @@ const (
 )
 
 type CrossChainHelper struct {
-	mtx         sync.Mutex
-	chainInfoDB dbm.DB
+	mtx             sync.Mutex
+	chainInfoDB     dbm.DB
+	localTX3CacheDB ethdb.Database
 	//the client does only connect to main chain
 	client *ethclient.Client
 }
@@ -175,6 +178,12 @@ func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, 
 	if ci == nil {
 		log.Errorf("JoinChildChain - Child Chain %s not exist, you can't join the chain", chainId)
 		return fmt.Errorf("Child Chain %s not exist, you can't join the chain", chainId)
+	}
+
+	for _, joined := range ci.JoinedValidators {
+		if from == joined.Address {
+			return nil
+		}
 	}
 
 	jv := core.JoinedValidator{
@@ -361,16 +370,6 @@ func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Trans
 	return tx
 }
 
-func (cch *CrossChainHelper) GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction {
-
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
-	tx, _ := core.GetChildChainTransactionByHash(chainDb, chainId, txHash)
-	return tx
-}
-
 // verify the signature of validators who voted for the block
 // most of the logic here is from 'VerifyHeader'
 func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
@@ -534,21 +533,175 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 	return nil
 }
 
-func (cch *CrossChainHelper) MarkFromChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error {
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
+func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData) error {
+	log.Debug("ValidateTX3ProofData - start")
 
-	return core.MarkCrossChainTx(chainDb, core.ChildChainToMainChain, from, chainId, txHash, used)
+	header := proofData.Header
+	// Don't waste time checking blocks from the future
+	if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
+		return errors.New("block in the future")
+	}
+
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
+	if err != nil {
+		return err
+	}
+
+	chainId := tdmExtra.ChainID
+	if chainId == "" || chainId == MainChain {
+		return fmt.Errorf("invalid child chain id: %s", chainId)
+	}
+
+	if header.Nonce != (types.TendermintEmptyNonce) && !bytes.Equal(header.Nonce[:], types.TendermintNonce) {
+		return errors.New("invalid nonce")
+	}
+
+	if header.MixDigest != types.TendermintDigest {
+		return errors.New("invalid mix digest")
+	}
+
+	if header.UncleHash != types.TendermintNilUncleHash {
+		return errors.New("invalid uncle Hash")
+	}
+
+	if header.Difficulty == nil || header.Difficulty.Cmp(types.TendermintDefaultDifficulty) != 0 {
+		return errors.New("invalid difficulty")
+	}
+
+	// special case: epoch 0 update
+	// TODO: how to verify this block which includes epoch 0?
+	if tdmExtra.EpochBytes != nil && len(tdmExtra.EpochBytes) != 0 {
+		ep := epoch.FromBytes(tdmExtra.EpochBytes)
+		if ep != nil && ep.Number == 0 {
+			return nil
+		}
+	}
+
+	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
+	if ci == nil {
+		return fmt.Errorf("chain info %s not found", chainId)
+	}
+	epoch := ci.GetEpochByBlockNumber(tdmExtra.Height)
+	if epoch == nil {
+		return fmt.Errorf("could not get epoch for block height %v", tdmExtra.Height)
+	}
+	valSet := epoch.Validators
+	if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
+		return errors.New("inconsistent validator set")
+	}
+
+	seenCommit := tdmExtra.SeenCommit
+	if !bytes.Equal(tdmExtra.SeenCommitHash, seenCommit.Hash()) {
+		return errors.New("invalid committed seals")
+	}
+
+	if err = valSet.VerifyCommit(tdmExtra.ChainID, tdmExtra.Height, seenCommit); err != nil {
+		return err
+	}
+
+	// tx merkle proof verify
+	keybuf := new(bytes.Buffer)
+	for i, txIndex := range proofData.TxIndexs {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(txIndex))
+		_, err, _ := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Debug("ValidateTX3ProofData - end")
+	return nil
 }
 
-func (cch *CrossChainHelper) ValidateFromChildChainTx(from common.Address, chainId string, txHash common.Hash) core.CrossChainTxState {
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
+func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transaction, tx3ProofData *types.TX3ProofData) error {
+	// TX4
+	signer := types.NewEIP155Signer(tx4.ChainId())
+	from, err := types.Sender(signer, tx4)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
 
-	return core.ValidateCrossChainTx(chainDb, core.ChildChainToMainChain, from, chainId, txHash)
+	var args pabi.WithdrawFromMainChainArgs
+
+	if !pabi.IsPChainContractAddr(tx4.To()) {
+		return errors.New("invalid TX4: wrong To()")
+	}
+
+	data := tx4.Data()
+	function, err := pabi.FunctionTypeFromId(data[:4])
+	if err != nil {
+		return err
+	}
+
+	if function != pabi.WithdrawFromMainChain {
+		return errors.New("invalid TX4: wrong function")
+	}
+
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	// TX3
+	header := tx3ProofData.Header
+	if err != nil {
+		return err
+	}
+	keybuf := new(bytes.Buffer)
+	rlp.Encode(keybuf, tx3ProofData.TxIndexs[0])
+	val, err, _ := trie.VerifyProof(header.TxHash, keybuf.Bytes(), tx3ProofData.TxProofs[0])
+	if err != nil {
+		return err
+	}
+
+	var tx3 types.Transaction
+	err = rlp.DecodeBytes(val, &tx3)
+	if err != nil {
+		return err
+	}
+
+	signer2 := types.NewEIP155Signer(tx3.ChainId())
+	tx3From, err := types.Sender(signer2, &tx3)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var tx3Args pabi.WithdrawFromChildChainArgs
+	tx3Data := tx3.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&tx3Args, pabi.WithdrawFromChildChain.String(), tx3Data[4:]); err != nil {
+		return err
+	}
+
+	// Does TX3 & TX4 Match
+	if from != tx3From || args.ChainId != tx3Args.ChainId || args.Amount.Cmp(tx3Args.Amount) != 0 {
+		return errors.New("params are not consistent with tx in child chain")
+	}
+
+	return nil
 }
+
+// TX3LocalCache start
+func (cch *CrossChainHelper) GetTX3(chainId string, txHash common.Hash) *types.Transaction {
+	return core.GetTX3(cch.localTX3CacheDB, chainId, txHash)
+}
+
+func (cch *CrossChainHelper) DeleteTX3(chainId string, txHash common.Hash) {
+	core.DeleteTX3(cch.localTX3CacheDB, chainId, txHash)
+}
+
+func (cch *CrossChainHelper) WriteTX3ProofData(proofData *types.TX3ProofData) error {
+	return core.WriteTX3ProofData(cch.localTX3CacheDB, proofData)
+}
+
+func (cch *CrossChainHelper) GetTX3ProofData(chainId string, txHash common.Hash) *types.TX3ProofData {
+	return core.GetTX3ProofData(cch.localTX3CacheDB, chainId, txHash)
+}
+
+func (cch *CrossChainHelper) GetAllTX3ProofData() []*types.TX3ProofData {
+	return core.GetAllTX3ProofData(cch.localTX3CacheDB)
+}
+
+// TX3LocalCache end
 
 func MustGetEthereumFromNode(node *node.Node) *eth.Ethereum {
 	ethereum, err := getEthereumFromNode(node)

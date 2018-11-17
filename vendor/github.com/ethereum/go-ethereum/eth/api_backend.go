@@ -32,16 +32,16 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
 )
 
 // EthApiBackend implements ethapi.Backend for full nodes
 type EthApiBackend struct {
-	eth *Ethereum
-	gpo *gasprice.Oracle
-	apiBridge ethapi.InnerAPIBridge
+	eth              *Ethereum
+	gpo              *gasprice.Oracle
+	apiBridge        ethapi.InnerAPIBridge
 	crossChainHelper core.CrossChainHelper
 }
 
@@ -234,3 +234,6 @@ func (b *EthApiBackend) GetCrossChainHelper() core.CrossChainHelper {
 	return b.crossChainHelper
 }
 
+func (b *EthApiBackend) BroadcastTX3ProofData(proofData *types.TX3ProofData) {
+	b.eth.protocolManager.BroadcastTX3ProofData(proofData.Header.Number.Uint64(), proofData)
+}

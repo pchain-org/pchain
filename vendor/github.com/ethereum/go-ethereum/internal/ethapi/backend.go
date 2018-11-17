@@ -73,6 +73,8 @@ type Backend interface {
 	SetInnerAPIBridge(inBridge InnerAPIBridge)
 	GetInnerAPIBridge() InnerAPIBridge
 	GetCrossChainHelper() core.CrossChainHelper
+
+	BroadcastTX3ProofData(proofData *types.TX3ProofData)
 }
 
 func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {

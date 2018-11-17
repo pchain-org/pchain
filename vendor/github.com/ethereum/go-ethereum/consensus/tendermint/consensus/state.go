@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sync"
 	"time"
+
 	"context"
 
 //	"github.com/ethereum/go-ethereum/common"
@@ -20,21 +21,20 @@ import (
 //	"github.com/ethereum/go-ethereum/crypto"
 	tmdcrypto "github.com/tendermint/go-crypto"
 	"github.com/ethereum/go-ethereum/params"
-//	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rlp"
 	pabi "github.com/pchain/abi"
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
 //	"golang.org/x/net/context"
 	"math/big"
-	"github.com/tendermint/go-p2p"
 	"encoding/binary"
 	"crypto/sha256"
 	"runtime/debug"
-	"github.com/ethereum/go-ethereum/rlp"
 	"crypto/ecdsa"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/common"
+	//"github.com/pchain/chain"
 )
 
 type Backend interface {
@@ -296,9 +296,6 @@ type ConsensusState struct {
 	config        cfg.Config
 	chainConfig   *params.ChainConfig
 	privValidator PrivValidator // for signing votes
-
-	nodeInfo      *p2p.NodeInfo	// Validator's node info (ip, port, etc)
-
 	cch core.CrossChainHelper
 
 	mtx sync.Mutex
@@ -326,6 +323,7 @@ type ConsensusState struct {
 	backend        Backend
 
 	node Node
+	conR *ConsensusReactor
 
 	logger log.Logger
 }
@@ -381,6 +379,10 @@ func (cs *ConsensusState) GetNode() Node {
 	return cs.node
 }
 
+func (cs *ConsensusState) GetNodeID() string {
+	return ""
+}
+
 func (cs *ConsensusState) GetState() *sm.State {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
@@ -422,17 +424,17 @@ func (cs *ConsensusState) updateProposer() {
 	if cs.proposer == nil {
 		cs.proposer = &VRFProposer{}
 	}
+
+	chainReader := cs.backend.ChainReader()
+
+	head := chainReader.CurrentHeader().Hash()
+
 	cs.proposer.Height = cs.Height
 	cs.proposer.Round = cs.Round
 	var roundBytes = make([]byte, 8)
 	binary.BigEndian.PutUint64(roundBytes, uint64(cs.proposer.Round))
-	var cc []byte
-	if cs.LastCommit != nil {
-		cc = cs.LastCommit.SignatureAggr.Bytes()
-	} else {
-		cc = ([]byte)("")
-	}
-	vrfBytes := append( roundBytes, cc...)
+
+	vrfBytes := append( roundBytes, head[:]...)
 	hs := sha256.New()
 	hs.Write(vrfBytes)
 	hv := hs.Sum(nil)
@@ -441,12 +443,11 @@ func (cs *ConsensusState) updateProposer() {
 	n :=big.NewInt(int64(cs.Validators.Size()))
 	n.Mod(hash, n)
 	idx := int(n.Int64())
-	idx = 0
 	if idx >= cs.Validators.Size() {
 		cs.proposer.Proposer = nil
 		PanicConsensus(Fmt("The index of proposer out of range", "index:", idx, "range:", cs.Validators.Size()))
 	} else {
-		cs.proposer.Proposer =  cs.Validators.Validators[idx].Copy()
+		cs.proposer.Proposer =  cs.Validators.Validators[idx]
 	}
 	fmt.Println("height:", cs.Height,  " round:", cs.Round)
 	fmt.Println("validator idx is:", idx)
@@ -462,7 +463,7 @@ func (cs *ConsensusState) GetProposer() (*types.Validator) {
 
 // Returns true if this validator is the proposer.
 func (cs *ConsensusState) IsProposer() bool {
-	if bytes.Equal(cs.GetProposer().Address, cs.privValidator.GetAddress()) {
+	if bytes.Equal(cs.GetProposer().Address , cs.privValidator.GetAddress()) {
 		return true
 	} else {
 		return false
@@ -497,6 +498,8 @@ func (cs *ConsensusState) OnStart() error {
 	go cs.receiveRoutine(0)
 
 	cs.StartNewHeight()
+
+	//cs.id = chain.GetNodeID()
 
 	return nil
 }
@@ -574,11 +577,6 @@ func (cs *ConsensusState) SetProposalAndBlock(proposal *types.Proposal, block *t
 	return nil // TODO errors
 }
 
-// Set node info wich is about current validator's peer info
-func (cs *ConsensusState) SetNodeInfo(nodeInfo *p2p.NodeInfo) {
-	cs.nodeInfo = nodeInfo
-}
-
 //------------------------------------------------------------
 // internal functions for managing the state
 
@@ -598,7 +596,6 @@ func (cs *ConsensusState) scheduleRound0(rs *RoundState) {
 func (cs *ConsensusState) scheduleTimeout(duration time.Duration, height uint64, round int, step RoundStepType) {
 	cs.timeoutTicker.ScheduleTimeout(timeoutInfo{duration, height, round, step})
 }
-
 
 // send a msg into the receiveRoutine regarding our own proposal, block part, or vote
 func (cs *ConsensusState) sendInternalMessage(mi msgInfo) {
@@ -854,7 +851,7 @@ func (cs *ConsensusState) enterNewRound(height uint64, round int) {
 	types.FireEventNewRound(cs.evsw, cs.RoundStateEvent())
 
 	// Immediately go to enterPropose.
-	if bytes.Equal(cs.GetProposer().Address, cs.privValidator.GetAddress()) && cs.blockFromMiner == nil {
+	if cs.IsProposer() && cs.blockFromMiner == nil {
 		cs.logger.Info("we are proposer, but blockFromMiner is nil, let's wait a second!!!")
 		cs.scheduleTimeout(cs.timeoutParams.WaitForMinerBlock(), height, round, RoundStepWaitForMinerBlock)
 		return
@@ -893,7 +890,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 	// Note!!! This will BLOCK the WHOLE consensus stack since it blocks receiveRoutine.
 	// TODO: what if there're more than one round for a height? 'saveBlockToMainChain' would be called more than once
 	if cs.state.TdmExtra.NeedToSave {
-		if cs.privValidator != nil && bytes.Equal(cs.GetProposer().Address, cs.privValidator.GetAddress()) {
+		if cs.privValidator != nil && cs.IsProposer() {
 			cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
 			lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
 			cs.saveBlockToMainChain(lastBlock)
@@ -910,10 +907,10 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		return
 	}
 
-	if !bytes.Equal(cs.GetProposer().Address, cs.privValidator.GetAddress()) {
-		cs.logger.Info("enterPropose: Not our turn to propose", "proposer", cs.GetProposer().Address, "privValidator", cs.privValidator)
+	if cs.IsProposer() {
+		cs.logger.Info("enterPropose: Not our turn to propose", "proposer", cs.GetProposer(), "privValidator", cs.privValidator)
 	} else {
-		cs.logger.Info("enterPropose: Our turn to propose", "proposer", cs.GetProposer().Address, "privValidator", cs.privValidator)
+		cs.logger.Info("enterPropose: Our turn to propose", "proposer", cs.GetProposer(), "privValidator", cs.privValidator)
 		cs.decideProposal(height, round)
 	}
 }
@@ -934,14 +931,6 @@ func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
 		if block == nil { // on error
 			return
 		}
-	}
-
-	// Get IP and pub key of current validators from nodeInfo
-	if cs.nodeInfo != nil {
-		proposerNetAddr = cs.nodeInfo.ListenAddres()
-		proposerPeerKey = cs.nodeInfo.PubKey.KeyString()
-	} else {
-		panic("cs.nodeInfo is nil when decide the next block\n")
 	}
 
 	// fmt.Println("defaultDecideProposal: cs nodeInfo %#v\n", cs.nodeInfo)
@@ -1048,9 +1037,35 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 
 		cs.blockFromMiner = nil
 
-		return types.MakeBlock(cs.Height, cs.state.TdmExtra.ChainID, commit,
-			ethBlock, val.Hash(), cs.Epoch.Number, epochBytes,
-			cs.config.GetInt("block_part_size"))
+		// retrieve TX3ProofData for TX4
+		var tx3ProofData []*ethTypes.TX3ProofData
+		txs := ethBlock.Transactions()
+		for _, tx := range txs {
+			if pabi.IsPChainContractAddr(tx.To()) {
+				data := tx.Data()
+				function, err := pabi.FunctionTypeFromId(data[:4])
+				if err != nil {
+					continue
+				}
+
+				if function == pabi.WithdrawFromMainChain {
+					var args pabi.WithdrawFromMainChainArgs
+					data := tx.Data()
+					if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+						continue
+					}
+
+					proof := cs.cch.GetTX3ProofData(args.ChainId, args.TxHash)
+					if proof != nil {
+						tx3ProofData = append(tx3ProofData, proof)
+					}
+				}
+			}
+		}
+
+		return types.MakeBlock(cs.Height, cs.state.TdmExtra.ChainID, commit, ethBlock,
+			val.Hash(), cs.Epoch.Number, epochBytes,
+				tx3ProofData, cs.config.GetInt("block_part_size"))
 	} else {
 		cs.logger.Warn("block from miner should not be nil, let's start another round")
 		return nil, nil
@@ -1383,22 +1398,21 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 			if len(block.TdmExtra.EpochBytes) > 0 {
 				block.TdmExtra.NeedToSave = true
 				cs.logger.Infof("NeedToSave set to true due to epoch. Chain: %s, Height: %v", block.TdmExtra.ChainID, block.TdmExtra.Height)
-			} else {
-				// check special cross-chain tx
-				txs := block.Block.Transactions()
-				for _, tx := range txs {
-					if pabi.IsPChainContractAddr(tx.To()) {
-						data := tx.Data()
-						function, err := pabi.FunctionTypeFromId(data[:4])
-						if err != nil {
-							continue
-						}
+			}
+			// check special cross-chain tx
+			txs := block.Block.Transactions()
+			for _, tx := range txs {
+				if pabi.IsPChainContractAddr(tx.To()) {
+					data := tx.Data()
+					function, err := pabi.FunctionTypeFromId(data[:4])
+					if err != nil {
+						continue
+					}
 
-						if function == pabi.WithdrawFromChildChain {
-							block.TdmExtra.NeedToSave = true
-							cs.logger.Infof("NeedToSave set to true due to tx. Tx: %s, Chain: %s, Height: %v", function.String(), block.TdmExtra.ChainID, block.TdmExtra.Height)
-							break
-						}
+					if function == pabi.WithdrawFromChildChain {
+						block.TdmExtra.NeedToBroadcast = true
+						cs.logger.Infof("NeedToBroadcast set to true due to tx. Tx: %s, Chain: %s, Height: %v", function.String(), block.TdmExtra.ChainID, block.TdmExtra.Height)
+						break
 					}
 				}
 			}
@@ -1994,6 +2008,40 @@ func CompareHRS(h1 uint64, r1 int, s1 RoundStepType, h2 uint64, r2 int, s2 Round
 	return 0
 }
 
+func (cs *ConsensusState) ValidateTX4(b *types.TdmBlock) error {
+	var index int
+
+	txs := b.Block.Transactions()
+	for _, tx := range txs {
+		if pabi.IsPChainContractAddr(tx.To()) {
+			data := tx.Data()
+			function, err := pabi.FunctionTypeFromId(data[:4])
+			if err != nil {
+				continue
+			}
+
+			if function == pabi.WithdrawFromMainChain {
+				// index of tx4 and tx3ProofData should exactly match one by one.
+				if index >= len(b.TX3ProofData) {
+					return errors.New("tx3 proof data missing")
+				}
+				tx3ProofData := b.TX3ProofData[index]
+				index++
+
+				if err := cs.cch.ValidateTX3ProofData(tx3ProofData); err != nil {
+					return err
+				}
+
+				if err := cs.cch.ValidateTX4WithInMemTX3ProofData(tx, tx3ProofData); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 
 	client := cs.cch.GetClient()
@@ -2030,7 +2078,6 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 		panic("saveDataToMainChain: unexpected privValidator type")
 	}
 	hash, err := client.SendDataToMainChain(ctx, cs.state.TdmExtra.ChainID, bs, common.BytesToAddress(cs.privValidator.GetAddress()), prv)
-
 	if err != nil {
 		cs.logger.Error("saveDataToMainChain(rpc) failed", "err", err)
 		return
@@ -2064,4 +2111,29 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 	}
 
 	cs.logger.Error("saveDataToMainChain: tx not packaged in any block after 3 blocks in main chain")
+}
+
+func (cs *ConsensusState) broadcastTX3ProofDataToMainChain(block *ethTypes.Block) {
+	client := cs.cch.GetClient()
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	//ctx := context.Background() // testing only!
+
+	proofData, err := ethTypes.NewTX3ProofData(block)
+	if err != nil {
+		cs.logger.Error("broadcastTX3ProofDataToMainChain: failed to create proof data", "block", block, "err", err)
+		return
+	}
+
+	bs, err := rlp.EncodeToBytes(proofData)
+	if err != nil {
+		cs.logger.Error("broadcastTX3ProofDataToMainChain: failed to encode proof data", "proof data", proofData, "err", err)
+		return
+	}
+	cs.logger.Infof("broadcastTX3ProofDataToMainChain proof data length: %d", len(bs))
+
+	err = client.BroadcastDataToMainChain(ctx, cs.state.TdmExtra.ChainID, bs)
+	if err != nil {
+		cs.logger.Error("broadcastTX3ProofDataToMainChain(rpc) failed", "err", err)
+		return
+	}
 }

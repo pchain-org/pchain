@@ -37,6 +37,7 @@ type HeightVoteSet struct {
 	round             int                  // max tracked round
 	roundVoteSets     map[int]RoundVoteSet // keys: [0...round]
 	peerCatchupRounds map[string][]int     // keys: peer.Key; values: at most 2 rounds
+
 	logger log.Logger
 }
 

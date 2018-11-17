@@ -13,6 +13,16 @@ import (
 	"sync"
 )
 
+type TX3LocalCache interface {
+	GetTX3(chainId string, txHash common.Hash) *types.Transaction
+	DeleteTX3(chainId string, txHash common.Hash)
+
+	WriteTX3ProofData(proofData *types.TX3ProofData) error
+
+	GetTX3ProofData(chainId string, txHash common.Hash) *types.TX3ProofData
+	GetAllTX3ProofData() []*types.TX3ProofData
+}
+
 type CrossChainHelper interface {
 	GetMutex() *sync.Mutex
 	GetClient() *ethclient.Client
@@ -31,17 +41,18 @@ type CrossChainHelper interface {
 	RevealVote(ep *epoch.Epoch, from common.Address, pubkey string, depositAmount *big.Int, salt string, txHash common.Hash) error
 
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
-	GetTxFromChildChain(txHash common.Hash, chainId string) *types.Transaction
+
+	// for epoch only
 	VerifyChildChainProofData(bs []byte) error
 	SaveChildChainProofDataToMainChain(bs []byte) error
 
-	// these should operate on the main chain db
-	MarkFromChildChainTx(from common.Address, chainId string, txHash common.Hash, used bool) error
-	ValidateFromChildChainTx(from common.Address, chainId string, txHash common.Hash) CrossChainTxState
+	TX3LocalCache
+	ValidateTX3ProofData(proofData *types.TX3ProofData) error
+	ValidateTX4WithInMemTX3ProofData(tx4 *types.Transaction, tx3ProofData *types.TX3ProofData) error
 }
 
 type EtdValidateCb func(tx *types.Transaction, state *state.StateDB, cch CrossChainHelper) error
-type EtdApplyCb func(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch CrossChainHelper) error
+type EtdApplyCb func(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch CrossChainHelper, mining bool) error
 type EtdInsertBlockCb func(bc *BlockChain, block *types.Block)
 
 var validateCbMap = make(map[pabi.FunctionType]EtdValidateCb)

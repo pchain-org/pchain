@@ -76,7 +76,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		//receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
 		totalUsedMoney := big.NewInt(0)
 		receipt, _, err := ApplyTransactionEx(p.config, p.bc, nil, gp, statedb, ops, header, tx,
-			usedGas, totalUsedMoney, cfg, p.cch)
+			usedGas, totalUsedMoney, cfg, p.cch, false)
 		fmt.Printf("(p *StateProcessor) Process()，after ApplyTransactionEx, receipt is %v\n", receipt)
 		if err != nil {
 			return nil, nil, 0, nil, err

@@ -47,6 +47,9 @@ const (
 	NodeDataMsg    = 0x0e
 	GetReceiptsMsg = 0x0f
 	ReceiptsMsg    = 0x10
+
+	// Protocol messages belonging to eth/64 (pchain)
+	TX3ProofDataMsg = 0x64
 )
 
 type errCode int
@@ -61,6 +64,7 @@ const (
 	ErrNoStatusMsg
 	ErrExtraStatusMsg
 	ErrSuspendedPeer
+	ErrTX3ValidateFail
 )
 
 func (e errCode) String() string {
@@ -78,6 +82,7 @@ var errorToString = map[int]string{
 	ErrNoStatusMsg:             "No status message",
 	ErrExtraStatusMsg:          "Extra status message",
 	ErrSuspendedPeer:           "Suspended peer",
+	ErrTX3ValidateFail:         "TX3 validate fail",
 }
 
 type txPool interface {

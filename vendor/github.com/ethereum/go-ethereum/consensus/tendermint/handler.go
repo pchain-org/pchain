@@ -18,15 +18,10 @@ package tendermint
 
 import (
 	"errors"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p"
-)
-
-const (
-	tendemrintMsg = 0x12
+	"time"
 )
 
 var (
@@ -39,19 +34,26 @@ func (sb *backend) Protocol() consensus.Protocol {
 
 	sb.logger.Info("Tendermint (backend) Protocol, add logic here")
 
+	var protocolName string
+	if sb.chainConfig.PChainId == "pchain" {
+		protocolName = sb.chainConfig.PChainId
+	} else {
+		protocolName = "pchain_" + sb.chainConfig.PChainId
+	}
+
 	return consensus.Protocol{
-		Name:     "pchain" + sb.chainConfig.PChainId,
+		Name:     protocolName,
 		Versions: []uint{64},
 		Lengths:  []uint64{64},
 	}
 }
 
 // HandleMsg implements consensus.Handler.HandleMsg
-func (sb *backend) HandleMsg(addr common.Address, msg p2p.Msg) (bool, error) {
+func (sb *backend) HandleMsg(chID uint64, src consensus.Peer, msgBytes []byte) (bool, error) {
 	sb.coreMu.Lock()
 	defer sb.coreMu.Unlock()
 
-	sb.logger.Info("Tendermint (backend) HandleMsg, add logic here")
+	sb.core.consensusReactor.Receive(chID, src, msgBytes)
 
 	return false, nil
 }
@@ -81,4 +83,29 @@ func (sb *backend) NewChainHead() error {
 
 func (sb *backend) GetLogger() log.Logger {
 	return sb.logger
+}
+
+func (sb *backend) AddPeer(src consensus.Peer) {
+	if !sb.shouldStart {
+		return
+	}
+
+	for i := 0; i < 10; i++ {
+		sb.coreMu.RLock()
+		started := sb.coreStarted
+		sb.coreMu.RUnlock()
+
+		if started {
+			sb.core.consensusReactor.AddPeer(src)
+			return
+		} else {
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	sb.logger.Error("Wait for 10 sec, Consensus Engine (Tendermint) still not start, unable to add the peer to Engine")
+}
+
+func (sb *backend) RemovePeer(src consensus.Peer) {
+	sb.core.consensusReactor.RemovePeer(src, nil)
 }

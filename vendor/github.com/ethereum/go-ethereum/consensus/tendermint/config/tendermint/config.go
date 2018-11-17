@@ -99,7 +99,7 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 	// all timeouts are in ms
 	mapConfig.SetDefault("timeout_handshake", 10000)
 	mapConfig.SetDefault("timeout_wait_for_miner_block", 3000)
-	mapConfig.SetDefault("timeout_propose", 3000)
+	mapConfig.SetDefault("timeout_propose", 6000)
 	mapConfig.SetDefault("timeout_propose_delta", 500)
 	mapConfig.SetDefault("timeout_prevote", 3000)
 	mapConfig.SetDefault("timeout_prevote_delta", 500)
@@ -114,7 +114,7 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 	mapConfig.SetDefault("mempool_broadcast", true)
 	mapConfig.SetDefault("mempool_wal_dir", filepath.Join(rootDir, chainId, defaultDataDir, "mempool.wal"))
 
-	mapConfig.SetDefault("tx_index", "kv")
+	//mapConfig.SetDefault("tx_index", "kv")
 
 	return mapConfig
 }

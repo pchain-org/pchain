@@ -506,6 +506,13 @@ func (srv *Server) Start() (err error) {
 	return nil
 }
 
+// AddHandshakeCaps Add the Child Protocol Caps after create the child chain and before launch it
+func (srv *Server) AddChildProtocolCaps(childProtocols []Protocol) {
+	for _, p := range childProtocols {
+		srv.ourHandshake.Caps = append(srv.ourHandshake.Caps, p.cap())
+	}
+}
+
 func (srv *Server) startListening() error {
 	// Launch the TCP listener.
 	listener, err := net.Listen("tcp", srv.ListenAddr)
@@ -890,6 +897,9 @@ func (srv *Server) runPeer(p *Peer) {
 		Peer: p.ID(),
 	})
 
+	// Set the server protocol, this should link with p2p server's protocol and auto-update if changed
+	p.srvProtocols = &srv.Protocols
+
 	// run the protocol
 	remoteRequested, err := p.run()
 
@@ -966,4 +976,12 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	return infos
+}
+
+// BroadcastMsg broadcast the message to all connected peers, this is low level func compare with Eth Protocol Manager
+func (srv *Server) BroadcastMsg(msgCode uint64, data interface{}) {
+	peers := srv.Peers()
+	for _, p := range peers {
+		Send(p.rw, BroadcastNewChildChainMsg, data)
+	}
 }

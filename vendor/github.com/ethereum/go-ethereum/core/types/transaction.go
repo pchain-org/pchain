@@ -293,7 +293,6 @@ func (tx *Transaction) String() string {
 	GasLimit  %#x
 	Value:    %#x
 	Data:     0x%x
-	ExtendTxData:  %v
 	V:        %#x
 	R:        %#x
 	S:        %#x

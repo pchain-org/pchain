@@ -18,12 +18,13 @@ import (
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 
 type TdmBlock struct {
-	Block    *types.Block     `json:"block"`
-	TdmExtra *TendermintExtra `json:"tdmexdata"`
+	Block        *types.Block          `json:"block"`
+	TdmExtra     *TendermintExtra      `json:"tdmexdata"`
+	TX3ProofData []*types.TX3ProofData `json:"tx3proofdata"`
 }
 
 func MakeBlock(height uint64, chainID string, commit *Commit,
-	block *types.Block, valHash []byte, epochNumber uint64, epochBytes []byte, partSize int) (*TdmBlock, *PartSet) {
+	block *types.Block, valHash []byte, epochNumber uint64, epochBytes []byte, tx3ProofData []*types.TX3ProofData, partSize int) (*TdmBlock, *PartSet) {
 
 	TdmExtra := &TendermintExtra{
 		ChainID:        chainID,
@@ -36,10 +37,10 @@ func MakeBlock(height uint64, chainID string, commit *Commit,
 	}
 
 	tdmBlock := &TdmBlock{
-		Block:    block,
-		TdmExtra: TdmExtra,
+		Block:        block,
+		TdmExtra:     TdmExtra,
+		TX3ProofData: tx3ProofData,
 	}
-
 	return tdmBlock, tdmBlock.MakePartSet(partSize)
 }
 
@@ -94,8 +95,9 @@ func (b *TdmBlock) MakePartSet(partSize int) *PartSet {
 func (b *TdmBlock) ToBytes() []byte {
 
 	type TmpBlock struct {
-		BlockData []byte
-		TdmExtra  *TendermintExtra
+		BlockData    []byte
+		TdmExtra     *TendermintExtra
+		TX3ProofData []*types.TX3ProofData
 	}
 	//fmt.Printf("TdmBlock.toBytes 0 with block: %v\n", b)
 
@@ -105,8 +107,9 @@ func (b *TdmBlock) ToBytes() []byte {
 	}
 	//fmt.Printf("TdmBlock.toBytes 1 with blockbyte: %v\n", blockByte)
 	bb := &TmpBlock{
-		BlockData: bs,
-		TdmExtra:  b.TdmExtra,
+		BlockData:    bs,
+		TdmExtra:     b.TdmExtra,
+		TX3ProofData: b.TX3ProofData,
 	}
 	//fmt.Printf("TdmBlock.toBytes 1 with tdmblock: %v\n", bb)
 
@@ -118,8 +121,9 @@ func (b *TdmBlock) ToBytes() []byte {
 func (b *TdmBlock) FromBytes(reader io.Reader) (*TdmBlock, error) {
 
 	type TmpBlock struct {
-		BlockData []byte
-		TdmExtra  *TendermintExtra
+		BlockData    []byte
+		TdmExtra     *TendermintExtra
+		TX3ProofData []*types.TX3ProofData
 	}
 
 	//fmt.Printf("TdmBlock.FromBytes \n")
@@ -140,8 +144,9 @@ func (b *TdmBlock) FromBytes(reader io.Reader) (*TdmBlock, error) {
 	}
 
 	tdmBlock := &TdmBlock{
-		Block:    &block,
-		TdmExtra: bb.TdmExtra,
+		Block:        &block,
+		TdmExtra:     bb.TdmExtra,
+		TX3ProofData: bb.TX3ProofData,
 	}
 
 	//fmt.Printf("TdmBlock.FromBytes 2 with: %v\n", tdmBlock)
