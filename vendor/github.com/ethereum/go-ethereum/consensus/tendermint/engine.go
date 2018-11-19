@@ -562,9 +562,9 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 
 			if ok {
 				sb.logger.Infof("Tendermint (backend) Seal, v got result with block.Hash: %x, result.Hash: %x", block.Hash(), iresult.Block.Hash())
-				if block.Hash() != iresult.Block.Hash() {
-					return iresult, nil
-				}
+				//if block.Hash() != iresult.Block.Hash() {
+				return iresult, nil
+				//}
 				sb.logger.Info("Tendermint (backend) Seal, v hash are the same")
 			} else {
 				sb.logger.Info("Tendermint (backend) Seal, v has been restart, just return")
