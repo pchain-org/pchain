@@ -30,7 +30,7 @@ import (
 )
 
 type Backend interface {
-	Commit(proposal *types.TdmBlock, seals [][]byte) error
+	Commit(proposal *types.TdmBlock, seals [][]byte, isProposer func() bool) error
 	ChainReader() consss.ChainReader
 	GetBroadcaster() consss.Broadcaster
 	GetLogger() log.Logger
@@ -766,7 +766,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 	// Note!!! This will BLOCK the WHOLE consensus stack since it blocks receiveRoutine.
 	// TODO: what if there're more than one round for a height? 'saveBlockToMainChain' would be called more than once
 	if cs.state.TdmExtra.NeedToSave {
-		if cs.privValidator != nil && bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
+		if cs.isProposer() {
 			cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
 			lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
 			cs.saveBlockToMainChain(lastBlock)
@@ -774,7 +774,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		}
 	}
 	if cs.state.TdmExtra.NeedToBroadcast {
-		if cs.privValidator != nil && bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress()) {
+		if cs.isProposer() {
 			cs.logger.Infof("enterPropose: broadcastTX3ProofDataToMainChain height: %v", cs.state.TdmExtra.Height)
 			lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
 			cs.broadcastTX3ProofDataToMainChain(lastBlock)
@@ -839,6 +839,14 @@ func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
 			log.Warn("enterPropose: Error signing proposal", "height", height, "round", round, "error", err)
 		}
 	}*/
+}
+
+func (cs *ConsensusState) isProposer() bool {
+	if cs.privValidator == nil {
+		return false
+	}
+
+	return bytes.Equal(cs.Validators.GetProposer().Address, cs.privValidator.GetAddress())
 }
 
 // Returns true if the proposal block is complete &&
@@ -1327,7 +1335,7 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 		types.FireEventNewBlockHeader(cs.evsw, types.EventDataNewBlockHeader{int(block.TdmExtra.Height)})
 
 		//the second parameter as signature has been set above
-		err := cs.backend.Commit(block, [][]byte{})
+		err := cs.backend.Commit(block, [][]byte{}, cs.isProposer)
 		if err != nil {
 			cs.logger.Errorf("Commit fail. error: %v", err)
 		}
