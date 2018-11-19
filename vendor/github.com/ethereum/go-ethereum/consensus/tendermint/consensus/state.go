@@ -196,7 +196,6 @@ type RoundState struct {
 	Proposal           *types.Proposal
 	ProposalBlock      *types.TdmBlock
 	ProposalBlockParts *types.PartSet
-	ProposerNetAddr	   string		// Proposer's IP address and port
 	ProposerPeerKey	   string		// Proposer's peer key
 	LockedRound        int
 	LockedBlock        *types.TdmBlock
@@ -918,8 +917,8 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
 	var block *types.TdmBlock
 	var blockParts *types.PartSet
-	var proposerNetAddr  string
 	var proposerPeerKey string
+
 
 	// Decide on block
 	if cs.LockedBlock != nil {
@@ -934,12 +933,16 @@ func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
 	}
 
 	// fmt.Println("defaultDecideProposal: cs nodeInfo %#v\n", cs.nodeInfo)
-	cs.logger.Debug(Fmt("defaultDecideProposal: Proposer (ip %s peer key %s)", proposerNetAddr, proposerPeerKey))
+	cs.logger.Debug(Fmt("defaultDecideProposal: Proposer (peer key %s)", proposerPeerKey))
 
 	// Make proposal
 	polRound, polBlockID := cs.VoteSignAggr.POLInfo()
 	cs.logger.Debugf("proposal hash:%+v", block.Hash())
-	proposal := types.NewProposal(height, round, block.Hash(), blockParts.Header(), polRound, polBlockID, proposerNetAddr, proposerPeerKey)
+	if NodeID == "" {
+		panic("Node id is nil")
+	}
+	proposerPeerKey = NodeID
+	proposal := types.NewProposal(height, round, block.Hash(), blockParts.Header(), polRound, polBlockID, proposerPeerKey)
 	err := cs.privValidator.SignProposal(cs.state.TdmExtra.ChainID, proposal)
 	if err == nil {
 		// Set fields
@@ -1472,7 +1475,6 @@ func (cs *ConsensusState) newSetProposal(proposal *types.Proposal) error {
 	cs.Proposal = proposal
 	cs.logger.Debugf("proposal is;%+v", proposal.Hash)
 	cs.ProposalBlockParts = types.NewPartSetFromHeader(proposal.BlockPartsHeader)
-	cs.ProposerNetAddr = proposal.ProposerNetAddr
 	cs.ProposerPeerKey = proposal.ProposerPeerKey
 	// enterPrevote don't wait for complete block
 	cs.enterPrevote(cs.Height, cs.Round)

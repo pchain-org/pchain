@@ -23,6 +23,7 @@ import (
 	"path"
 	"strconv"
 	"sync"
+	consensus2 "github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
 )
 
 type ChainManager struct {
@@ -60,6 +61,7 @@ func GetCMInstance(ctx *cli.Context) *ChainManager {
 
 func (cm *ChainManager) InitP2P() {
 	cm.server = p2p.NewP2PServer(cm.ctx)
+	consensus2.NodeID = cm.server.Server().Self().ID.String()
 }
 
 func (cm *ChainManager) LoadMainChain(ctx *cli.Context) error {

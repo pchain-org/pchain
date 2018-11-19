@@ -17,6 +17,7 @@ var (
 )
 
 type Proposal struct {
+	NodeID			string			`json:"node_id"`
 	Height           uint64           `json:"height"`
 	Round            int              `json:"round"`
 	Hash 		 []byte         `json:"hash"`
@@ -29,7 +30,7 @@ type Proposal struct {
 }
 
 // polRound: -1 if no polRound.
-func NewProposal(height uint64, round int, hash []byte, blockPartsHeader PartSetHeader, polRound int, polBlockID BlockID, netAddr string, peerKey string) *Proposal {
+func NewProposal(height uint64, round int, hash []byte, blockPartsHeader PartSetHeader, polRound int, polBlockID BlockID, peerKey string) *Proposal {
 	return &Proposal{
 		Height:           height,
 		Round:            round,
@@ -37,7 +38,6 @@ func NewProposal(height uint64, round int, hash []byte, blockPartsHeader PartSet
 		BlockPartsHeader: blockPartsHeader,
 		POLRound:         polRound,
 		POLBlockID:       polBlockID,
-		ProposerNetAddr:  netAddr,
 		ProposerPeerKey:  peerKey,
 	}
 }

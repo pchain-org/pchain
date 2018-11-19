@@ -28,7 +28,7 @@ const (
 	maxConsensusMessageSize     = 1048576                // 1MB; NOTE: keep in sync with types.PartSet sizes.
 )
 //-----------------------------------------------------------------------------
-
+var NodeID = ""
 type ConsensusReactor struct {
 	BaseService
 	// p2p.BaseReactor // BaseService + p2p.Switch
@@ -127,7 +127,7 @@ func (conR *ConsensusReactor) AddPeer(peer consensus.Peer) {
 
 	conR.logger.Debugf("peer is:%+v", peer)
 	conR.logger.Debugf("peer key is:%+v", peer.GetKey())
-	peerKey := peer.GetConsensusKey()
+	peerKey := peer.GetKey()
 	if peerKey != "" {
 		conR.peerStates[peerKey] = peerState
 	}
