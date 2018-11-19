@@ -74,7 +74,12 @@ func InitCmd(ctx *cli.Context) error {
 		utils.Fatalf("must supply path to genesis JSON file")
 	}
 
-	return init_cmd(ctx, GetTendermintConfig(MainChain, ctx), MainChain, ethGenesisPath)
+	chainId := ctx.Args().Get(1)
+	if chainId == "" {
+		chainId = MainChain
+	}
+
+	return init_cmd(ctx, GetTendermintConfig(chainId, ctx), chainId, ethGenesisPath)
 }
 
 func init_cmd(ctx *cli.Context, config cfg.Config, chainId string, ethGenesisPath string) error {
