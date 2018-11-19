@@ -809,9 +809,8 @@ func (self *ProtocolManager) minedBroadcastLoop() {
 	for obj := range self.minedBlockSub.Chan() {
 		switch ev := obj.Data.(type) {
 		case core.NewMinedBlockEvent:
-			_ = ev
-			//self.BroadcastBlock(ev.Block, true)  // First propagate block to peers
-			//self.BroadcastBlock(ev.Block, false) // Only then announce to the rest
+			self.BroadcastBlock(ev.Block, true)  // First propagate block to peers
+			self.BroadcastBlock(ev.Block, false) // Only then announce to the rest
 		}
 	}
 }
