@@ -846,13 +846,16 @@ func (cs *ConsensusState) enterNewRound(height uint64, round int) {
 		cs.PrecommitMaj23SignAggr = nil
 	}
 	cs.VoteSignAggr.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
-
 	types.FireEventNewRound(cs.evsw, cs.RoundStateEvent())
+
+	fmt.Println(cs.IsProposer())
+
 
 	// Immediately go to enterPropose.
 	if cs.IsProposer() && cs.blockFromMiner == nil {
 		cs.logger.Info("we are proposer, but blockFromMiner is nil, let's wait a second!!!")
 		cs.scheduleTimeout(cs.timeoutParams.WaitForMinerBlock(), height, round, RoundStepWaitForMinerBlock)
+		panic("handle new round")
 		return
 	}
 
@@ -906,7 +909,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		return
 	}
 
-	if cs.IsProposer() {
+	if !cs.IsProposer() {
 		cs.logger.Info("enterPropose: Not our turn to propose", "proposer", cs.GetProposer(), "privValidator", cs.privValidator)
 	} else {
 		cs.logger.Info("enterPropose: Our turn to propose", "proposer", cs.GetProposer(), "privValidator", cs.privValidator)
@@ -1944,6 +1947,8 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 		cs.logger.Error("Votset does not have +2/3 voting")
 	}
 
+
+	fmt.Println("vote len is:", len(votes))
 	numValidators := cs.Validators.Size()
 	signBitArray := NewBitArray((uint64)(numValidators))
 	var sigs []*tmdcrypto.Signature
@@ -1974,7 +1979,7 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	//signAggr.SetBitArray(signBitArray)
 
 	if maj23.IsZero() == true {
-		cs.logger.Debug("The maj23 blockID is zero %#v\n", maj23)
+		cs.logger.Debugf("The maj23 blockID is zero %+v\n", maj23)
 		panic("Invalid maj23")
 	}
 
