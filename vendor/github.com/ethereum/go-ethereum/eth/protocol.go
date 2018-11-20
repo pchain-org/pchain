@@ -49,7 +49,7 @@ const (
 	ReceiptsMsg    = 0x10
 
 	// Protocol messages belonging to eth/64 (pchain)
-	TX3ProofDataMsg = 0x64
+	TX3ProofDataMsg = 0x20
 )
 
 type errCode int
