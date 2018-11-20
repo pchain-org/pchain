@@ -193,6 +193,12 @@ func (p *Peer) Addr() net.Addr {
 	return p.conn.RemoteAddr()
 }
 
+// Key returns the peer's id key.
+func (p *Peer) PeerKey() string {
+	//	return p.nodeInfo.ListenAddr // XXX: should probably be PubKey.KeyString()
+	return p.ListenAddr // XXX: should probably be PubKey.KeyString()
+}
+
 // PubKey returns peer's public key.
 func (p *Peer) PubKey() crypto.PubKeyEd25519 {
 	if p.config.AuthEnc {

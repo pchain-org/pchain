@@ -10,13 +10,13 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	. "github.com/tendermint/go-common"
 )
 
 //--------------------------------------------------
 
 // return a bit array of validators that signed the last commit
 // NOTE: assumes commits have already been authenticated
+/*
 func commitBitArrayFromBlock(block *types.TdmBlock) *BitArray {
 
 	signed := NewBitArray(uint64(len(block.TdmExtra.SeenCommit.Precommits)))
@@ -26,7 +26,7 @@ func commitBitArrayFromBlock(block *types.TdmBlock) *BitArray {
 		}
 	}
 	return signed
-}
+}*/
 
 //-----------------------------------------------------
 // Validate block

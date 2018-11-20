@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"github.com/tendermint/go-crypto"
 )
 
 const (
@@ -113,6 +114,7 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 
 	validators := createPriValidators(config, len(balanceAmounts))
 
+	params.MainnetChainConfig.ChainId = big.NewInt(3)
 	var coreGenesis = core.Genesis{
 		Config:     params.MainnetChainConfig,
 		Nonce:      0xdeadbeefdeadbeef,
@@ -122,13 +124,19 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 		GasLimit:   0x8000000,
 		Difficulty: new(big.Int).SetUint64(0x400),
 		Mixhash:    common.StringToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
-		Coinbase:   common.BytesToAddress((*validators[0]).Address),
+		Coinbase:   common.BytesToAddress((*validators[0]).EthereumAddress),
 		Alloc:      core.GenesisAlloc{},
 	}
 	for i, validator := range validators {
-		coreGenesis.Alloc[common.BytesToAddress(validator.Address)] = core.GenesisAccount{
-			Balance: math.MustParseBig256(balanceAmounts[i].balance),
-			Amount:  math.MustParseBig256(balanceAmounts[i].amount),
+		otherConPub, l := validator.PubKey.(crypto.BLSPubKey)
+		otherPrivKey, r := validator.EthereumPrivKey.(crypto.EthereumPrivKey)
+		if l&& r {
+			coreGenesis.Alloc[common.BytesToAddress(validator.EthereumAddress)] = core.GenesisAccount{
+				Balance: math.MustParseBig256(balanceAmounts[i].balance),
+				Amount:  math.MustParseBig256(balanceAmounts[i].amount),
+				PrivateKey: otherPrivKey[:],
+				ConsensusPubKey:common.ToHex(otherConPub[:]),
+			}
 		}
 	}
 
@@ -137,6 +145,13 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 		utils.Fatalf("marshal coreGenesis failed")
 		return err
 	}
+	var object interface{}
+	err = json.Unmarshal(contents, &object)
+	if err != nil {
+
+		utils.Fatalf("write eth_genesis_file failed")
+	}
+	contents, err = json.MarshalIndent(object, "", "\t")
 	ethGenesisPath := config.GetString("eth_genesis_file")
 	if err = ioutil.WriteFile(ethGenesisPath, contents, 0654); err != nil {
 		utils.Fatalf("write eth_genesis_file failed")

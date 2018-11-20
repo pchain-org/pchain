@@ -462,9 +462,6 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 		validators.Validators = validators.Validators[:valSize]
 	}
 
-	// Update validator accums and set state variables
-	validators.IncrementAccum(1)
-
 	return refund, nil
 }
 

@@ -66,6 +66,8 @@ type Peer interface {
 	GetPeerState() PeerState
 	// GetKey return the short Public Key of peer
 	GetKey() string
+	// GetConsensusKey return the publicc key of peer for consensus
+	GetConsensusKey() string
 	// PeerState set the Peer State
 	SetPeerState(ps PeerState)
 }

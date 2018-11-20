@@ -84,6 +84,7 @@ type GenesisAccount struct {
 	Nonce      uint64                      `json:"nonce,omitempty"`
 	Amount     *big.Int                    `json:"amount,omitempty"`
 	PrivateKey []byte                      `json:"secretKey,omitempty"` // for tests
+	ConsensusPubKey string					`json:"consensus_pub_key, omitempty"`
 }
 
 // field type overrides for gencodec

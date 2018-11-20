@@ -137,15 +137,15 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey 
 	}
 
 	// Check PubKey match the Address
-	pubkeySlice := ethcrypto.FromECDSAPub(ethcrypto.ToECDSAPub(common.FromHex(pubkey)))
+/*	pubkeySlice := ethcrypto.FromECDSAPub(ethcrypto.ToECDSAPub(common.FromHex(pubkey)))
 	if pubkeySlice == nil {
 		return errors.New("your Public Key is not valid, please provide a valid Public Key")
 	}
 
-	validatorPubkey := crypto.EtherumPubKey(pubkeySlice)
+	validatorPubkey := crypto.BLSPubKey(pubkeySlice)
 	if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
 		return errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
-	}
+	}*/
 
 	// Check if already joined the chain
 	find := false
@@ -187,7 +187,7 @@ func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, 
 	}
 
 	jv := core.JoinedValidator{
-		PubKey:        crypto.EtherumPubKey(common.FromHex(pubkey)),
+		PubKey:        crypto.BLSPubKey(common.FromHex(pubkey)),
 		Address:       from,
 		DepositAmount: depositAmount,
 	}
@@ -279,7 +279,7 @@ func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Addr
 		return errors.New("your Public Key is not valid, please provide a valid Public Key")
 	}
 
-	validatorPubkey := crypto.EtherumPubKey(pubkeySlice)
+	validatorPubkey := crypto.BLSPubKey(pubkeySlice)
 	if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
 		return errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
 	}
@@ -350,7 +350,7 @@ func (cch *CrossChainHelper) RevealVote(ep *epoch.Epoch, from common.Address, pu
 
 	if exist {
 		// Update the Hash Vote with Real Data
-		vote.PubKey = crypto.EtherumPubKey(common.FromHex(pubkey))
+		vote.PubKey = crypto.BLSPubKey(common.FromHex(pubkey))
 		vote.Amount = depositAmount
 		vote.Salt = salt
 		vote.TxHash = txHash

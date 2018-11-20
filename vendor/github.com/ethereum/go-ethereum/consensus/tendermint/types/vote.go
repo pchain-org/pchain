@@ -55,6 +55,7 @@ type Vote struct {
 	Type             byte             `json:"type"`
 	BlockID          BlockID          `json:"block_id"` // zero if vote is nil.
 	Signature        crypto.Signature `json:"signature"`
+	SignBytes		[]byte			  `json:"sign_bytes"`
 }
 
 func (vote *Vote) WriteSignBytes(chainID string, w io.Writer, n *int, err *error) {

@@ -21,6 +21,7 @@ type CanonicalJSONProposal struct {
 	POLBlockID       CanonicalJSONBlockID       `json:"pol_block_id"`
 	POLRound         int                        `json:"pol_round"`
 	Round            int                        `json:"round"`
+	Hash		 []byte 		    `json:"hash"`
 }
 
 type CanonicalJSONVote struct {
@@ -28,6 +29,16 @@ type CanonicalJSONVote struct {
 	Height  uint64                  `json:"height"`
 	Round   uint64                  `json:"round"`
 	Type    byte                 `json:"type"`
+}
+
+type CanonicalJSONSignAggr struct {
+        Height  uint64                  `json:"height"`
+        Round   int                  `json:"round"`
+        Type    byte                 `json:"type"`
+		NumValidators int	     `json:"NumValidators"`
+        BlockID CanonicalJSONBlockID `json:"block_id"`
+        Maj23   CanonicalJSONBlockID `json:"maj23"`
+	Sum	int64		     `json:"sum"`
 }
 
 //------------------------------------
@@ -41,6 +52,11 @@ type CanonicalJSONOnceProposal struct {
 type CanonicalJSONOnceVote struct {
 	ChainID string            `json:"chain_id"`
 	Vote    CanonicalJSONVote `json:"vote"`
+}
+
+type CanonicalJSONOnceSignAggr struct {
+	ChainID		string            	`json:"chain_id"`
+	SignAggr	CanonicalJSONSignAggr	`json:"sign_aggr"`
 }
 
 //-----------------------------
@@ -97,3 +113,14 @@ func CanonicalVote(vote *Vote) CanonicalJSONVote {
 	}
 }
 
+func CanonicalSignAggr(signAggr *SignAggr) CanonicalJSONSignAggr {
+	return CanonicalJSONSignAggr{
+		signAggr.Height,
+		signAggr.Round,
+		signAggr.Type,
+		signAggr.NumValidators,
+		CanonicalBlockID(signAggr.BlockID),
+		CanonicalBlockID(signAggr.Maj23),
+		signAggr.Sum,
+	}
+}

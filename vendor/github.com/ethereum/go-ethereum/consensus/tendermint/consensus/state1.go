@@ -8,6 +8,7 @@ import (
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	cmn "github.com/tendermint/go-common"
 	"time"
+	"fmt"
 )
 
 // The +2/3 and other Precommit-votes for block at `height`.
@@ -71,6 +72,7 @@ func (cs *ConsensusState) Initialize() {
 	cs.blockFromMiner = nil
 
 	//initialize round state
+	cs.ProposerPeerKey = ""
 	cs.Validators = nil
 	cs.Proposal = nil
 	cs.ProposalBlock = nil
@@ -79,6 +81,9 @@ func (cs *ConsensusState) Initialize() {
 	cs.LockedBlock = nil
 	cs.LockedBlockParts = nil
 	cs.Votes = nil
+	cs.VoteSignAggr = nil
+	cs.PrevoteMaj23SignAggr = nil
+	cs.PrecommitMaj23SignAggr = nil
 	cs.CommitRound = -1
 	cs.LastCommit = nil
 	cs.state = nil
@@ -90,13 +95,18 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 
 	// Reset fields based on state.
 	_, validators, _ := state.GetValidators()
-	lastPrecommits := (*types.VoteSet)(nil)
-	if cs.CommitRound > -1 && cs.Votes != nil {
-		if !cs.Votes.Precommits(cs.CommitRound).HasTwoThirdsMajority() {
-			cmn.PanicSanity("updateToState(state) called but last Precommit round didn't have +2/3")
-		}
-		lastPrecommits = cs.Votes.Precommits(cs.CommitRound)
+	lastPrecommits := (*types.SignAggr)(nil)
+	if cs.CommitRound > -1 && cs.PrecommitMaj23SignAggr != nil {
+		lastPrecommits = cs.PrecommitMaj23SignAggr
+		fmt.Println("set lastcommit")
+	} else {
+		fmt.Println("nil")
 	}
+	
+	fmt.Printf("commit round:+%v\n", cs.CommitRound)
+	 
+	fmt.Printf("lastPrecommit is:%+v\n", lastPrecommits)
+	fmt.Printf("lastPrecommit height:%+v\n", cs.Height)
 
 	cs.Initialize()
 
@@ -118,7 +128,8 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	}
 
 	cs.Validators = validators
-	cs.Votes = NewHeightVoteSet(cs.chainConfig.PChainId, height, validators, cs.logger)
+	cs.Votes = NewHeightVoteSet(cs.config.GetString("chain_id"), height, validators, cs.logger)
+	cs.VoteSignAggr = NewHeightVoteSignAggr(cs.config.GetString("chain_id"), height, validators, cs.logger)
 	cs.LastCommit = lastPrecommits
 
 	cs.state = state

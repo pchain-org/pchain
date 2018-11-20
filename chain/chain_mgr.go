@@ -43,6 +43,8 @@ type ChainManager struct {
 var chainMgr *ChainManager
 var once sync.Once
 
+
+
 func GetCMInstance(ctx *cli.Context) *ChainManager {
 
 	once.Do(func() {
@@ -52,6 +54,10 @@ func GetCMInstance(ctx *cli.Context) *ChainManager {
 		chainMgr.cch = &CrossChainHelper{}
 	})
 	return chainMgr
+}
+
+func (cm *ChainManager)GetNodeID() string {
+	return cm.server.Server().NodeInfo().ID
 }
 
 func (cm *ChainManager) InitP2P() {
@@ -249,7 +255,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		}
 
 		// dereference the PubKey
-		if pubkey, ok := v.PubKey.(*crypto.EtherumPubKey); ok {
+		if pubkey, ok := v.PubKey.(*crypto.BLSPubKey); ok {
 			v.PubKey = *pubkey
 		}
 

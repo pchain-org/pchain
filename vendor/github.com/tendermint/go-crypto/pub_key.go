@@ -8,10 +8,12 @@ import (
 	"github.com/tendermint/ed25519"
 	"github.com/tendermint/ed25519/extra25519"
 	. "github.com/tendermint/go-common"
-	data "github.com/tendermint/go-data"
+	"github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
 	"golang.org/x/crypto/ripemd160"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
+	"bls"
+	"os"
 )
 
 // PubKey is part of Account and Validator.
@@ -30,7 +32,8 @@ func init() {
 	pubKeyMapper = data.NewMapper(PubKeyS{}).
 		RegisterImplementation(PubKeyEd25519{}, NameEd25519, TypeEd25519).
 		RegisterImplementation(PubKeySecp256k1{}, NameSecp256k1, TypeSecp256k1).
-		RegisterImplementation(EtherumPubKey{}, NameEtherum, TypeEtherum)
+		RegisterImplementation(EthereumPubKey{}, NameEthereum, TypeEthereum).
+		RegisterImplementation(BLSPubKey{}, NameBls, TypeBls)
 }
 
 // PubKeyS add json serialization to PubKey
@@ -216,47 +219,223 @@ func (pubKey PubKeySecp256k1) Equals(other PubKey) bool {
 	}
 }
 
-type EtherumPubKey []byte
+type EthereumPubKey []byte
 
-func (pubKey EtherumPubKey) Address() []byte {
+func (pubKey EthereumPubKey) Address() []byte {
 	cKey := ethcrypto.ToECDSAPub(pubKey[:])
 	address := ethcrypto.PubkeyToAddress(*cKey)
 	return address[:]
 }
 
-func (pubKey EtherumPubKey) Bytes() []byte {
+func (pubKey EthereumPubKey) Bytes() []byte {
 	return wire.BinaryBytes(struct{ PubKey }{pubKey})
 }
 
-func (pubKey EtherumPubKey) KeyString() string {
+func (pubKey EthereumPubKey) KeyString() string {
 	return Fmt("EthPubKey{%X}", pubKey[:])
 }
 
-func (pubKey EtherumPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
+func (pubKey EthereumPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
 	msg = ethcrypto.Keccak256(msg)
-	recoveredPub, err := ethcrypto.Ecrecover(msg, sig_.(EtherumSignature).SigByte())
+	recoveredPub, err := ethcrypto.Ecrecover(msg, sig_.(EthereumSignature).SigByte())
 	if err != nil {
 		return false
 	}
 	return bytes.Equal(pubKey[:], recoveredPub[:])
 }
 
-func (pubKey EtherumPubKey) Equals(other PubKey) bool {
-	if otherEd, ok := other.(EtherumPubKey); ok {
+func (pubKey EthereumPubKey) Equals(other PubKey) bool {
+	if otherEd, ok := other.(EthereumPubKey); ok {
 		return bytes.Equal(pubKey[:], otherEd[:])
 	} else {
 		return false
 	}
 }
 
-func (pubKey EtherumPubKey) MarshalJSON() ([]byte, error) {
+func (pubKey EthereumPubKey) MarshalJSON() ([]byte, error) {
 
 	return data.Encoder.Marshal(pubKey[:])
 }
 
-func (p *EtherumPubKey) UnmarshalJSON(enc []byte) error {
+func (p *EthereumPubKey) UnmarshalJSON(enc []byte) error {
 	var ref []byte
 	err := data.Encoder.Unmarshal(&ref, enc)
 	copy((*p)[:], ref)
+	return err
+}
+
+/*
+//-------------------------------------
+// Implements PubKey.
+type BLSPubKey []byte
+
+func (pubKey BLSPubKey) getElement() *pbc.Element {
+	return pairing.NewG2().SetBytes(pubKey)
+}
+
+func (pubKey BLSPubKey) GetElement() *pbc.Element {
+	return pairing.NewG2().SetBytes(pubKey)
+}
+
+func (pubKey BLSPubKey) Set1() {
+	copy(pubKey, pairing.NewG1().Set1().Bytes())
+}
+
+
+func CreateBLSPubKey() BLSPubKey {
+	pubKey := pairing.NewG2().Rand()
+	return pubKey.Bytes()
+}
+
+func PubKeyMul(l, r BLSPubKey) BLSPubKey {
+	el1 := l.getElement()
+	el2 := r.getElement()
+	rs := pairing.NewG2().Mul(el1, el2)
+	return rs.Bytes()
+}
+
+func (pubKey BLSPubKey) Mul(other PubKey) bool {
+	if otherPub, ok := other.(BLSPubKey); ok {
+		el1 := pubKey.getElement()
+		el2 := otherPub.getElement()
+		rs := pairing.NewG2().Mul(el1, el2)
+		copy(pubKey, rs.Bytes())
+		return true
+	} else {
+		return false
+	}
+}
+
+func (pubKey BLSPubKey) MulWithSet1(other PubKey) bool {
+	if otherPub, ok := other.(BLSPubKey); ok {
+		el1 := pubKey.getElement()
+		el1.Set1()
+		el2 := otherPub.getElement()
+		rs := pairing.NewG2().Mul(el1, el2)
+		copy(pubKey, rs.Bytes())
+		return true
+	} else {
+		return false
+	}
+}
+
+func (pubKey BLSPubKey) Bytes() []byte {
+	return pubKey
+}
+
+func (pubKey BLSPubKey) Address() []byte {
+	hasherSHA256 := sha256.New()
+	hasherSHA256.Write(pubKey[:]) // does not error
+	sha := hasherSHA256.Sum(nil)
+
+	hasherRIPEMD160 := ripemd160.New()
+	hasherRIPEMD160.Write(sha) // does not error
+	return hasherRIPEMD160.Sum(nil)
+}
+
+func (pubKey BLSPubKey) KeyString() string {
+
+	return Fmt("EthPubKey{%X}", pubKey[:])
+}
+
+func (pubKey BLSPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
+	if otherSign, ok := sig_.(BLSSignature); ok {
+		h := pairing.NewG1().SetFromStringHash(string(msg), sha256.New())
+		temp1 := pairing.NewGT().Pair(h, pubKey.getElement())
+		temp2 := pairing.NewGT().Pair(otherSign.getElement(), g)
+		return temp1.Equals(temp2)
+	} else {
+		return false;
+	}
+}
+
+func (pubKey BLSPubKey) Equals(other PubKey) bool {
+	if otherBLS, ok := other.(BLSPubKey); ok {
+		return pubKey.getElement().Equals(otherBLS.getElement())
+	} else {
+		return false
+	}
+}
+
+func (pubKey BLSPubKey) MarshalJSON() ([]byte, error) {
+
+	return data.Encoder.Marshal(pubKey)
+}
+
+func (p *BLSPubKey) UnmarshalJSON(enc []byte) error {
+	var ref []byte
+	err := data.Encoder.Unmarshal(&ref, enc)
+	copy(*p, ref)
+	return err
+}
+*/
+type BLSPubKey []byte
+
+func (pubKey BLSPubKey) getElement() *bls.PublicKey {
+	pb := &bls.PublicKey{}
+	err := pb.Unmarshal(pubKey)
+	if err != nil {
+		return nil
+	} else {
+		return pb
+	}
+}
+
+func (pubKey BLSPubKey) Bytes() []byte {
+	return pubKey
+}
+
+func BLSPubKeyAggregate(pks []*PubKey) BLSPubKey {
+	var _pks []*bls.PublicKey
+	for _, pk := range pks {
+		if _pk, ok := (*pk).(BLSPubKey); ok {
+			_pks = append(_pks, _pk.getElement())
+		} else {
+			return nil
+		}
+	}
+	return  new(bls.PublicKey).AggregateArray(_pks).Marshal()
+}
+
+func (pubKey BLSPubKey) Address() []byte {
+	hasherSHA256 := sha256.New()
+	hasherSHA256.Write(pubKey[:]) // does not error
+	sha := hasherSHA256.Sum(nil)
+
+	hasherRIPEMD160 := ripemd160.New()
+	hasherRIPEMD160.Write(sha) // does not error
+	return hasherRIPEMD160.Sum(nil)
+}
+
+func (pubKey BLSPubKey) Equals(other PubKey) bool {
+	if otherPk, ok := other.(BLSPubKey); ok {
+		return bytes.Equal(pubKey, otherPk)
+	} else {
+		return false
+	}
+}
+
+func (pubKey BLSPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
+	if otherSign, ok := sig_.(BLSSignature); ok {
+		sign := otherSign.getElement()
+		return bls.Verify(sign, msg, pubKey.getElement())
+	} else {
+		os.Exit(0)
+		return false;
+	}
+}
+
+func (pubKey BLSPubKey) KeyString() string {
+	return Fmt("BlsPubKey{%X}", pubKey[:])
+}
+
+func (pubKey BLSPubKey) MarshalJSON() ([]byte, error) {
+	return data.Encoder.Marshal(pubKey)
+}
+
+func (p *BLSPubKey) UnmarshalJSON(enc []byte) error {
+	var ref []byte
+	err := data.Encoder.Unmarshal(&ref, enc)
+	copy(*p, ref)
 	return err
 }

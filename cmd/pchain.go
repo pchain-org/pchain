@@ -5,6 +5,7 @@ import (
 	"github.com/pchain/chain"
 	"gopkg.in/urfave/cli.v1"
 	"strings"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
 )
 
 func pchainCmd(ctx *cli.Context) error {
@@ -41,6 +42,7 @@ func pchainCmd(ctx *cli.Context) error {
 		log.Errorf("Start P2P Server failed. %v", err)
 		return err
 	}
+	consensus.NodeID = chainMgr.GetNodeID()[0:16]
 
 	// Start Main Chain
 	err = chainMgr.StartMainChain()

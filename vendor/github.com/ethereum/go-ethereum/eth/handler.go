@@ -259,7 +259,7 @@ func (pm *ProtocolManager) Stop() {
 }
 
 func (pm *ProtocolManager) newPeer(pn string, pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
-	return newPeer(pn, pv, p, newMeteredMsgWriter(rw))
+		return newPeer(pn, pv, p, newMeteredMsgWriter(rw))
 }
 
 // handle is the callback invoked to manage the life cycle of an eth peer. When
