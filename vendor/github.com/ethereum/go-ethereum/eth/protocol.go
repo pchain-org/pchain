@@ -48,8 +48,8 @@ const (
 	GetReceiptsMsg = 0x0f
 	ReceiptsMsg    = 0x10
 
-	// Protocol messages belonging to eth/64 (pchain)
-	TX3ProofDataMsg = 0x64
+	// Protocol messages belonging to pchain
+	TX3ProofDataMsg = 0x18
 )
 
 type errCode int
