@@ -787,9 +787,12 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 // already have the given TX3ProofData.
 func (pm *ProtocolManager) BroadcastTX3ProofData(height uint64, proofData *types.TX3ProofData) {
 	// Broadcast TX3ProofData to a batch of peers not knowing about it
+	log.Info("BroadcastTX3ProofData", "height", height, "proofData", proofData)
 	peers := pm.peers.PeersWithoutTX3ProofData(height)
+	log.Info("BroadcastTX3ProofData", "peers", peers)
 	for _, peer := range peers {
-		peer.SendTX3ProofData([]*types.TX3ProofData{proofData})
+		err := peer.SendTX3ProofData([]*types.TX3ProofData{proofData})
+		log.Info("BroadcastTX3ProofData", "err", err)
 	}
 	log.Trace("Broadcast TX3ProofData", "height", height, "recipients", len(peers))
 }
