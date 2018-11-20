@@ -70,7 +70,7 @@ type peer struct {
 
 	knownTxs           *set.Set // Set of transaction hashes known to be known by this peer
 	knownBlocks        *set.Set // Set of block hashes known to be known by this peer
-	knownTX3ProofDatas *set.Set // Set of TX3ProofData height known to be known by this peer
+	knownTX3ProofDatas *set.Set // Set of TX3ProofData(per block hash) known to be known by this peer
 
 	peerState consensus.PeerState
 }
@@ -146,12 +146,12 @@ func (p *peer) MarkTransaction(hash common.Hash) {
 
 // MarkTX3ProofData marks a TX3ProofData as known for the peer, ensuring that it
 // will never be propagated to this particular peer.
-func (p *peer) MarkTX3ProofData(height uint64) {
+func (p *peer) MarkTX3ProofData(hash common.Hash) {
 	// If we reached the memory allowance, drop a previously known TX3ProofData height
 	for p.knownTX3ProofDatas.Size() >= maxKnownTX3ProofData {
 		p.knownTX3ProofDatas.Pop()
 	}
-	p.knownTX3ProofDatas.Add(height)
+	p.knownTX3ProofDatas.Add(hash)
 }
 
 // ---------- PChain P2P peer function - Start ----------
@@ -241,7 +241,7 @@ func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 // SendTX3ProofData sends a batch of TX3ProofData to the remote peer.
 func (p *peer) SendTX3ProofData(proofDatas []*types.TX3ProofData) error {
 	for _, proofData := range proofDatas {
-		p.knownTX3ProofDatas.Add(proofData.Header.Number.Uint64())
+		p.knownTX3ProofDatas.Add(proofData.Header.Hash())
 	}
 	return p2p.Send(p.rw, TX3ProofDataMsg, proofDatas)
 }
@@ -458,13 +458,13 @@ func (ps *peerSet) PeersWithoutTx(hash common.Hash) []*peer {
 	return list
 }
 
-func (ps *peerSet) PeersWithoutTX3ProofData(height uint64) []*peer {
+func (ps *peerSet) PeersWithoutTX3ProofData(hash common.Hash) []*peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
 	list := make([]*peer, 0, len(ps.peers))
 	for _, p := range ps.peers {
-		if !p.knownTX3ProofDatas.Has(height) {
+		if !p.knownTX3ProofDatas.Has(hash) {
 			list = append(list, p)
 		}
 	}

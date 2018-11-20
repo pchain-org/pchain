@@ -235,5 +235,5 @@ func (b *EthApiBackend) GetCrossChainHelper() core.CrossChainHelper {
 }
 
 func (b *EthApiBackend) BroadcastTX3ProofData(proofData *types.TX3ProofData) {
-	b.eth.protocolManager.BroadcastTX3ProofData(proofData.Header.Number.Uint64(), proofData)
+	b.eth.protocolManager.BroadcastTX3ProofData(proofData.Header.Hash(), proofData)
 }
