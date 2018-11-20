@@ -42,7 +42,7 @@ func pchainCmd(ctx *cli.Context) error {
 		log.Errorf("Start P2P Server failed. %v", err)
 		return err
 	}
-	consensus.NodeID = chainMgr.GetNodeID()
+	consensus.NodeID = chainMgr.GetNodeID()[0:16]
 
 	// Start Main Chain
 	err = chainMgr.StartMainChain()

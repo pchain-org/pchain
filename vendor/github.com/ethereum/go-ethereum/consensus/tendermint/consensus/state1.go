@@ -72,6 +72,7 @@ func (cs *ConsensusState) Initialize() {
 	cs.blockFromMiner = nil
 
 	//initialize round state
+	cs.ProposerPeerKey = ""
 	cs.Validators = nil
 	cs.Proposal = nil
 	cs.ProposalBlock = nil
