@@ -719,7 +719,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				log.Error("TX3ProofDataMsg validate error", "msg", msg, "error", err)
 				return errResp(ErrTX3ValidateFail, "msg %v: %v", msg, err)
 			}
-			p.MarkTX3ProofData(proofData.Header.Number.Uint64())
+			p.MarkTX3ProofData(proofData.Header.Hash())
 			// Write the remote TX3ProofData
 			if err := pm.cch.WriteTX3ProofData(proofData); err != nil {
 				log.Error("TX3ProofDataMsg write error", "msg", msg, "error", err)
@@ -785,16 +785,13 @@ func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) 
 
 // BroadcastTX3ProofData will propagate a TX3ProofData to all peers which are not known to
 // already have the given TX3ProofData.
-func (pm *ProtocolManager) BroadcastTX3ProofData(height uint64, proofData *types.TX3ProofData) {
+func (pm *ProtocolManager) BroadcastTX3ProofData(hash common.Hash, proofData *types.TX3ProofData) {
 	// Broadcast TX3ProofData to a batch of peers not knowing about it
-	log.Info("BroadcastTX3ProofData", "height", height, "proofData", proofData)
-	peers := pm.peers.PeersWithoutTX3ProofData(height)
-	log.Info("BroadcastTX3ProofData", "peers", peers)
+	peers := pm.peers.PeersWithoutTX3ProofData(hash)
 	for _, peer := range peers {
-		err := peer.SendTX3ProofData([]*types.TX3ProofData{proofData})
-		log.Info("BroadcastTX3ProofData", "err", err)
+		peer.SendTX3ProofData([]*types.TX3ProofData{proofData})
 	}
-	log.Trace("Broadcast TX3ProofData", "height", height, "recipients", len(peers))
+	log.Trace("Broadcast TX3ProofData", "hash", hash, "recipients", len(peers))
 }
 
 func (pm *ProtocolManager) BroadcastMessage(msgcode uint64, data interface{}) {
