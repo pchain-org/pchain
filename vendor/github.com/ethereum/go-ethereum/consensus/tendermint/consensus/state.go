@@ -1790,8 +1790,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 				}
 			} else if vote.Type == types.VoteTypePrecommit {
 				if cs.Votes.Precommits(cs.Round).HasTwoThirdsMajority() {
-					cs.logger.Debugf("block id is:%+v", cs.Votes.Prevotes(cs.Round).Votes()[0].BlockID)
-					cs.logger.Debug(Fmt("addVote: Got 2/3+ precommits %+v\n", cs.Votes.Prevotes(cs.Round)))
+					cs.logger.Debugf("addVote: Got 2/3+ precommits %+v", cs.Votes.Precommits(cs.Round))
 					// Send votes aggregation
 					//cs.sendMaj23Vote(vote.Type)
 
@@ -1950,7 +1949,7 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 		cs.logger.Error("Votset does not have +2/3 voting")
 	}
 
-	fmt.Println("vote len is:", len(votes))
+	cs.logger.Debugf("vote len is: %v", len(votes))
 	numValidators := cs.Validators.Size()
 	signBitArray := NewBitArray((uint64)(numValidators))
 	var sigs []*tmdcrypto.Signature
@@ -1963,8 +1962,7 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 			sigs = append(sigs, &(vote.Signature))
 		}
 	}
-	cs.logger.Debugf("send maj block ID:%+v", votes[0].BlockID.Hash)
-	cs.logger.Debugf("send maj block ID:%+v", blockID.Hash)
+	cs.logger.Debugf("send maj block ID: %X", blockID.Hash)
 
 	// step 1: build BLS signature aggregation based on signatures in votes
 	// bitarray, signAggr := BuildSignAggr(votes)
@@ -1987,7 +1985,7 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 
 	// Set ma23 block ID
 	signAggr.SetMaj23(maj23)
-	cs.logger.Debug(Fmt("Generate Maj23SignAggr %#v\n", signAggr))
+	cs.logger.Debugf("Generate Maj23SignAggr %#v", signAggr)
 
 	signEvent := types.EventDataSignAggr{SignAggr: signAggr}
 	types.FireEventSignAggr(cs.evsw, signEvent)
