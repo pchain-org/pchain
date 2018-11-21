@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
@@ -97,4 +98,17 @@ func ExtractTendermintExtra(h *ethTypes.Header) (*TendermintExtra, error) {
 		return nil, err
 	}
 	return &tdmExtra, nil
+}
+
+func (te *TendermintExtra) String() string {
+	str := fmt.Sprintf(`TendermintExtra: {
+ChainID:     %s
+EpochNumber: %v
+Height:      %v
+Time:        %v
+
+EpochBytes: length %v
+}
+`, te.ChainID, te.EpochNumber, te.Height, te.Time, len(te.EpochBytes))
+	return str
 }

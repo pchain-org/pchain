@@ -10,9 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	. "github.com/tendermint/go-common"
+	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
-	"github.com/tendermint/go-crypto"
 )
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
@@ -179,7 +179,6 @@ func (b *TdmBlock) StringIndented(indent string) string {
 %s  %v
 %s  %v
 %s  %v
-%s  %v
 %s}#%X`,
 		indent, b.Block.String(),
 		indent, b.TdmExtra,
@@ -202,19 +201,17 @@ type Commit struct {
 	// NOTE: The Precommits are in order of address to preserve the bonded ValidatorSet order.
 	// Any peer with a block can gossip precommits by index with a peer without recalculating the
 	// active ValidatorSet.
-	BlockID    BlockID `json:"blockID"`
-	Height		uint64	`json:"height"`
-	Round		int	`json:"round"`
+	BlockID BlockID `json:"blockID"`
+	Height  uint64  `json:"height"`
+	Round   int     `json:"round"`
 
 	// BLS signature aggregation to be added here
-	SignAggr	crypto.BLSSignature     `json:"SignAggr"`
-	BitArray        *BitArray
+	SignAggr crypto.BLSSignature `json:"SignAggr"`
+	BitArray *BitArray
 
 	// Volatile
-	hash            []byte
+	hash []byte
 }
-
-
 
 func (commit *Commit) Type() byte {
 	return VoteTypePrecommit
@@ -228,19 +225,18 @@ func (commit *Commit) NumCommits() int {
 	return (int)(commit.BitArray.NumBitsSet())
 }
 
-
 func (commit *Commit) ValidateBasic() error {
 	if commit.BlockID.IsZero() {
 		return errors.New("Commit cannot be for nil block")
 	}
-/*
-	if commit.Type() != VoteTypePrecommit {
-		return fmt.Errorf("Invalid commit type. Expected VoteTypePrecommit, got %v",
-			precommit.Type)
-	}
+	/*
+		if commit.Type() != VoteTypePrecommit {
+			return fmt.Errorf("Invalid commit type. Expected VoteTypePrecommit, got %v",
+				precommit.Type)
+		}
 
-	// shall we validate the signature aggregation?
-*/
+		// shall we validate the signature aggregation?
+	*/
 
 	return nil
 }

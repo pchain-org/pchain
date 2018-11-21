@@ -22,13 +22,13 @@ import (
 	"github.com/pkg/errors"
 	cmn "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
+	"github.com/tendermint/go-crypto"
 	"io/ioutil"
 	"math/big"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-	"github.com/tendermint/go-crypto"
 )
 
 const (
@@ -114,7 +114,6 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 
 	validators := createPriValidators(config, len(balanceAmounts))
 
-	params.MainnetChainConfig.ChainId = big.NewInt(3)
 	var coreGenesis = core.Genesis{
 		Config:     params.MainnetChainConfig,
 		Nonce:      0xdeadbeefdeadbeef,
@@ -129,13 +128,12 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 	}
 	for i, validator := range validators {
 		otherConPub, l := validator.PubKey.(crypto.BLSPubKey)
-		otherPrivKey, r := validator.EthereumPrivKey.(crypto.EthereumPrivKey)
-		if l&& r {
+		_, r := validator.EthereumPrivKey.(crypto.EthereumPrivKey)
+		if l && r {
 			coreGenesis.Alloc[common.BytesToAddress(validator.EthereumAddress)] = core.GenesisAccount{
-				Balance: math.MustParseBig256(balanceAmounts[i].balance),
-				Amount:  math.MustParseBig256(balanceAmounts[i].amount),
-				PrivateKey: otherPrivKey[:],
-				ConsensusPubKey:common.ToHex(otherConPub[:]),
+				Balance:         math.MustParseBig256(balanceAmounts[i].balance),
+				Amount:          math.MustParseBig256(balanceAmounts[i].amount),
+				ConsensusPubKey: common.ToHex(otherConPub[:]),
 			}
 		}
 	}
