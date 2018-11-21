@@ -18,6 +18,10 @@ import (
 	"time"
 )
 
+const (
+	clientIdentifier = "pchain" // Client identifier to advertise over the network
+)
+
 func main() {
 
 	cliApp := newCliApp(version.Version, "the pchain command line interface")
@@ -53,12 +57,12 @@ func main() {
 		},
 
 		// See consolecmd.go:
-		gethmain.ConsoleCommand,
+		//gethmain.ConsoleCommand,
 		gethmain.AttachCommand,
-		gethmain.JavascriptCommand,
+		//gethmain.JavascriptCommand,
 
-		gethmain.WalletCommand,
-		gethmain.AccountCommand,
+		//gethmain.WalletCommand,
+		//gethmain.AccountCommand,
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 
@@ -109,14 +113,15 @@ func newCliApp(version, usage string) *cli.App {
 	app.Usage = usage
 	app.Flags = []cli.Flag{
 		utils.IdentityFlag,
-		utils.UnlockedAccountFlag,
-		utils.PasswordFileFlag,
+		//utils.UnlockedAccountFlag,
+		//utils.PasswordFileFlag,
 		utils.BootnodesFlag,
 		utils.BootnodesV4Flag,
 		utils.BootnodesV5Flag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
 		utils.NoUSBFlag,
+		/*
 		utils.DashboardEnabledFlag,
 		utils.DashboardAddrFlag,
 		utils.DashboardPortFlag,
@@ -127,6 +132,7 @@ func newCliApp(version, usage string) *cli.App {
 		utils.EthashDatasetDirFlag,
 		utils.EthashDatasetsInMemoryFlag,
 		utils.EthashDatasetsOnDiskFlag,
+		*/
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
 		utils.TxPoolRejournalFlag,
@@ -137,8 +143,8 @@ func newCliApp(version, usage string) *cli.App {
 		utils.TxPoolAccountQueueFlag,
 		utils.TxPoolGlobalQueueFlag,
 		utils.TxPoolLifetimeFlag,
-		utils.FastSyncFlag,
-		utils.LightModeFlag,
+		//utils.FastSyncFlag,
+		//utils.LightModeFlag,
 		utils.SyncModeFlag,
 		utils.GCModeFlag,
 		utils.LightServFlag,
@@ -162,15 +168,15 @@ func newCliApp(version, usage string) *cli.App {
 		utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
-		utils.DeveloperFlag,
-		utils.DeveloperPeriodFlag,
-		utils.TestnetFlag,
-		utils.RinkebyFlag,
-		utils.OttomanFlag,
+		//utils.DeveloperFlag,
+		//utils.DeveloperPeriodFlag,
+		//utils.TestnetFlag,
+		//utils.RinkebyFlag,
+		//utils.OttomanFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
-		utils.RPCVirtualHostsFlag,
+		//utils.RPCVirtualHostsFlag,
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
 		utils.FakePoWFlag,
@@ -178,18 +184,20 @@ func newCliApp(version, usage string) *cli.App {
 		utils.GpoBlocksFlag,
 		utils.GpoPercentileFlag,
 		utils.ExtraDataFlag,
-		gethmain.ConfigFileFlag,
-		utils.IstanbulRequestTimeoutFlag,
-		utils.IstanbulBlockPeriodFlag,
+		//gethmain.ConfigFileFlag,
+		//utils.IstanbulRequestTimeoutFlag,
+		//utils.IstanbulBlockPeriodFlag,
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
 		utils.RPCApiFlag,
+		/*
 		utils.WSEnabledFlag,
 		utils.WSListenAddrFlag,
 		utils.WSPortFlag,
 		utils.WSApiFlag,
 		utils.WSAllowedOriginsFlag,
+		*/
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
 
@@ -203,6 +211,7 @@ func newCliApp(version, usage string) *cli.App {
 		LogDirFlag,
 		ChildChainFlag,
 
+		/*
 		//Tendermint flags
 		MonikerFlag,
 		NodeLaddrFlag,
@@ -211,6 +220,7 @@ func newCliApp(version, usage string) *cli.App {
 		SkipUpnpFlag,
 		RpcLaddrFlag,
 		AddrFlag,
+		*/
 	}
 	app.Flags = append(app.Flags, DebugFlags...)
 
