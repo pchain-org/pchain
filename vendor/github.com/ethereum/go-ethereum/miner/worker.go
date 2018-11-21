@@ -385,9 +385,11 @@ func (self *worker) wait() {
 			)
 			events = append(events, core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 			if stat == core.CanonStatTy {
+				self.logger.Info("miner/wait append ChainHeadEvent event")
 				events = append(events, core.ChainHeadEvent{Block: block})
 			}
 
+			self.logger.Info("miner/wait post chain events")
 			self.chain.PostChainEvents(events, logs)
 
 			// Insert the block into the set of pending ones to wait for confirmations

@@ -145,7 +145,10 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		receipt.Logs = statedb.GetLogs(tx.Hash())
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
+		log.Infof("ApplyTransactionEx() 2.5 before, from: %x, nonce: %v", msg.From(), statedb.GetNonce(msg.From()))
 		statedb.SetNonce(msg.From(), statedb.GetNonce(msg.From())+1)
+		log.Infof("ApplyTransactionEx() 2.5 after, from: %x, nonce: %v", msg.From(), statedb.GetNonce(msg.From()))
+
 		log.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)
 
 		return receipt, 0, nil

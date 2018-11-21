@@ -292,11 +292,13 @@ func (pool *TxPool) loop() {
 		select {
 		// Handle ChainHeadEvent
 		case ev := <-pool.chainHeadCh:
+			log.Info("txpool received chainHead")
 			if ev.Block != nil {
 				pool.mu.Lock()
 				if pool.chainconfig.IsHomestead(ev.Block.Number()) {
 					pool.homestead = true
 				}
+				log.Info("txpool reset", "previous", head.Hash(), "current", ev.Block.Hash())
 				pool.reset(head.Header(), ev.Block.Header())
 				head = ev.Block
 
@@ -363,14 +365,18 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// If we're reorging an old state, reinject all dropped transactions
 	var reinject types.Transactions
 
+	log.Info("txpool reset checkpoint 0")
 	if oldHead != nil && oldHead.Hash() != newHead.ParentHash {
+		log.Info("txpool reset checkpoint 1")
 		// If the reorg is too deep, avoid doing it (will happen during fast sync)
 		oldNum := oldHead.Number.Uint64()
 		newNum := newHead.Number.Uint64()
 
 		if depth := uint64(math.Abs(float64(oldNum) - float64(newNum))); depth > 64 {
+			log.Info("txpool reset checkpoint 2")
 			log.Debug("Skipping deep transaction reorg", "depth", depth)
 		} else {
+			log.Info("txpool reset checkpoint 3")
 			// Reorg seems shallow enough to pull in all transactions into memory
 			var discarded, included types.Transactions
 
@@ -407,6 +413,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 			reinject = types.TxDifference(discarded, included)
 		}
 	}
+	log.Info("txpool reset checkpoint 4")
 	// Initialize the internal state to the current head
 	if newHead == nil {
 		newHead = pool.chain.CurrentBlock().Header() // Special case during testing
@@ -416,6 +423,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 		log.Error("Failed to reset txpool state", "err", err)
 		return
 	}
+	log.Info("txpool reset checkpoint 5")
 	pool.currentState = statedb
 	pool.pendingState = state.ManageState(statedb)
 	pool.currentMaxGas = newHead.GasLimit
@@ -424,6 +432,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	log.Debug("Reinjecting stale transactions", "count", len(reinject))
 	pool.addTxsLocked(reinject, false)
 
+	log.Info("txpool reset checkpoint 6")
 	// validate the pool of pending transactions, this will remove
 	// any transactions that have been included in the block or
 	// have been invalidated because of another transaction (e.g.
@@ -433,8 +442,13 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	// Update all accounts to the latest known pending nonce
 	for addr, list := range pool.pending {
 		txs := list.Flatten() // Heavy but will be cached and is needed by the miner anyway
+		for _, tx := range txs {
+			log.Info("txpool reset, after demote", "addr", addr, "tx", tx)
+		}
 		pool.pendingState.SetNonce(addr, txs[len(txs)-1].Nonce()+1)
 	}
+
+	log.Info("txpool reset checkpoint 7")
 	// Check the queue and move transactions over to the pending if possible
 	// or remove those that have become invalid
 	pool.promoteExecutables(nil)
@@ -1114,11 +1128,12 @@ func (pool *TxPool) demoteUnexecutables() {
 	// Iterate over all accounts and demote any non-executable transactions
 	for addr, list := range pool.pending {
 		nonce := pool.currentState.GetNonce(addr)
+		log.Info("demoteUnexecutables", "addr", addr, "nonce", nonce)
 
 		// Drop all transactions that are deemed too old (low nonce)
 		for _, tx := range list.Forward(nonce) {
 			hash := tx.Hash()
-			log.Trace("Removed old pending transaction", "hash", hash)
+			log.Info("Removed old pending transaction", "hash", hash)
 			delete(pool.all, hash)
 			pool.priced.Removed()
 		}
@@ -1126,14 +1141,14 @@ func (pool *TxPool) demoteUnexecutables() {
 		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), pool.currentMaxGas)
 		for _, tx := range drops {
 			hash := tx.Hash()
-			log.Trace("Removed unpayable pending transaction", "hash", hash)
+			log.Info("Removed unpayable pending transaction", "hash", hash)
 			delete(pool.all, hash)
 			pool.priced.Removed()
 			pendingNofundsCounter.Inc(1)
 		}
 		for _, tx := range invalids {
 			hash := tx.Hash()
-			log.Trace("Demoting pending transaction", "hash", hash)
+			log.Info("Demoting pending transaction", "hash", hash)
 			pool.enqueueTx(hash, tx)
 		}
 		// If there's a gap in front, warn (should never happen) and postpone all transactions
