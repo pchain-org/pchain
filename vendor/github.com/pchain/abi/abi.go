@@ -219,7 +219,7 @@ const jsonChainABI = `
 			},
 			{
 				"name": "txHash",
-				"type": "hash"
+				"type": "bytes32"
 			}
 		]
 	},
@@ -253,7 +253,7 @@ const jsonChainABI = `
 			},
 			{
 				"name": "txHash",
-				"type": "hash"
+				"type": "bytes32"
 			}
 		]
 	},
@@ -279,7 +279,7 @@ const jsonChainABI = `
 			},
 			{
 				"name": "voteHash",
-				"type": "hash"
+				"type": "bytes32"
 			}
 		]
 	},
