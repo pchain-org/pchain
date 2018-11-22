@@ -94,10 +94,22 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		}
 		log.Infof("ApplyTransactionEx() 0, Chain Function is %v\n", function.String())
 
+		from := msg.From()
+		// Make sure this transaction's nonce is correct
+		if msg.CheckNonce() {
+			nonce := statedb.GetNonce(from)
+			if nonce < msg.Nonce() {
+				log.Info("ApplyTransactionEx() abort due to nonce too high")
+				return nil, 0, ErrNonceTooHigh
+			} else if nonce > msg.Nonce() {
+				log.Info("ApplyTransactionEx() abort due to nonce too low")
+				return nil, 0, ErrNonceTooLow
+			}
+		}
+
 		// pre-buy gas according to the gas limit
 		gasLimit := tx.Gas()
 		gasValue := new(big.Int).Mul(new(big.Int).SetUint64(gasLimit), tx.GasPrice())
-		from := msg.From()
 		if statedb.GetBalance(from).Cmp(gasValue) < 0 {
 			return nil, 0, fmt.Errorf("insufficient PAI for gas (%x). Req %v, has %v", from.Bytes()[:4], gasValue, statedb.GetBalance(from))
 		}
