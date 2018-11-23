@@ -44,7 +44,12 @@ func (c *Context) Set(name, value string) error {
 
 // GlobalSet sets a context flag to a value on the global flagset
 func (c *Context) GlobalSet(name, value string) error {
-	return globalContext(c).flagSet.Set(name, value)
+	err := globalContext(c).flagSet.Set(name, value)
+	if err != nil {
+		return nil
+	}
+	globalContext(c).setFlags[name] = true
+	return err
 }
 
 // IsSet determines if the flag was actually set

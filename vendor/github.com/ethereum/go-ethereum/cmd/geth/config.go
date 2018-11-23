@@ -109,10 +109,6 @@ func defaultNodeConfig() node.Config {
 	return cfg
 }
 
-func MakeConfigNode(ctx *cli.Context, chainId string) (*node.Node, gethConfig) {
-	return makeConfigNode(ctx, chainId)
-}
-
 func makeConfigNode(ctx *cli.Context, chainId string) (*node.Node, gethConfig) {
 	// Load defaults.
 	cfg := gethConfig{

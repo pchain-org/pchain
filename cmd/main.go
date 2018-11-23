@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	clientIdentifier = "pchain" // Client identifier to advertise over the network
+	clientIdentifier = "pchain" // Client identifier to advertise over the network; it also is the main chain's id
 )
 
 func main() {
@@ -61,8 +61,8 @@ func main() {
 		gethmain.AttachCommand,
 		//gethmain.JavascriptCommand,
 
-		//gethmain.WalletCommand,
-		//gethmain.AccountCommand,
+		//walletCommand,
+		accountCommand,
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 
@@ -114,7 +114,7 @@ func newCliApp(version, usage string) *cli.App {
 	app.Flags = []cli.Flag{
 		utils.IdentityFlag,
 		//utils.UnlockedAccountFlag,
-		//utils.PasswordFileFlag,
+		utils.PasswordFileFlag,
 		utils.BootnodesFlag,
 		utils.BootnodesV4Flag,
 		utils.BootnodesV5Flag,
