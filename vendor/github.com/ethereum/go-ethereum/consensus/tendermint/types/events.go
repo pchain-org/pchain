@@ -2,10 +2,10 @@ package types
 
 import (
 	// for registering TMEventData as events.EventData
+	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-events"
 	"github.com/tendermint/go-wire"
-	ethTypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 // Functions to generate eventId strings
@@ -18,27 +18,27 @@ func EventStringDupeout() string { return "Dupeout" }
 func EventStringFork() string    { return "Fork" }
 func EventStringTx(tx Tx) string { return Fmt("Tx:%X", tx.Hash()) }
 
-func EventStringNewBlock() string         { return "NewBlock" }
-func EventStringNewBlockHeader() string   { return "NewBlockHeader" }
-func EventStringNewRound() string         { return "NewRound" }
-func EventStringNewRoundStep() string     { return "NewRoundStep" }
-func EventStringTimeoutPropose() string   { return "TimeoutPropose" }
-func EventStringCompleteProposal() string { return "CompleteProposal" }
-func EventStringPolka() string            { return "Polka" }
-func EventStringUnlock() string           { return "Unlock" }
-func EventStringLock() string             { return "Lock" }
-func EventStringRelock() string           { return "Relock" }
-func EventStringTimeoutWait() string      { return "TimeoutWait" }
-func EventStringVote() string             { return "Vote" }
-func EventStringSignAggr() string 		   { return  "SignAggr"}
-func EventStringVote2Proposer() string    { return "Vote2Proposer"}
-func EventStringProposal() string         { return "Proposal"}
-func EventStringBlockPart() string        { return "BlockPart"}
-func EventStringProposalBlockParts() string { return "Proposal_BlockParts"}
+func EventStringNewBlock() string           { return "NewBlock" }
+func EventStringNewBlockHeader() string     { return "NewBlockHeader" }
+func EventStringNewRound() string           { return "NewRound" }
+func EventStringNewRoundStep() string       { return "NewRoundStep" }
+func EventStringTimeoutPropose() string     { return "TimeoutPropose" }
+func EventStringCompleteProposal() string   { return "CompleteProposal" }
+func EventStringPolka() string              { return "Polka" }
+func EventStringUnlock() string             { return "Unlock" }
+func EventStringLock() string               { return "Lock" }
+func EventStringRelock() string             { return "Relock" }
+func EventStringTimeoutWait() string        { return "TimeoutWait" }
+func EventStringVote() string               { return "Vote" }
+func EventStringSignAggr() string           { return "SignAggr" }
+func EventStringVote2Proposer() string      { return "Vote2Proposer" }
+func EventStringProposal() string           { return "Proposal" }
+func EventStringBlockPart() string          { return "BlockPart" }
+func EventStringProposalBlockParts() string { return "Proposal_BlockParts" }
 
-func EventStringRequest() string          { return "Request" }
-func EventStringMessage() string          { return "Message" }
-func EventStringFinalCommitted() string   { return "FinalCommitted" }
+func EventStringRequest() string        { return "Request" }
+func EventStringMessage() string        { return "Message" }
+func EventStringFinalCommitted() string { return "FinalCommitted" }
 
 //----------------------------------------
 
@@ -54,17 +54,14 @@ const (
 	EventDataTypeTx             = byte(0x03)
 	EventDataTypeNewBlockHeader = byte(0x04)
 
-	EventDataTypeRoundState = byte(0x11)
-	EventDataTypeVote       = byte(0x12)
-	EventDataTypeSignAggr       = byte(0x13)
+	EventDataTypeRoundState    = byte(0x11)
+	EventDataTypeVote          = byte(0x12)
+	EventDataTypeSignAggr      = byte(0x13)
 	EventDataTypeVote2Proposer = byte(0x14)
-	EventDataTypeProposal      = byte(0x15)
-	EventDataTypeBlockPart    = byte(0x16)
-	EventDataTypeProposalBlockParts = byte(0x17)
 
-	EventDataTypeRequest		= byte(0x21)
-	EventDataTypeMessage		= byte(0x22)
-	EventDataTypeFinalCommitted	= byte(0x23)
+	EventDataTypeRequest        = byte(0x21)
+	EventDataTypeMessage        = byte(0x22)
+	EventDataTypeFinalCommitted = byte(0x23)
 )
 
 var _ = wire.RegisterInterface(
@@ -77,15 +74,11 @@ var _ = wire.RegisterInterface(
 	wire.ConcreteType{EventDataVote{}, EventDataTypeVote},
 	wire.ConcreteType{EventDataSignAggr{}, EventDataTypeSignAggr},
 	wire.ConcreteType{EventDataVote2Proposer{}, EventDataTypeVote2Proposer},
-	wire.ConcreteType{EventDataProposal{}, EventDataTypeProposal},
-	wire.ConcreteType{EventDataBlockPart{}, EventDataTypeBlockPart},
-	wire.ConcreteType{EventDataProposalBlockParts{}, EventDataTypeProposalBlockParts},
 
 	wire.ConcreteType{EventDataRequest{}, EventDataTypeRequest},
 	wire.ConcreteType{EventDataMessage{}, EventDataTypeMessage},
 	wire.ConcreteType{EventDataFinalCommitted{}, EventDataTypeFinalCommitted},
 )
-
 
 // Most event messages are basic types (a block, a transaction)
 // but some (an input to a call tx or a receive) are more exotic
@@ -101,16 +94,16 @@ type EventDataNewBlockHeader struct {
 
 // All txs fire EventDataTx
 type EventDataTx struct {
-	Height int           `json:"height"`
-	Tx     Tx            `json:"tx"`
-	Data   []byte        `json:"data"`
-	Log    string        `json:"log"`
-	Error  string        `json:"error"` // this is redundant information for now
+	Height int    `json:"height"`
+	Tx     Tx     `json:"tx"`
+	Data   []byte `json:"data"`
+	Log    string `json:"log"`
+	Error  string `json:"error"` // this is redundant information for now
 }
 
 // NOTE: This goes into the replay WAL
 type EventDataRoundState struct {
-	Height uint64    `json:"height"`
+	Height uint64 `json:"height"`
 	Round  int    `json:"round"`
 	Step   string `json:"step"`
 
@@ -127,26 +120,9 @@ type EventDataSignAggr struct {
 }
 
 type EventDataVote2Proposer struct {
-	Vote *Vote
+	Vote        *Vote
 	ProposerKey string
 }
-
-type EventDataProposal struct {
-	Proposal *Proposal
-}
-
-type EventDataBlockPart struct {
-	Round int
-	Height uint64
-	Part *Part
-}
-
-type EventDataProposalBlockParts struct {
-	Proposal *Proposal
-	Parts *PartSet
-}
-
-
 
 // EventDataRequest is posted to propose a proposal
 type EventDataRequest struct {
@@ -162,17 +138,13 @@ type EventDataMessage struct {
 type EventDataFinalCommitted struct {
 }
 
-
 func (_ EventDataNewBlock) AssertIsTMEventData()       {}
 func (_ EventDataNewBlockHeader) AssertIsTMEventData() {}
 func (_ EventDataTx) AssertIsTMEventData()             {}
 func (_ EventDataRoundState) AssertIsTMEventData()     {}
 func (_ EventDataVote) AssertIsTMEventData()           {}
-func (_ EventDataSignAggr) AssertIsTMEventData()		{}
-func (_ EventDataVote2Proposer) AssertIsTMEventData()	{}
-func (_ EventDataProposal) AssertIsTMEventData()		{}
-func (_ EventDataBlockPart) AssertIsTMEventData() 		{}
-func (_ EventDataProposalBlockParts) AssertIsTMEventData() {}
+func (_ EventDataSignAggr) AssertIsTMEventData()       {}
+func (_ EventDataVote2Proposer) AssertIsTMEventData()  {}
 
 func (_ EventDataRequest) AssertIsTMEventData()        {}
 func (_ EventDataMessage) AssertIsTMEventData()        {}
@@ -241,19 +213,6 @@ func FireEventSignAggr(fireable events.Fireable, sign EventDataSignAggr) {
 func FireEventVote2Proposer(fireable events.Fireable, vote EventDataVote2Proposer) {
 	fireEvent(fireable, EventStringVote2Proposer(), vote)
 }
-
-func FireEventProposal(fireable events.Fireable, proposal EventDataProposal) {
-	fireEvent(fireable, EventStringProposal(), proposal)
-}
-
-func FireEventBlockPart(fireable events.Fireable, blockPart EventDataBlockPart) {
-	fireEvent(fireable, EventStringBlockPart(), blockPart)
-}
-
-func FireEventProposalBlockParts(fireable events.Fireable, propsal_blockParts EventDataProposalBlockParts) {
-	fireEvent(fireable, EventStringProposalBlockParts(), propsal_blockParts)
-}
-
 
 func FireEventTx(fireable events.Fireable, tx EventDataTx) {
 	fireEvent(fireable, EventStringTx(tx.Tx), tx)

@@ -99,13 +99,13 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 	// all timeouts are in ms
 	mapConfig.SetDefault("timeout_handshake", 10000)
 	mapConfig.SetDefault("timeout_wait_for_miner_block", 3000)
-	mapConfig.SetDefault("timeout_propose", 6000)
+	mapConfig.SetDefault("timeout_propose", 3000)
 	mapConfig.SetDefault("timeout_propose_delta", 500)
-	mapConfig.SetDefault("timeout_prevote", 3000)
+	mapConfig.SetDefault("timeout_prevote", 1000)
 	mapConfig.SetDefault("timeout_prevote_delta", 500)
-	mapConfig.SetDefault("timeout_precommit", 3000)
+	mapConfig.SetDefault("timeout_precommit", 1000)
 	mapConfig.SetDefault("timeout_precommit_delta", 500)
-	mapConfig.SetDefault("timeout_commit", 3000)
+	mapConfig.SetDefault("timeout_commit", 1000)
 
 	// make progress asap (no `timeout_commit`) on full precommit votes
 	mapConfig.SetDefault("skip_timeout_commit", false)

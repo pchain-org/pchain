@@ -344,9 +344,8 @@ func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.C
 
 	// set function defaults (may be overwritten before calling Start)
 	cs.decideProposal = cs.defaultDecideProposal
-	//cs.doPrevote = cs.defaultDoPrevote
+	cs.doPrevote = cs.defaultDoPrevote
 	//cs.setProposal = cs.defaultSetProposal
-	cs.doPrevote = cs.newDoPrevote
 	cs.setProposal = cs.newSetProposal
 
 	// Don't call scheduleRound0 yet.
@@ -367,18 +366,6 @@ func (cs *ConsensusState) SetEventSwitch(evsw types.EventSwitch) {
 func (cs *ConsensusState) String() string {
 	// better not to access shared variables
 	return Fmt("ConsensusState") //(H:%v R:%v S:%v", cs.Height, cs.Round, cs.Step)
-}
-
-func (cs *ConsensusState) SetNode(node Node) {
-	cs.node = node
-}
-
-func (cs *ConsensusState) GetNode() Node {
-	return cs.node
-}
-
-func (cs *ConsensusState) GetNodeID() string {
-	return ""
 }
 
 func (cs *ConsensusState) GetState() *sm.State {
@@ -586,8 +573,8 @@ func (cs *ConsensusState) updateRoundStep(round int, step RoundStepType) {
 // enterNewRound(height, 0) at cs.StartTime.
 func (cs *ConsensusState) scheduleRound0(rs *RoundState) {
 	//log.Info("scheduleRound0", "now", time.Now(), "startTime", cs.StartTime)
-	//sleepDuration := rs.StartTime.Sub(time.Now())
-	cs.scheduleTimeout(2*time.Second, rs.Height, 0, RoundStepNewHeight)
+	sleepDuration := rs.StartTime.Sub(time.Now())
+	cs.scheduleTimeout(sleepDuration, rs.Height, 0, RoundStepNewHeight)
 }
 
 // Attempt to schedule a timeout (by sending timeoutInfo on the tickChan)
@@ -715,12 +702,13 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 	case *ProposalMessage:
 		// will not cause transition.
 		// once proposal is set, we can receive block parts
-		cs.logger.Debug(Fmt("handleMsg: Received proposal message %+v\n", msg))
+		cs.logger.Debugf("handleMsg: Received proposal message %v", msg.Proposal)
 		cs.mtx.Lock()
 		err = cs.setProposal(msg.Proposal)
 		cs.mtx.Unlock()
 	case *BlockPartMessage:
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
+		cs.logger.Infof("handleMsg. BlockPartMessage: %v", msg)
 		cs.mtx.Lock()
 		_, err = cs.addProposalBlockPart(msg.Height, msg.Part, peerKey != "")
 		if err != nil && msg.Round != cs.Round {
@@ -877,11 +865,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		// If we have the whole proposal + POL, then goto Prevote now.
 		// else, we'll enterPrevote when the rest of the proposal is received (in AddProposalBlockPart),
 		// or else after timeoutPropose
-		//if cs.isProposalComplete() {
-		//	cs.enterPrevote(height, cs.Round)
-		//}
-		// enter prevote without waiting for complete block
-		if cs.Proposal != nil {
+		if cs.isProposalComplete() {
 			cs.enterPrevote(height, cs.Round)
 		}
 	}()
@@ -908,7 +892,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 	}
 
 	// If we don't get the proposal and all block parts quick enough, enterPrevote
-	//cs.scheduleTimeout(cs.timeoutParams.Propose(round), height, round, RoundStepPropose)
+	cs.scheduleTimeout(cs.timeoutParams.Propose(round), height, round, RoundStepPropose)
 
 	// Nothing more to do if we're not a validator
 	if cs.privValidator == nil {
@@ -964,19 +948,9 @@ func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
 
 		cs.logger.Infof("Signed proposal block, height: %v", block.TdmExtra.Height)
 		// send proposal and block parts on internal msg queue
-		proposal_blockParts := types.EventDataProposalBlockParts{proposal, blockParts}
-		types.FireEventProposalBlockParts(cs.evsw, proposal_blockParts)
-		/*
-			proposalMsg :=  types.EventDataProposal{proposal}
-			types.FireEventProposal(cs.evsw, proposalMsg)
-		*/
 		cs.sendInternalMessage(msgInfo{&ProposalMessage{proposal}, ""})
 		for i := 0; i < blockParts.Total(); i++ {
 			part := blockParts.GetPart(i)
-			/*
-				partMsg := types.EventDataBlockPart{cs.Round, cs.Height, part}
-				types.FireEventBlockPart(cs.evsw, partMsg)
-			*/
 			cs.sendInternalMessage(msgInfo{&BlockPartMessage{cs.Height, cs.Round, part}, ""})
 		}
 	} /*else {
@@ -1126,7 +1100,7 @@ func (cs *ConsensusState) enterPrevote(height uint64, round int) {
 	// (so we have more time to try and collect +2/3 prevotes for a single block)
 }
 
-func (cs *ConsensusState) newDoPrevote(height uint64, round int) {
+func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	// If a block is locked, prevote that.
 	if cs.LockedBlock != nil {
 		cs.logger.Info("enterPrevote: Block was locked")
@@ -1134,19 +1108,49 @@ func (cs *ConsensusState) newDoPrevote(height uint64, round int) {
 		return
 	}
 
-	// If Proposal is nil, prevote nil.
-	if cs.Proposal == nil {
+	// If ProposalBlock is nil, prevote nil.
+	if cs.ProposalBlock == nil {
 		cs.logger.Warn("enterPrevote: ProposalBlock is nil")
 		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
 		return
 	}
 
-	// NOTE: Don't valdiate proposal block
+	// Validate proposal block
+	err := cs.ProposalBlock.ValidateBasic(cs.state.TdmExtra)
+	if err != nil {
+		// ProposalBlock is invalid, prevote nil.
+		cs.logger.Warnf("enterPrevote: ProposalBlock is invalid, error: %v", err)
+		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+		return
+	}
+
+	// Validate TX4
+	err = cs.ValidateTX4(cs.ProposalBlock)
+	if err != nil {
+		// ProposalBlock is invalid, prevote nil.
+		cs.logger.Warnf("enterPrevote: ProposalBlock is invalid, error: %v", err)
+		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+		return
+	}
+
+	// Valdiate proposal block
+	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.TdmExtra.EpochBytes)
+	if proposedNextEpoch != nil && proposedNextEpoch.Number == cs.Epoch.Number+1 {
+		lastHeight := cs.backend.ChainReader().CurrentBlock().Number().Uint64()
+		lastBlockTime := time.Unix(cs.backend.ChainReader().CurrentBlock().Time().Int64(), 0)
+		err = cs.Epoch.ValidateNextEpoch(proposedNextEpoch, lastHeight, lastBlockTime)
+		if err != nil {
+			// ProposalBlock is invalid, prevote nil.
+			cs.logger.Warnf("enterPrevote: Proposal Next Epoch is invalid, error: %v", err)
+			cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+			return
+		}
+	}
+
 	// Prevote cs.ProposalBlock
 	// NOTE: the proposal signature is validated when it is received,
 	// and the proposal block parts are validated as they are received (against the merkle hash in the proposal)
-	//cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash().Bytes(), cs.ProposalBlockParts.Header())
-	cs.signAddVote(types.VoteTypePrevote, cs.Proposal.BlockHeaderHash(), cs.Proposal.BlockPartsHeader)
+	cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header())
 	return
 }
 
@@ -1484,7 +1488,7 @@ func (cs *ConsensusState) newSetProposal(proposal *types.Proposal) error {
 	cs.ProposalBlockParts = types.NewPartSetFromHeader(proposal.BlockPartsHeader)
 	cs.ProposerPeerKey = proposal.ProposerPeerKey
 	// enterPrevote don't wait for complete block
-	cs.enterPrevote(cs.Height, cs.Round)
+	//cs.enterPrevote(cs.Height, cs.Round)
 	return nil
 }
 func (cs *ConsensusState) defaultSetProposal(proposal *types.Proposal) error {
@@ -1533,11 +1537,6 @@ func (cs *ConsensusState) addProposalBlockPart(height uint64, part *types.Part, 
 		return false, nil // TODO: bad peer? Return error?
 	}
 
-	if cs.isProposalComplete() {
-		cs.logger.Debug("proposalBlock is completed")
-		return false, nil
-	}
-
 	added, err = cs.ProposalBlockParts.AddPart(part, verify)
 	if err != nil {
 		return added, err
@@ -1546,17 +1545,25 @@ func (cs *ConsensusState) addProposalBlockPart(height uint64, part *types.Part, 
 		// Added and completed!
 		tdmBlock := &types.TdmBlock{}
 		cs.ProposalBlock, err = tdmBlock.FromBytes(cs.ProposalBlockParts.GetReader())
-		cs.logger.Debugf("block part, hash:%+v", cs.ProposalBlock.Hash())
+
+		cs.logger.Info("Received complete proposal block", "block", cs.ProposalBlock.String(), "err", err)
 
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
 		//log.Info("Received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
-		//fmt.Printf("Received complete proposal block is %v\n", cs.ProposalBlock.String())
-		if cs.Step == RoundStepPrevote {
-			sign_aggr := cs.VoteSignAggr.getSignAggr(cs.Round, types.VoteTypePrevote)
-			if sign_aggr != nil && sign_aggr.HasTwoThirdsMajority(cs.Validators) {
-				cs.enterPrecommit(cs.Height, cs.Round)
-			}
+		if cs.Step == RoundStepPropose && cs.isProposalComplete() {
+			// Move onto the next step
+			cs.enterPrevote(height, cs.Round)
+		} else if cs.Step == RoundStepCommit {
+			// If we're waiting on the proposal block...
+			cs.tryFinalizeCommit(height)
 		}
+
+		//if cs.Step == RoundStepPrevote {
+		//	sign_aggr := cs.VoteSignAggr.getSignAggr(cs.Round, types.VoteTypePrevote)
+		//	if sign_aggr != nil && sign_aggr.HasTwoThirdsMajority(cs.Validators) {
+		//		cs.enterPrecommit(cs.Height, cs.Round)
+		//	}
+		//}
 		return true, err
 	}
 	return added, nil
