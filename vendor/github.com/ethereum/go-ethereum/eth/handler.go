@@ -259,7 +259,7 @@ func (pm *ProtocolManager) Stop() {
 }
 
 func (pm *ProtocolManager) newPeer(pn string, pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
-		return newPeer(pn, pv, p, newMeteredMsgWriter(rw))
+	return newPeer(pn, pv, p, newMeteredMsgWriter(rw))
 }
 
 // handle is the callback invoked to manage the life cycle of an eth peer. When
@@ -304,6 +304,8 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// Add Peer to Consensus Engine
 	if handler, ok := pm.engine.(consensus.Handler); ok {
 		handler.AddPeer(p)
+	} else {
+		p.Log().Info("AddPeer not executed")
 	}
 
 	// If we're DAO hard-fork aware, validate any remote peer with regard to the hard-fork

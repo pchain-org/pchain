@@ -87,6 +87,7 @@ func (sb *backend) GetLogger() log.Logger {
 
 func (sb *backend) AddPeer(src consensus.Peer) {
 	if !sb.shouldStart {
+		sb.logger.Debug("Consensus Engine (Tendermint) does not plan to start")
 		return
 	}
 
@@ -97,6 +98,7 @@ func (sb *backend) AddPeer(src consensus.Peer) {
 
 		if started {
 			sb.core.consensusReactor.AddPeer(src)
+			sb.logger.Debug("Peer successful added into Consensus Reactor")
 			return
 		} else {
 			time.Sleep(1 * time.Second)

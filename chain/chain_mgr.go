@@ -43,8 +43,6 @@ type ChainManager struct {
 var chainMgr *ChainManager
 var once sync.Once
 
-
-
 func GetCMInstance(ctx *cli.Context) *ChainManager {
 
 	once.Do(func() {
@@ -56,7 +54,7 @@ func GetCMInstance(ctx *cli.Context) *ChainManager {
 	return chainMgr
 }
 
-func (cm *ChainManager)GetNodeID() string {
+func (cm *ChainManager) GetNodeID() string {
 	return cm.server.Server().NodeInfo().ID
 }
 
@@ -297,6 +295,11 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		return
 	}
 
+	// Add mine Flag if absent before load child chain, in order to set Consensus shouldStart to true
+	if !cm.ctx.GlobalIsSet(utils.MiningEnabledFlag.Name) {
+		cm.ctx.GlobalSet(utils.MiningEnabledFlag.Name, "true")
+	}
+
 	chain := LoadChildChain(cm.ctx, chainId)
 	if chain == nil {
 		log.Errorf("Child Chain %v load failed!", chainId)
@@ -317,11 +320,6 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	// Start the new Child Chain, and it will start child chain reactors as well
 	quit := make(chan int)
 	cm.childQuits[chain.Id] = quit
-
-	// Add mine Flag if absent before child chain start
-	if !cm.ctx.GlobalIsSet(utils.MiningEnabledFlag.Name) {
-		cm.ctx.GlobalSet(utils.MiningEnabledFlag.Name, "true")
-	}
 
 	err = StartChain(cm.ctx, chain, nil)
 	if err != nil {
