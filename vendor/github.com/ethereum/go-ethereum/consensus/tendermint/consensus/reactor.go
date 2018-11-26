@@ -38,16 +38,15 @@ type ConsensusReactor struct {
 	ChainId    string //make access easier
 	conS       *ConsensusState
 	evsw       types.EventSwitch
-	peerStates map[string]*PeerState
+	peerStates sync.Map // map[string]*PeerState
 	logger     log.Logger
 }
 
 func NewConsensusReactor(consensusState *ConsensusState) *ConsensusReactor {
 	conR := &ConsensusReactor{
-		conS:       consensusState,
-		ChainId:    consensusState.chainConfig.PChainId,
-		peerStates: map[string]*PeerState{},
-		logger:     consensusState.backend.GetLogger(),
+		conS:    consensusState,
+		ChainId: consensusState.chainConfig.PChainId,
+		logger:  consensusState.backend.GetLogger(),
 	}
 
 	consensusState.conR = conR
@@ -130,7 +129,7 @@ func (conR *ConsensusReactor) AddPeer(peer consensus.Peer) {
 	conR.logger.Debugf("peer key is:%+v", peer.GetKey())
 	peerKey := peer.GetKey()
 	if peerKey != "" {
-		conR.peerStates[peerKey] = peerState
+		conR.peerStates.Store(peerKey, peerState)
 	}
 
 	// Send our state to peer.
@@ -370,23 +369,24 @@ func (conR *ConsensusReactor) broadcastNewRoundStep(rs *RoundState) {
 func (conR *ConsensusReactor) broadcastSignAggr(sign *types.SignAggr) {
 	if sign != nil {
 		msg := &Maj23SignAggrMessage{Maj23SignAggr: sign}
-		peers := conR.peerStates
-		for _, peerState := range peers {
+		conR.peerStates.Range(func(_, val interface{}) bool {
+			peerState := val.(*PeerState)
 			go func(peer consensus.Peer, peerState *PeerState) {
 				if peer.Send(DataChannel, struct{ ConsensusMessage }{msg}) == nil {
 					peerState.SetHasMaj23SignAggr(sign)
 				}
 			}(peerState.Peer, peerState)
-		}
+			return true
+		})
 	}
 }
 
 func (conR *ConsensusReactor) sendVote2Proposer(vote *types.Vote, proposerKey string) {
 	if vote != nil {
-		peerState, ok := conR.peerStates[proposerKey]
+		peerState, ok := conR.peerStates.Load(proposerKey)
 		if ok {
 			msg := &VoteMessage{vote}
-			peerState.Peer.Send(VoteChannel, struct{ ConsensusMessage }{msg})
+			peerState.(*PeerState).Peer.Send(VoteChannel, struct{ ConsensusMessage }{msg})
 		} else {
 			fmt.Printf("proposerKey is :%+v\n", proposerKey)
 			panic("can't find the proposerKey")
