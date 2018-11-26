@@ -137,15 +137,15 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey 
 	}
 
 	// Check PubKey match the Address
-/*	pubkeySlice := ethcrypto.FromECDSAPub(ethcrypto.ToECDSAPub(common.FromHex(pubkey)))
-	if pubkeySlice == nil {
-		return errors.New("your Public Key is not valid, please provide a valid Public Key")
-	}
+	/*	pubkeySlice := ethcrypto.FromECDSAPub(ethcrypto.ToECDSAPub(common.FromHex(pubkey)))
+		if pubkeySlice == nil {
+			return errors.New("your Public Key is not valid, please provide a valid Public Key")
+		}
 
-	validatorPubkey := crypto.BLSPubKey(pubkeySlice)
-	if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
-		return errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
-	}*/
+		validatorPubkey := crypto.BLSPubKey(pubkeySlice)
+		if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
+			return errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
+		}*/
 
 	// Check if already joined the chain
 	find := false
@@ -499,7 +499,7 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 		}
 	}
 
-	// here is the tx
+	// Save TX logic can be removed since we have new logic for tx3 proof data
 	keybuf := new(bytes.Buffer)
 	for i, txIndex := range proofData.TxIndexs {
 		keybuf.Reset()

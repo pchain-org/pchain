@@ -471,7 +471,9 @@ func Number(b1, b2 *Block) bool { return b1.header.Number.Cmp(b2.header.Number) 
 type ChildChainProofData struct {
 	Header *Header
 
+	// Deprecated
 	TxIndexs []uint
+	// Deprecated
 	TxProofs []*BSKeyValueSet
 }
 
