@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	pabi "github.com/pchain/abi"
 	"github.com/pkg/errors"
 	"math/big"
@@ -38,6 +39,12 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data 
 		return common.Hash{}, err
 	}
 
+	// nonce, fetch the nonce first, if we get nonce too low error, we will manually add the value until the error gone
+	nonce, err := ec.NonceAt(ctx, account, nil)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
 	// tx signer for the main chain
 	digest := crypto.Keccak256([]byte("pchain"))
 	signer := types.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
@@ -50,12 +57,7 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data 
 			return err
 		}
 
-		// nonce
-		nonce, err := ec.NonceAt(ctx, account, nil)
-		if err != nil {
-			return err
-		}
-
+	SendTX:
 		// tx
 		tx := types.NewTransaction(nonce, pabi.ChainContractMagicAddr, nil, 0, gasPrice, bs)
 
@@ -68,7 +70,13 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data 
 		// eth_sendRawTransaction
 		err = ec.SendTransaction(ctx, signedTx)
 		if err != nil {
-			return err
+			if err.Error() == "nonce too low" {
+				log.Warnf("SendDataToMainChain: failed, nonce too low, %v current nonce is %v. Will try to increase the nonce then send again.", account, nonce)
+				nonce += 1
+				goto SendTX
+			} else {
+				return err
+			}
 		}
 
 		hash = signedTx.Hash()
