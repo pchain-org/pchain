@@ -13,3 +13,5 @@ func Debug_Setup(ctx *cli.Context, logdir string)  error {
 func Debug_Exit() {
 	debug.Exit()
 }
+
+var DebugFlags = debug.Flags

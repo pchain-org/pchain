@@ -201,10 +201,10 @@ func newCliApp(version, usage string) *cli.App {
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
 
-		utils.WhisperEnabledFlag,
 		utils.SolcPathFlag,
-		utils.WhisperMaxMessageSizeFlag,
-		utils.WhisperMinPOWFlag,
+		//utils.WhisperEnabledFlag,
+		//utils.WhisperMaxMessageSizeFlag,
+		//utils.WhisperMinPOWFlag,
 
 		utils.PerfTestFlag,
 

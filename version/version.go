@@ -3,14 +3,13 @@ package version
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/params"
 )
 
 const (
-	Major = 1          // Major version component of the current release
-	Minor = 1          // Minor version component of the current release
+	Major = 0          // Major version component of the current release
+	Minor = 8          // Minor version component of the current release
 	Patch = 0          // Patch version component of the current release
-	Meta  = "unstable" // Version metadata to append to the version string
+	Meta  = "test2.0" // Version metadata to append to the version string
 )
 
 var (
@@ -30,5 +29,4 @@ func init() {
 	if GitCommit != "" {
 		Version += "-" + GitCommit[:8]
 	}
-	Version += " Ethereum/" + params.Version
 }

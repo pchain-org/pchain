@@ -44,6 +44,7 @@ const (
 )
 
 var ClientIdentifier = clientIdentifier
+var WhisperFlags = whisperFlags
 
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)

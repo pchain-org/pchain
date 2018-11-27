@@ -67,14 +67,14 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "ETHEREUM",
 		Flags: []cli.Flag{
-			//configFileFlag,
+			configFileFlag,
 			utils.DataDirFlag,
 			utils.KeyStoreDirFlag,
 			utils.NoUSBFlag,
 			utils.NetworkIdFlag,
-			//utils.TestnetFlag,
-			//utils.RinkebyFlag,
-			//utils.OttomanFlag,
+			utils.TestnetFlag,
+			utils.RinkebyFlag,
+			utils.OttomanFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,
 			utils.EthStatsURLFlag,
@@ -84,7 +84,6 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.LightKDFFlag,
 		},
 	},
-	/*
 	{Name: "DEVELOPER CHAIN",
 		Flags: []cli.Flag{
 			utils.DeveloperFlag,
@@ -102,17 +101,16 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.EthashDatasetsOnDiskFlag,
 		},
 	},
-	*/
-	//{
-	//	Name: "DASHBOARD",
-	//	Flags: []cli.Flag{
-	//		utils.DashboardEnabledFlag,
-	//		utils.DashboardAddrFlag,
-	//		utils.DashboardPortFlag,
-	//		utils.DashboardRefreshFlag,
-	//		utils.DashboardAssetsFlag,
-	//	},
-	//},
+	{
+		Name: "DASHBOARD",
+		Flags: []cli.Flag{
+			utils.DashboardEnabledFlag,
+			utils.DashboardAddrFlag,
+			utils.DashboardPortFlag,
+			utils.DashboardRefreshFlag,
+			//utils.DashboardAssetsFlag,
+		},
+	},
 	{
 		Name: "TRANSACTION POOL",
 		Flags: []cli.Flag{
@@ -137,7 +135,6 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.TrieCacheGenFlag,
 		},
 	},
-	/*
 	{
 		Name: "ACCOUNT",
 		Flags: []cli.Flag{
@@ -145,7 +142,6 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.PasswordFileFlag,
 		},
 	},
-	*/
 	{
 		Name: "API AND CONSOLE",
 		Flags: []cli.Flag{
@@ -153,20 +149,18 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.RPCListenAddrFlag,
 			utils.RPCPortFlag,
 			utils.RPCApiFlag,
-			/*
 			utils.WSEnabledFlag,
 			utils.WSListenAddrFlag,
 			utils.WSPortFlag,
 			utils.WSApiFlag,
 			utils.WSAllowedOriginsFlag,
-			*/
 			utils.IPCDisabledFlag,
 			utils.IPCPathFlag,
 			utils.RPCCORSDomainFlag,
-			//utils.RPCVirtualHostsFlag,
-			//utils.JSpathFlag,
-			//utils.ExecFlag,
-			//utils.PreloadJSFlag,
+			utils.RPCVirtualHostsFlag,
+			utils.JSpathFlag,
+			utils.ExecFlag,
+			utils.PreloadJSFlag,
 		},
 	},
 	{
@@ -222,7 +216,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Name:  "WHISPER (EXPERIMENTAL)",
 		Flags: whisperFlags,
 	},
-	/*
 	{
 		Name: "DEPRECATED",
 		Flags: []cli.Flag{
@@ -230,11 +223,9 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.LightModeFlag,
 		},
 	},
-	*/
 	{
 		Name: "MISC",
 	},
-	/*
 	{
 		Name: "ISTANBUL",
 		Flags: []cli.Flag{
@@ -242,7 +233,6 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.IstanbulBlockPeriodFlag,
 		},
 	},
-	*/
 }
 
 // byCategory sorts an array of flagGroup by Name in the order
