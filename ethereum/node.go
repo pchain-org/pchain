@@ -14,11 +14,11 @@ import (
 var clientIdentifier = "pchain" // Client identifier to advertise over the network
 
 // MakeSystemNode sets up a local node and configures the services to launch
-func MakeSystemNode(chainId, version string, ctx *cli.Context, cch core.CrossChainHelper) *node.Node {
+func MakeSystemNode(chainId, version string, ctx *cli.Context, cch core.CrossChainHelper, mining bool) *node.Node {
 
 	stack, cfg := gethmain.MakeConfigNode(ctx, chainId)
 	//utils.RegisterEthService(stack, &cfg.Eth)
-	registerEthService(stack, &cfg.Eth, ctx, cch)
+	registerEthService(stack, &cfg.Eth, ctx, cch, mining)
 
 	if chainId == "pchain" && ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
 		// Only Main Chain can start the dashboard, the dashboard is still not complete
@@ -48,7 +48,7 @@ func MakeSystemNode(chainId, version string, ctx *cli.Context, cch core.CrossCha
 }
 
 // registerEthService adds an Ethereum client to the stack.
-func registerEthService(stack *node.Node, cfg *eth.Config, cliCtx *cli.Context, cch core.CrossChainHelper) {
+func registerEthService(stack *node.Node, cfg *eth.Config, cliCtx *cli.Context, cch core.CrossChainHelper, mining bool) {
 	var err error
 	if cfg.SyncMode == downloader.LightSync {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
@@ -57,7 +57,7 @@ func registerEthService(stack *node.Node, cfg *eth.Config, cliCtx *cli.Context, 
 	} else {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			//return NewBackend(ctx, cfg, cliCtx, pNode, cch)
-			fullNode, err := eth.New(ctx, cfg, cliCtx, cch, stack.GetLogger())
+			fullNode, err := eth.New(ctx, cfg, cliCtx, cch, stack.GetLogger(), mining)
 			if fullNode != nil && cfg.LightServ > 0 {
 				ls, _ := les.NewLesServer(fullNode, cfg)
 				fullNode.AddLesServer(ls)

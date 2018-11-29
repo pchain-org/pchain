@@ -15,12 +15,10 @@ import (
 
 // Volatile state for each Validator
 // TODO: make non-volatile identity
-// 	- Remove Accum - it can be computed, and now valset becomes identifying
 type Validator struct {
 	Address     []byte        `json:"address"`
 	PubKey      crypto.PubKey `json:"pub_key"`
 	VotingPower *big.Int      `json:"voting_power"`
-	Accum       *big.Int      `json:"accum"`
 }
 
 func NewValidator(pubKey crypto.PubKey, votingPower *big.Int) *Validator {
@@ -28,7 +26,6 @@ func NewValidator(pubKey crypto.PubKey, votingPower *big.Int) *Validator {
 		Address:     pubKey.Address(),
 		PubKey:      pubKey,
 		VotingPower: votingPower,
-		Accum:       big.NewInt(0),
 	}
 }
 
@@ -37,7 +34,6 @@ func NewValidator(pubKey crypto.PubKey, votingPower *big.Int) *Validator {
 func (v *Validator) Copy() *Validator {
 	vCopy := *v
 	vCopy.VotingPower = new(big.Int).Set(v.VotingPower)
-	vCopy.Accum = new(big.Int).Set(v.Accum)
 	return &vCopy
 }
 
@@ -48,36 +44,14 @@ func (v *Validator) Equals(other *Validator) bool {
 		v.VotingPower.Cmp(other.VotingPower) == 0
 }
 
-// Returns the one with higher Accum.
-func (v *Validator) CompareAccum(other *Validator) *Validator {
-	if v == nil {
-		return other
-	}
-	if v.Accum.Cmp(other.Accum) == 1 {
-		return v
-	} else if v.Accum.Cmp(other.Accum) == -1 {
-		return other
-	} else {
-		if bytes.Compare(v.Address, other.Address) < 0 {
-			return v
-		} else if bytes.Compare(v.Address, other.Address) > 0 {
-			return other
-		} else {
-			PanicSanity("Cannot compare identical validators")
-			return nil
-		}
-	}
-}
-
 func (v *Validator) String() string {
 	if v == nil {
 		return "nil-Validator"
 	}
-	return fmt.Sprintf("Validator{ADD:%X PK:%X VP:%v A:%v}",
+	return fmt.Sprintf("Validator{ADD:%X PK:%X VP:%v}",
 		v.Address,
 		v.PubKey,
-		v.VotingPower,
-		v.Accum)
+		v.VotingPower)
 }
 
 func (v *Validator) Hash() []byte {

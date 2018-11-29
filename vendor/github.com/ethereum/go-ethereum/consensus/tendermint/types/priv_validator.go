@@ -8,15 +8,15 @@ import (
 	"os"
 	"sync"
 
+	"bls"
 	crand "crypto/rand"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
-	"bls"
-	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
@@ -43,11 +43,11 @@ type PrivValidator struct {
 	PubKey  crypto.PubKey `json:"pub_key"`
 
 	// PrivKey should be empty if a Signer other than the default is being used.
-	PrivKey crypto.PrivKey `json:"priv_key"`
-	EthereumPubKey  crypto.PubKey `json:"ethereum_pub_key"`
+	PrivKey         crypto.PrivKey `json:"priv_key"`
+	EthereumPubKey  crypto.PubKey  `json:"ethereum_pub_key"`
 	EthereumPrivKey crypto.PrivKey `json:"ethereum_priv_key"`
 	EthereumAddress []byte         `json:"ethereum_address"`
-	Signer  `json:"-"`
+	Signer          `json:"-"`
 
 	// For persistence.
 	// Overloaded for testing.
@@ -93,7 +93,6 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
 	privKey := crypto.EthereumPrivKey(ethcrypto.FromECDSA(newKey.PrivateKey))
 
-
 	keyPair := bls.GenerateKey()
 	blsPrivKey := crypto.BLSPrivKey(keyPair.Private().Marshal())
 	blsPubKey := blsPrivKey.PubKey()
@@ -104,12 +103,12 @@ func GenPrivValidatorKey() (*PrivValidator, *keystore.Key) {
 	fmt.Println("verify:", blsPrivKey.PubKey().VerifyBytes([]byte(msg), sign))
 	fmt.Println(common.ToHex(blsPrivKey.PubKey().Bytes()))
 	return &PrivValidator{
-		Address:       blsPubKey.Address(),
-		PubKey:        blsPubKey,
-		PrivKey:       blsPrivKey,
-		EthereumAddress:    pubKey.Address(),
-		EthereumPrivKey:    privKey,
-		EthereumPubKey:     pubKey,
+		Address:         blsPubKey.Address(),
+		PubKey:          blsPubKey,
+		PrivKey:         blsPrivKey,
+		EthereumAddress: pubKey.Address(),
+		EthereumPrivKey: privKey,
+		EthereumPubKey:  pubKey,
 
 		filePath: "",
 		Signer:   NewDefaultSigner(blsPrivKey),
@@ -133,7 +132,6 @@ func GenPrivValidator(keydir string) *PrivValidator {
 	pubKey := crypto.EthereumPubKey(ethcrypto.FromECDSAPub(&(newKey.PrivateKey.PublicKey)))
 	privKey := crypto.EthereumPrivKey(ethcrypto.FromECDSA(newKey.PrivateKey))
 
-
 	keyPair := bls.GenerateKey()
 	blsPrivKey := crypto.BLSPrivKey(keyPair.Private().Marshal())
 	blsPubKey := blsPrivKey.PubKey()
@@ -144,12 +142,12 @@ func GenPrivValidator(keydir string) *PrivValidator {
 	fmt.Println("verify:", blsPrivKey.PubKey().VerifyBytes([]byte(msg), sign))
 	fmt.Println(common.ToHex(blsPrivKey.PubKey().Bytes()))
 	return &PrivValidator{
-		Address:       blsPubKey.Address(),
-		PubKey:        blsPubKey,
-		PrivKey:       blsPrivKey,
-		EthereumAddress:    pubKey.Address(),
-		EthereumPrivKey:    privKey,
-		EthereumPubKey:     pubKey,
+		Address:         blsPubKey.Address(),
+		PubKey:          blsPubKey,
+		PrivKey:         blsPrivKey,
+		EthereumAddress: pubKey.Address(),
+		EthereumPrivKey: privKey,
+		EthereumPubKey:  pubKey,
 
 		filePath: "",
 		Signer:   NewDefaultSigner(blsPrivKey),
@@ -209,7 +207,7 @@ func (privVal *PrivValidator) save() {
 }
 
 func (privVal *PrivValidator) GetAddress() []byte {
-	return privVal.Address
+	return privVal.EthereumAddress
 }
 
 func (priVal *PrivValidator) GetPubKey() crypto.PubKey {

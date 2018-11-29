@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	tmdcrypto "github.com/tendermint/go-crypto"
-	dbm "github.com/tendermint/go-db"
 	//	"golang.org/x/net/context"
 	"math/big"
 	//"github.com/pchain/chain"
@@ -41,11 +40,6 @@ type Backend interface {
 	ChainReader() consss.ChainReader
 	GetBroadcaster() consss.Broadcaster
 	GetLogger() log.Logger
-}
-
-type Node interface {
-	Config() cfg.Config
-	EpochDB() dbm.DB
 }
 
 //-----------------------------------------------------------------------------
@@ -149,7 +143,6 @@ const (
 	RoundStepPrecommit         = RoundStepType(0x07) // Did precommit, gossip precommits
 	RoundStepPrecommitWait     = RoundStepType(0x08) // Did receive any +2/3 precommits, start timeout
 	RoundStepCommit            = RoundStepType(0x09) // Entered commit state machine
-	RoundStepTest              = RoundStepType(0x0a) // for test author@liaoyd
 	// NOTE: RoundStepNewHeight acts as RoundStepCommitWait.
 )
 
@@ -173,8 +166,6 @@ func (rs RoundStepType) String() string {
 		return "RoundStepPrecommitWait"
 	case RoundStepCommit:
 		return "RoundStepCommit"
-	case RoundStepTest:
-		return "RoundStepTest"
 	default:
 		return "RoundStepUnknown" // Cannot panic.
 	}
@@ -291,7 +282,6 @@ type PrivValidator interface {
 type ConsensusState struct {
 	BaseService
 
-	config        cfg.Config
 	chainConfig   *params.ChainConfig
 	privValidator PrivValidator // for signing votes
 	cch           core.CrossChainHelper
@@ -320,7 +310,6 @@ type ConsensusState struct {
 	blockFromMiner *ethTypes.Block
 	backend        Backend
 
-	node Node
 	conR *ConsensusReactor
 
 	logger log.Logger
@@ -328,7 +317,6 @@ type ConsensusState struct {
 
 func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.ChainConfig, cch core.CrossChainHelper) *ConsensusState {
 	cs := &ConsensusState{
-		config:           config,
 		chainConfig:      chainConfig,
 		cch:              cch,
 		peerMsgQueue:     make(chan msgInfo, msgQueueSize),
@@ -338,7 +326,6 @@ func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.C
 		done:             make(chan struct{}),
 		blockFromMiner:   nil,
 		backend:          backend,
-		node:             nil,
 		logger:           backend.GetLogger(),
 	}
 
@@ -835,13 +822,10 @@ func (cs *ConsensusState) enterNewRound(height uint64, round int) {
 	cs.VoteSignAggr.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
 	types.FireEventNewRound(cs.evsw, cs.RoundStateEvent())
 
-	fmt.Println(cs.IsProposer())
-
 	// Immediately go to enterPropose.
 	if cs.IsProposer() && cs.blockFromMiner == nil {
 		cs.logger.Info("we are proposer, but blockFromMiner is nil, let's wait a second!!!")
 		cs.scheduleTimeout(cs.timeoutParams.WaitForMinerBlock(), height, round, RoundStepWaitForMinerBlock)
-		panic("handle new round")
 		return
 	}
 
@@ -1051,7 +1035,7 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 
 		return types.MakeBlock(cs.Height, cs.state.TdmExtra.ChainID, commit, ethBlock,
 			val.Hash(), cs.Epoch.Number, epochBytes,
-			tx3ProofData, cs.config.GetInt("block_part_size"))
+			tx3ProofData, 65536)
 	} else {
 		cs.logger.Warn("block from miner should not be nil, let's start another round")
 		return nil, nil

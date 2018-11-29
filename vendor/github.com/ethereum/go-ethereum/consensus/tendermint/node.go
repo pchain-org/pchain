@@ -19,8 +19,7 @@ import (
 
 type Node struct {
 	cmn.BaseService
-	// config
-	config cfg.Config // user config
+
 	//genesisDoc    *types.GenesisDoc    // initial validator set
 	privValidator *types.PrivValidator // local node's validator key
 
@@ -66,7 +65,6 @@ func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.Ch
 	SetEventSwitch(eventSwitch, consensusReactor)
 
 	node := &Node{
-		config:        config,
 		privValidator: privValidator,
 
 		epochDB: epochDB,
@@ -172,14 +170,6 @@ func (n *Node) EventSwitch() types.EventSwitch {
 // XXX: for convenience
 func (n *Node) PrivValidator() *types.PrivValidator {
 	return n.privValidator
-}
-
-func (n *Node) Config() cfg.Config {
-	return n.config
-}
-
-func (n *Node) EpochDB() dbm.DB {
-	return n.epochDB
 }
 
 /*

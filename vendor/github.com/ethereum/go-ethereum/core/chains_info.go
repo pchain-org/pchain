@@ -99,7 +99,7 @@ func SaveChainInfo(db dbm.DB, ci *ChainInfo) error {
 
 	mtx.Lock()
 	defer mtx.Unlock()
-	fmt.Printf("ChainInfo Save(), info is: (%v, %v)\n", ci)
+	fmt.Printf("ChainInfo Save(), info is: (%v)\n", ci)
 
 	err := saveCoreChainInfo(db, &ci.CoreChainInfo)
 	if err != nil {

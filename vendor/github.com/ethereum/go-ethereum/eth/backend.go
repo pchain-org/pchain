@@ -109,7 +109,7 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
-	cch core.CrossChainHelper, logger log.Logger) (*Ethereum, error) {
+	cch core.CrossChainHelper, logger log.Logger, mining bool) (*Ethereum, error) {
 
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -134,7 +134,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb, cliCtx, cch, logger),
+		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb, cliCtx, cch, logger, mining),
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		networkId:      config.NetworkId,
@@ -227,7 +227,7 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
 func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig *params.ChainConfig, db ethdb.Database,
-	cliCtx *cli.Context, cch core.CrossChainHelper, logger log.Logger) consensus.Engine {
+	cliCtx *cli.Context, cch core.CrossChainHelper, logger log.Logger, mining bool) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
@@ -246,7 +246,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 			config.Tendermint.Epoch = chainConfig.Tendermint.Epoch
 		}
 		config.Tendermint.ProposerPolicy = tendermint.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
-		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), db, cch, logger)
+		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), db, cch, logger, mining)
 	}
 
 	// Otherwise assume proof-of-work

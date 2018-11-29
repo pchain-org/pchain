@@ -80,28 +80,42 @@ func (cm *ChainManager) LoadChains(childIds []string) error {
 	childChainIds := core.GetChildChainIds(cm.cch.chainInfoDB)
 	log.Infof("Before Load Child Chains, childChainIds is %v, len is %d", childChainIds, len(childChainIds))
 
-	var readyToLoadChains []string
-	for _, chainId := range childChainIds {
-		// Check request from Child Chain
-		if checkChildIdInRequestID(chainId, childIds) {
-			readyToLoadChains = append(readyToLoadChains, chainId)
-			continue
-		}
+	readyToLoadChains := make(map[string]bool) // Key: Child Chain ID, Value: Enable Mining
 
+	// Check we are belong to the validator of Child Chain in DB first (Mining Mode)
+	for _, chainId := range childChainIds {
 		// TODO Check Validator Address in Tendermint
 		// Check Current Validator is Child Chain Validator
 		ci := core.GetChainInfo(cm.cch.chainInfoDB, chainId)
 		// Check if we are in this child chain
 		if ci.Epoch != nil && cm.checkCoinbaseInChildChain(ci.Epoch) {
-			readyToLoadChains = append(readyToLoadChains, chainId)
+			readyToLoadChains[chainId] = true
+		}
+	}
+
+	// Check request from Child Chain
+	for _, requestId := range childIds {
+		if requestId == "" {
+			// Ignore the Empty ID
+			continue
+		}
+
+		if _, present := readyToLoadChains[requestId]; present {
+			// Already loaded, ignore
+			continue
+		} else {
+			if contains(childChainIds, requestId) {
+				// Launch in non-mining mode
+				readyToLoadChains[requestId] = false
+			}
 		}
 	}
 
 	log.Infof("Number of Child Chain to be load - %v", len(readyToLoadChains))
 	log.Infof("Start to Load Child Chain - %v", readyToLoadChains)
 
-	for _, chainId := range readyToLoadChains {
-		chain := LoadChildChain(cm.ctx, chainId)
+	for chainId, mining := range readyToLoadChains {
+		chain := LoadChildChain(cm.ctx, chainId, mining)
 		if chain == nil {
 			log.Errorf("Load Child Chain - %s Failed.", chainId)
 			continue
@@ -300,7 +314,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		cm.ctx.GlobalSet(utils.MiningEnabledFlag.Name, "true")
 	}
 
-	chain := LoadChildChain(cm.ctx, chainId)
+	chain := LoadChildChain(cm.ctx, chainId, true)
 	if chain == nil {
 		log.Errorf("Child Chain %v load failed!", chainId)
 		return
@@ -347,15 +361,6 @@ func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainIn
 	core.DeletePendingChildChainData(cm.cch.chainInfoDB, chainId)
 	// Convert the Chain Info from Pending to Formal
 	core.SaveChainInfo(cm.cch.chainInfoDB, &core.ChainInfo{CoreChainInfo: cci, Epoch: ep})
-}
-
-func checkChildIdInRequestID(childId string, requestChildId []string) bool {
-	for _, requestId := range requestChildId {
-		if childId == requestId {
-			return true
-		}
-	}
-	return false
 }
 
 func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool {

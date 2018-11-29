@@ -43,7 +43,6 @@ func NewValidatorSet(vals []*Validator) *ValidatorSet {
 	return vs
 }
 
-
 func (valSet *ValidatorSet) Copy() *ValidatorSet {
 	validators := make([]*Validator, len(valSet.Validators))
 	for i, val := range valSet.Validators {
@@ -75,7 +74,7 @@ func (valSet *ValidatorSet) AggrPubKey(bitMap *cmn.BitArray) crypto.PubKey {
 
 func (valSet *ValidatorSet) TalliedVotingPower(bitMap *cmn.BitArray) (*big.Int, error) {
 	if bitMap == nil {
-		return big.NewInt(0),fmt.Errorf("Invalid bitmap(nil)")
+		return big.NewInt(0), fmt.Errorf("Invalid bitmap(nil)")
 	}
 	validators := valSet.Validators
 	if validators == nil {
@@ -86,9 +85,9 @@ func (valSet *ValidatorSet) TalliedVotingPower(bitMap *cmn.BitArray) (*big.Int, 
 	}
 	powerSum := big.NewInt(0)
 	for i := 0; i < (int)(bitMap.Size()); i++ {
-		powerSum.Add(powerSum,validators[i].VotingPower )
+		powerSum.Add(powerSum, validators[i].VotingPower)
 	}
-	return powerSum,nil
+	return powerSum, nil
 }
 
 func (valSet *ValidatorSet) Equals(other *ValidatorSet) bool {
@@ -145,16 +144,6 @@ func (valSet *ValidatorSet) TotalVotingPower() *big.Int {
 		}
 	}
 	return valSet.totalVotingPower
-}
-
-func (valSet *ValidatorSet) findProposer() *Validator {
-	var proposer *Validator
-	for _, val := range valSet.Validators {
-		if proposer == nil || !bytes.Equal(val.Address, proposer.Address) {
-			proposer = proposer.CompareAccum(val)
-		}
-	}
-	return proposer
 }
 
 func (valSet *ValidatorSet) Hash() []byte {
@@ -249,10 +238,10 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, height uint64, commit *
 	pubKey := valSet.AggrPubKey(commit.BitArray)
 	vote := &Vote{
 
-		BlockID:	commit.BlockID,
-		Height: 	commit.Height,
-		Round: 		(uint64)(commit.Round),
-		Type: 		commit.Type(),
+		BlockID: commit.BlockID,
+		Height:  commit.Height,
+		Round:   (uint64)(commit.Round),
+		Type:    commit.Type(),
 	}
 	if !pubKey.VerifyBytes(SignBytes(chainID, vote), commit.SignAggr) {
 		return fmt.Errorf("Invalid commit -- wrong Signature:%v or BitArray:%v", commit.SignAggr, commit.BitArray)
@@ -341,20 +330,6 @@ func (vs ValidatorsByAddress) Swap(i, j int) {
 	it := vs[i]
 	vs[i] = vs[j]
 	vs[j] = it
-}
-
-//-------------------------------------
-// Use with Heap for sorting validators by accum
-
-type accumComparable struct {
-	*Validator
-}
-
-// We want to find the validator with the greatest accum.
-func (ac accumComparable) Less(o interface{}) bool {
-	other := o.(accumComparable).Validator
-	larger := ac.CompareAccum(other)
-	return bytes.Equal(larger.Address, ac.Address)
 }
 
 //----------------------------------------

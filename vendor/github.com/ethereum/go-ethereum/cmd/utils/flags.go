@@ -170,7 +170,7 @@ var (
 	}
 	defaultSyncMode = eth.DefaultConfig.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
-		Name:  "syncmode",
+		Name: "syncmode",
 		//Usage: `Blockchain sync mode ("fast", "full", or "light")`,
 		Usage: `Blockchain sync mode ("full")`,
 		Value: &defaultSyncMode,
@@ -866,7 +866,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	if lightClient {
 		ethPeers = 0
 	}
-	log.Debugf("Maximum peer count", "ETH", ethPeers, "LES", lightPeers, "total", cfg.MaxPeers)
+	log.Debug("Maximum peer count", "ETH", ethPeers, "LES", lightPeers, "total", cfg.MaxPeers)
 
 	if ctx.GlobalIsSet(MaxPendingPeersFlag.Name) {
 		cfg.MaxPendingPeers = ctx.GlobalInt(MaxPendingPeersFlag.Name)
@@ -1186,7 +1186,7 @@ func RegisterEthService(stack *node.Node, cfg *eth.Config) {
 		})
 	} else {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			fullNode, err := eth.New(ctx, cfg, nil, nil, stack.GetLogger())
+			fullNode, err := eth.New(ctx, cfg, nil, nil, stack.GetLogger(), false)
 			if fullNode != nil && cfg.LightServ > 0 {
 				ls, _ := les.NewLesServer(fullNode, cfg)
 				fullNode.AddLesServer(ls)

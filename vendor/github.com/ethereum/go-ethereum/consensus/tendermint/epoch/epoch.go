@@ -136,17 +136,16 @@ func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc, logger log.Logger) *
 	validators := make([]*tmTypes.Validator, len(oneEpoch.Validators))
 	for i, val := range oneEpoch.Validators {
 		pubKey := val.PubKey
-		address := pubKey.Address()
+		// address := pubKey.Address()
 		//TODO: very important, here the address should be the ethereum account,
 		//TODO: at least, should add one additional ethereum account
-		//address := val.EthAccount.Bytes()
+		address := val.EthAccount.Bytes()
 
 		// Make validator
 		validators[i] = &tmTypes.Validator{
 			Address:     address,
 			PubKey:      pubKey,
 			VotingPower: val.Amount,
-			Accum:       big.NewInt(0),
 		}
 	}
 

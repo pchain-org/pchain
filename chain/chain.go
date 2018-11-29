@@ -35,7 +35,7 @@ func LoadMainChain(ctx *cli.Context, chainId string) *Chain {
 
 	//always start ethereum
 	log.Info("ethereum.MakeSystemNode")
-	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, GetCMInstance(ctx).cch)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, GetCMInstance(ctx).cch, ctx.GlobalBool(utils.MiningEnabledFlag.Name))
 	chain.EthNode = stack
 
 	rpcHandler, err := stack.GetRPCHandler()
@@ -48,7 +48,7 @@ func LoadMainChain(ctx *cli.Context, chainId string) *Chain {
 	return chain
 }
 
-func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
+func LoadChildChain(ctx *cli.Context, chainId string, mining bool) *Chain {
 
 	log.Infof("now load child: %s", chainId)
 
@@ -66,7 +66,7 @@ func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
 	//always start ethereum
 	log.Infof("chainId: %s, ethereum.MakeSystemNode", chainId)
 	cch := GetCMInstance(ctx).cch
-	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, cch)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, cch, mining)
 	chain.EthNode = stack
 
 	rpcHandler, err := stack.GetRPCHandler()
