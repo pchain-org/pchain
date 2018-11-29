@@ -1970,8 +1970,8 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	//signAggr.SetBitArray(signBitArray)
 
 	if maj23.IsZero() == true {
-		cs.logger.Debugf("The maj23 blockID is zero %+v\n", maj23)
-		panic("Invalid maj23")
+		cs.logger.Debugf("The maj23 blockID is zero %+v", maj23)
+		return
 	}
 
 	// Set ma23 block ID
