@@ -27,17 +27,15 @@ func (ec *Client) BlockNumber(ctx context.Context) (*big.Int, error) {
 }
 
 // SaveBlockToMainChain save a block to main chain through eth_sendRawTransaction
-func (ec *Client) SendDataToMainChain(ctx context.Context, chainId string, data []byte, account common.Address, prv *ecdsa.PrivateKey) (common.Hash, error) {
-
-	if chainId == "" || chainId == "pchain" {
-		return common.Hash{}, errors.New("invalid child chainId")
-	}
+func (ec *Client) SendDataToMainChain(ctx context.Context, data []byte, prv *ecdsa.PrivateKey) (common.Hash, error) {
 
 	// data
 	bs, err := pabi.ChainABI.Pack(pabi.SaveDataToMainChain.String(), data)
 	if err != nil {
 		return common.Hash{}, err
 	}
+
+	account := crypto.PubkeyToAddress(prv.PublicKey)
 
 	// nonce, fetch the nonce first, if we get nonce too low error, we will manually add the value until the error gone
 	nonce, err := ec.NonceAt(ctx, account, nil)

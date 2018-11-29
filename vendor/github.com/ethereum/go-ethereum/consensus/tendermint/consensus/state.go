@@ -27,7 +27,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/binary"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	tmdcrypto "github.com/tendermint/go-crypto"
 	//	"golang.org/x/net/context"
@@ -857,7 +856,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 	// Save block to main chain (this happens only on validator node).
 	// Note!!! This will BLOCK the WHOLE consensus stack since it blocks receiveRoutine.
 	// TODO: what if there're more than one round for a height? 'saveBlockToMainChain' would be called more than once
-	if cs.state.TdmExtra.NeedToSave {
+	if cs.state.TdmExtra.NeedToSave && cs.state.TdmExtra.ChainID != "pchain" {
 		if cs.privValidator != nil && cs.IsProposer() {
 			cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
 			lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
@@ -866,7 +865,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		}
 	}
 
-	if cs.state.TdmExtra.NeedToBroadcast {
+	if cs.state.TdmExtra.NeedToBroadcast && cs.state.TdmExtra.ChainID != "pchain" {
 		if cs.privValidator != nil && cs.IsProposer() {
 			cs.logger.Infof("enterPropose: broadcastTX3ProofDataToMainChain height: %v", cs.state.TdmExtra.Height)
 			lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
@@ -2065,6 +2064,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 		return
 	}
 
+	// We use BLS Consensus PrivateKey to sign the digest data
 	var prv *ecdsa.PrivateKey
 	if prvValidator, ok := cs.privValidator.(*types.PrivValidator); ok {
 		prv, err = crypto.ToECDSA(prvValidator.PrivKey.(tmdcrypto.BLSPrivKey))
@@ -2075,7 +2075,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 	} else {
 		panic("saveDataToMainChain: unexpected privValidator type")
 	}
-	hash, err := client.SendDataToMainChain(ctx, cs.state.TdmExtra.ChainID, bs, common.BytesToAddress(cs.privValidator.GetAddress()), prv)
+	hash, err := client.SendDataToMainChain(ctx, bs, prv)
 	if err != nil {
 		cs.logger.Error("saveDataToMainChain(rpc) failed", "err", err)
 		return
