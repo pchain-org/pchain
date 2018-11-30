@@ -321,7 +321,7 @@ func init() {
 }
 
 func IsPChainContractAddr(addr *common.Address) bool {
-	return *addr == ChainContractMagicAddr
+	return addr != nil && *addr == ChainContractMagicAddr
 }
 
 func FunctionTypeFromId(sigdata []byte) (FunctionType, error) {
