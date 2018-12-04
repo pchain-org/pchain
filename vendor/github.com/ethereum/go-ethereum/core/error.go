@@ -35,4 +35,7 @@ var (
 
 	// ErrNoContractOnMainChain is returned if the contract creation tx has been submit to PChain main chain
 	ErrNoContractOnMainChain = errors.New("no contract creation on main chain")
+
+	// ErrInvalidTx4 is returned if the tx4 has been checked during execution
+	ErrInvalidTx4 = errors.New("invalid Tx4")
 )

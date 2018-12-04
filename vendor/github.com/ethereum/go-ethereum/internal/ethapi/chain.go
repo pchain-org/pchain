@@ -659,7 +659,7 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		}
 
 		if from != wfccFrom || args.ChainId != wfccArgs.ChainId || args.Amount.Cmp(wfccArgs.Amount) != 0 {
-			return errors.New("params are not consistent with tx in child chain")
+			return core.ErrInvalidTx4
 		}
 	}
 

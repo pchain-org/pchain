@@ -495,7 +495,12 @@ func (self *worker) commitNewWork() {
 	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
 
 	//work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
-	work.commitTransactionsEx(self.mux, txs, self.chain, self.coinbase, self.totalUsedMoney, self.cch)
+	rmTxs := work.commitTransactionsEx(self.mux, txs, self.chain, self.coinbase, self.totalUsedMoney, self.cch)
+
+	// Remove the Invalid Transactions during tx execution (eg: tx4)
+	if len(rmTxs) > 0 {
+		self.eth.TxPool().RemoveTxs(rmTxs)
+	}
 
 	// compute uncles for the new block.
 	var (
@@ -645,7 +650,7 @@ func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, c
 }
 
 func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.TransactionsByPriceAndNonce, bc *core.BlockChain,
-	coinbase common.Address, totalUsedMoney *big.Int, cch core.CrossChainHelper) {
+	coinbase common.Address, totalUsedMoney *big.Int, cch core.CrossChainHelper) (rmTxs types.Transactions) {
 
 	gp := new(core.GasPool).AddGas(env.header.GasLimit)
 
@@ -697,6 +702,12 @@ func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.Transaction
 			env.logger.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
 			txs.Pop()
 
+		case core.ErrInvalidTx4:
+			// Remove the tx4
+			rmTxs = append(rmTxs, tx)
+			env.logger.Trace("Invalid Tx4, this tx will be removed", "hash", tx.Hash())
+			txs.Shift()
+
 		case nil:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
@@ -729,6 +740,7 @@ func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.Transaction
 			}
 		}(cpy, env.tcount)
 	}
+	return
 }
 
 func (env *Work) commitTransactionEx(tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool, totalUsedMoney *big.Int, cch core.CrossChainHelper) (error, []*types.Log) {

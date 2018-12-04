@@ -39,8 +39,6 @@ import (
 const (
 	// chainHeadChanSize is the size of channel listening to ChainHeadEvent.
 	chainHeadChanSize = 10
-	// rmTxChanSize is the size of channel listening to RemovedTransactionEvent.
-	rmTxChanSize = 10
 )
 
 var (
@@ -896,6 +894,17 @@ func (pool *TxPool) Get(hash common.Hash) *types.Transaction {
 	defer pool.mu.RUnlock()
 
 	return pool.all[hash]
+}
+
+// RemoveTxs remove transaction due to validate failed during mining (commit transaction)
+// (eg: tx4 validate pass when addtx but failed during executing, because tx4 can be validated only when tx3 proof available in local tx3 db)
+func (pool *TxPool) RemoveTxs(txs types.Transactions) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	for _, tx := range txs {
+		pool.removeTx(tx.Hash())
+	}
 }
 
 // removeTx removes a single transaction from the queue, moving all subsequent
