@@ -100,18 +100,3 @@ func (op *SwitchEpochOp) Conflict(op1 ethTypes.PendingOp) bool {
 func (op *SwitchEpochOp) String() string {
 	return fmt.Sprintf("SwitchEpochOp - New Validators: %v", op.NewValidators)
 }
-
-//--------------------------------------------------------------------------------
-// For testing...
-
-func RandValidator(randPower bool, minPower int64) (*Validator, *PrivValidator) {
-	privVal := GenPrivValidator("")
-	_, tempFilePath := Tempfile("priv_validator_")
-	privVal.SetFile(tempFilePath)
-	votePower := minPower
-	if randPower {
-		votePower += int64(RandUint32())
-	}
-	val := NewValidator(privVal.PubKey, big.NewInt(votePower))
-	return val, privVal
-}

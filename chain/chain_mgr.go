@@ -300,8 +300,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 	// child chain uses the same validator with the main chain.
 	privValidatorFile := cm.mainChain.Config.GetString("priv_validator_file")
-	keydir := cm.mainChain.Config.GetString("keystore")
-	self := types.LoadOrGenPrivValidator(privValidatorFile, keydir)
+	self := types.LoadPrivValidator(privValidatorFile)
 
 	err := CreateChildChain(cm.ctx, chainId, *self, keyJson, validators)
 	if err != nil {

@@ -3,7 +3,6 @@ package chain
 import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/log"
 	eth "github.com/ethereum/go-ethereum/node"
@@ -105,7 +104,7 @@ func CreateChildChain(ctx *cli.Context, chainId string, validator tdmTypes.PrivV
 
 	// Save the KeyStore File
 	keystoreDir := config.GetString("keystore")
-	keyJsonFilePath := filepath.Join(keystoreDir, keystore.KeyFileName(common.BytesToAddress(validator.Address)))
+	keyJsonFilePath := filepath.Join(keystoreDir, keystore.KeyFileName(validator.Address))
 	saveKeyError := keystore.WriteKeyStore(keyJsonFilePath, keyJson)
 	if saveKeyError != nil {
 		return saveKeyError
