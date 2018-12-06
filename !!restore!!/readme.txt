@@ -104,8 +104,3 @@ here are the deployment steps:
    5.5) start all nodes with C the last one to start
    5.6) extension: 5.1-5.5 should work for batch-add of new validators. in the 5.2 step, make sure the sum of the new validators' amount 
         is smaller than 1/2 of the sum of the existing validators' amount. in the 5.5 step, start all nodes with the new validators start lately
-        
-
-reference:
----------
-https://tendermint.com/intro/getting-started/deploy-testnet
