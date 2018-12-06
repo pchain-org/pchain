@@ -10,4 +10,4 @@ move all directories/files except '!!restore!!', '.git', '!!readmefirst!!.txt' t
 
 2，copy all content under '!!restore!!' to current directory, now you can build and start pchain by using the scripts
 
-details can be found in [Build and start pchain](https://github.com/pchain-org/pchain/wiki/Build-and-start-pchain)
+details can be found in https://github.com/pchain-org/pchain/wiki/Build-and-start-pchain
