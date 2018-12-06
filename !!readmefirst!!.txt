@@ -1,11 +1,13 @@
-ÎªÁË±£Ö¤Ä¿Â¼µÄ¼ò½éĞÔ£¬µ±Ç°¿´µ½µÄÎÄ¼ş½á¹¹²¢·ÇÊµ¼ÊÊ¹ÓÃ¿ª·¢ºÍÊ¹ÓÃÊ±µÄÄ¿Â¼½á¹¹¡£
 
-ÔÚ¿ª·¢ºÍ²¿ÊğÊ±£¬´ÓgithubÉÏÏÂÔØÍê³ÉÒÔºó£¬ĞèÒª½øĞĞÈçÏÂµ÷Õû£º
+Current directory structure is not directly usable for development
 
-1£¬ÔÚµ±Ç°Ä¿Â¼ÏÂ´´½¨
-.\src\github.com\pchain\£¬
-½«³ıÁË !!restore!!, .git, !!readmefirst!!.txt Õâ3¸öÄ¿Â¼ºÍÎÄ¼şÒÔÍâµÄËùÓĞÎÄ¼ş¶¼ÒÆÖÁĞÂ´´½¨µÄÄ¿Â¼ÏÂ
+To develop and deploy, after got clone of the code, need adjust as followï¼š
 
-2£¬½« !!restore!!Ä¿Â¼ÏÂµÄËùÓĞÄÚÈİ¿½±´µ½µ±Ç°Ä¿Â¼
+1ï¼Œcreate directory under current directory
+   mkdir .\src\github.com\pchain\ï¼Œ
 
-Íê³ÉÒÔÉÏ²½ÖèÒÔºó£¬ĞÂµÄÄ¿Â¼½á¹¹½«¿ÉÒÔ½øĞĞIntelliJ IdeaµÄÏîÄ¿Õ¹¿ª£¬ÒÔ¼°ÔÚUbuntu14.0.4ÏÂµÄ±àÒë²¿Êğ¡£
+move all directories/files except '!!restore!!', '.git', '!!readmefirst!!.txt' to the newly created directory
+
+2ï¼Œcopy all content under '!!restore!!' to current directory, now you can build and start pchain by using the scripts
+
+details can be found in [Build and start pchain](https://github.com/pchain-org/pchain/wiki/Build-and-start-pchain)
