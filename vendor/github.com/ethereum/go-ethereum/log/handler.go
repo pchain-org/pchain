@@ -170,11 +170,7 @@ func RotatingFileHandler(path string, limit uint, formatter Format) (Handler, er
 	h := StreamHandler(counter, formatter)
 
 	return FuncHandler(func(r *Record) error {
-		counter.RLock()
-		defer counter.RUnlock()
-
 		if counter.count > limit || counter.w == nil {
-			counter.RUnlock()
 			// Hold Write Lock to Reset the Log Counter
 			counter.Lock()
 			if counter.count > limit {
@@ -196,8 +192,11 @@ func RotatingFileHandler(path string, limit uint, formatter Format) (Handler, er
 				counter.count = 0
 			}
 			counter.Unlock()
-			counter.RLock()
 		}
+
+		counter.RLock()
+		defer counter.RUnlock()
+
 		return h.Log(r)
 	}), nil
 }
