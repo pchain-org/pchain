@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"math/big"
 	"strings"
+	"time"
 )
 
 type PublicChainAPI struct {
@@ -248,6 +249,43 @@ func (s *PublicChainAPI) BroadcastTX3ProofData(ctx context.Context, bs hexutil.B
 	// Broadcast the TX3ProofData to all peers in the main chain.
 	s.b.BroadcastTX3ProofData(&proofData)
 	return nil
+}
+
+func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
+
+	cch := s.b.GetCrossChainHelper()
+	chainInfoDB := cch.GetChainInfoDB()
+
+	// Load Main Chain
+
+	// Load All Available Child Chain
+	chainIds := core.GetChildChainIds(chainInfoDB)
+
+	result := make([]*ChainStatus, 0, len(chainIds))
+
+	for _, chainId := range chainIds {
+		chainInfo := core.GetChainInfo(chainInfoDB, chainId)
+
+		epoch := chainInfo.Epoch
+		validators := make([]*ChainValidator, 0, epoch.Validators.Size())
+		for _, val := range epoch.Validators.Validators {
+			validators = append(validators, &ChainValidator{
+				Account:     common.BytesToAddress(val.Address),
+				VotingPower: val.VotingPower,
+			})
+		}
+
+		chain_status := &ChainStatus{
+			ChainID:    chainInfo.ChainId,
+			Owner:      chainInfo.Owner,
+			Number:     epoch.Number,
+			StartTime:  epoch.StartTime,
+			Validators: validators,
+		}
+		result = append(result, chain_status)
+	}
+
+	return result
 }
 
 func init() {
@@ -708,4 +746,17 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 	}
 
 	return nil
+}
+
+type ChainStatus struct {
+	ChainID    string            `json:"Chain ID"`
+	Owner      common.Address    `json:"Owner"`
+	Number     uint64            `json:"Current Epoch"`
+	StartTime  time.Time         `json:"Epoch Start Time"`
+	Validators []*ChainValidator `json:"Validators"`
+}
+
+type ChainValidator struct {
+	Account     common.Address `json:"Address"`
+	VotingPower *big.Int       `json:"Voting Power"`
 }
