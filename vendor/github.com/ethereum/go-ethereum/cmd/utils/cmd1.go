@@ -16,12 +16,12 @@ import (
 	//"github.com/ethereum/go-ethereum/console"
 )
 
-func StartNodeEx(ctx *cli.Context, stack *node.Node) error {
+func StartNodeEx(ctx *cli.Context, stack *node.Node, mining bool) error {
 
 	StartNode1(stack)
 
 	// Start auxiliary services if enabled
-	if ctx.GlobalBool(MiningEnabledFlag.Name) || ctx.GlobalBool(DeveloperFlag.Name) {
+	if mining || ctx.GlobalBool(DeveloperFlag.Name) {
 		// Mining only makes sense if a full Ethereum node is running
 		if ctx.GlobalBool(LightModeFlag.Name) || ctx.GlobalString(SyncModeFlag.Name) == "light" {
 			Fatalf("Light clients do not support mining")

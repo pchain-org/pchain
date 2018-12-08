@@ -25,17 +25,19 @@ type Chain struct {
 	Config     cfg.Config
 	EthNode    *eth.Node
 	RpcHandler http.Handler
+	mining     bool
 }
 
 func LoadMainChain(ctx *cli.Context, chainId string) *Chain {
 
-	chain := &Chain{Id: chainId}
+	mining := ctx.GlobalBool(utils.MiningEnabledFlag.Name)
+	chain := &Chain{Id: chainId, mining: mining}
 	config := GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
 	//always start ethereum
 	log.Info("ethereum.MakeSystemNode")
-	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, GetCMInstance(ctx).cch, ctx.GlobalBool(utils.MiningEnabledFlag.Name))
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, GetCMInstance(ctx).cch, mining)
 	chain.EthNode = stack
 
 	rpcHandler, err := stack.GetRPCHandler()
@@ -59,7 +61,7 @@ func LoadChildChain(ctx *cli.Context, chainId string, mining bool) *Chain {
 	//	log.Errorf("directory %s not exist or with error %v", chainDir, err)
 	//	return nil
 	//}
-	chain := &Chain{Id: chainId}
+	chain := &Chain{Id: chainId, mining: mining}
 	config := GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
@@ -85,10 +87,7 @@ func StartChain(ctx *cli.Context, chain *Chain, startDone chan<- struct{}) error
 	log.Infof("Start Chain: %s", chain.Id)
 	go func() {
 		log.Info("StartChain()->utils.StartNode(stack)")
-		utils.StartNodeEx(ctx, chain.EthNode)
-
-		// Add ChainID to Tendermint P2P Node Info
-		//chainMgr.p2pObj.AddNetwork(chain.Id)
+		utils.StartNodeEx(ctx, chain.EthNode, chain.mining)
 
 		if startDone != nil {
 			startDone <- struct{}{}
