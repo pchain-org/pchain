@@ -308,11 +308,6 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		return
 	}
 
-	// Add mine Flag if absent before load child chain, in order to set Consensus shouldStart to true
-	if !cm.ctx.GlobalIsSet(utils.MiningEnabledFlag.Name) {
-		cm.ctx.GlobalSet(utils.MiningEnabledFlag.Name, "true")
-	}
-
 	chain := LoadChildChain(cm.ctx, chainId, true)
 	if chain == nil {
 		log.Errorf("Child Chain %v load failed!", chainId)
