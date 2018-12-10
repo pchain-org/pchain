@@ -411,10 +411,24 @@ func (cs *ConsensusState) updateProposer() {
 	hv := hs.Sum(nil)
 	hash := new(big.Int)
 	hash.SetBytes(hv[:])
-	n := big.NewInt(int64(cs.Validators.Size()))
+	//n := big.NewInt(int64(cs.Validators.Size()))
+	n := big.NewInt(0)
+	validators := cs.Validators.Validators
+	for _, validator := range validators {
+		n.Add(n, validator.VotingPower)
+	}
 	n.Mod(hash, n)
-	idx := int(n.Int64())
-	if idx >= cs.Validators.Size() {
+	idx := -1
+	for i, validator := range validators {
+		n.Sub(n, validator.VotingPower)
+		if n.Cmp(big.NewInt(0)) < 0 {
+			idx = i
+			break
+		}
+	}
+
+	//idx := int(n.Int64())
+	if idx >= cs.Validators.Size() || idx < 0 {
 		cs.proposer.Proposer = nil
 		PanicConsensus(Fmt("The index of proposer out of range", "index:", idx, "range:", cs.Validators.Size()))
 	} else {
