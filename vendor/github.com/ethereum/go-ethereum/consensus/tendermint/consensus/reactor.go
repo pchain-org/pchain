@@ -14,7 +14,6 @@ import (
 	"github.com/tendermint/go-wire"
 	//sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	"strings"
 )
 
 const (
@@ -495,16 +494,18 @@ OUTER_LOOP:
 
 		// If the peer is on a previous height, help catch up. we catch up by using ethereum's p2p now
 		if (0 < prs.Height) && (prs.Height < rs.Height) {
-
-			conR.logger.Info("Data catchup", "height", rs.Height, "peerHeight", prs.Height, "peerProposalBlockParts", prs.ProposalBlockParts)
-			//we send the last block to increase prs.Height
-			block := conR.conS.GetChainReader().GetBlockByNumber(prs.Height)
-			if block != nil {
-				conR.logger.Info("Data catchup", "readed block height", block.Number().Uint64())
-				conR.conS.backend.GetBroadcaster().BroadcastBlock(block, true)
+			if index, ok := prs.ProposalBlockParts.Not().PickRandom(); ok {
+				conR.logger.Info("Data catchup", "height", rs.Height, "peerHeight", prs.Height, "peerProposalBlockParts", prs.ProposalBlockParts)
+				//we send the last block to increase prs.Height
+				block := conR.conS.GetChainReader().GetBlockByNumber(prs.Height)
+				if block != nil {
+					conR.logger.Info("Data catchup", "readed block height", block.Number().Uint64())
+					conR.conS.backend.GetBroadcaster().BroadcastBlock(block, true)
+					ps.SetHasProposalBlockPart(prs.Height, prs.Round, int(index))
+				}
+				//log.Info("No parts to send in catch-up, sleeping")
+				time.Sleep(peerGossipSleepDuration)
 			}
-			//log.Info("No parts to send in catch-up, sleeping")
-			time.Sleep(peerGossipSleepDuration)
 			continue OUTER_LOOP
 		}
 
@@ -578,11 +579,11 @@ OUTER_LOOP:
 			panic("conR.conS.privValidator is nil")
 		}
 
-		if strings.Compare(peer.GetKey(), conR.conS.ProposerPeerKey) != 0 {
-
+		if peer.GetKey() != conR.conS.ProposerPeerKey {
 			time.Sleep(peerGossipSleepDuration)
 			continue OUTER_LOOP
 		}
+
 		//logger.Debug("gossipVotesRoutine", "rsHeight", rs.Height, "rsRound", rs.Round,
 		//	"prsHeight", prs.Height, "prsRound", prs.Round, "prsStep", prs.Step)
 
