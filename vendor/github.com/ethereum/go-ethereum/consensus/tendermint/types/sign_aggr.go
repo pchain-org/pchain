@@ -11,7 +11,6 @@ import (
 	//"github.com/tendermint/go-data"
 	"io"
 	"github.com/tendermint/go-wire"
-	"math/big"
 )
 
 //------------------------ signature aggregation -------------------
@@ -87,10 +86,15 @@ func (sa *SignAggr) HasTwoThirdsMajority(valSet *ValidatorSet) bool {
 	if err != nil {
 		return false
 	}
+
+	/*
 	quorum := big.NewInt(0)
 	quorum.Mul(valSet.totalVotingPower, big.NewInt(2))
 	quorum.Div(quorum, big.NewInt(3))
 	quorum.Add(quorum, big.NewInt(1))
+	*/
+	quorum := Loose23MajorThreshold(valSet.totalVotingPower, sa.Round)
+
 	return talliedVotingPower.Cmp(quorum) >= 0
 }
 

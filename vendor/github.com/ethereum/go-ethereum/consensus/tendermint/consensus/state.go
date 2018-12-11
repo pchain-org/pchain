@@ -590,25 +590,6 @@ func (cs *ConsensusState) ReconstructLastCommit(state *sm.State) {
 	if state.TdmExtra == nil {
 		return
 	}
-
-	seenCommit := state.TdmExtra.SeenCommit
-
-	lastValidators, _, _ := state.GetValidators()
-
-	if seenCommit.Size() != lastValidators.Size() {
-		panic("size of lastValidators is not equal to that saved in last commit")
-	}
-
-	lastPrecommits := types.MakeSignAggr(seenCommit.Height,
-		seenCommit.Round,
-		types.VoteTypePrecommit,
-		seenCommit.Size(),
-		seenCommit.BlockID,
-		cs.chainConfig.PChainId,
-		seenCommit.BitArray.Copy(),
-		seenCommit.SignAggr)
-	cs.logger.Infof("ReconstructLastCommit. seenCommit: %v, lastPrecommits: %v", seenCommit, lastPrecommits)
-	cs.LastCommit = lastPrecommits
 }
 
 func (cs *ConsensusState) newStep() {
