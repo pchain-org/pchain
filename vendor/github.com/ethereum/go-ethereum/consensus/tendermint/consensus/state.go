@@ -2081,7 +2081,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 	// We use BLS Consensus PrivateKey to sign the digest data
 	var prv *ecdsa.PrivateKey
 	if prvValidator, ok := cs.privValidator.(*types.PrivValidator); ok {
-		prv, err = crypto.ToECDSA(prvValidator.PrivKey.(tmdcrypto.BLSPrivKey))
+		prv, err = crypto.ToECDSA(prvValidator.PrivKey.(tmdcrypto.BLSPrivKey).Bytes())
 		if err != nil {
 			cs.logger.Error("saveDataToMainChain: failed to get PrivateKey", "err", err)
 			return

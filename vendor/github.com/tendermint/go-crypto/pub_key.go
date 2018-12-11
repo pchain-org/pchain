@@ -412,7 +412,7 @@ func (pubKey BLSPubKey) Address() []byte {
 
 func (pubKey BLSPubKey) Equals(other PubKey) bool {
 	if otherPk, ok := other.(BLSPubKey); ok {
-		return bytes.Equal(pubKey[:], otherPk[:])
+		return pubKey == otherPk
 	} else {
 		return false
 	}
@@ -436,9 +436,9 @@ func (pubKey BLSPubKey) MarshalJSON() ([]byte, error) {
 	return data.Encoder.Marshal(pubKey[:])
 }
 
-func (p *BLSPubKey) UnmarshalJSON(enc []byte) error {
+func (pubKey *BLSPubKey) UnmarshalJSON(enc []byte) error {
 	var ref []byte
 	err := data.Encoder.Unmarshal(&ref, enc)
-	copy(p[:], ref)
+	copy(pubKey[:], ref)
 	return err
 }

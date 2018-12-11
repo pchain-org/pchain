@@ -55,7 +55,9 @@ func (ds *DefaultSigner) Sign(msg []byte) crypto.Signature {
 func GenPrivValidatorKey(address common.Address) *PrivValidator {
 
 	keyPair := bls.GenerateKey()
-	blsPrivKey := crypto.BLSPrivKey(keyPair.Private().Marshal())
+	var blsPrivKey crypto.BLSPrivKey
+	copy(blsPrivKey[:], keyPair.Private().Marshal())
+
 	blsPubKey := blsPrivKey.PubKey()
 
 	return &PrivValidator{
