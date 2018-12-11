@@ -119,11 +119,16 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 }
 
 // ValidateJoinChildChain check the criteria whether it meets the join child chain requirement
-func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error {
+func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, consensusPubkey []byte, chainId string, depositAmount *big.Int, signature []byte) error {
 	log.Debug("ValidateJoinChildChain - start")
 
 	if chainId == MainChain {
 		return errors.New("you can't join PChain as a child chain, try use other name instead")
+	}
+
+	// Check Signature of the PubKey matched against the Address
+	if err := checkConsensusPubKey(from, consensusPubkey, signature); err != nil {
+		return err
 	}
 
 	// Check if "chainId" has been created/registered
@@ -135,17 +140,6 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey 
 			return fmt.Errorf("child chain %s not exist, try use other name instead", chainId)
 		}
 	}
-
-	// Check PubKey match the Address
-	/*	pubkeySlice := ethcrypto.FromECDSAPub(ethcrypto.ToECDSAPub(common.FromHex(pubkey)))
-		if pubkeySlice == nil {
-			return errors.New("your Public Key is not valid, please provide a valid Public Key")
-		}
-
-		validatorPubkey := crypto.BLSPubKey(pubkeySlice)
-		if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
-			return errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
-		}*/
 
 	// Check if already joined the chain
 	find := false
@@ -170,7 +164,7 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, pubkey 
 }
 
 // JoinChildChain Join the Child Chain
-func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error {
+func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey crypto.PubKey, chainId string, depositAmount *big.Int) error {
 	log.Debug("JoinChildChain - start")
 
 	// Load the Child Chain first
@@ -187,7 +181,7 @@ func (cch *CrossChainHelper) JoinChildChain(from common.Address, pubkey string, 
 	}
 
 	jv := core.JoinedValidator{
-		PubKey:        crypto.BLSPubKey(common.FromHex(pubkey)),
+		PubKey:        pubkey,
 		Address:       from,
 		DepositAmount: depositAmount,
 	}
@@ -272,16 +266,10 @@ func (cch *CrossChainHelper) VoteNextEpoch(ep *epoch.Epoch, from common.Address,
 	return nil
 }
 
-func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) error {
-	// Check PubKey match the Address
-	pubkeySlice := ethcrypto.FromECDSAPub(ethcrypto.ToECDSAPub(common.FromHex(pubkey)))
-	if pubkeySlice == nil {
-		return errors.New("your Public Key is not valid, please provide a valid Public Key")
-	}
-
-	validatorPubkey := crypto.BLSPubKey(pubkeySlice)
-	if !bytes.Equal(validatorPubkey.Address(), from.Bytes()) {
-		return errors.New("your Public Key is not match with your Address, please provide a valid Public Key and Address")
+func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Address, consensusPubkey []byte, depositAmount *big.Int, salt string, signature []byte) error {
+	// Check Signature of the PubKey matched against the Address
+	if err := checkConsensusPubKey(from, consensusPubkey, signature); err != nil {
+		return err
 	}
 
 	var ethereum *eth.Ethereum
@@ -326,7 +314,7 @@ func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Addr
 	// Check Vote Hash
 	byte_data := [][]byte{
 		from.Bytes(),
-		common.FromHex(pubkey),
+		consensusPubkey,
 		depositAmount.Bytes(),
 		[]byte(salt),
 	}
@@ -343,14 +331,14 @@ func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Addr
 	return nil
 }
 
-func (cch *CrossChainHelper) RevealVote(ep *epoch.Epoch, from common.Address, pubkey string, depositAmount *big.Int, salt string, txHash common.Hash) error {
+func (cch *CrossChainHelper) RevealVote(ep *epoch.Epoch, from common.Address, pubkey crypto.PubKey, depositAmount *big.Int, salt string, txHash common.Hash) error {
 
 	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
 	vote, exist := voteSet.GetVoteByAddress(from)
 
 	if exist {
 		// Update the Hash Vote with Real Data
-		vote.PubKey = crypto.BLSPubKey(common.FromHex(pubkey))
+		vote.PubKey = pubkey
 		vote.Amount = depositAmount
 		vote.Salt = salt
 		vote.TxHash = txHash
@@ -731,4 +719,26 @@ func concatCopyPreAllocate(slices [][]byte) []byte {
 		i += copy(tmp[i:], s)
 	}
 	return tmp
+}
+
+func checkConsensusPubKey(from common.Address, consensusPubkey, signature []byte) error {
+	// Check Signature of the PubKey matched against the Address
+	if signature[64] != 27 && signature[64] != 28 {
+		return fmt.Errorf("invalid signature (V is not 27 or 28)")
+	}
+	signature[64] -= 27 // Transform V from 27/28 to 0/1
+	recoveredPubkey, pubKey_err := ethcrypto.SigToPub(signHash(consensusPubkey), signature)
+	if pubKey_err != nil || recoveredPubkey == nil {
+		return fmt.Errorf("signature verification failed: %v", pubKey_err)
+	}
+	recoveredAddress := ethcrypto.PubkeyToAddress(*recoveredPubkey)
+	if from != recoveredAddress {
+		return errors.New("consensus public key signature verification failed")
+	}
+	return nil
+}
+
+func signHash(data []byte) []byte {
+	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
+	return ethcrypto.Keccak256([]byte(msg))
 }

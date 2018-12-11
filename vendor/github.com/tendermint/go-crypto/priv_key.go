@@ -381,8 +381,10 @@ func (privKey BLSPrivKey) getElement() *bls.PrivateKey {
 }
 
 func (privKey BLSPrivKey) PubKey() PubKey {
-	pub := privKey.getElement().Public()
-	return BLSPubKey(pub.Marshal())
+	pubKey := privKey.getElement().Public()
+	var pub BLSPubKey
+	copy(pub[:], pubKey.Marshal())
+	return pub
 }
 
 func (privKey BLSPrivKey) Sign(msg []byte) Signature {

@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	pabi "github.com/pchain/abi"
+	"github.com/tendermint/go-crypto"
 	"math/big"
 )
 
@@ -47,11 +48,11 @@ func (api *PublicTdmAPI) VoteNextEpoch(ctx context.Context, from common.Address,
 	return api.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-func (api *PublicTdmAPI) RevealVote(ctx context.Context, from common.Address, pubkey string, amount *hexutil.Big, salt string) (common.Hash, error) {
+func (api *PublicTdmAPI) RevealVote(ctx context.Context, from common.Address, pubkey crypto.BLSPubKey, amount *hexutil.Big, salt string, signature hexutil.Bytes) (common.Hash, error) {
 
 	chainId := api.b.ChainConfig().PChainId
 
-	input, err := pabi.ChainABI.Pack(pabi.RevealVote.String(), chainId, pubkey, (*big.Int)(amount), salt)
+	input, err := pabi.ChainABI.Pack(pabi.RevealVote.String(), chainId, pubkey, (*big.Int)(amount), salt, signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -143,7 +144,7 @@ func rev_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 		return core.ErrInsufficientFunds
 	}
 
-	err = cch.ValidateRevealVote(args.ChainId, from, args.PubKey, args.Amount, args.Salt)
+	err = cch.ValidateRevealVote(args.ChainId, from, args.PubKey, args.Amount, args.Salt, args.Signature)
 	return err
 }
 
@@ -167,7 +168,7 @@ func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 		return core.ErrInsufficientFunds
 	}
 
-	err = cch.ValidateRevealVote(args.ChainId, from, args.PubKey, args.Amount, args.Salt)
+	err = cch.ValidateRevealVote(args.ChainId, from, args.PubKey, args.Amount, args.Salt, args.Signature)
 	if err != nil {
 		return err
 	}
@@ -184,9 +185,12 @@ func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 		}
 	}
 
+	var pub crypto.BLSPubKey
+	copy(pub[:], args.PubKey)
+
 	op := types.RevealVoteOp{
 		From:   from,
-		Pubkey: args.PubKey,
+		Pubkey: pub,
 		Amount: args.Amount,
 		Salt:   args.Salt,
 		TxHash: tx.Hash(),

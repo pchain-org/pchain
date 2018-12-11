@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"github.com/pkg/errors"
+	"github.com/tendermint/go-crypto"
 	"math/big"
 	"strings"
 	"time"
@@ -56,14 +57,14 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address, pubkey string, chainId string,
-	depositAmount *hexutil.Big, gas *hexutil.Uint64, gasPrice *hexutil.Big) (common.Hash, error) {
+func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address, pubkey crypto.BLSPubKey, chainId string,
+	depositAmount *hexutil.Big, signature hexutil.Bytes, gas *hexutil.Uint64, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
 	}
 
-	input, err := pabi.ChainABI.Pack(pabi.JoinChildChain.String(), pubkey, chainId, (*big.Int)(depositAmount))
+	input, err := pabi.ChainABI.Pack(pabi.JoinChildChain.String(), pubkey.Bytes(), chainId, (*big.Int)(depositAmount), signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -390,7 +391,7 @@ func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 		return core.ErrInsufficientFunds
 	}
 
-	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, args.DepositAmount); err != nil {
+	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, args.DepositAmount, args.Signature); err != nil {
 		return err
 	}
 
@@ -416,13 +417,16 @@ func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 		return core.ErrInsufficientFunds
 	}
 
-	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, args.DepositAmount); err != nil {
+	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, args.DepositAmount, args.Signature); err != nil {
 		return err
 	}
 
+	var pub crypto.BLSPubKey
+	copy(pub[:], args.PubKey)
+
 	op := types.JoinChildChainOp{
 		From:          from,
-		PubKey:        args.PubKey,
+		PubKey:        pub,
 		ChainId:       args.ChainId,
 		DepositAmount: args.DepositAmount,
 	}

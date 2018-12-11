@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/tendermint/go-crypto"
 	"math/big"
 )
 
@@ -57,7 +58,7 @@ func (op *CreateChildChainOp) String() string {
 // JoinChildChain op
 type JoinChildChainOp struct {
 	From          common.Address
-	PubKey        string
+	PubKey        crypto.PubKey
 	ChainId       string
 	DepositAmount *big.Int
 }
@@ -125,7 +126,7 @@ func (op *VoteNextEpochOp) String() string {
 // RevealVote op
 type RevealVoteOp struct {
 	From   common.Address
-	Pubkey string
+	Pubkey crypto.PubKey
 	Amount *big.Int
 	Salt   string
 	TxHash common.Hash
