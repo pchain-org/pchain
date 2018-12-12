@@ -289,6 +289,19 @@ func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
 	return result
 }
 
+func (s *PublicChainAPI) SignAddress(from common.Address, consensusPrivateKey hexutil.Bytes) (crypto.Signature, error) {
+	if len(consensusPrivateKey) != 32 {
+		return nil, errors.New("invalid consensus private key")
+	}
+
+	var blsPriv crypto.BLSPrivKey
+	copy(blsPriv[:], consensusPrivateKey)
+
+	blsSign := blsPriv.Sign(from.Bytes())
+
+	return blsSign, nil
+}
+
 func init() {
 	//CreateChildChain
 	core.RegisterValidateCb(pabi.CreateChildChain, ccc_ValidateCb)

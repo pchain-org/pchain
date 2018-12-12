@@ -722,23 +722,23 @@ func concatCopyPreAllocate(slices [][]byte) []byte {
 }
 
 func checkConsensusPubKey(from common.Address, consensusPubkey, signature []byte) error {
-	// Check Signature of the PubKey matched against the Address
-	if signature[64] != 27 && signature[64] != 28 {
-		return fmt.Errorf("invalid signature (V is not 27 or 28)")
+	if len(consensusPubkey) != 128 {
+		return errors.New("invalid consensus public key")
 	}
-	signature[64] -= 27 // Transform V from 27/28 to 0/1
-	recoveredPubkey, pubKey_err := ethcrypto.SigToPub(signHash(consensusPubkey), signature)
-	if pubKey_err != nil || recoveredPubkey == nil {
-		return fmt.Errorf("signature verification failed: %v", pubKey_err)
+
+	if len(signature) != 64 {
+		return errors.New("invalid signature")
 	}
-	recoveredAddress := ethcrypto.PubkeyToAddress(*recoveredPubkey)
-	if from != recoveredAddress {
+
+	// Get BLS Public Key
+	var blsPK crypto.BLSPubKey
+	copy(blsPK[:], consensusPubkey)
+	// Get BLS Signature
+	blsSign := crypto.BLSSignature(signature)
+	// Verify the Signature
+	success := blsPK.VerifyBytes(from.Bytes(), blsSign)
+	if !success {
 		return errors.New("consensus public key signature verification failed")
 	}
 	return nil
-}
-
-func signHash(data []byte) []byte {
-	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
-	return ethcrypto.Keccak256([]byte(msg))
 }
