@@ -13,7 +13,6 @@ import (
 	"github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
 	"golang.org/x/crypto/ripemd160"
-	"os"
 )
 
 // PubKey is part of Account and Validator.
@@ -421,9 +420,11 @@ func (pubKey BLSPubKey) Equals(other PubKey) bool {
 func (pubKey BLSPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
 	if otherSign, ok := sig_.(BLSSignature); ok {
 		sign := otherSign.getElement()
+		if sign == nil {
+			return false
+		}
 		return bls.Verify(sign, msg, pubKey.getElement())
 	} else {
-		os.Exit(0)
 		return false;
 	}
 }
