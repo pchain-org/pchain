@@ -44,6 +44,32 @@ import (
 
 	NOTE: Assumes that the sum total of voting power does not exceed MaxUInt64.
 */
+
+const  LooseRound  = 50
+
+//max { [(100 - round)*x + 150]/150, (x+3)/3 }
+func Loose23MajorThreshold(totalVotingPower *big.Int, round int) *big.Int {
+
+	quorum := big.NewInt(0)
+	quorum.Add(totalVotingPower, big.NewInt(3))
+	quorum.Div(quorum, big.NewInt(3))
+
+	if round >= LooseRound {
+		return quorum
+	}
+
+	quorum1 := big.NewInt(0)
+	quorum1.Mul(totalVotingPower, big.NewInt(int64(100 - round)))
+	quorum1.Add(quorum1, big.NewInt(150))
+	quorum1.Div(quorum1, big.NewInt(150))
+
+	if quorum.Cmp(quorum1) > 0 {
+		return quorum
+	} else {
+		return quorum1
+	}
+}
+
 type VoteSet struct {
 	chainID string
 	height  uint64
@@ -259,9 +285,12 @@ func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower
 	// Before adding to votesByBlock, see if we'll exceed quorum
 	origSum := new(big.Int).Set(votesByBlock.sum)
 
+	/*
 	twoThird := new(big.Int).Mul(voteSet.valSet.TotalVotingPower(), big.NewInt(2))
 	twoThird.Div(twoThird, big.NewInt(3))
 	quorum := new(big.Int).Add(twoThird, big.NewInt(1))
+	*/
+	quorum := Loose23MajorThreshold(voteSet.valSet.TotalVotingPower(), int(vote.Round))
 
 	// Add vote to votesByBlock
 	votesByBlock.addVerifiedVote(vote, votingPower)
@@ -398,8 +427,12 @@ func (voteSet *VoteSet) HasTwoThirdsAny() bool {
 	voteSet.mtx.Lock()
 	defer voteSet.mtx.Unlock()
 
+	/*
 	twoThird := new(big.Int).Mul(voteSet.valSet.TotalVotingPower(), big.NewInt(2))
 	twoThird.Div(twoThird, big.NewInt(3))
+	*/
+	twoThirdPlus1 := Loose23MajorThreshold(voteSet.valSet.TotalVotingPower(), voteSet.round)
+	twoThird := twoThirdPlus1.Sub(twoThirdPlus1, big.NewInt(1))
 
 	return voteSet.sum.Cmp(twoThird) == 1
 }

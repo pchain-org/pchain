@@ -252,10 +252,14 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, height uint64, commit *
 		return err
 	}
 
+	/*
 	quorum := big.NewInt(0)
 	quorum.Mul(valSet.TotalVotingPower(), big.NewInt(2))
 	quorum.Div(quorum, big.NewInt(3))
 	quorum.Add(quorum, big.NewInt(1))
+	*/
+	quorum := Loose23MajorThreshold(valSet.TotalVotingPower(), commit.Round)
+
 	if talliedVotingPower.Cmp(quorum) >= 0 {
 		return nil
 	} else {

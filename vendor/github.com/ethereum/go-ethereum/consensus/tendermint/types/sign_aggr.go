@@ -4,14 +4,13 @@ import (
 	//"bytes"
 	//"errors"
 	"fmt"
-	//"io"
+	"math/big"
 
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	//"github.com/tendermint/go-data"
 	"io"
 	"github.com/tendermint/go-wire"
-	"math/big"
 )
 
 //------------------------ signature aggregation -------------------
@@ -87,10 +86,15 @@ func (sa *SignAggr) HasTwoThirdsMajority(valSet *ValidatorSet) bool {
 	if err != nil {
 		return false
 	}
+
+	/*
 	quorum := big.NewInt(0)
 	quorum.Mul(valSet.totalVotingPower, big.NewInt(2))
 	quorum.Div(quorum, big.NewInt(3))
 	quorum.Add(quorum, big.NewInt(1))
+	*/
+	quorum := Loose23MajorThreshold(valSet.totalVotingPower, sa.Round)
+
 	return talliedVotingPower.Cmp(quorum) >= 0
 }
 
@@ -153,20 +157,24 @@ func (sa *SignAggr) SignAggrVerify(msg []byte, valSet *ValidatorSet) bool {
 	return pubKey.VerifyBytes(msg, sa.SignatureAggr) && sa.HasTwoThirdsMajority(valSet)
 }
 
-
-
-/*
-func (sa *SignAggr) HasTwoThirdsAny() bool {
+func (sa *SignAggr) HasTwoThirdsAny(valSet *ValidatorSet) bool {
 	if sa == nil {
 		return false
 	}
-	return sa.sum > voteSet.valSet.TotalVotingPower()*2/3
+
+	/*
+	twoThird := new(big.Int).Mul(voteSet.valSet.TotalVotingPower(), big.NewInt(2))
+	twoThird.Div(twoThird, big.NewInt(3))sa
+	*/
+	twoThirdPlus1 := Loose23MajorThreshold(valSet.TotalVotingPower(), sa.Round)
+	twoThird := twoThirdPlus1.Sub(twoThirdPlus1, big.NewInt(1))
+
+	return big.NewInt(sa.Sum).Cmp(twoThird) == 1
 }
 
-func (sa *SignAggr) HasAll() bool {
-	return sa.sum == sa.valSet.TotalVotingPower()
+func (sa *SignAggr) HasAll(valSet *ValidatorSet) bool {
+	return big.NewInt(sa.Sum).Cmp(valSet.TotalVotingPower()) == 0
 }
-*/
 
 // Returns either a blockhash (or nil) that received +2/3 majority.
 // If there exists no such majority, returns (nil, PartSetHeader{}, false).

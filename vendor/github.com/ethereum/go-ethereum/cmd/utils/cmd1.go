@@ -57,7 +57,6 @@ func StartNode1(stack *node.Node) {
 		Fatalf("Error starting protocol stack: %v", err)
 	}
 
-	fmt.Println("pow recover 3")
 	go func() {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, os.Interrupt)
@@ -71,11 +70,9 @@ func StartNode1(stack *node.Node) {
 				log.Info(fmt.Sprintf("Already shutting down, interrupt %d more times for panic.", i-1))
 			}
 		}
-		fmt.Println("pow recover 4")
 		debug.Exit() // ensure trace and CPU profile data is flushed.
 		debug.LoudPanic("boom")
 	}()
-	fmt.Println("pow recover 5")
 }
 
 /*

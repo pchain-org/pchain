@@ -4,7 +4,6 @@ import (
 	consss "github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 
-	"fmt"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	cmn "github.com/tendermint/go-common"
@@ -93,21 +92,6 @@ func (cs *ConsensusState) Initialize() {
 // The round becomes 0 and cs.Step becomes RoundStepNewHeight.
 func (cs *ConsensusState) UpdateToState(state *sm.State) {
 
-	// Reset fields based on state.
-	_, validators, _ := state.GetValidators()
-	lastPrecommits := (*types.SignAggr)(nil)
-	if cs.CommitRound > -1 && cs.PrecommitMaj23SignAggr != nil {
-		lastPrecommits = cs.PrecommitMaj23SignAggr
-		fmt.Println("set lastcommit")
-	} else {
-		fmt.Println("nil")
-	}
-
-	fmt.Printf("commit round:+%v\n", cs.CommitRound)
-
-	fmt.Printf("lastPrecommit is:%+v\n", lastPrecommits)
-	fmt.Printf("lastPrecommit height:%+v\n", cs.Height)
-
 	cs.Initialize()
 
 	height := state.TdmExtra.Height + 1
@@ -127,9 +111,25 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 		cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
 	}
 
+	// Reset fields based on state.
+	_, validators, _ := state.GetValidators()
 	cs.Validators = validators
 	cs.Votes = NewHeightVoteSet(cs.chainConfig.PChainId, height, validators, cs.logger)
 	cs.VoteSignAggr = NewHeightVoteSignAggr(cs.chainConfig.PChainId, height, validators, cs.logger)
+
+	lastPrecommits := (*types.SignAggr)(nil)
+	seenCommit := state.TdmExtra.SeenCommit
+	if seenCommit != nil {
+		lastPrecommits = types.MakeSignAggr(seenCommit.Height,
+			seenCommit.Round,
+			types.VoteTypePrecommit,
+			seenCommit.Size(),
+			seenCommit.BlockID,
+			cs.chainConfig.PChainId,
+			seenCommit.BitArray.Copy(),
+			seenCommit.SignAggr)
+	}
+	cs.logger.Infof("UpdateToState. seenCommit: %v, lastPrecommits: %v", seenCommit, lastPrecommits)
 	cs.LastCommit = lastPrecommits
 
 	cs.state = state
