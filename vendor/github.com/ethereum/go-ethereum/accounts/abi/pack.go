@@ -45,12 +45,6 @@ func packElement(t Type, reflectValue reflect.Value) []byte {
 		}
 
 		return common.LeftPadBytes(reflectValue.Bytes(), 32)
-	case HashTy:
-		if reflectValue.Kind() == reflect.Array {
-			reflectValue = mustArrayToByteSlice(reflectValue)
-		}
-
-		return common.LeftPadBytes(reflectValue.Bytes(), 32)
 	case BoolTy:
 		if reflectValue.Bool() {
 			return math.PaddedBigBytes(common.Big1, 32)

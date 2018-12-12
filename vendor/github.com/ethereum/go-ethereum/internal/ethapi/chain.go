@@ -13,8 +13,10 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"github.com/pkg/errors"
+	"github.com/tendermint/go-crypto"
 	"math/big"
 	"strings"
+	"time"
 )
 
 type PublicChainAPI struct {
@@ -55,14 +57,14 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address, pubkey string, chainId string,
-	depositAmount *hexutil.Big, gas *hexutil.Uint64, gasPrice *hexutil.Big) (common.Hash, error) {
+func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address, pubkey crypto.BLSPubKey, chainId string,
+	depositAmount *hexutil.Big, signature hexutil.Bytes, gas *hexutil.Uint64, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
 	}
 
-	input, err := pabi.ChainABI.Pack(pabi.JoinChildChain.String(), pubkey, chainId, (*big.Int)(depositAmount))
+	input, err := pabi.ChainABI.Pack(pabi.JoinChildChain.String(), pubkey.Bytes(), chainId, (*big.Int)(depositAmount), signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -250,6 +252,56 @@ func (s *PublicChainAPI) BroadcastTX3ProofData(ctx context.Context, bs hexutil.B
 	return nil
 }
 
+func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
+
+	cch := s.b.GetCrossChainHelper()
+	chainInfoDB := cch.GetChainInfoDB()
+
+	// Load Main Chain
+
+	// Load All Available Child Chain
+	chainIds := core.GetChildChainIds(chainInfoDB)
+
+	result := make([]*ChainStatus, 0, len(chainIds))
+
+	for _, chainId := range chainIds {
+		chainInfo := core.GetChainInfo(chainInfoDB, chainId)
+
+		epoch := chainInfo.Epoch
+		validators := make([]*ChainValidator, 0, epoch.Validators.Size())
+		for _, val := range epoch.Validators.Validators {
+			validators = append(validators, &ChainValidator{
+				Account:     common.BytesToAddress(val.Address),
+				VotingPower: val.VotingPower,
+			})
+		}
+
+		chain_status := &ChainStatus{
+			ChainID:    chainInfo.ChainId,
+			Owner:      chainInfo.Owner,
+			Number:     epoch.Number,
+			StartTime:  epoch.StartTime,
+			Validators: validators,
+		}
+		result = append(result, chain_status)
+	}
+
+	return result
+}
+
+func (s *PublicChainAPI) SignAddress(from common.Address, consensusPrivateKey hexutil.Bytes) (crypto.Signature, error) {
+	if len(consensusPrivateKey) != 32 {
+		return nil, errors.New("invalid consensus private key")
+	}
+
+	var blsPriv crypto.BLSPrivKey
+	copy(blsPriv[:], consensusPrivateKey)
+
+	blsSign := blsPriv.Sign(from.Bytes())
+
+	return blsSign, nil
+}
+
 func init() {
 	//CreateChildChain
 	core.RegisterValidateCb(pabi.CreateChildChain, ccc_ValidateCb)
@@ -352,7 +404,7 @@ func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 		return core.ErrInsufficientFunds
 	}
 
-	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, args.DepositAmount); err != nil {
+	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, args.DepositAmount, args.Signature); err != nil {
 		return err
 	}
 
@@ -378,13 +430,16 @@ func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 		return core.ErrInsufficientFunds
 	}
 
-	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, args.DepositAmount); err != nil {
+	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, args.DepositAmount, args.Signature); err != nil {
 		return err
 	}
 
+	var pub crypto.BLSPubKey
+	copy(pub[:], args.PubKey)
+
 	op := types.JoinChildChainOp{
 		From:          from,
-		PubKey:        args.PubKey,
+		PubKey:        pub,
 		ChainId:       args.ChainId,
 		DepositAmount: args.DepositAmount,
 	}
@@ -708,4 +763,17 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 	}
 
 	return nil
+}
+
+type ChainStatus struct {
+	ChainID    string            `json:"Chain ID"`
+	Owner      common.Address    `json:"Owner"`
+	Number     uint64            `json:"Current Epoch"`
+	StartTime  time.Time         `json:"Epoch Start Time"`
+	Validators []*ChainValidator `json:"Validators"`
+}
+
+type ChainValidator struct {
+	Account     common.Address `json:"Address"`
+	VotingPower *big.Int       `json:"Voting Power"`
 }

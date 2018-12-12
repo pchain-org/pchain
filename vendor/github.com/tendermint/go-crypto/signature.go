@@ -7,7 +7,8 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
-	//"github.com/Nik-U/pbc"
+	"encoding/hex"
+	"encoding/json"
 	"bls"
 )
 
@@ -300,7 +301,8 @@ func (sig BLSSignature) Equals(other Signature) bool {
 }
 
 func (p BLSSignature) MarshalJSON() ([]byte, error) {
-	return data.Encoder.Marshal(p)
+	s := "0x" + hex.EncodeToString(p)
+	return json.Marshal(s)
 }
 
 func (p *BLSSignature) UnmarshalJSON(enc []byte) error {

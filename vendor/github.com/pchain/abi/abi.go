@@ -107,9 +107,10 @@ type CreateChildChainArgs struct {
 }
 
 type JoinChildChainArgs struct {
-	PubKey        string
+	PubKey        []byte
 	ChainId       string
 	DepositAmount *big.Int
+	Signature     []byte
 }
 
 type DepositInMainChainArgs struct {
@@ -139,10 +140,11 @@ type VoteNextEpochArgs struct {
 }
 
 type RevealVoteArgs struct {
-	ChainId string
-	PubKey  string
-	Amount  *big.Int
-	Salt    string
+	ChainId   string
+	PubKey    []byte
+	Amount    *big.Int
+	Salt      string
+	Signature []byte
 }
 
 const jsonChainABI = `
@@ -181,7 +183,7 @@ const jsonChainABI = `
 		"inputs": [
 			{
 				"name": "pubKey",
-				"type": "string"
+				"type": "bytes"
 			},
 			{
 				"name": "chainId",
@@ -190,6 +192,10 @@ const jsonChainABI = `
 			{
 				"name": "depositAmount",
 				"type": "uint256"
+			},
+			{
+				"name": "signature",
+				"type": "bytes"
 			}
 		]
 	},
@@ -294,7 +300,7 @@ const jsonChainABI = `
 			},
 			{
 				"name": "pubKey",
-				"type": "string"
+				"type": "bytes"
 			},
 			{
 				"name": "amount",
@@ -303,6 +309,10 @@ const jsonChainABI = `
 			{
 				"name": "salt",
 				"type": "string"
+			},
+			{
+				"name": "signature",
+				"type": "bytes"
 			}
 		]
 	}

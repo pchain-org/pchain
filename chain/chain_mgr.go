@@ -300,18 +300,12 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 	// child chain uses the same validator with the main chain.
 	privValidatorFile := cm.mainChain.Config.GetString("priv_validator_file")
-	keydir := cm.mainChain.Config.GetString("keystore")
-	self := types.LoadOrGenPrivValidator(privValidatorFile, keydir)
+	self := types.LoadPrivValidator(privValidatorFile)
 
 	err := CreateChildChain(cm.ctx, chainId, *self, keyJson, validators)
 	if err != nil {
 		log.Errorf("Create Child Chain %v failed! %v", chainId, err)
 		return
-	}
-
-	// Add mine Flag if absent before load child chain, in order to set Consensus shouldStart to true
-	if !cm.ctx.GlobalIsSet(utils.MiningEnabledFlag.Name) {
-		cm.ctx.GlobalSet(utils.MiningEnabledFlag.Name, "true")
 	}
 
 	chain := LoadChildChain(cm.ctx, chainId, true)

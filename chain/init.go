@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 
 	"encoding/json"
-	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/common"
@@ -22,7 +21,6 @@ import (
 	"github.com/pkg/errors"
 	cmn "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
-	"github.com/tendermint/go-crypto"
 	"io/ioutil"
 	"math/big"
 	"regexp"
@@ -34,6 +32,8 @@ import (
 const (
 	POSReward  = "315000000000000000000000000"
 	LockReward = "11500000000000000000000000" // 11.5m
+
+	DefaultAccountPassword = "pchain"
 )
 
 type BalaceAmount struct {
@@ -123,18 +123,13 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 		GasLimit:   0x8000000,
 		Difficulty: new(big.Int).SetUint64(0x400),
 		Mixhash:    common.StringToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
-		Coinbase:   common.BytesToAddress((*validators[0]).EthereumAddress),
+		Coinbase:   (*validators[0]).Address,
 		Alloc:      core.GenesisAlloc{},
 	}
 	for i, validator := range validators {
-		otherConPub, l := validator.PubKey.(crypto.BLSPubKey)
-		_, r := validator.EthereumPrivKey.(crypto.EthereumPrivKey)
-		if l && r {
-			coreGenesis.Alloc[common.BytesToAddress(validator.EthereumAddress)] = core.GenesisAccount{
-				Balance:         math.MustParseBig256(balanceAmounts[i].balance),
-				Amount:          math.MustParseBig256(balanceAmounts[i].amount),
-				ConsensusPubKey: common.ToHex(otherConPub[:]),
-			}
+		coreGenesis.Alloc[validator.Address] = core.GenesisAccount{
+			Balance: math.MustParseBig256(balanceAmounts[i].balance),
+			Amount:  math.MustParseBig256(balanceAmounts[i].amount),
 		}
 	}
 
@@ -197,23 +192,18 @@ func init_em_files(config cfg.Config, chainId string, genesisPath string, valida
 	}
 
 	var privValidator *types.PrivValidator
+	// validators == nil means we are init the Genesis from priv_validator, not from runtime GenesisValidator
 	if validators == nil {
 		privValPath := config.GetString("priv_validator_file")
-		keydir := config.GetString("keystore")
 		if _, err := os.Stat(privValPath); os.IsNotExist(err) {
-			utils.Fatalf("failed to read privValidator file: %v", err)
-			return err
+			log.Info("priv_validator_file not exist, probably you are running in non-mining mode")
+			return nil
 		}
-		privValidator = types.LoadOrGenPrivValidator(privValPath, keydir)
+		// Now load the priv_validator_file
+		privValidator = types.LoadPrivValidator(privValPath)
 	}
 
-	//privValPath := config.GetString("priv_validator_file")
-	//if _, err := os.Stat(privValPath); os.IsNotExist(err) {
-	//	utils.Fatalf("failed to read privValidator file: %v", err)
-	//	return err
-	//}
-	//privValidator := types.LoadOrGenPrivValidator(privValPath)
-
+	// Create the Genesis Doc
 	if err := createGenesisDoc(config, chainId, &coreGenesis, privValidator, validators); err != nil {
 		utils.Fatalf("failed to write genesis file: %v", err)
 		return err
@@ -253,7 +243,7 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 		}
 
 		genDoc := types.GenesisDoc{
-			ChainID:      chainId, //cmn.Fmt("pchain-%v", cmn.RandStr(6)),
+			ChainID:      chainId,
 			Consensus:    types.CONSENSUS_POS,
 			GenesisTime:  time.Now(),
 			RewardScheme: rewardScheme,
@@ -289,20 +279,19 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 
 func createPriValidators(config cfg.Config, num int) []*types.PrivValidator {
 	validators := make([]*types.PrivValidator, num)
-	var newKey *keystore.Key
-	scryptN := keystore.StandardScryptN
-	scryptP := keystore.StandardScryptP
-	ks := keystore.NewKeyStoreByTenermint(config.GetString("keystore"), scryptN, scryptP)
+
+	ks := keystore.NewKeyStore(config.GetString("keystore"), keystore.StandardScryptN, keystore.StandardScryptP)
+
 	privValFile := config.GetString("priv_validator_file_root")
 	for i := 0; i < num; i++ {
-		validators[i], newKey = types.GenPrivValidatorKey()
-		pwd := "pchain"
-		log.Info("createPriValidators", "account:", common.ToHex(validators[i].EthereumAddress), "pwd:", pwd)
-		a := accounts.Account{Address: newKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: ks.Ks.JoinPath(keystore.KeyFileName(newKey.Address))}}
-		if err := ks.StoreKey(a.URL.Path, newKey, pwd); err != nil {
-			utils.Fatalf("store key failed")
-			return nil
+		// Create New PChain Account
+		account, err := ks.NewAccount(DefaultAccountPassword)
+		if err != nil {
+			utils.Fatalf("Failed to create PChain account: %v", err)
 		}
+		// Generate Consensus KeyPair
+		validators[i] = types.GenPrivValidatorKey(account.Address)
+		log.Info("createPriValidators", "account:", validators[i].Address, "pwd:", DefaultAccountPassword)
 		if i > 0 {
 			validators[i].SetFile(privValFile + strconv.Itoa(i) + ".json")
 		} else {

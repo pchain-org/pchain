@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	pabi "github.com/pchain/abi"
+	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"math/big"
 	"sync"
@@ -30,15 +31,15 @@ type CrossChainHelper interface {
 
 	CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error
 	CreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error
-	ValidateJoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error
-	JoinChildChain(from common.Address, pubkey string, chainId string, depositAmount *big.Int) error
+	ValidateJoinChildChain(from common.Address, pubkey []byte, chainId string, depositAmount *big.Int, signature []byte) error
+	JoinChildChain(from common.Address, pubkey crypto.PubKey, chainId string, depositAmount *big.Int) error
 	ReadyForLaunchChildChain(height *big.Int, stateDB *state.StateDB) ([]string, []byte, []string)
 	ProcessPostPendingData(newPendingIdxBytes []byte, deleteChildChainIds []string)
 
 	ValidateVoteNextEpoch(chainId string) error
 	VoteNextEpoch(ep *epoch.Epoch, from common.Address, voteHash common.Hash, txHash common.Hash) error
-	ValidateRevealVote(chainId string, from common.Address, pubkey string, depositAmount *big.Int, salt string) error
-	RevealVote(ep *epoch.Epoch, from common.Address, pubkey string, depositAmount *big.Int, salt string, txHash common.Hash) error
+	ValidateRevealVote(chainId string, from common.Address, pubkey []byte, depositAmount *big.Int, salt string, signature []byte) error
+	RevealVote(ep *epoch.Epoch, from common.Address, pubkey crypto.PubKey, depositAmount *big.Int, salt string, txHash common.Hash) error
 
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
 

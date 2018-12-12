@@ -252,10 +252,14 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, height uint64, commit *
 		return err
 	}
 
+	/*
 	quorum := big.NewInt(0)
 	quorum.Mul(valSet.TotalVotingPower(), big.NewInt(2))
 	quorum.Div(quorum, big.NewInt(3))
 	quorum.Add(quorum, big.NewInt(1))
+	*/
+	quorum := Loose23MajorThreshold(valSet.TotalVotingPower(), commit.Round)
+
 	if talliedVotingPower.Cmp(quorum) >= 0 {
 		return nil
 	} else {
@@ -330,21 +334,4 @@ func (vs ValidatorsByAddress) Swap(i, j int) {
 	it := vs[i]
 	vs[i] = vs[j]
 	vs[j] = it
-}
-
-//----------------------------------------
-// For testing
-
-// NOTE: PrivValidator are in order.
-func RandValidatorSet(numValidators int, votingPower int64) (*ValidatorSet, []*PrivValidator) {
-	vals := make([]*Validator, numValidators)
-	privValidators := make([]*PrivValidator, numValidators)
-	for i := 0; i < numValidators; i++ {
-		val, privValidator := RandValidator(false, votingPower)
-		vals[i] = val
-		privValidators[i] = privValidator
-	}
-	valSet := NewValidatorSet(vals)
-	sort.Sort(PrivValidatorsByAddress(privValidators))
-	return valSet, privValidators
 }

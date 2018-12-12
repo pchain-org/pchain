@@ -20,13 +20,7 @@ package downloader
 import (
 	"errors"
 	"fmt"
-	"math/big"
-	"sync"
-	"sync/atomic"
-	"time"
-	"runtime/debug"
-
-	ethereum "github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -35,6 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"math/big"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 var (
@@ -416,8 +414,6 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	}
 
 	log.Debug("Synchronising with the network", "peer", p.id, "eth", p.version, "head", hash, "td", td, "mode", d.mode)
-	debug.PrintStack()
-	fmt.Printf("(d *Downloader) syncWithPeer with p.id: %v, eth: %v, head %v, td: %v, d.mode: %v\n", p.id, p.version, hash, td, d.mode)
 	defer func(start time.Time) {
 		log.Debug("Synchronisation terminated", "elapsed", time.Since(start))
 	}(time.Now())
