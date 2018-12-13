@@ -358,6 +358,15 @@ func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Trans
 	return tx
 }
 
+func (cch *CrossChainHelper) GetEpochFromMainChain() *epoch.Epoch {
+	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
+	var ep *epoch.Epoch
+	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
+		ep = tdm.GetEpoch()
+	}
+	return ep
+}
+
 // verify the signature of validators who voted for the block
 // most of the logic here is from 'VerifyHeader'
 func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {

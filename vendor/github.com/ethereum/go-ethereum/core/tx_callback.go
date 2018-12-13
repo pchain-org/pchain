@@ -41,6 +41,7 @@ type CrossChainHelper interface {
 	ValidateRevealVote(chainId string, from common.Address, pubkey []byte, depositAmount *big.Int, salt string, signature []byte) error
 	RevealVote(ep *epoch.Epoch, from common.Address, pubkey crypto.PubKey, depositAmount *big.Int, salt string, txHash common.Hash) error
 
+	GetEpochFromMainChain() *epoch.Epoch
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
 
 	// for epoch only

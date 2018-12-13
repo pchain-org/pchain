@@ -153,10 +153,6 @@ func (cci *CoreChainInfo) TotalDeposit() *big.Int {
 }
 
 func loadEpoch(db dbm.DB, number uint64, chainId string) *ep.Epoch {
-
-	mtx.Lock()
-	defer mtx.Unlock()
-
 	epochBytes := db.Get(calcEpochKey(number, chainId))
 	return ep.FromBytes(epochBytes)
 }

@@ -258,12 +258,31 @@ func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
 	chainInfoDB := cch.GetChainInfoDB()
 
 	// Load Main Chain
+	mainChainEpoch := s.b.GetCrossChainHelper().GetEpochFromMainChain()
+	mainChainValidators := make([]*ChainValidator, 0, mainChainEpoch.Validators.Size())
+	for _, val := range mainChainEpoch.Validators.Validators {
+		mainChainValidators = append(mainChainValidators, &ChainValidator{
+			Account:     common.BytesToAddress(val.Address),
+			VotingPower: val.VotingPower,
+		})
+	}
+	mainChainStatus := &ChainStatus{
+		ChainID:    "pchain",
+		Number:     mainChainEpoch.Number,
+		StartTime:  mainChainEpoch.StartTime,
+		Validators: mainChainValidators,
+	}
 
 	// Load All Available Child Chain
 	chainIds := core.GetChildChainIds(chainInfoDB)
 
-	result := make([]*ChainStatus, 0, len(chainIds))
+	// Load Complete, now append the data
+	result := make([]*ChainStatus, 0, len(chainIds)+1)
 
+	// Add Main Chain Data
+	result = append(result, mainChainStatus)
+
+	// Add Child Chain Data
 	for _, chainId := range chainIds {
 		chainInfo := core.GetChainInfo(chainInfoDB, chainId)
 
