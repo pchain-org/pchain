@@ -64,7 +64,7 @@ var allChainKey = []byte("AllChainID")
 
 const specialSep = ";"
 
-var mtx sync.Mutex
+var mtx sync.RWMutex
 
 func calcCoreChainInfoKey(chainId string) []byte {
 	return []byte(chainInfoKey + ":" + chainId)
@@ -75,6 +75,8 @@ func calcEpochKey(number uint64, chainId string) []byte {
 }
 
 func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
+	mtx.RLock()
+	defer mtx.RUnlock()
 
 	cci := loadCoreChainInfo(db, chainId)
 	if cci == nil {
@@ -96,9 +98,9 @@ func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
 }
 
 func SaveChainInfo(db dbm.DB, ci *ChainInfo) error {
-
 	mtx.Lock()
 	defer mtx.Unlock()
+
 	fmt.Printf("ChainInfo Save(), info is: (%v)\n", ci)
 
 	err := saveCoreChainInfo(db, &ci.CoreChainInfo)
@@ -113,7 +115,7 @@ func SaveChainInfo(db dbm.DB, ci *ChainInfo) error {
 		}
 	}
 
-	SaveId(db, ci.ChainId)
+	saveId(db, ci.ChainId)
 
 	return nil
 }
@@ -166,6 +168,8 @@ func saveEpoch(db dbm.DB, epoch *ep.Epoch, chainId string) error {
 }
 
 func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
+	mtx.RLock()
+	defer mtx.RUnlock()
 
 	if blockNumber < 0 {
 		return ci.Epoch
@@ -195,7 +199,7 @@ func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
 	return nil
 }
 
-func SaveId(db dbm.DB, chainId string) {
+func saveId(db dbm.DB, chainId string) {
 
 	buf := db.Get(allChainKey)
 
@@ -225,6 +229,8 @@ func SaveId(db dbm.DB, chainId string) {
 }
 
 func GetChildChainIds(db dbm.DB) []string {
+	mtx.RLock()
+	defer mtx.RUnlock()
 
 	buf := db.Get(allChainKey)
 

@@ -823,6 +823,7 @@ func (cs *ConsensusState) enterNewRound(height uint64, round int) {
 		cs.PrecommitMaj23SignAggr = nil
 	}
 	cs.VoteSignAggr.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
+	cs.Votes.SetRound(round + 1)
 	types.FireEventNewRound(cs.evsw, cs.RoundStateEvent())
 
 	// Immediately go to enterPropose.
