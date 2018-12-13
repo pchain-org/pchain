@@ -559,7 +559,7 @@ OUTER_LOOP:
 	for {
 		// Manage disconnects from self or peer.
 		if peer == nil || !conR.IsRunning() {
-			conR.logger.Info("Stopping gossipVotesRoutine for peer %v", id)
+			conR.logger.Infof("Stopping gossipVotesRoutine for peer %v", id)
 			return
 		}
 		rs := conR.conS.GetRoundState()
@@ -676,7 +676,7 @@ OUTER_LOOP:
 	for {
 		// Manage disconnects from self or peer.
 		if peer == nil || !conR.IsRunning() {
-			conR.logger.Info("Stopping queryMaj23Routine for %v.", peer)
+			conR.logger.Infof("Stopping queryMaj23Routine for %v.", peer)
 			return
 		}
 
