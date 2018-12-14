@@ -32,7 +32,7 @@ type ChainManager struct {
 	mainQuit      chan int
 	mainStartDone chan struct{}
 
-	createChildChainLock sync.Mutex
+	createChildChainLock sync.RWMutex
 	childChains          map[string]*Chain
 	childQuits           map[string]chan int
 
