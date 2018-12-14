@@ -774,6 +774,14 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 		return err
 	}
 
+	// Validate only when mining
+	if mining {
+		err := cch.VerifyChildChainProofData(bs)
+		if err != nil {
+			return fmt.Errorf("data can not pass verification: %v", err)
+		}
+	}
+
 	op := types.SaveDataToMainChainOp{
 		Data: bs,
 	}

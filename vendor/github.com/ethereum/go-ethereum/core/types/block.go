@@ -467,14 +467,9 @@ func (self blockSorter) Less(i, j int) bool { return self.by(self.blocks[i], sel
 
 func Number(b1, b2 *Block) bool { return b1.header.Number.Cmp(b2.header.Number) < 0 }
 
-// ChildChainProofData represents a proof of tx/epoch from child chain to the main chain.
+// ChildChainProofData represents epoch from child chain to the main chain.
 type ChildChainProofData struct {
 	Header *Header
-
-	// Deprecated
-	TxIndexs []uint
-	// Deprecated
-	TxProofs []*BSKeyValueSet
 }
 
 // TX3ProofData represents proof of tx3 from child chain to the main chain.
@@ -488,38 +483,6 @@ type TX3ProofData struct {
 func NewChildChainProofData(block *Block) (*ChildChainProofData, error) {
 	ret := &ChildChainProofData{
 		Header: block.Header(),
-	}
-
-	txs := block.Transactions()
-	// build the Trie (see derive_sha.go)
-	keybuf := new(bytes.Buffer)
-	trie := new(trie.Trie)
-	for i := 0; i < txs.Len(); i++ {
-		keybuf.Reset()
-		rlp.Encode(keybuf, uint(i))
-		trie.Update(keybuf.Bytes(), txs.GetRlp(i))
-	}
-	// do the Merkle Proof for the specific tx
-	for i, tx := range txs {
-		if pabi.IsPChainContractAddr(tx.To()) {
-			data := tx.Data()
-			function, err := pabi.FunctionTypeFromId(data[:4])
-			if err != nil {
-				continue
-			}
-
-			if function == pabi.WithdrawFromChildChain {
-				kvSet := MakeBSKeyValueSet()
-				keybuf.Reset()
-				rlp.Encode(keybuf, uint(i))
-				if err := trie.Prove(keybuf.Bytes(), 0, kvSet); err != nil {
-					return nil, err
-				}
-
-				ret.TxIndexs = append(ret.TxIndexs, uint(i))
-				ret.TxProofs = append(ret.TxProofs, kvSet)
-			}
-		}
 	}
 
 	return ret, nil

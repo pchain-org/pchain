@@ -442,22 +442,14 @@ func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
 		return err
 	}
 
-	// tx merkle proof verify
-	keybuf := new(bytes.Buffer)
-	for i, txIndex := range proofData.TxIndexs {
-		keybuf.Reset()
-		rlp.Encode(keybuf, uint(txIndex))
-		_, err, _ := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
-		if err != nil {
-			return err
-		}
-	}
-
 	log.Debug("VerifyChildChainProofData - end")
 	return nil
 }
 
 func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error {
+	// we need to wait for the child chain started
+	chainMgr.createChildChainLock.RLock()
+	defer chainMgr.createChildChainLock.RUnlock()
 
 	log.Debug("SaveChildChainProofDataToMainChain - start")
 
@@ -478,10 +470,6 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 		return fmt.Errorf("invalid child chain id: %s", chainId)
 	}
 
-	chainMgr := GetCMInstance(nil)
-	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	chainDb := ethereum.ChainDb()
-
 	// here is epoch update; should be a more general mechanism
 	if len(tdmExtra.EpochBytes) != 0 {
 		ep := epoch.FromBytes(tdmExtra.EpochBytes)
@@ -493,36 +481,6 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 				core.SaveChainInfo(cch.chainInfoDB, ci)
 				log.Infof("Epoch saved from chain: %s, epoch: %v", chainId, ep)
 			}
-		}
-	}
-
-	// Save TX logic can be removed since we have new logic for tx3 proof data
-	keybuf := new(bytes.Buffer)
-	for i, txIndex := range proofData.TxIndexs {
-		keybuf.Reset()
-		rlp.Encode(keybuf, uint(txIndex))
-		val, err, _ := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
-		if err != nil {
-			log.Error("SaveChildChainProofDataToMainChain VerifyProof error", "err", err)
-			continue
-		}
-
-		var tx types.Transaction
-		err = rlp.DecodeBytes(val, &tx)
-		if err != nil {
-			log.Error("SaveChildChainProofDataToMainChain decode tx error", "err", err)
-			continue
-		}
-
-		// retrieve 'from' here.
-		digest := ethcrypto.Keccak256([]byte(chainId))
-		signer := types.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
-		from, _ := types.Sender(signer, &tx)
-
-		err = core.WriteChildChainTransaction(chainDb, chainId, from, &tx)
-		if err != nil {
-			log.Error("SaveChildChainProofDataToMainChain write tx error", "err", err)
-			continue
 		}
 	}
 
