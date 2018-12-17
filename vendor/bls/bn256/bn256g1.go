@@ -2,6 +2,7 @@ package bn256
 
 import (
 	"errors"
+	"math/big"
 )
 
 // G1 is an abstract cyclic group. The zero value is suitable for use as the
@@ -10,8 +11,8 @@ type G1 struct {
 	p *curvePoint
 }
 
-func (e *G1) String() string {
-	return "bn256.G1" + e.p.String()
+func (g *G1) String() string {
+	return "bn256.G1" + g.p.String()
 }
 
 // Base set e to g where g is the generator of the group and then returns e.
@@ -40,8 +41,9 @@ func (e *G1) IsZero() bool {
 	return e.p.IsInfinity()
 }
 
-// ScalarBaseMult sets e to g*k and then returns e.
-func (e *G1) ScalarBaseMult(k *Scalar) *G1 {
+// ScalarBaseMult sets e to g*k where g is the generator of the group and then
+// returns e.
+func (e *G1) ScalarBaseMult(k *big.Int) *G1 {
 	if e.p == nil {
 		e.p = &curvePoint{}
 	}
@@ -50,7 +52,7 @@ func (e *G1) ScalarBaseMult(k *Scalar) *G1 {
 }
 
 // ScalarMult sets e to a*k and then returns e.
-func (e *G1) ScalarMult(a *G1, k *Scalar) *G1 {
+func (e *G1) ScalarMult(a *G1, k *big.Int) *G1 {
 	if e.p == nil {
 		e.p = &curvePoint{}
 	}
@@ -90,6 +92,10 @@ func (e *G1) Marshal() []byte {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
 
+	if e.p == nil {
+		e.p = &curvePoint{}
+	}
+
 	e.p.MakeAffine()
 	ret := make([]byte, numBytes*2)
 	if e.p.IsInfinity() {
@@ -112,7 +118,7 @@ func (e *G1) Unmarshal(m []byte) error {
 	const numBytes = 256 / 8
 
 	if len(m) != 2*numBytes {
-		return errors.New("bn256.G1: not enough data")
+		return errors.New("bn256.G1: incorrect data length")
 	}
 
 	if e.p == nil {

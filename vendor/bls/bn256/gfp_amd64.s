@@ -4,13 +4,13 @@
 	MOVQ a0,  0+r \
 	MOVQ a1,  8+r \
 	MOVQ a2, 16+r \
-	MOVQ a3, 24+r
+	MOVQ a3, 24+r \
 
 #define loadBlock(r, a0,a1,a2,a3) \
 	MOVQ  0+r, a0 \
 	MOVQ  8+r, a1 \
 	MOVQ 16+r, a2 \
-	MOVQ 24+r, a3
+	MOVQ 24+r, a3 \
 
 #define gfpCarry(a0,a1,a2,a3,a4, b0,b1,b2,b3,b4) \
 	MOVQ a0, b0 \
@@ -26,7 +26,7 @@
 	CMOVQCC b0, a0 \
 	CMOVQCC b1, a1 \
 	CMOVQCC b2, a2 \
-	CMOVQCC b3, a3
+	CMOVQCC b3, a3 \
 
 #define mul(a0,a1,a2,a3, rb, stack) \
 	MOVQ a0, AX \
@@ -127,7 +127,7 @@
 	ADCQ 48+stack, R11 \
 	ADCQ $0, R12 \
 	storeBlock(R8,R9,R10,R11, 24+stack) \
-	MOVQ R12, 56+stack
+	MOVQ R12, 56+stack \
 
 #define gfpReduce(stack) \
 	MOVQ ·np+0(SB), AX \
@@ -188,7 +188,7 @@
 	ADCQ 48+stack, R14 \
 	ADCQ 56+stack, R15 \
 	ADCQ $0, AX \
-	gfpCarry(R12,R13,R14,R15,AX, R8,R9,R10,R11,BX)
+	gfpCarry(R12,R13,R14,R15,AX, R8,R9,R10,R11,BX) \
 
 #define mulBMI2(a0,a1,a2,a3, rb) \
 	MOVQ a0, DX \
@@ -247,7 +247,7 @@
 	ADCQ BX, R13 \
 	MULXQ 24+rb, AX, BX \
 	ADCQ AX, R14 \
-	ADCQ BX, R15
+	ADCQ BX, R15 \
 
 #define gfpReduceBMI2() \
 	MOVQ ·np+0(SB), DX \
@@ -288,7 +288,7 @@
 	ADCQ 48(SP), R14 \
 	ADCQ 56(SP), R15 \
 	ADCQ $0, AX \
-	gfpCarry(R12,R13,R14,R15,AX, R8,R9,R10,R11,BX)
+	gfpCarry(R12,R13,R14,R15,AX, R8,R9,R10,R11,BX) \
 
 TEXT ·gfpNeg(SB),0,$0-16
 	MOVQ ·p2+0(SB), R8
@@ -314,15 +314,15 @@ TEXT ·gfpAdd(SB),0,$0-24
 	MOVQ b+16(FP), SI
 
 	loadBlock(0(DI), R8,R9,R10,R11)
-	MOVQ $0, R12
+	MOVQ $0, AX
 
 	ADDQ  0(SI), R8
 	ADCQ  8(SI), R9
 	ADCQ 16(SI), R10
 	ADCQ 24(SI), R11
-	ADCQ $0, R12
+	ADCQ $0, AX
 
-	gfpCarry(R8,R9,R10,R11,R12, R13,R14,R15,AX,BX)
+	gfpCarry(R8,R9,R10,R11,AX, R12,R13,R14,R15,BX)
 
 	MOVQ c+0(FP), DI
 	storeBlock(R8,R9,R10,R11, 0(DI))
@@ -355,6 +355,8 @@ TEXT ·gfpSub(SB),0,$0-24
 	ADCQ R14, R10
 	ADCQ R15, R11
 
+	gfpCarry(R8,R9,R10,R11,AX, R12,R13,R14,R15,BX)
+
 	MOVQ c+0(FP), DI
 	storeBlock(R8,R9,R10,R11, 0(DI))
 	RET
@@ -363,8 +365,7 @@ TEXT ·gfpMul(SB),0,$160-24
 	MOVQ a+8(FP), DI
 	MOVQ b+16(FP), SI
 
-	// Jump to a slightly different implementation if MULX isn't supported.
-	CMPB runtime·support_bmi2(SB), $0
+	CMPB ·hasBMI2(SB), $0
 	JE   nobmi2Mul
 
 	mulBMI2(0(DI),8(DI),16(DI),24(DI), 0(SI))

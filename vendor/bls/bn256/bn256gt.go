@@ -2,6 +2,7 @@ package bn256
 
 import (
 	"errors"
+	"math/big"
 )
 
 // GT is an abstract cyclic group. The zero value is suitable for use as the
@@ -22,8 +23,8 @@ func Miller(g1 *G1, g2 *G2) *GT {
 	return &GT{miller(g2.p, g1.p)}
 }
 
-func (e *GT) String() string {
-	return "bn256.GT" + e.p.String()
+func (g *GT) String() string {
+	return "bn256.GT" + g.p.String()
 }
 
 // Base set e to g where g is the generator of the group and then returns e.
@@ -61,17 +62,28 @@ func (e *GT) Unit() *GT {
 	return e
 }
 
-// ScalarBaseMult sets e to g*k and then returns e.
-func (e *GT) ScalarBaseMult(k *Scalar) *GT {
+// ScalarBaseMult sets e to g*k where g is the generator of the group and then
+// returns out.
+func (e *GT) ScalarBaseMult(k *big.Int) *GT {
 	if e.p == nil {
 		e.p = &gfP12{}
 	}
-	e.p.Exp(gfP12Gen, k)
+	e.p.latticeExp(gfP12Gen, k)
 	return e
 }
 
-// ScalarMult sets e to a*k and then returns e.
-func (e *GT) ScalarMult(a *GT, k *Scalar) *GT {
+// ScalarMult sets e to a*k and then returns e. (If e is not guaranteed to be an element of the group because it is the
+// output of Miller(), use ScalarMultSimple.)
+func (e *GT) ScalarMult(a *GT, k *big.Int) *GT {
+	if e.p == nil {
+		e.p = &gfP12{}
+	}
+	e.p.latticeExp(a.p, k)
+	return e
+}
+
+// ScalarMultSimple sets e to a*k and then returns e.
+func (e *GT) ScalarMultSimple(a *GT, k *big.Int) *GT {
 	if e.p == nil {
 		e.p = &gfP12{}
 	}
@@ -118,6 +130,10 @@ func (e *GT) Marshal() []byte {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
 
+	if e.p == nil {
+		e.p = &gfP12{}
+	}
+
 	ret := make([]byte, numBytes*12)
 	temp := &gfP{}
 
@@ -156,7 +172,7 @@ func (e *GT) Unmarshal(m []byte) error {
 	const numBytes = 256 / 8
 
 	if len(m) != 12*numBytes {
-		return errors.New("bn256.GT: not enough data")
+		return errors.New("bn256.GT: incorrect data length")
 	}
 
 	if e.p == nil {

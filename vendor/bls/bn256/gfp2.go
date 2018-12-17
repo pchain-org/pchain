@@ -26,7 +26,6 @@ func (e *gfP2) Set(a *gfP2) *gfP2 {
 	e.y.Set(&a.y)
 	return e
 }
-
 func (e *gfP2) SetZero() *gfP2 {
 	e.x.SetZero()
 	e.y.SetZero()
