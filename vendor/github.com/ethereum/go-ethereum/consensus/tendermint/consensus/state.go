@@ -1809,7 +1809,8 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 			height := cs.Height
 			switch vote.Type {
 			case types.VoteTypePrevote:
-				prevotes := cs.Votes.Prevotes(int(vote.Round))
+				//prevotes := cs.Votes.Prevotes(int(vote.Round))
+				prevotes := cs.VoteSignAggr.Prevotes(int(vote.Round))
 				cs.logger.Info("Added to prevote", "vote", vote, "prevotes", prevotes.StringShort())
 				// First, unlock if prevotes is a valid POL.
 				// >> lockRound < POLRound <= unlockOrChangeLockRound (see spec)
@@ -1829,11 +1830,11 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 					}
 				}
 
-				if cs.Round <= int(vote.Round) && prevotes.HasTwoThirdsAny() {
+				if cs.Round <= int(vote.Round) && prevotes.HasTwoThirdsAny(cs.Validators) {
 					// Round-skip over to PrevoteWait or goto Precommit.
 					cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 2")
 					cs.enterNewRound(height, int(vote.Round)) // if the vote is ahead of us
-					if prevotes.HasTwoThirdsMajority() {
+					if prevotes.HasTwoThirdsMajority(cs.Validators) {
 						cs.enterPrecommit(height, int(vote.Round))
 					} else {
 						cs.enterPrevote(height, int(vote.Round)) // if the vote is ahead of us
@@ -1852,7 +1853,8 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 					cs.enterPrevoteWait(height, int(vote.Round))
 				}
 			case types.VoteTypePrecommit:
-				precommits := cs.Votes.Precommits(int(vote.Round))
+				//precommits := cs.Votes.Precommits(int(vote.Round))
+				precommits := cs.VoteSignAggr.Precommits(int(vote.Round))
 				cs.logger.Info("Added to precommit", "vote", vote, "precommits", precommits.StringShort())
 
 				blockID, ok := precommits.TwoThirdsMajority()
@@ -1867,7 +1869,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 						cs.enterPrecommit(height, int(vote.Round))
 						cs.enterCommit(height, int(vote.Round))
 
-						if cs.timeoutParams.SkipTimeoutCommit && precommits.HasAll() {
+						if cs.timeoutParams.SkipTimeoutCommit && precommits.HasAll(cs.Validators) {
 							cs.logger.Info("(cs *ConsensusState) VoteTypePrecommit 3")
 							// if we have all the votes now,
 							// go straight to new round (skip timeout commit)
@@ -1875,7 +1877,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 							cs.enterNewRound(cs.Height, 0)
 						}
 					}
-				} else if cs.Round <= int(vote.Round) && precommits.HasTwoThirdsAny() {
+				} else if cs.Round <= int(vote.Round) && precommits.HasTwoThirdsAny(cs.Validators) {
 					cs.logger.Info("(cs *ConsensusState) VoteTypePrecommit 4")
 					cs.enterNewRound(height, int(vote.Round))
 					cs.enterPrecommit(height, int(vote.Round))
