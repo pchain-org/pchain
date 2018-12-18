@@ -491,20 +491,18 @@ OUTER_LOOP:
 			}
 		}
 
-		// If the peer is on a previous height, help catch up. we catch up by using ethereum's p2p now
+		// If the peer is on a previous height, ethereum's p2p should help catch up.
+		// here trigger it manually
 		if (0 < prs.Height) && (prs.Height < rs.Height) {
-			if index, ok := prs.ProposalBlockParts.Not().PickRandom(); ok {
-				conR.logger.Info("Data catchup", "height", rs.Height, "peerHeight", prs.Height, "peerProposalBlockParts", prs.ProposalBlockParts)
-				//we send the last block to increase prs.Height
-				block := conR.conS.GetChainReader().GetBlockByNumber(prs.Height)
-				if block != nil {
-					conR.logger.Info("Data catchup", "readed block height", block.Number().Uint64())
-					conR.conS.backend.GetBroadcaster().BroadcastBlock(block, true)
-					ps.SetHasProposalBlockPart(prs.Height, prs.Round, int(index))
-				}
-				//log.Info("No parts to send in catch-up, sleeping")
-				time.Sleep(peerGossipSleepDuration)
+			conR.logger.Info("Data catchup", "height", rs.Height, "peerHeight", prs.Height, "peerProposalBlockParts", prs.ProposalBlockParts)
+			//we send the last block to increase prs.Height
+			block := conR.conS.GetChainReader().GetBlockByNumber(prs.Height)
+			if block != nil {
+				conR.logger.Info("Data catchup", "readed block height", block.Number().Uint64())
+				conR.conS.backend.GetBroadcaster().BroadcastBlock(block, true)
 			}
+			//log.Info("No parts to send in catch-up, sleeping")
+			time.Sleep(peerGossipSleepDuration)
 			continue OUTER_LOOP
 		}
 
