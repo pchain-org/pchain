@@ -390,6 +390,11 @@ func (epoch *Epoch) EnterNewEpoch(newValidators *tmTypes.ValidatorSet) (*Epoch, 
 	}
 }
 
+func DryRunUpdateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet) error {
+	_, err := updateEpochValidatorSet(validators, voteSet)
+	return err
+}
+
 // updateEpochValidatorSet Update the Current Epoch Validator by vote
 //
 func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet) ([]*tmTypes.RefundValidatorAmount, error) {
