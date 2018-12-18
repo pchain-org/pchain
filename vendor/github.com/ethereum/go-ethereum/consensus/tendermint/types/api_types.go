@@ -39,5 +39,5 @@ type EpochValidatorVoteApi struct {
 type EpochValidator struct {
 	Address common.Address `json:"address"`
 	PubKey  crypto.PubKey  `json:"public_key"`
-	Amount  *big.Int       `json:"amount"`
+	Amount  *big.Int       `json:"voting_power"`
 }
