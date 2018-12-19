@@ -18,6 +18,7 @@
 package consensus
 
 import (
+	"math/big"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
@@ -62,6 +63,8 @@ type Broadcaster interface {
 type Peer interface {
 	// Send sends the message to this peer
 	Send(msgcode uint64, data interface{}) error
+	//Send block to this peer
+	SendNewBlock(block *types.Block, td *big.Int) error
 	// GetPeerState return the Peer State during consensus
 	GetPeerState() PeerState
 	// GetKey return the short Public Key of peer
@@ -74,4 +77,5 @@ type Peer interface {
 
 type PeerState interface {
 	GetHeight() uint64
+	Disconnect()
 }

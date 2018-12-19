@@ -52,6 +52,10 @@ type ChainReader interface {
 	// (associated with its hash) if found.
 	GetBlockByNumber(number uint64) *types.Block
 
+	// GetTd retrieves a block's total difficulty in the canonical chain from the
+	// database by hash and number, caching it if found.
+	GetTd(hash common.Hash, number uint64) *big.Int
+
 	// CurrentBlock retrieves the current head block of the canonical chain. The
 	// block is retrieved from the blockchain's internal cache.
 	CurrentBlock() *types.Block
