@@ -793,14 +793,14 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 }
 
 type ChainStatus struct {
-	ChainID    string            `json:"Chain ID"`
-	Owner      common.Address    `json:"Owner"`
-	Number     uint64            `json:"Current Epoch"`
-	StartTime  time.Time         `json:"Epoch Start Time"`
-	Validators []*ChainValidator `json:"Validators"`
+	ChainID    string            `json:"chain_id"`
+	Owner      common.Address    `json:"owner"`
+	Number     uint64            `json:"current_epoch"`
+	StartTime  time.Time         `json:"epoch_start_time"`
+	Validators []*ChainValidator `json:"validators"`
 }
 
 type ChainValidator struct {
-	Account     common.Address `json:"Address"`
-	VotingPower *big.Int       `json:"Voting Power"`
+	Account     common.Address `json:"address"`
+	VotingPower *big.Int       `json:"voting_power"`
 }

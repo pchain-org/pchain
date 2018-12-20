@@ -34,13 +34,12 @@ func (api *API) GetEpoch(number uint64) (*tdmTypes.EpochApi, error) {
 		resultEpoch = epoch.LoadOneEpoch(curEpoch.GetDB(), number, nil)
 	}
 
-	validators := make([]tdmTypes.GenesisValidator, len(resultEpoch.Validators.Validators))
+	validators := make([]*tdmTypes.EpochValidator, len(resultEpoch.Validators.Validators))
 	for i, val := range resultEpoch.Validators.Validators {
-		validators[i] = tdmTypes.GenesisValidator{
-			EthAccount: common.BytesToAddress(val.Address),
-			PubKey:     val.PubKey,
-			Amount:     val.VotingPower,
-			Name:       "",
+		validators[i] = &tdmTypes.EpochValidator{
+			Address: common.BytesToAddress(val.Address),
+			PubKey:  val.PubKey,
+			Amount:  val.VotingPower,
 		}
 	}
 
@@ -61,18 +60,20 @@ func (api *API) GetEpoch(number uint64) (*tdmTypes.EpochApi, error) {
 }
 
 // GetEpochVote
-func (api *API) GetEpochVote() (*tdmTypes.EpochVotesApi, error) {
+func (api *API) GetNextEpochVote() (*tdmTypes.EpochVotesApi, error) {
 
 	ep := api.tendermint.core.consensusState.Epoch
 	if ep.GetNextEpoch() != nil {
 
 		votes := ep.GetNextEpoch().GetEpochValidatorVoteSet().Votes
-		votesApi := make([]tdmTypes.EpochValidatorVoteApi, 0, len(votes))
+		votesApi := make([]*tdmTypes.EpochValidatorVoteApi, 0, len(votes))
 		for _, v := range votes {
-			votesApi = append(votesApi, tdmTypes.EpochValidatorVoteApi{
-				Address:  v.Address,
-				PubKey:   v.PubKey,
-				Amount:   v.Amount,
+			votesApi = append(votesApi, &tdmTypes.EpochValidatorVoteApi{
+				EpochValidator: tdmTypes.EpochValidator{
+					Address: v.Address,
+					PubKey:  v.PubKey,
+					Amount:  v.Amount,
+				},
 				Salt:     v.Salt,
 				VoteHash: v.VoteHash,
 				TxHash:   v.TxHash,
@@ -87,4 +88,32 @@ func (api *API) GetEpochVote() (*tdmTypes.EpochVotesApi, error) {
 		}, nil
 	}
 	return nil, errors.New("next epoch has not been proposed")
+}
+
+func (api *API) GetNextEpochValidators() ([]*tdmTypes.EpochValidator, error) {
+
+	height := api.chain.CurrentBlock().NumberU64()
+
+	ep := api.tendermint.core.consensusState.Epoch
+	nextEp := ep.GetNextEpoch()
+	if nextEp == nil {
+		return nil, errors.New("voting for next epoch has not started yet")
+	} else if height <= ep.GetVoteEndHeight() {
+		return nil, errors.New("hash vote stage now, please wait for reveal stage")
+	} else {
+		nextValidators := nextEp.Validators.Copy()
+
+		epoch.DryRunUpdateEpochValidatorSet(nextValidators, nextEp.GetEpochValidatorVoteSet())
+
+		validators := make([]*tdmTypes.EpochValidator, 0, len(nextValidators.Validators))
+		for _, val := range nextValidators.Validators {
+			validators = append(validators, &tdmTypes.EpochValidator{
+				Address: common.BytesToAddress(val.Address),
+				PubKey:  val.PubKey,
+				Amount:  val.VotingPower,
+			})
+		}
+
+		return validators, nil
+	}
 }

@@ -271,7 +271,7 @@ func BLSSignatureAggregate(sigs []*Signature) BLSSignature {
 			return nil
 		}
 	}
-	return new(bls.Signature).AggregateArray(_sigs).Marshal()
+	return new(bls.Signature).Aggregate(_sigs...).Marshal()
 }
 
 func (sig BLSSignature) getElement() *bls.Signature {

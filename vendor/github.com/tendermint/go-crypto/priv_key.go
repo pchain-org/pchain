@@ -389,7 +389,7 @@ func (privKey BLSPrivKey) PubKey() PubKey {
 
 func (privKey BLSPrivKey) Sign(msg []byte) Signature {
 	sk := privKey.getElement()
-	sign := bls.Sign(sk, msg)
+	sign := bls.Sign(msg, sk)
 	return BLSSignature(sign.Marshal())
 }
 

@@ -1,5 +1,7 @@
 package bn256
 
+import "math/big"
+
 // curvePoint implements the elliptic curve y²=x³+3. Points are kept in Jacobian
 // form and t=z² when valid. G₁ is the set of points of this curve on GF(p).
 type curvePoint struct {
@@ -178,16 +180,25 @@ func (c *curvePoint) Double(a *curvePoint) {
 	gfpAdd(&c.z, t, t)
 }
 
-func (c *curvePoint) Mul(a *curvePoint, sc *Scalar) {
-	sum, t := &curvePoint{}, &curvePoint{}
-	sum.SetInfinity()
+func (c *curvePoint) Mul(a *curvePoint, scalar *big.Int) {
+	precomp := [1 << 2]*curvePoint{nil, &curvePoint{}, &curvePoint{}, &curvePoint{}}
+	precomp[1].Set(a)
+	precomp[2].Set(a)
+	gfpMul(&precomp[2].x, &precomp[2].x, xiTo2PSquaredMinus2Over3)
+	precomp[3].Add(precomp[1], precomp[2])
 
-	for i := 255; i >= 0; i-- {
+	multiScalar := curveLattice.Multi(scalar)
+
+	sum := &curvePoint{}
+	sum.SetInfinity()
+	t := &curvePoint{}
+
+	for i := len(multiScalar) - 1; i >= 0; i-- {
 		t.Double(sum)
-		if sc.Bit(i) != 0 {
-			sum.Add(t, a)
-		} else {
+		if multiScalar[i] == 0 {
 			sum.Set(t)
+		} else {
+			sum.Add(t, precomp[multiScalar[i]])
 		}
 	}
 

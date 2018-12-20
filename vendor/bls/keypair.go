@@ -5,15 +5,16 @@ import (
 	"errors"
 	"math/big"
 
-	"bls/bn256"
-	"bls/sha3"
+	"golang.org/x/crypto/sha3"
 )
 
-var maxUint64 = new(big.Int).Exp(big.NewInt(2), big.NewInt(64), nil)
+var maxUint256 = new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil)
 
-func randUint64() uint64 {
-	x, _ := rand.Int(rand.Reader, maxUint64)
-	return x.Uint64()
+func randBytes32() []byte {
+	x, _ := rand.Int(rand.Reader, maxUint256)
+	buf := make([]byte, 32)
+	copy(buf[32-len(x.Bytes()):], x.Bytes())
+	return buf
 }
 
 type KeyPair struct {
@@ -22,64 +23,40 @@ type KeyPair struct {
 }
 
 func GenerateKey() *KeyPair {
-	key := new(KeyPair)
-	n0, n1, n2, n3 := randUint64(), randUint64(), randUint64(), randUint64()
-	key.private = &PrivateKey{
-		scalar: &bn256.Scalar{n0, n1, n2, n3},
-	}
-	key.public = key.private.Public()
-	return key
+	kp := new(KeyPair)
+	kp.private = new(PrivateKey)
+	kp.private.Unmarshal(randBytes32())
+	kp.public = Private2Public(kp.private)
+	return kp
 }
 
 func KeyFromSeed(seed []byte) *KeyPair {
-	key := new(KeyPair)
+	kp := new(KeyPair)
+	kp.private = new(PrivateKey)
 	h := sha3.Sum256(seed)
-	key.private = new(PrivateKey)
-	key.private.Unmarshal(h[:])
-	key.public = key.private.Public()
-	return key
+	kp.private.Unmarshal(h[:])
+	kp.public = Private2Public(kp.private)
+	return kp
+}
+
+func (kp *KeyPair) fixPrivate() {
+	kp.private = new(PrivateKey).Null()
 }
 
 func (kp *KeyPair) Private() *PrivateKey {
 	if kp.private == nil {
-		kp.private = new(PrivateKey)
+		kp.fixPrivate()
 	}
 	ret := new(PrivateKey)
 	ret.Unmarshal(kp.private.Marshal())
 	return ret
 }
 
-func (kp *KeyPair) Public() *PublicKey {
-	if kp.public == nil {
-		kp.public = new(PublicKey)
-	}
-	ret := new(PublicKey)
-	ret.Unmarshal(kp.public.Marshal())
-	return ret
-}
-
 func (kp *KeyPair) MarshalPrivate() []byte {
 	if kp.private == nil {
-		kp.private = new(PrivateKey)
+		kp.fixPrivate()
 	}
 	return kp.private.Marshal()
-}
-
-func (kp *KeyPair) MarshalPublic() []byte {
-	if kp.public == nil {
-		kp.public = new(PublicKey)
-	}
-	return kp.public.Marshal()
-}
-
-func (kp *KeyPair) Marshal() []byte {
-	if kp.private == nil {
-		kp.private = new(PrivateKey)
-	}
-	if kp.private.IsNull() {
-		return kp.MarshalPublic()
-	}
-	return kp.MarshalPrivate()
 }
 
 func (kp *KeyPair) UnmarshalPrivate(in []byte) error {
@@ -89,16 +66,52 @@ func (kp *KeyPair) UnmarshalPrivate(in []byte) error {
 	if err := kp.private.Unmarshal(in); err != nil {
 		return err
 	}
-	kp.public = kp.private.Public()
+	kp.public = Private2Public(kp.private)
 	return nil
 }
 
+func (kp *KeyPair) fixPublic() {
+	kp.public = new(PublicKey).Null()
+	if kp.private == nil {
+		kp.fixPrivate()
+	}
+	if !kp.private.IsNull() {
+		kp.public = Private2Public(kp.private)
+	}
+}
+
+func (kp *KeyPair) Public() *PublicKey {
+	if kp.public == nil {
+		kp.fixPublic()
+	}
+	ret := new(PublicKey)
+	ret.Unmarshal(kp.public.Marshal())
+	return ret
+}
+
+func (kp *KeyPair) MarshalPublic() []byte {
+	if kp.public == nil {
+		kp.fixPublic()
+	}
+	return kp.public.Marshal()
+}
+
 func (kp *KeyPair) UnmarshalPublic(in []byte) error {
+	kp.private = new(PrivateKey).Null()
 	if kp.public == nil {
 		kp.public = new(PublicKey)
 	}
-	kp.private = new(PrivateKey)
 	return kp.public.Unmarshal(in)
+}
+
+func (kp *KeyPair) Marshal() []byte {
+	if kp.private == nil {
+		kp.fixPrivate()
+	}
+	if kp.private.IsNull() {
+		return kp.MarshalPublic()
+	}
+	return kp.MarshalPrivate()
 }
 
 func (kp *KeyPair) Unmarshal(in []byte) error {

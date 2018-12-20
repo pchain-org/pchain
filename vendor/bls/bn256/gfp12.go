@@ -4,13 +4,17 @@ package bn256
 // Pairing-Friendly Fields, Devegili et al.
 // http://eprint.iacr.org/2006/471.pdf.
 
+import (
+	"math/big"
+)
+
 // gfP12 implements the field of size p¹² as a quadratic extension of gfP6
 // where ω²=τ.
 type gfP12 struct {
 	x, y gfP6 // value is xω + y
 }
 
-var gfP12Gen = &gfP12{
+var gfP12Gen *gfP12 = &gfP12{
 	x: gfP6{
 		x: gfP2{
 			x: gfP{0x62d608d6bb67a4fb, 0x9a66ec93f0c2032f, 0x5391628e924e1a34, 0x2162dbf7de801d0e},
@@ -137,11 +141,11 @@ func (e *gfP12) MulScalar(a *gfP12, b *gfP6) *gfP12 {
 	return e
 }
 
-func (e *gfP12) Exp(a *gfP12, power *Scalar) *gfP12 {
+func (c *gfP12) Exp(a *gfP12, power *big.Int) *gfP12 {
 	sum := (&gfP12{}).SetOne()
 	t := &gfP12{}
 
-	for i := 255; i >= 0; i-- {
+	for i := power.BitLen() - 1; i >= 0; i-- {
 		t.Square(sum)
 		if power.Bit(i) != 0 {
 			sum.Mul(t, a)
@@ -150,8 +154,42 @@ func (e *gfP12) Exp(a *gfP12, power *Scalar) *gfP12 {
 		}
 	}
 
-	e.Set(sum)
-	return e
+	c.Set(sum)
+	return c
+}
+
+func (c *gfP12) latticeExp(a *gfP12, power *big.Int) *gfP12 {
+	base := [1 << 2]*gfP12{&gfP12{}, &gfP12{}, &gfP12{}, &gfP12{}}
+	base[0].Set(a)
+	base[1].Frobenius(base[0])
+	base[2].FrobeniusP2(base[0])
+	base[3].Frobenius(base[2])
+
+	precomp := [1 << 4]*gfP12{}
+	targetLattice.Precompute(func(i, j uint) {
+		if precomp[j] == nil {
+			precomp[j] = &gfP12{}
+			precomp[j].SetOne()
+		}
+		precomp[j].Mul(precomp[j], base[i])
+	})
+	multiPower := targetLattice.Multi(power)
+
+	sum := &gfP12{}
+	sum.SetOne()
+	t := &gfP12{}
+
+	for i := len(multiPower) - 1; i >= 0; i-- {
+		t.Square(sum)
+		if multiPower[i] == 0 {
+			sum.Set(t)
+		} else {
+			sum.Mul(t, precomp[multiPower[i]])
+		}
+	}
+
+	c.Set(sum)
+	return c
 }
 
 func (e *gfP12) Square(a *gfP12) *gfP12 {

@@ -224,9 +224,9 @@ func finalExponentiation(in *gfP12) *gfP12 {
 	fp2 := (&gfP12{}).FrobeniusP2(t1)
 	fp3 := (&gfP12{}).Frobenius(fp2)
 
-	fu := (&gfP12{}).Exp(t1, &u)
-	fu2 := (&gfP12{}).Exp(fu, &u)
-	fu3 := (&gfP12{}).Exp(fu2, &u)
+	fu := (&gfP12{}).Exp(t1, u)
+	fu2 := (&gfP12{}).Exp(fu, u)
+	fu3 := (&gfP12{}).Exp(fu2, u)
 
 	y3 := (&gfP12{}).Frobenius(fu)
 	fu2p := (&gfP12{}).Frobenius(fu2)

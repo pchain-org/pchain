@@ -4,19 +4,19 @@
 	MOVD a0,  0+r \
 	MOVD a1,  8+r \
 	MOVD a2, 16+r \
-	MOVD a3, 24+r
+	MOVD a3, 24+r \
 
 #define loadBlock(r, a0,a1,a2,a3) \
 	MOVD  0+r, a0 \
 	MOVD  8+r, a1 \
 	MOVD 16+r, a2 \
-	MOVD 24+r, a3
+	MOVD 24+r, a3 \
 
 #define loadModulus(p0,p1,p2,p3) \
 	MOVD ·p2+0(SB), p0 \
 	MOVD ·p2+8(SB), p1 \
 	MOVD ·p2+16(SB), p2 \
-	MOVD ·p2+24(SB), p3
+	MOVD ·p2+24(SB), p3 \
 
 #define mul(c0,c1,c2,c3,c4,c5,c6,c7) \
 	MUL R1, R5, c0 \
@@ -81,7 +81,7 @@
 	ADCS R26, c4 \
 	ADCS R27, c5 \
 	ADCS R29, c6 \
-	ADCS  ZR, c7
+	ADCS  ZR, c7 \
 
 #define gfpReduce() \
 	MOVD ·np+0(SB), R17 \
@@ -135,7 +135,7 @@
 	CSEL CS, R10, R21, R1 \
 	CSEL CS, R11, R22, R2 \
 	CSEL CS, R12, R23, R3 \
-	CSEL CS, R13, R24, R4
+	CSEL CS, R13, R24, R4 \
 
 TEXT ·gfpNeg(SB),0,$0-16
 	MOVD a+8(FP), R0

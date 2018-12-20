@@ -395,7 +395,7 @@ func BLSPubKeyAggregate(pks []*PubKey) *BLSPubKey {
 	}
 
 	var pub BLSPubKey
-	copy(pub[:], new(bls.PublicKey).AggregateArray(_pks).Marshal())
+	copy(pub[:], new(bls.PublicKey).Aggregate(_pks...).Marshal())
 	return &pub
 }
 

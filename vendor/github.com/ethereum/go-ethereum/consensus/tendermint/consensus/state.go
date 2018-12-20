@@ -76,7 +76,7 @@ func (tp *TimeoutParams) Prevote(round int) time.Duration {
 
 // After receiving any +2/3 precommits, wait this long for stragglers
 func (tp *TimeoutParams) Precommit(round int) time.Duration {
-	return time.Duration(tp.Precommit0+tp.PrecommitDelta*int(math.Pow(1.5, float64(round)))) * time.Millisecond
+	return time.Duration(tp.Precommit0+tp.PrecommitDelta*round) * time.Millisecond
 }
 
 // After receiving +2/3 precommits for a single block (a commit), wait this long for stragglers in the next height's RoundStepNewHeight
