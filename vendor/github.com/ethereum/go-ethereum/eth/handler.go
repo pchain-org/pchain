@@ -291,7 +291,13 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		p.Log().Error("Ethereum peer registration failed", "err", err)
 		return err
 	}
-	defer pm.removePeer(p.id)
+
+	defer func(){
+		pm.removePeer(p.id)
+		if handler, ok := pm.engine.(consensus.Handler); ok {
+			handler.RemovePeer(p)
+		}
+	}()
 
 	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
 	if err := pm.downloader.RegisterPeer(p.id, p.version, p); err != nil {

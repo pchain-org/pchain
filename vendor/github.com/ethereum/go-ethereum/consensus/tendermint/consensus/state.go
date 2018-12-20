@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sync"
 	"time"
+	"math"
 
 	"context"
 
@@ -70,7 +71,7 @@ func (tp *TimeoutParams) Propose(round int) time.Duration {
 
 // After receiving any +2/3 prevote, wait this long for stragglers
 func (tp *TimeoutParams) Prevote(round int) time.Duration {
-	return time.Duration(tp.Prevote0+tp.PrevoteDelta*round) * time.Millisecond
+	return time.Duration(tp.Prevote0+tp.PrevoteDelta*int(math.Pow(1.5, float64(round)))) * time.Millisecond
 }
 
 // After receiving any +2/3 precommits, wait this long for stragglers
@@ -795,21 +796,12 @@ func (cs *ConsensusState) enterNewRound(height uint64, round int) {
 	}
 
 	cs.logger.Infof("enterNewRound(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step)
-
-	//liaoyd
-	// fmt.Println("in func (cs *ConsensusState) enterNewRound(height int, round int)")
 	cs.logger.Infof("Validators: %v", cs.Validators)
-	// Increment validators if necessary
-	validators := cs.Validators
-	if cs.Round < round {
-		validators = validators.Copy()
-	}
 
 	// Setup new round
 	// we don't fire newStep for this step,
 	// but we fire an event, so update the round step first
 	cs.updateRoundStep(round, RoundStepNewRound)
-	cs.Validators = validators
 	if round == 0 {
 		// We've already reset these upon new height,
 		// and meanwhile we might have received a proposal
@@ -1009,7 +1001,8 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 
 		_, val, _ := cs.state.GetValidators()
 
-		cs.blockFromMiner = nil
+		//This block could be used for later round
+		//cs.blockFromMiner = nil
 
 		// retrieve TX3ProofData for TX4
 		var tx3ProofData []*ethTypes.TX3ProofData
@@ -1083,6 +1076,9 @@ func (cs *ConsensusState) enterPrevote(height uint64, round int) {
 
 	// Sign and broadcast vote as necessary
 	cs.doPrevote(height, round)
+
+	//trigger the timer in bls-vote mode to make the steps go ahead
+	cs.enterPrevoteWait(height, round)
 
 	// Once `addVote` hits any +2/3 prevotes, we will go to PrevoteWait
 	// (so we have more time to try and collect +2/3 prevotes for a single block)
@@ -1183,6 +1179,9 @@ func (cs *ConsensusState) enterPrecommit(height uint64, round int) {
 		// Done enterPrecommit:
 		cs.updateRoundStep(round, RoundStepPrecommit)
 		cs.newStep()
+
+		//trigger the timer in bls-vote mode to make the steps go ahead
+		cs.enterPrecommitWait(height, round)
 	}()
 
 	blockID, ok := cs.VoteSignAggr.Prevotes(round).TwoThirdsMajority()
@@ -1787,23 +1786,18 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 				// If 2/3+ votes received, send them to other validators
 				if cs.Votes.Prevotes(cs.Round).HasTwoThirdsMajority() {
 					cs.logger.Debug(Fmt("addVote: Got 2/3+ prevotes %+v\n", cs.Votes.Prevotes(cs.Round)))
-					// Send votes aggregation
-					//cs.sendMaj23Vote(vote.Type)
-
 					// Send signature aggregation
 					cs.sendMaj23SignAggr(vote.Type)
 				}
 			} else if vote.Type == types.VoteTypePrecommit {
 				if cs.Votes.Precommits(cs.Round).HasTwoThirdsMajority() {
 					cs.logger.Debugf("addVote: Got 2/3+ precommits %+v", cs.Votes.Precommits(cs.Round))
-					// Send votes aggregation
-					//cs.sendMaj23Vote(vote.Type)
-
 					// Send signature aggregation
 					cs.sendMaj23SignAggr(vote.Type)
 				}
 			}
 
+			/*
 			types.FireEventVote(cs.evsw, types.EventDataVote{vote})
 
 			height := cs.Height
@@ -1890,6 +1884,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 			default:
 				PanicSanity(Fmt("Unexpected vote type %X", vote.Type)) // Should not happen.
 			}
+			*/
 		}
 		// Either duplicate, or error upon cs.Votes.AddByIndex()
 		return
