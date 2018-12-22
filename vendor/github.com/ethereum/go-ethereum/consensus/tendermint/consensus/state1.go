@@ -76,7 +76,7 @@ func (cs *ConsensusState) Initialize() {
 	cs.Proposal = nil
 	cs.ProposalBlock = nil
 	cs.ProposalBlockParts = nil
-	cs.LockedRound = 0
+	cs.LockedRound = -1
 	cs.LockedBlock = nil
 	cs.LockedBlockParts = nil
 	cs.Votes = nil
@@ -84,7 +84,6 @@ func (cs *ConsensusState) Initialize() {
 	cs.PrevoteMaj23SignAggr = nil
 	cs.PrecommitMaj23SignAggr = nil
 	cs.CommitRound = -1
-	cs.LastCommit = nil
 	cs.state = nil
 }
 
@@ -116,21 +115,6 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	cs.Validators = validators
 	cs.Votes = NewHeightVoteSet(cs.chainConfig.PChainId, height, validators, cs.logger)
 	cs.VoteSignAggr = NewHeightVoteSignAggr(cs.chainConfig.PChainId, height, validators, cs.logger)
-
-	lastPrecommits := (*types.SignAggr)(nil)
-	seenCommit := state.TdmExtra.SeenCommit
-	if seenCommit != nil {
-		lastPrecommits = types.MakeSignAggr(seenCommit.Height,
-			seenCommit.Round,
-			types.VoteTypePrecommit,
-			seenCommit.Size(),
-			seenCommit.BlockID,
-			cs.chainConfig.PChainId,
-			seenCommit.BitArray.Copy(),
-			seenCommit.SignAggr)
-	}
-	cs.logger.Infof("UpdateToState. seenCommit: %v, lastPrecommits: %v", seenCommit, lastPrecommits)
-	cs.LastCommit = lastPrecommits
 
 	cs.state = state
 
