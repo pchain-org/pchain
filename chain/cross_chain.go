@@ -348,9 +348,12 @@ func (cch *CrossChainHelper) RevealVote(ep *epoch.Epoch, from common.Address, pu
 	return nil
 }
 
-func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Transaction {
+func (cch *CrossChainHelper) GetHeightFromMainChain() *big.Int {
+	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
+	return ethereum.BlockChain().CurrentBlock().Number()
+}
 
-	chainMgr := GetCMInstance(nil)
+func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Transaction {
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
 	chainDb := ethereum.ChainDb()
 

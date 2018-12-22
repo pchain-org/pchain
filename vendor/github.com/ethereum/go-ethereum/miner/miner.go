@@ -65,17 +65,17 @@ type Miner struct {
 	cch    core.CrossChainHelper
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, cch core.CrossChainHelper, logger log.Logger) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, cch core.CrossChainHelper) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
-		worker:   newWorker(config, engine, common.Address{}, eth, mux, cch, logger),
+		worker:   newWorker(config, engine, common.Address{}, eth, mux, cch),
 		canStart: 1,
-		logger:   logger,
+		logger:   config.ChainLogger,
 		cch:      cch,
 	}
-	miner.Register(NewCpuAgent(eth.BlockChain(), engine, logger))
+	miner.Register(NewCpuAgent(eth.BlockChain(), engine, config.ChainLogger))
 	go miner.update()
 
 	return miner

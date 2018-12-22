@@ -8,6 +8,7 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru"
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -58,6 +59,11 @@ var (
 	errEmptyCommittedSeals = errors.New("zero committed seals")
 	// errMismatchTxhashes is returned if the TxHash in header is mismatch.
 	errMismatchTxhashes = errors.New("mismatch transactions hashes")
+
+	// errInvalidMainChainNumber is returned when child chain block doesn't contain the valid main chain height
+	errInvalidMainChainNumber = errors.New("invalid Main Chain Height")
+	// errMainChainNotCatchup is returned if child chain wait more than 300 seconds for main chain to catch up
+	errMainChainNotCatchup = errors.New("unable proceed the block due to main chain not catch up by waiting for more than 300 seconds, please catch up the main chain first")
 )
 
 var (
@@ -188,7 +194,38 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		return errInvalidDifficulty
 	}
 
-	return sb.verifyCascadingFields(chain, header, parents)
+	if fieldError := sb.verifyCascadingFields(chain, header, parents); fieldError != nil {
+		return fieldError
+	}
+
+	// Check the MainChainNumber if on Child Chain
+	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId {
+		if header.MainChainNumber == nil {
+			return errInvalidMainChainNumber
+		}
+
+		tried := 0
+		for {
+			// Check our main chain has already run ahead
+			ourMainChainHeight := sb.core.cch.GetHeightFromMainChain()
+			if ourMainChainHeight.Cmp(header.MainChainNumber) >= 0 {
+				break
+			}
+
+			if tried == 10 {
+				sb.logger.Warnf("Tendermint (backend) VerifyHeader, Main Chain Number mismatch, after retried %d times", tried)
+				return errMainChainNotCatchup
+			}
+
+			// Sleep for a while and check again
+			duration := 30 * time.Second
+			tried++
+			sb.logger.Infof("Tendermint (backend) VerifyHeader, Main Chain Number mismatch, wait for %v then try again (count %d)", duration, tried)
+			time.Sleep(duration)
+		}
+	}
+
+	return nil
 }
 
 // verifyCascadingFields verifies all the header fields that are not standalone,
@@ -227,9 +264,6 @@ func (sb *backend) verifyCascadingFields(chain consensus.ChainReader, header *ty
 			copy(validators[i*common.AddressLength:], validator[:])
 		}
 	*/
-	if err := sb.verifySigner(chain, header, parents); err != nil {
-		return err
-	}
 
 	err := sb.verifyCommittedSeals(chain, header, parents)
 	return err
@@ -247,7 +281,6 @@ func (sb *backend) VerifyHeaders(chain consensus.ChainReader, headers []*types.H
 
 	go func() {
 		for i, header := range headers {
-			//err := sb.verifyHeader(chain, header, headers[:i])
 			err := sb.verifyHeader(chain, header, headers[:i])
 			select {
 			case <-abort:
@@ -267,15 +300,6 @@ func (sb *backend) VerifyUncles(chain consensus.ChainReader, block *types.Block)
 	if len(block.Uncles()) > 0 {
 		return errInvalidUncleHash
 	}
-	return nil
-}
-
-// verifySigner checks whether the signer is in parent's validator set
-func (sb *backend) verifySigner(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
-
-	sb.logger.Info("Tendermint (backend) verifySigner, add logic here")
-
-	//no need to verify signer here, the proposer has been verified when reaching consensus
 	return nil
 }
 
@@ -329,14 +353,12 @@ func (sb *backend) VerifySeal(chain consensus.ChainReader, header *types.Header)
 		return errInvalidDifficulty
 	}
 
-	return sb.verifySigner(chain, header, nil)
+	return nil
 }
 
 // Prepare initializes the consensus fields of a block header according to the
 // rules of a particular engine. The changes are executed inline.
 func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) error {
-
-	sb.logger.Info("Tendermint (backend) Prepare, add logic here")
 
 	header.Coinbase = common.Address{}
 	header.Nonce = types.TendermintEmptyNonce
@@ -396,6 +418,11 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	header.Time = big.NewInt(time.Now().Unix())
 	//}
 
+	// Add Main Chain Height if running on Child Chain
+	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId {
+		header.MainChainNumber = sb.core.cch.GetHeightFromMainChain()
+	}
+
 	return nil
 }
 
@@ -410,7 +437,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	sb.logger.Infof("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
 	// Check if any Child Chain need to be launch and Update their account balance accordingly
-	if chain.Config().PChainId == "pchain" {
+	if sb.chainConfig.PChainId == params.MainnetChainConfig.PChainId {
 		// Check the Child Chain Start
 		readyId, updateBytes, removedId := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
 		if len(readyId) > 0 || updateBytes != nil || len(removedId) > 0 {

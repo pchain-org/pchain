@@ -104,10 +104,9 @@ func (cm *ChainManager) LoadChains(childIds []string) error {
 			// Already loaded, ignore
 			continue
 		} else {
-			if contains(childChainIds, requestId) {
-				// Launch in non-mining mode
-				readyToLoadChains[requestId] = false
-			}
+			// Launch in non-mining mode, including both correct and wrong chain id
+			// Wrong chain id will be ignore after loading failed
+			readyToLoadChains[requestId] = false
 		}
 	}
 
@@ -223,18 +222,12 @@ func (cm *ChainManager) StartInspectEvent() {
 			select {
 			case event := <-createChildChainCh:
 				log.Infof("CreateChildChainEvent received: %v", event)
-				chainId := event.ChainId
 
 				go func() {
 					cm.createChildChainLock.Lock()
 					defer cm.createChildChainLock.Unlock()
 
-					_, ok := cm.childChains[chainId]
-					if ok {
-						log.Infof("CreateChildChainEvent has been received: %v, and chain has been loaded, just continue", event)
-					} else {
-						cm.LoadChildChainInRT(event.ChainId)
-					}
+					cm.LoadChildChainInRT(event.ChainId)
 				}()
 			case <-createChildChainSub.Err():
 				return
@@ -283,6 +276,12 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		log.Warnf("You are not in the validators of child chain %v, no need to start the child chain", chainId)
 		// Update Child Chain to formal
 		cm.formalizeChildChain(chainId, *cci, nil)
+		return
+	}
+
+	// if child chain already loaded, just return (For catch-up case)
+	if _, ok := cm.childChains[chainId]; ok {
+		log.Infof("Child Chain [%v] has been already loaded.", chainId)
 		return
 	}
 

@@ -18,7 +18,7 @@ import (
 // New creates an Ethereum backend for Tendermint core engine.
 func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 	privateKey *ecdsa.PrivateKey, db ethdb.Database,
-	cch core.CrossChainHelper, logger log.Logger, mining bool) consensus.Tendermint {
+	cch core.CrossChainHelper, mining bool) consensus.Tendermint {
 	// Allocate the snapshot caches and create the engine
 	//recents, _ := lru.NewARC(inmemorySnapshots)
 	//recentMessages, _ := lru.NewARC(inmemoryPeers)
@@ -33,7 +33,7 @@ func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 		privateKey:         privateKey,
 		//address:          crypto.PubkeyToAddress(privateKey.PublicKey),
 		//core:             node,
-		logger:   logger,
+		logger:   chainConfig.ChainLogger,
 		db:       db,
 		commitCh: make(chan *types.Block, 1),
 		//recents:          recents,
