@@ -45,9 +45,9 @@ import (
 	NOTE: Assumes that the sum total of voting power does not exceed MaxUInt64.
 */
 
-const  LooseRound  = 50
+const  LooseRound  = 30
 
-//max { [(100 - round)*x + 150]/150, (x+3)/3 }
+//max { [(2*LooseRound - round)*totalVotingPower + 3*LooseRound]/(3*LooseRound), (totalVotingPower+3)/3 }
 func Loose23MajorThreshold(totalVotingPower *big.Int, round int) *big.Int {
 
 	quorum := big.NewInt(0)
@@ -59,9 +59,9 @@ func Loose23MajorThreshold(totalVotingPower *big.Int, round int) *big.Int {
 	}
 
 	quorum1 := big.NewInt(0)
-	quorum1.Mul(totalVotingPower, big.NewInt(int64(100 - round)))
-	quorum1.Add(quorum1, big.NewInt(150))
-	quorum1.Div(quorum1, big.NewInt(150))
+	quorum1.Mul(totalVotingPower, big.NewInt(int64(2*LooseRound - round)))
+	quorum1.Add(quorum1, big.NewInt(3*LooseRound))
+	quorum1.Div(quorum1, big.NewInt(3*LooseRound))
 
 	if quorum.Cmp(quorum1) > 0 {
 		return quorum
