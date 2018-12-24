@@ -158,7 +158,7 @@ type ChainConfig struct {
 	Istanbul   *IstanbulConfig   `json:"istanbul,omitempty"`
 	Tendermint *TendermintConfig `json:"tendermint,omitempty"`
 
-	ChainLogger log.Logger
+	ChainLogger log.Logger `json:"-"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
