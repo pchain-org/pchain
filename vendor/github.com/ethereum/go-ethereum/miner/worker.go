@@ -135,7 +135,7 @@ type worker struct {
 	cch    core.CrossChainHelper
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux, cch core.CrossChainHelper, logger log.Logger) *worker {
+func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux, cch core.CrossChainHelper) *worker {
 	worker := &worker{
 		config:         config,
 		engine:         engine,
@@ -151,9 +151,9 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		possibleUncles: make(map[common.Hash]*types.Block),
 		coinbase:       coinbase,
 		agents:         make(map[Agent]struct{}),
-		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth, logger),
+		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth, config.ChainLogger),
 		totalUsedMoney: big.NewInt(0),
-		logger:         logger,
+		logger:         config.ChainLogger,
 		cch:            cch,
 	}
 	// Subscribe TxPreEvent for tx pool

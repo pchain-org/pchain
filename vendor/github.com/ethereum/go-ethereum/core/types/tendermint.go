@@ -10,7 +10,7 @@ import (
 var (
 	// TendermintDigest represents a hash of "Tendermint practical byzantine fault tolerance"
 	// to identify whether the block is from Tendermint consensus engine
-	TendermintDigest = common.HexToHash("54656e6465726d696e742070726163746963616c2062797a616e74696e65206661756c7420746f6c6572616e6365")
+	TendermintDigest = common.HexToHash("0x63746963616c2062797a616e74696e65206661756c7420746f6c6572616e6365")
 
 	TendermintExtraVanity = 32 // Fixed number of extra-data bytes reserved for validator vanity
 	TendermintExtraSeal   = 65 // Fixed number of extra-data bytes reserved for validator seal

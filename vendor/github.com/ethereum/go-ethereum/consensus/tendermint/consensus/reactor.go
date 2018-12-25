@@ -455,7 +455,7 @@ OUTER_LOOP:
 		}
 
 		// If the peer is on a previous height, ethereum's p2p should help catch up.
-		// here trigger it manually
+		/*
 		if (0 < prs.Height) && (prs.Height < rs.Height) {
 			conR.logger.Info("Data catchup", "height", rs.Height, "peerHeight", prs.Height, "peerProposalBlockParts", prs.ProposalBlockParts)
 			//we send the last block to increase prs.Height
@@ -476,6 +476,7 @@ OUTER_LOOP:
 			time.Sleep(peerGossipSleepDuration)
 			continue OUTER_LOOP
 		}
+		*/
 
 		// If height and round don't match, sleep.
 		if (rs.Height != prs.Height) || (rs.Round != prs.Round) {

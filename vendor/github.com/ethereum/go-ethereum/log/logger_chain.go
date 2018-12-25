@@ -29,7 +29,7 @@ func NewLogger(chainID, logDir string, logLevel int, fileLine bool, vmodule, bac
 	if logDir != "" {
 		rfh, err := RotatingFileHandler(
 			logDir,
-			2*1024*1024,
+			10*1024*1024,
 			TerminalFormat(false),
 			//JSONFormatOrderedEx(false, true),
 		)

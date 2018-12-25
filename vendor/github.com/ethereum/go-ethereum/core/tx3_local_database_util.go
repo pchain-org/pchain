@@ -280,3 +280,13 @@ func DeleteTX3(db ethdb.Database, chainId string, txHash common.Hash) {
 		db.Put(key3, bs)
 	}
 }
+
+func decodeTx(txBytes []byte) (*types.Transaction, error) {
+
+	tx := new(types.Transaction)
+	rlpStream := rlp.NewStream(bytes.NewBuffer(txBytes), 0)
+	if err := tx.DecodeRLP(rlpStream); err != nil {
+		return nil, err
+	}
+	return tx, nil
+}
