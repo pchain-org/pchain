@@ -12,8 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"runtime/debug"
-
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	cmn "github.com/tendermint/go-common"
@@ -122,11 +120,7 @@ func makeJSONRPCHandler(funcMap map[string]*RPCFunc) http.HandlerFunc {
 		rpcFunc := funcMap[request.Method]
 		if rpcFunc == nil {
 			WriteRPCResponseHTTP(w, types.NewRPCResponse(request.ID, nil, "RPC method unknown 1: "+request.Method))
-			fmt.Println("now iterate all rpc functions")
-			for k, v := range funcMap {
-				fmt.Println("%s=%d;", k, v)
-			}
-			debug.PrintStack()
+			log.Debugf("rpc functions count is %v", len(funcMap))
 			return
 		}
 		if rpcFunc.ws {

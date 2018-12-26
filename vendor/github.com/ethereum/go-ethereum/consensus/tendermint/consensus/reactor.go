@@ -360,7 +360,7 @@ func (conR *ConsensusReactor) sendVote2Proposer(vote *types.Vote, proposerKey st
 			msg := &VoteMessage{vote}
 			peerState.(*PeerState).Peer.Send(VoteChannel, struct{ ConsensusMessage }{msg})
 		} else {
-			fmt.Printf("proposerKey is :%+v, proposer could be offline\n", proposerKey)
+			conR.logger.Infof("proposerKey is :%+v, proposer could be offline\n", proposerKey)
 		}
 	} else {
 		panic("vote is nil")

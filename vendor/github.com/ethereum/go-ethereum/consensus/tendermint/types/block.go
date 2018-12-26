@@ -13,6 +13,7 @@ import (
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
@@ -103,18 +104,15 @@ func (b *TdmBlock) ToBytes() []byte {
 
 	bs, err := rlp.EncodeToBytes(b.Block)
 	if err != nil {
-		fmt.Printf("TdmBlock.toBytes error\n")
+		log.Warnf("TdmBlock.toBytes error\n")
 	}
-	//fmt.Printf("TdmBlock.toBytes 1 with blockbyte: %v\n", blockByte)
 	bb := &TmpBlock{
 		BlockData:    bs,
 		TdmExtra:     b.TdmExtra,
 		TX3ProofData: b.TX3ProofData,
 	}
-	//fmt.Printf("TdmBlock.toBytes 1 with tdmblock: %v\n", bb)
-
+	
 	ret := wire.BinaryBytes(bb)
-	//fmt.Printf("TdmBlock.toBytes 1 with ret:%v\n", ret)
 	return ret
 }
 
@@ -132,14 +130,14 @@ func (b *TdmBlock) FromBytes(reader io.Reader) (*TdmBlock, error) {
 	var err error
 	bb := wire.ReadBinary(&TmpBlock{}, reader, MaxBlockSize, &n, &err).(*TmpBlock)
 	if err != nil {
-		fmt.Printf("TdmBlock.FromBytes 0 error: %v\n", err)
+		log.Warnf("TdmBlock.FromBytes 0 error: %v\n", err)
 		return nil, err
 	}
 
 	var block types.Block
 	err = rlp.DecodeBytes(bb.BlockData, &block)
 	if err != nil {
-		fmt.Printf("TdmBlock.FromBytes 1 error: %v\n", err)
+		log.Warnf("TdmBlock.FromBytes 1 error: %v\n", err)
 		return nil, err
 	}
 

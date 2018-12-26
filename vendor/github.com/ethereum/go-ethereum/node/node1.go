@@ -1,7 +1,6 @@
 package node
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -128,8 +127,7 @@ func (n *Node) GetRPCHandler() (http.Handler, error) {
 		}
 	}
 
-	//emmark
-	fmt.Println("(n *Node) startHTTP()->before rpc.NewCorsHandler(cors, handler)")
+	log.Debugf("(n *Node) startHTTP()->before rpc.NewCorsHandler(cors, handler)")
 
 	// All listeners booted successfully
 	n.httpEndpoint = ""

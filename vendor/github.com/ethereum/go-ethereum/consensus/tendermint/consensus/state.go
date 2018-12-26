@@ -433,14 +433,13 @@ func (cs *ConsensusState) updateProposer() {
 	} else {
 		cs.proposer.Proposer = cs.Validators.Validators[idx]
 	}
-	fmt.Println("height:", cs.Height, " round:", cs.Round)
-	fmt.Println("validator idx is:", idx)
+	log.Debug("update proposer", "height", cs.Height, "round", cs.Round, "idx", idx)
 }
 
 // Sets our private validator account for signing votes.
 func (cs *ConsensusState) GetProposer() *types.Validator {
 
-	fmt.Printf("cs.proposer, cs.Height, cs.Round are (%v, %v, %v)\n", cs.proposer, cs.Height, cs.Round)
+	cs.logger.Infof("cs.proposer, cs.Height, cs.Round are (%v, %v, %v)\n", cs.proposer, cs.Height, cs.Round)
 
 	if cs.proposer == nil || cs.proposer.Proposer == nil || cs.Height != cs.proposer.Height || cs.Round != cs.proposer.Round {
 		cs.updateProposer()
@@ -453,12 +452,12 @@ func (cs *ConsensusState) IsProposer() bool {
 
 	proposer := cs.GetProposer()
 	privalidator := cs.privValidator
-	fmt.Printf("proposer, privalidator are (%v, %v)\n", proposer, privalidator)
+	cs.logger.Debugf("proposer, privalidator are (%v, %v)\n", proposer, privalidator)
 	if bytes.Equal(proposer.Address, privalidator.GetAddress()) {
-		fmt.Printf("IsProposer() return true\n")
+		cs.logger.Debugf("IsProposer() return true\n")
 		return true
 	} else {
-		fmt.Printf("IsProposer() return false\n")
+		cs.logger.Debugf("IsProposer() return false\n")
 		return false
 	}
 }

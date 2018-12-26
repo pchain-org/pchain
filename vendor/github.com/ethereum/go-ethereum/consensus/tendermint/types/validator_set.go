@@ -10,6 +10,7 @@ import (
 	cmn "github.com/tendermint/go-common"
 	crypto "github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-merkle"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // ValidatorSet represent a set of *Validator at a given height.
@@ -224,7 +225,7 @@ func (valSet *ValidatorSet) Iterate(fn func(index int, val *Validator) bool) {
 // Verify that +2/3 of the set had signed the given signBytes
 func (valSet *ValidatorSet) VerifyCommit(chainID string, height uint64, commit *Commit) error {
 
-	fmt.Printf("(valSet *ValidatorSet) VerifyCommit(), avoid valSet and commit.Precommits size check for validatorset change\n")
+	log.Debugf("(valSet *ValidatorSet) VerifyCommit(), avoid valSet and commit.Precommits size check for validatorset change\n")
 	if commit == nil {
 		return fmt.Errorf("Invalid commit(nil)")
 	}

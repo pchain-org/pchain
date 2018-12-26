@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 type CoreChainInfo struct {
@@ -92,7 +93,7 @@ func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
 		ci.Epoch = epoch
 	}
 
-	fmt.Printf("LoadChainInfo(), chainInfo is: %v\n", ci)
+	log.Debugf("LoadChainInfo(), chainInfo is: %v\n", ci)
 
 	return ci
 }
@@ -101,7 +102,7 @@ func SaveChainInfo(db dbm.DB, ci *ChainInfo) error {
 	mtx.Lock()
 	defer mtx.Unlock()
 
-	fmt.Printf("ChainInfo Save(), info is: (%v)\n", ci)
+	log.Debugf("ChainInfo Save(), info is: (%v)\n", ci)
 
 	err := saveCoreChainInfo(db, &ci.CoreChainInfo)
 	if err != nil {
@@ -131,7 +132,7 @@ func loadCoreChainInfo(db dbm.DB, chainId string) *CoreChainInfo {
 		wire.ReadBinaryPtr(&cci, r, 0, n, err)
 		if *err != nil {
 			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
-			fmt.Printf("LoadChainInfo: Data has been corrupted or its spec has changed: %v\n", *err)
+			log.Debugf("LoadChainInfo: Data has been corrupted or its spec has changed: %v\n", *err)
 			os.Exit(1)
 		}
 	}
@@ -201,7 +202,7 @@ func saveId(db dbm.DB, chainId string) {
 
 	if len(buf) == 0 {
 		db.SetSync(allChainKey, []byte(chainId))
-		fmt.Printf("ChainInfo SaveId(), chainId is: %s\n", chainId)
+		log.Debugf("ChainInfo SaveId(), chainId is: %s\n", chainId)
 	} else {
 
 		strIdArr := strings.Split(string(buf), specialSep)
@@ -219,7 +220,7 @@ func saveId(db dbm.DB, chainId string) {
 			strIds := strings.Join(strIdArr, specialSep)
 			db.SetSync(allChainKey, []byte(strIds))
 
-			fmt.Printf("ChainInfo SaveId(), strIds is: %s\n", strIds)
+			log.Debugf("ChainInfo SaveId(), strIds is: %s\n", strIds)
 		}
 	}
 }
@@ -230,7 +231,7 @@ func GetChildChainIds(db dbm.DB) []string {
 
 	buf := db.Get(allChainKey)
 
-	fmt.Printf("GetChildChainIds 0, buf is %v, len is %d\n", buf, len(buf))
+	log.Debugf("GetChildChainIds 0, buf is %v, len is %d\n", buf, len(buf))
 
 	if len(buf) == 0 {
 		return []string{}
