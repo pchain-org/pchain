@@ -86,21 +86,15 @@ func NewBaseService(logger log.Logger, name string, impl Service) *BaseService {
 // Implements Servce
 func (bs *BaseService) Start() (bool, error) {
 	if atomic.CompareAndSwapUint32(&bs.started, 0, 1) {
-		if atomic.LoadUint32(&bs.stopped) == 1 {
-			if bs.logger != nil {
-				bs.logger.Warnf("Not starting %v -- already stopped, impl: %v", bs.name, bs.impl)
-			}
-			return false, nil
-		} else {
-			if bs.logger != nil {
-				bs.logger.Infof("Starting %v impl: %v", bs.name, bs.impl)
-			}
-		}
+		bs.Quit = make(chan struct{})
 		err := bs.impl.OnStart()
 		if err != nil {
 			// revert flag
 			atomic.StoreUint32(&bs.started, 0)
 			return false, err
+		}
+		if atomic.LoadUint32(&bs.stopped) == 1 {
+			atomic.StoreUint32(&bs.stopped, 0)
 		}
 		return true, err
 	} else {
@@ -124,6 +118,9 @@ func (bs *BaseService) Stop() bool {
 		}
 		bs.impl.OnStop()
 		close(bs.Quit)
+		if atomic.LoadUint32(&bs.started) == 1 {
+			atomic.StoreUint32(&bs.started, 0)
+		}
 		return true
 	} else {
 		if bs.logger != nil {
