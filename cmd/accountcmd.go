@@ -194,21 +194,17 @@ nodes.
 )
 
 func accountList(ctx *cli.Context) error {
-	fmt.Printf("accountList 0\n")
 	makeFlagsGlobal(ctx)
 
 	stack, _ := gethmain.MakeConfigNode(ctx, clientIdentifier)
 
-	fmt.Printf("accountList 1\n")
 	var index int
 	for _, wallet := range stack.AccountManager().Wallets() {
-		fmt.Printf("accountList 2\n")
 		for _, account := range wallet.Accounts() {
 			fmt.Printf("Account #%d: {%x} %s\n", index, account.Address, &account.URL)
 			index++
 		}
 	}
-	fmt.Printf("accountList 3\n")
 	return nil
 }
 

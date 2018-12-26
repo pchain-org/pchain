@@ -1060,8 +1060,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		seals[i] = true
 	}
 
-	fmt.Printf("block insert 0\n")
-
 	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
 	defer close(abort)
 
@@ -1079,14 +1077,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		}
 		// Wait for the block's verification to complete
 		bstart := time.Now()
-		fmt.Printf("block insert 1\n")
 		err := <-results
 		if err == nil {
-			fmt.Printf("block insert 2\n")
 			err = bc.Validator().ValidateBody(block)
-			fmt.Printf("block insert 3 with error: %v\n", err)
 		}
-		fmt.Printf("block insert 4 with error: %v\n", err)
 		switch {
 		case err == ErrKnownBlock:
 			// Block and state both already known. However if the current block is below
@@ -1158,13 +1152,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 			parent = chain[i-1]
 		}
 		state, err := state.New(parent.Root(), bc.stateCache)
-		fmt.Printf("block insert 5 with root %x, error: %v\n", parent.Root(), err)
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}
 		// Process block using the parent state as reference point.
 		receipts, logs, usedGas, ops, err := bc.processor.Process(block, state, bc.vmConfig)
-		fmt.Printf("block insert 6 with error: %v\n", err)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return i, events, coalescedLogs, err
@@ -1172,7 +1164,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 
 		// Validate the state using the default validator
 		err = bc.Validator().ValidateState(block, parent, state, receipts, usedGas)
-		fmt.Printf("block insert 7 with error: %v\n", err)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return i, events, coalescedLogs, err
@@ -1181,7 +1172,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 
 		// Write the block to the chain and get the status.
 		status, err := bc.WriteBlockWithState(block, receipts, state)
-		fmt.Printf("block insert 8 with error: %v\n", err)
 		if err != nil {
 			return i, events, coalescedLogs, err
 		}
@@ -1219,8 +1209,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 		events = append(events, ChainHeadEvent{lastCanon})
 	}
-
-	fmt.Printf("block insert done\n")
 
 	return 0, events, coalescedLogs, nil
 }

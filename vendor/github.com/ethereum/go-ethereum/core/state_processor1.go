@@ -20,8 +20,6 @@ import (
 func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, ops *types.PendingOps,
 	header *types.Header, tx *types.Transaction, usedGas *uint64, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper, mining bool) (*types.Receipt, uint64, error) {
 
-	fmt.Printf("ApplyTransactionEx 0\n")
-
 	signer := types.MakeSigner(config, header.Number)
 	msg, err := tx.AsMessage(signer)
 	if err != nil {

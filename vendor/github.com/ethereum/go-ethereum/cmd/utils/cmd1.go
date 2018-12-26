@@ -52,7 +52,7 @@ func StartNodeEx(ctx *cli.Context, stack *node.Node, mining bool) error {
 
 func StartNode1(stack *node.Node) {
 
-	fmt.Println("StartNode->stack.Start()")
+	log.Debug("StartNode->stack.Start()")
 	if err := stack.Start1(); err != nil {
 		Fatalf("Error starting protocol stack: %v", err)
 	}

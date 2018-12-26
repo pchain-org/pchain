@@ -693,18 +693,15 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == TxMsg:
-		fmt.Printf("msg.Code == TxMsg here 0\n")
 		// Transactions arrived, make sure we have a valid and fresh chain to handle them
 		if atomic.LoadUint32(&pm.acceptTxs) == 0 {
 			break
 		}
-		fmt.Printf("msg.Code == TxMsg here 1\n")
 		// Transactions can be processed, parse all of them and deliver to the pool
 		var txs []*types.Transaction
 		if err := msg.Decode(&txs); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-		fmt.Printf("msg.Code == TxMsg here 2\n")
 		for i, tx := range txs {
 			// Validate and mark the remote transaction
 			if tx == nil {
@@ -712,10 +709,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 			p.MarkTransaction(tx.Hash())
 		}
-		fmt.Printf("msg.Code == TxMsg here 3\n")
 		pm.txpool.AddRemotes(txs)
-		fmt.Printf("msg.Code == TxMsg here 4\n")
-
+		
 	case msg.Code == TX3ProofDataMsg:
 		pm.logger.Info("TX3ProofDataMsg received")
 		var proofDatas []*types.TX3ProofData
@@ -783,10 +778,8 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 // already have the given transaction.
 func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) {
 	// Broadcast transaction to a batch of peers not knowing about it
-	fmt.Printf("(self *ProtocolManager) BroadcastTx(), ready to broadcast hash:%v\n", hash)
 	peers := pm.peers.PeersWithoutTx(hash)
 	//FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
-	fmt.Printf("(self *ProtocolManager) BroadcastTx(), peers are :%v, filtered with %v\n", pm.peers.Len(), len(peers))
 	for _, peer := range peers {
 		peer.SendTransactions(types.Transactions{tx})
 	}
@@ -829,7 +822,6 @@ func (self *ProtocolManager) txBroadcastLoop() {
 	for {
 		select {
 		case event := <-self.txCh:
-			fmt.Printf("(self *ProtocolManager) txBroadcastLoop(), tx received")
 			self.BroadcastTx(event.Tx.Hash(), event.Tx)
 
 		// Err() channel will be closed when unsubscribing.

@@ -19,9 +19,7 @@ func (cr *ChainRouter) AddReactor(name string, reactor Reactor) {
 	for _, chDesc := range reactorChannels {
 		chID := chDesc.ID
 		if cr.reactorsByCh[chID] != nil {
-			//cmn.PanicSanity(fmt.Sprintf("Channel %X has multiple reactors %v & %v", chID, cr.reactorsByCh[chID], reactor))
-			fmt.Printf("！！Channel %X has multiple reactors %v & %v", chID, cr.reactorsByCh[chID], reactor)
-			fmt.Printf("we overwrite the previous value")
+			log.Debugf("！！Channel %X has multiple reactors %v & %v", chID, cr.reactorsByCh[chID], reactor)
 		}
 		cr.chDescs = append(cr.chDescs, chDesc)
 		cr.reactorsByCh[chID] = reactor

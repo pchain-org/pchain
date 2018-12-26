@@ -91,7 +91,7 @@ out:
 	for ev := range events.Chan() {
 		switch ev.Data.(type) {
 		case downloader.StartEvent:
-			fmt.Printf("(self *Miner) update(); downloader.StartEvent received\n")
+			log.Debug("(self *Miner) update(); downloader.StartEvent received\n")
 			atomic.StoreInt32(&self.canStart, 0)
 			if self.Mining() {
 				self.Stop()
@@ -100,7 +100,7 @@ out:
 			}
 		case downloader.DoneEvent, downloader.FailedEvent:
 
-			fmt.Printf("(self *Miner) update(); downloader.DoneEvent, downloader.FailedEvent received\n")
+			log.Debug("(self *Miner) update(); downloader.DoneEvent, downloader.FailedEvent received\n")
 			shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
 
 			atomic.StoreInt32(&self.canStart, 1)
