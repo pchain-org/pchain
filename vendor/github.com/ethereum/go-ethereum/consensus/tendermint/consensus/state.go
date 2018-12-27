@@ -700,7 +700,7 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 		// if the proposal is complete, we'll enterPrevote or tryFinalizeCommit
 		cs.logger.Infof("handleMsg. BlockPartMessage: %v", msg)
 		cs.mtx.Lock()
-		_, err = cs.addProposalBlockPart(msg.Height, msg.Part, peerKey != "")
+		_, err = cs.addProposalBlockPart(msg.Height, msg.Round, msg.Part, peerKey != "")
 		if err != nil && msg.Round != cs.Round {
 			err = nil
 		}
@@ -943,7 +943,12 @@ func (cs *ConsensusState) isProposalComplete() bool {
 		return true
 	} else {
 		// if this is false the proposer is lying or we haven't received the POL yet
-		return cs.VoteSignAggr.Prevotes(cs.Proposal.POLRound).HasTwoThirdsMajority(cs.Validators)
+		sa := cs.VoteSignAggr.Prevotes(cs.Proposal.POLRound)
+		if sa != nil {
+			return sa.HasTwoThirdsMajority(cs.Validators)
+		} else {
+			return false
+		}
 	}
 }
 
@@ -1475,9 +1480,9 @@ func (cs *ConsensusState) defaultSetProposal(proposal *types.Proposal) error {
 
 // NOTE: block is not necessarily valid.
 // Asynchronously triggers either enterPrevote (before we timeout of propose) or tryFinalizeCommit, once we have the full block.
-func (cs *ConsensusState) addProposalBlockPart(height uint64, part *types.Part, verify bool) (added bool, err error) {
-	// Blocks might be reused, so round mismatch is OK
-	if cs.Height != height {
+func (cs *ConsensusState) addProposalBlockPart(height uint64, round int, part *types.Part, verify bool) (added bool, err error) {
+
+	if cs.Height != height || cs.Round != round {
 		return false, nil
 	}
 
