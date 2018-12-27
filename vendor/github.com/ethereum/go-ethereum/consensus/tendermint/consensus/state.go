@@ -64,17 +64,19 @@ func (tp *TimeoutParams) WaitForMinerBlock() time.Duration {
 	return time.Duration(tp.WaitForMinerBlock0) * time.Millisecond
 }
 
-// Wait this long for a proposal
+//In PDBFT, wait for this long for Proposer to send proposal
+//the more round, the more time to wait for proposer's proposal
 func (tp *TimeoutParams) Propose(round int) time.Duration {
 	return time.Duration(tp.Propose0/*+tp.ProposeDelta*round*/) * time.Millisecond
 }
 
-// After receiving any +2/3 prevote, wait this long for stragglers
+//In PDBFT, wait for this long for Non-Proposer validator to vote prevote
+//the more round, the more time to wait for validator's prevote
 func (tp *TimeoutParams) Prevote(round int) time.Duration {
 	return time.Duration(tp.Prevote0+tp.PrevoteDelta*int(math.Pow(1.5, float64(round)))) * time.Millisecond
 }
 
-// After receiving any +2/3 precommits, wait this long for stragglers
+//In PDBFT, wait for this long for validator to vote precommit
 func (tp *TimeoutParams) Precommit(round int) time.Duration {
 	return time.Duration(tp.Precommit0/*+tp.PrecommitDelta*round*/) * time.Millisecond
 }
@@ -194,7 +196,7 @@ type RoundState struct {
 	VoteSignAggr       *HeightVoteSignAggr
 	CommitRound        int             //
 	
-	// Following fields are used for BLS signature aggregation
+	// Following fields are used for PDBFT/BLS signature aggregation
 	PrevoteMaj23SignAggr   *types.SignAggr
 	PrecommitMaj23SignAggr *types.SignAggr
 
@@ -390,6 +392,8 @@ func BytesToBig(data []byte) *big.Int {
 	n.SetBytes(data)
 	return n
 }
+
+//PDBFT VRF proposer selection
 func (cs *ConsensusState) updateProposer() {
 	if cs.proposer == nil {
 		cs.proposer = &VRFProposer{}
@@ -1110,17 +1114,13 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	return
 }
 
-// Enter: any +2/3 prevotes at next round.
+// In PDBFT, wait for 2/3 votes for prevote
 func (cs *ConsensusState) enterPrevoteWait(height uint64, round int) {
 	if cs.Height != height || round < cs.Round || (cs.Round == round && RoundStepPrevoteWait <= cs.Step) {
 		cs.logger.Warnf("enterPrevoteWait(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step)
 		return
 	}
-	/*
-	if !cs.Votes.Prevotes(round).HasTwoThirdsAny() {
-		PanicSanity(Fmt("enterPrevoteWait(%v/%v), but Prevotes does not have any +2/3 votes", height, round))
-	}
-	*/
+
 	cs.logger.Infof("enterPrevoteWait(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step)
 
 	defer func() {
@@ -1133,12 +1133,7 @@ func (cs *ConsensusState) enterPrevoteWait(height uint64, round int) {
 	cs.scheduleTimeout(cs.timeoutParams.Prevote(round), height, round, RoundStepPrevoteWait)
 }
 
-// Enter: +2/3 precomits for block or nil.
-// Enter: `timeoutPrevote` after any +2/3 prevotes.
-// Enter: any +2/3 precommits for next round.
-// Lock & precommit the ProposalBlock if we have enough prevotes for it (a POL in this round)
-// else, unlock an existing lock and precommit nil if +2/3 of prevotes were nil,
-// else, precommit nil otherwise.
+// In PBDFT, when prevote round ends, enter to vote for precommit
 func (cs *ConsensusState) enterPrecommit(height uint64, round int) {
 	if cs.Height != height || round < cs.Round || (cs.Round == round && RoundStepPrecommit <= cs.Step) {
 		cs.logger.Warnf("enterPrecommit(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step)
@@ -1236,7 +1231,7 @@ func (cs *ConsensusState) enterPrecommit(height uint64, round int) {
 	return
 }
 
-// Enter: any +2/3 precommits for next round.
+// In PDBFT, wait for 2/3 votes for precommit
 func (cs *ConsensusState) enterPrecommitWait(height uint64, round int) {
 	if cs.Height != height || round < cs.Round || (cs.Round == round && RoundStepPrecommitWait <= cs.Step) {
 		cs.logger.Warnf("enterPrecommitWait(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step)

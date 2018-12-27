@@ -79,9 +79,7 @@ func (conR *ConsensusReactor) OnStop() {
 
 // Implements Reactor
 func (conR *ConsensusReactor) AddPeer(peer consensus.Peer) {
-	if !conR.IsRunning() {
-		return
-	}
+
 	conR.logger.Debug("add peer ============================================================")
 
 	// Create peerState for peer
@@ -414,8 +412,8 @@ func (conR *ConsensusReactor) gossipDataRoutine(peer consensus.Peer, ps *PeerSta
 OUTER_LOOP:
 	for {
 		// Manage disconnects from self or peer.
-		if peer == nil || !conR.IsRunning() {
-			conR.logger.Infof("Stopping gossipDataRoutine for peer %v", id)
+		if peer == nil {
+			conR.logger.Infof("Peer is nil, Stopping gossipDataRoutine for peer %v", id)
 			return
 		}
 
@@ -424,6 +422,13 @@ OUTER_LOOP:
 			conR.logger.Infof("Peer disconnected, stopping gossipDataRoutine for peer %v", peer)
 			return
 		}
+
+		if  !conR.IsRunning() {
+			conR.logger.Infof("in gossipDataRoutine, Consensus reactor is not running")
+			time.Sleep(peerGossipSleepDuration)
+			continue OUTER_LOOP
+		}
+
 
 		rs := conR.conS.GetRoundState()
  		prs := ps1.GetRoundState()
@@ -525,15 +530,21 @@ func (conR *ConsensusReactor) gossipVotesRoutine(peer consensus.Peer, ps *PeerSt
 OUTER_LOOP:
 	for {
 		// Manage disconnects from self or peer.
-		if peer == nil || !conR.IsRunning() {
-			conR.logger.Infof("Stopping gossipVotesRoutine for peer %v", id)
+		if peer == nil {
+			conR.logger.Infof("Peer is nil, Stopping gossipVotesRoutine for peer %v", id)
 			return
 		}
 
 		ps1 := peer.GetPeerState().(*PeerState)
 		if !ps1.Connected {
-			conR.logger.Infof("Peer disconnected, stopping gossipDataRoutine for peer %v", peer)
+			conR.logger.Infof("Peer disconnected, stopping gossipVotesRoutine for peer %v", peer)
 			return
+		}
+
+		if  !conR.IsRunning() {
+			conR.logger.Infof("in gossipVotesRoutine, Consensus reactor is not running")
+			time.Sleep(peerGossipSleepDuration)
+			continue OUTER_LOOP
 		}
 
 		rs := conR.conS.GetRoundState()

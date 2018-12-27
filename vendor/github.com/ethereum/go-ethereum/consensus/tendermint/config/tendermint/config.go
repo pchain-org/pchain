@@ -101,9 +101,9 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 	mapConfig.SetDefault("timeout_wait_for_miner_block", 2000)
 	mapConfig.SetDefault("timeout_propose", 2000)
 	mapConfig.SetDefault("timeout_propose_delta", 750)
-	mapConfig.SetDefault("timeout_prevote", 1000)
+	mapConfig.SetDefault("timeout_prevote", 2000)
 	mapConfig.SetDefault("timeout_prevote_delta", 750)
-	mapConfig.SetDefault("timeout_precommit", 1000)
+	mapConfig.SetDefault("timeout_precommit", 2000)
 	mapConfig.SetDefault("timeout_precommit_delta", 750)
 	mapConfig.SetDefault("timeout_commit", 1000)
 
