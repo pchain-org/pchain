@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
+	"math"
 	"reflect"
 	"sync"
 	"time"
-	"math"
 
 	"context"
 
@@ -67,7 +67,7 @@ func (tp *TimeoutParams) WaitForMinerBlock() time.Duration {
 //In PDBFT, wait for this long for Proposer to send proposal
 //the more round, the more time to wait for proposer's proposal
 func (tp *TimeoutParams) Propose(round int) time.Duration {
-	return time.Duration(tp.Propose0/*+tp.ProposeDelta*round*/) * time.Millisecond
+	return time.Duration(tp.Propose0 /*+tp.ProposeDelta*round*/) * time.Millisecond
 }
 
 //In PDBFT, wait for this long for Non-Proposer validator to vote prevote
@@ -78,7 +78,7 @@ func (tp *TimeoutParams) Prevote(round int) time.Duration {
 
 //In PDBFT, wait for this long for validator to vote precommit
 func (tp *TimeoutParams) Precommit(round int) time.Duration {
-	return time.Duration(tp.Precommit0/*+tp.PrecommitDelta*round*/) * time.Millisecond
+	return time.Duration(tp.Precommit0 /*+tp.PrecommitDelta*round*/) * time.Millisecond
 }
 
 // After receiving +2/3 precommits for a single block (a commit), wait this long for stragglers in the next height's RoundStepNewHeight
@@ -194,8 +194,8 @@ type RoundState struct {
 	LockedBlockParts   *types.PartSet
 	Votes              *HeightVoteSet
 	VoteSignAggr       *HeightVoteSignAggr
-	CommitRound        int             //
-	
+	CommitRound        int //
+
 	// Following fields are used for PDBFT/BLS signature aggregation
 	PrevoteMaj23SignAggr   *types.SignAggr
 	PrecommitMaj23SignAggr *types.SignAggr
@@ -1243,10 +1243,10 @@ func (cs *ConsensusState) enterPrecommitWait(height uint64, round int) {
 		return
 	}
 	/*
-	// Temp use here, need to change it to use cs.VoteSignAggr finally
-	if !cs.Votes.Precommits(round).HasTwoThirdsAny() {
-		PanicSanity(Fmt("enterPrecommitWait(%v/%v), but Precommits does not have any +2/3 votes", height, round))
-	}
+		// Temp use here, need to change it to use cs.VoteSignAggr finally
+		if !cs.Votes.Precommits(round).HasTwoThirdsAny() {
+			PanicSanity(Fmt("enterPrecommitWait(%v/%v), but Precommits does not have any +2/3 votes", height, round))
+		}
 	*/
 	cs.logger.Infof("enterPrecommitWait(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step)
 
@@ -1650,14 +1650,14 @@ func (cs *ConsensusState) blsVerifySignAggr(signAggr *types.SignAggr) (bool, err
 	validators := cs.Validators
 
 	/*
-	quorum := big.NewInt(0)
-	quorum.Mul(cs.Validators.TotalVotingPower(), big.NewInt(2))
-	quorum.Div(quorum, big.NewInt(3))
-	quorum.Add(quorum, big.NewInt(1))
-	if validators.Size() != (int)(bitMap.Size()) {
-		cs.logger.Info("validators are not matched")
-		return false, fmt.Errorf(Fmt("validators are not matched, consensus validators:%v, signAggr validators:%v"), validators.Validators, signAggr.BitArray)
-	}
+		quorum := big.NewInt(0)
+		quorum.Mul(cs.Validators.TotalVotingPower(), big.NewInt(2))
+		quorum.Div(quorum, big.NewInt(3))
+		quorum.Add(quorum, big.NewInt(1))
+		if validators.Size() != (int)(bitMap.Size()) {
+			cs.logger.Info("validators are not matched")
+			return false, fmt.Errorf(Fmt("validators are not matched, consensus validators:%v, signAggr validators:%v"), validators.Validators, signAggr.BitArray)
+		}
 	*/
 	powerSum, err := validators.TalliedVotingPower(bitMap)
 	if err != nil {
@@ -1730,7 +1730,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 	}
 
 	// A precommit for the previous height or previous round, just ignore
-	if vote.Height != cs.Height || int(vote.Round) != cs.Round{
+	if vote.Height != cs.Height || int(vote.Round) != cs.Round {
 		cs.logger.Warn("addVote, vote is for previous blocks or previous round, just ignore\n")
 		return
 	}
@@ -1764,94 +1764,94 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool,
 	}
 
 	return
-			/*
-			types.FireEventVote(cs.evsw, types.EventDataVote{vote})
+	/*
+		types.FireEventVote(cs.evsw, types.EventDataVote{vote})
 
-			height := cs.Height
-			switch vote.Type {
-			case types.VoteTypePrevote:
-				//prevotes := cs.Votes.Prevotes(int(vote.Round))
-				prevotes := cs.VoteSignAggr.Prevotes(int(vote.Round))
-				cs.logger.Info("Added to prevote", "vote", vote, "prevotes", prevotes.StringShort())
-				// First, unlock if prevotes is a valid POL.
-				// >> lockRound < POLRound <= unlockOrChangeLockRound (see spec)
-				// NOTE: If (lockRound < POLRound) but !(POLRound <= unlockOrChangeLockRound),
-				// we'll still enterNewRound(H,vote.R) and enterPrecommit(H,vote.R) to process it
-				// there.
-				if (cs.LockedBlock != nil) && (cs.LockedRound < int(vote.Round)) && (int(vote.Round) <= cs.Round) {
-					blockID, ok := prevotes.TwoThirdsMajority()
-					cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 0")
-					if ok && !cs.LockedBlock.HashesTo(blockID.Hash) {
-						cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 1")
-						cs.logger.Info("Unlocking because of POL.", "lockedRound", cs.LockedRound, "POLRound", vote.Round)
-						cs.LockedRound = -1
-						cs.LockedBlock = nil
-						cs.LockedBlockParts = nil
-						types.FireEventUnlock(cs.evsw, cs.RoundStateEvent())
-					}
+		height := cs.Height
+		switch vote.Type {
+		case types.VoteTypePrevote:
+			//prevotes := cs.Votes.Prevotes(int(vote.Round))
+			prevotes := cs.VoteSignAggr.Prevotes(int(vote.Round))
+			cs.logger.Info("Added to prevote", "vote", vote, "prevotes", prevotes.StringShort())
+			// First, unlock if prevotes is a valid POL.
+			// >> lockRound < POLRound <= unlockOrChangeLockRound (see spec)
+			// NOTE: If (lockRound < POLRound) but !(POLRound <= unlockOrChangeLockRound),
+			// we'll still enterNewRound(H,vote.R) and enterPrecommit(H,vote.R) to process it
+			// there.
+			if (cs.LockedBlock != nil) && (cs.LockedRound < int(vote.Round)) && (int(vote.Round) <= cs.Round) {
+				blockID, ok := prevotes.TwoThirdsMajority()
+				cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 0")
+				if ok && !cs.LockedBlock.HashesTo(blockID.Hash) {
+					cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 1")
+					cs.logger.Info("Unlocking because of POL.", "lockedRound", cs.LockedRound, "POLRound", vote.Round)
+					cs.LockedRound = -1
+					cs.LockedBlock = nil
+					cs.LockedBlockParts = nil
+					types.FireEventUnlock(cs.evsw, cs.RoundStateEvent())
 				}
+			}
 
-				if cs.Round <= int(vote.Round) && prevotes.HasTwoThirdsAny(cs.Validators) {
-					// Round-skip over to PrevoteWait or goto Precommit.
-					cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 2")
-					cs.enterNewRound(height, int(vote.Round)) // if the vote is ahead of us
-					if prevotes.HasTwoThirdsMajority(cs.Validators) {
-						cs.enterPrecommit(height, int(vote.Round))
-					} else {
-						cs.enterPrevote(height, int(vote.Round)) // if the vote is ahead of us
-						cs.enterPrevoteWait(height, int(vote.Round))
-					}
-				} else if cs.Proposal != nil && 0 <= cs.Proposal.POLRound && cs.Proposal.POLRound == int(vote.Round) {
-					// If the proposal is now complete, enter prevote of cs.Round.
-					cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 3")
-					if cs.isProposalComplete() {
-						cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 4")
-						cs.enterPrevote(height, cs.Round)
-					}
+			if cs.Round <= int(vote.Round) && prevotes.HasTwoThirdsAny(cs.Validators) {
+				// Round-skip over to PrevoteWait or goto Precommit.
+				cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 2")
+				cs.enterNewRound(height, int(vote.Round)) // if the vote is ahead of us
+				if prevotes.HasTwoThirdsMajority(cs.Validators) {
+					cs.enterPrecommit(height, int(vote.Round))
 				} else {
-					//in other conditions, trigger prevote wait to make this round go ahead
-					cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 5")
+					cs.enterPrevote(height, int(vote.Round)) // if the vote is ahead of us
 					cs.enterPrevoteWait(height, int(vote.Round))
 				}
-			case types.VoteTypePrecommit:
-				//precommits := cs.Votes.Precommits(int(vote.Round))
-				precommits := cs.VoteSignAggr.Precommits(int(vote.Round))
-				cs.logger.Info("Added to precommit", "vote", vote, "precommits", precommits.StringShort())
+			} else if cs.Proposal != nil && 0 <= cs.Proposal.POLRound && cs.Proposal.POLRound == int(vote.Round) {
+				// If the proposal is now complete, enter prevote of cs.Round.
+				cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 3")
+				if cs.isProposalComplete() {
+					cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 4")
+					cs.enterPrevote(height, cs.Round)
+				}
+			} else {
+				//in other conditions, trigger prevote wait to make this round go ahead
+				cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 5")
+				cs.enterPrevoteWait(height, int(vote.Round))
+			}
+		case types.VoteTypePrecommit:
+			//precommits := cs.Votes.Precommits(int(vote.Round))
+			precommits := cs.VoteSignAggr.Precommits(int(vote.Round))
+			cs.logger.Info("Added to precommit", "vote", vote, "precommits", precommits.StringShort())
 
-				blockID, ok := precommits.TwoThirdsMajority()
-				if ok {
-					cs.logger.Info("(cs *ConsensusState) VoteTypePrecommit 0")
-					if len(blockID.Hash) == 0 {
-						cs.logger.Info("(cs *ConsensusState) VoteTypePrecommit 1")
-						cs.enterNewRound(height, int(vote.Round+1))
-					} else {
-						cs.logger.Info("(cs *ConsensusState) VoteTypePrecommit 2")
-						cs.enterNewRound(height, int(vote.Round))
-						cs.enterPrecommit(height, int(vote.Round))
-						cs.enterCommit(height, int(vote.Round))
-
-						if cs.timeoutParams.SkipTimeoutCommit && precommits.HasAll(cs.Validators) {
-							cs.logger.Info("(cs *ConsensusState) VoteTypePrecommit 3")
-							// if we have all the votes now,
-							// go straight to new round (skip timeout commit)
-							// cs.scheduleTimeout(time.Duration(0), cs.Height, 0, RoundStepNewHeight)
-							cs.enterNewRound(cs.Height, 0)
-						}
-					}
-				} else if cs.Round <= int(vote.Round) && precommits.HasTwoThirdsAny(cs.Validators) {
-					cs.logger.Info("(cs *ConsensusState) VoteTypePrecommit 4")
+			blockID, ok := precommits.TwoThirdsMajority()
+			if ok {
+				cs.logger.Info("(cs *ConsensusState) VoteTypePrecommit 0")
+				if len(blockID.Hash) == 0 {
+					cs.logger.Info("(cs *ConsensusState) VoteTypePrecommit 1")
+					cs.enterNewRound(height, int(vote.Round+1))
+				} else {
+					cs.logger.Info("(cs *ConsensusState) VoteTypePrecommit 2")
 					cs.enterNewRound(height, int(vote.Round))
 					cs.enterPrecommit(height, int(vote.Round))
-					cs.enterPrecommitWait(height, int(vote.Round))
-				} else {
-					//in other conditions, trigger precommit wait to make this round go ahead
-					cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 5")
-					cs.enterPrecommitWait(height, int(vote.Round))
+					cs.enterCommit(height, int(vote.Round))
+
+					if cs.timeoutParams.SkipTimeoutCommit && precommits.HasAll(cs.Validators) {
+						cs.logger.Info("(cs *ConsensusState) VoteTypePrecommit 3")
+						// if we have all the votes now,
+						// go straight to new round (skip timeout commit)
+						// cs.scheduleTimeout(time.Duration(0), cs.Height, 0, RoundStepNewHeight)
+						cs.enterNewRound(cs.Height, 0)
+					}
 				}
-			default:
-				PanicSanity(Fmt("Unexpected vote type %X", vote.Type)) // Should not happen.
+			} else if cs.Round <= int(vote.Round) && precommits.HasTwoThirdsAny(cs.Validators) {
+				cs.logger.Info("(cs *ConsensusState) VoteTypePrecommit 4")
+				cs.enterNewRound(height, int(vote.Round))
+				cs.enterPrecommit(height, int(vote.Round))
+				cs.enterPrecommitWait(height, int(vote.Round))
+			} else {
+				//in other conditions, trigger precommit wait to make this round go ahead
+				cs.logger.Info("(cs *ConsensusState) VoteTypePrevote 5")
+				cs.enterPrecommitWait(height, int(vote.Round))
 			}
-			*/
+		default:
+			PanicSanity(Fmt("Unexpected vote type %X", vote.Type)) // Should not happen.
+		}
+	*/
 }
 
 func (cs *ConsensusState) signVote(type_ byte, hash []byte, header types.PartSetHeader) (*types.Vote, error) {
@@ -1882,7 +1882,7 @@ func (cs *ConsensusState) signAddVote(type_ byte, hash []byte, header types.Part
 				v2pMsg := types.EventDataVote2Proposer{vote, cs.ProposerPeerKey}
 				types.FireEventVote2Proposer(cs.evsw, v2pMsg)
 			} else {
-				cs.logger.Warn("sign and vote£¬ Proposer key is nil")
+				cs.logger.Warn("sign and vote, Proposer key is nil")
 			}
 		} else {
 			cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
