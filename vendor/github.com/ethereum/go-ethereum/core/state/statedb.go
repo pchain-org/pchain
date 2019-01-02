@@ -492,19 +492,14 @@ func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common
 	if so == nil {
 		return
 	}
-
-	// When iterating over the storage check the cache first
-	for h, value := range so.cachedStorage {
-		cb(h, value)
-	}
-
 	it := trie.NewIterator(so.getTrie(db.db).NodeIterator(nil))
 	for it.Next() {
-		// ignore cached values
 		key := common.BytesToHash(db.trie.GetKey(it.Key))
-		if _, ok := so.cachedStorage[key]; !ok {
-			cb(key, common.BytesToHash(it.Value))
+		if value, dirty := so.dirtyStorage[key]; dirty {
+			cb(key, value)
+			continue
 		}
+		cb(key, common.BytesToHash(it.Value))
 	}
 }
 
@@ -535,6 +530,24 @@ func (db *StateDB) ForEachTX3(addr common.Address, cb func(tx3 common.Hash) bool
 		if ret := cb(key); !ret {
 			break
 		}
+	}
+}
+
+func (db *StateDB) ForEachProxied(addr common.Address, cb func(key common.Address, proxiedBalance, depositProxiedBalance *big.Int) bool) {
+	so := db.getStateObject(addr)
+	if so == nil {
+		return
+	}
+	it := trie.NewIterator(so.getProxiedTrie(db.db).NodeIterator(nil))
+	for it.Next() {
+		key := common.BytesToAddress(db.trie.GetKey(it.Key))
+		if value, dirty := so.dirtyProxied[key]; dirty {
+			cb(key, value.ProxiedBalance, value.DepositProxiedBalance)
+			continue
+		}
+		var apb accountProxiedBalance
+		rlp.DecodeBytes(it.Value, &apb)
+		cb(key, apb.ProxiedBalance, apb.DepositProxiedBalance)
 	}
 }
 
@@ -615,6 +628,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			stateObject.updateRoot(s.db)
 			stateObject.updateTX1Root(s.db)
 			stateObject.updateTX3Root(s.db)
+			stateObject.updateProxiedRoot(s.db)
 			s.updateStateObject(stateObject)
 		}
 	}
@@ -695,6 +709,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 			if err := stateObject.CommitTX3Trie(s.db); err != nil {
 				return common.Hash{}, err
 			}
+			// Write any Proxied Delegate Balance changes in the state object to its proxied trie.
+			if err := stateObject.CommitProxiedTrie(s.db); err != nil {
+				return common.Hash{}, err
+			}
 			// Update the object in the main account trie.
 			s.updateStateObject(stateObject)
 		}
@@ -714,6 +732,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		}
 		if account.TX3Root != emptyState {
 			s.db.TrieDB().Reference(account.TX3Root, parent)
+		}
+		if account.ProxiedRoot != emptyState {
+			s.db.TrieDB().Reference(account.ProxiedRoot, parent)
 		}
 		code := common.BytesToHash(account.CodeHash)
 		if code != emptyCode {

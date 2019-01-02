@@ -133,6 +133,11 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Version:   "1.0",
 			Service:   NewPublicTdmAPI(apiBackend),
 			Public:    true,
+		}, {
+			Namespace: "del",
+			Version:   "1.0",
+			Service:   NewPublicDelegateAPI(apiBackend),
+			Public:    true,
 		},
 	}
 	return append(compiler, all...)

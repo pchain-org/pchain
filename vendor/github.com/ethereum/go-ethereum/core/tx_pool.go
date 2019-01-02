@@ -616,7 +616,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if err != nil {
 			return err
 		}
-		log.Info("validateTx Chain Function", function.String())
+		log.Infof("validateTx Chain Function %v", function.String())
 		if validateCb := GetValidateCb(function); validateCb != nil {
 			pool.cch.GetMutex().Lock()
 			defer pool.cch.GetMutex().Unlock()

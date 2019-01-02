@@ -10,6 +10,7 @@ import (
 type FunctionType int
 
 const (
+	// Cross Chain Function
 	CreateChildChain FunctionType = iota
 	JoinChildChain
 	DepositInMainChain
@@ -17,8 +18,11 @@ const (
 	WithdrawFromChildChain
 	WithdrawFromMainChain
 	SaveDataToMainChain
+	// Non-Cross Chain Function
 	VoteNextEpoch
 	RevealVote
+	Delegate
+	CancelDelegate
 	// Unknown
 	Unknown
 )
@@ -42,6 +46,8 @@ func (t FunctionType) RequiredGas() uint64 {
 	case VoteNextEpoch:
 		return 21000
 	case RevealVote:
+		return 21000
+	case Delegate, CancelDelegate:
 		return 21000
 	default:
 		return 0
@@ -68,6 +74,10 @@ func (t FunctionType) String() string {
 		return "VoteNextEpoch"
 	case RevealVote:
 		return "RevealVote"
+	case Delegate:
+		return "Delegate"
+	case CancelDelegate:
+		return "CancelDelegate"
 	default:
 		return "UnKnown"
 	}
@@ -93,6 +103,10 @@ func StringToFunctionType(s string) FunctionType {
 		return VoteNextEpoch
 	case "RevealVote":
 		return RevealVote
+	case "Delegate":
+		return Delegate
+	case "CancelDelegate":
+		return CancelDelegate
 	default:
 		return Unknown
 	}
@@ -145,6 +159,15 @@ type RevealVoteArgs struct {
 	Amount    *big.Int
 	Salt      string
 	Signature []byte
+}
+
+type DelegateArgs struct {
+	Candidate common.Address
+}
+
+type CancelDelegateArgs struct {
+	Candidate common.Address
+	Amount    *big.Int
 }
 
 const jsonChainABI = `
@@ -313,6 +336,32 @@ const jsonChainABI = `
 			{
 				"name": "signature",
 				"type": "bytes"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "Delegate",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "candidate",
+				"type": "address"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "CancelDelegate",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "candidate",
+				"type": "address"
+			},
+			{
+				"name": "amount",
+				"type": "uint256"
 			}
 		]
 	}

@@ -38,4 +38,8 @@ var (
 
 	// ErrInvalidTx4 is returned if the tx4 has been checked during execution
 	ErrInvalidTx4 = errors.New("invalid Tx4")
+
+	// ErrInsufficientProxiedBalance is returned if the cancellation amount of executing a transaction
+	// is higher than the proxied balance of the user's account.
+	ErrInsufficientProxiedBalance = errors.New("cancel amount greater than your Proxied Balance")
 )
