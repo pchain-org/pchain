@@ -23,6 +23,8 @@ const (
 	RevealVote
 	Delegate
 	CancelDelegate
+	Candidate
+	CancelCandidate
 	// Unknown
 	Unknown
 )
@@ -47,8 +49,10 @@ func (t FunctionType) RequiredGas() uint64 {
 		return 21000
 	case RevealVote:
 		return 21000
-	case Delegate, CancelDelegate:
+	case Delegate, CancelDelegate, Candidate:
 		return 21000
+	case CancelCandidate:
+		return 100000
 	default:
 		return 0
 	}
@@ -78,6 +82,10 @@ func (t FunctionType) String() string {
 		return "Delegate"
 	case CancelDelegate:
 		return "CancelDelegate"
+	case Candidate:
+		return "Candidate"
+	case CancelCandidate:
+		return "CancelCandidate"
 	default:
 		return "UnKnown"
 	}
@@ -107,6 +115,10 @@ func StringToFunctionType(s string) FunctionType {
 		return Delegate
 	case "CancelDelegate":
 		return CancelDelegate
+	case "Candidate":
+		return Candidate
+	case "CancelCandidate":
+		return CancelCandidate
 	default:
 		return Unknown
 	}
@@ -168,6 +180,10 @@ type DelegateArgs struct {
 type CancelDelegateArgs struct {
 	Candidate common.Address
 	Amount    *big.Int
+}
+
+type CandidateArgs struct {
+	Commission uint8
 }
 
 const jsonChainABI = `
@@ -364,6 +380,23 @@ const jsonChainABI = `
 				"type": "uint256"
 			}
 		]
+	},
+	{
+		"type": "function",
+		"name": "Candidate",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "commission",
+				"type": "uint8"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "CancelCandidate",
+		"constant": false,
+		"inputs": []
 	}
 ]`
 

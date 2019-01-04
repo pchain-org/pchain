@@ -125,6 +125,9 @@ type Account struct {
 	ProxiedBalance        *big.Int    // the accumulative balance which other user delegate to this account (this balance can be revoked, can be deposit for validator)
 	DepositProxiedBalance *big.Int    // the deposit proxied balance for validator which come from ProxiedBalance (this balance can not be revoked)
 	ProxiedRoot           common.Hash // merkle root of the Proxied trie
+	// Candidate
+	Candidate  bool  // flag for Account, true indicate the account has been applied for the Delegation Candidate
+	Commission uint8 // commission percentage of Delegation Candidate (0-100)
 }
 
 // newObject creates a state object.

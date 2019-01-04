@@ -127,3 +127,41 @@ func (self *StateDB) SubProxiedBalanceByUser(addr, user common.Address, amount *
 		stateObject.SubProxiedBalance(amount)
 	}
 }
+
+// ----- Candidate
+
+// IsCandidate Retrieve the candidate flag of the given address or false if object not found
+func (self *StateDB) IsCandidate(addr common.Address) bool {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.IsCandidate()
+	}
+	return false
+}
+
+// GetCommission Retrieve the commission percentage of the given address or 0 if object not found
+func (self *StateDB) GetCommission(addr common.Address) uint8 {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Commission()
+	}
+	return 0
+}
+
+// ApplyForCandidate Set the Candidate Flag of the given address to true and commission to given value
+func (self *StateDB) ApplyForCandidate(addr common.Address, commission uint8) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetCandidate(true)
+		stateObject.SetCommission(commission)
+	}
+}
+
+// CancelCandidate Set the Candidate Flag of the given address to false and commission to 0
+func (self *StateDB) CancelCandidate(addr common.Address) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetCandidate(false)
+		stateObject.SetCommission(0)
+	}
+}

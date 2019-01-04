@@ -286,3 +286,37 @@ func (self *stateObject) CommitProxiedTrie(db Database) error {
 	}
 	return err
 }
+
+// ----- Candidate
+
+func (self *stateObject) IsCandidate() bool {
+	return self.data.Candidate
+}
+
+func (self *stateObject) SetCandidate(isCandidate bool) {
+	self.db.journal = append(self.db.journal, candidateChange{
+		account: &self.address,
+		prev:    self.data.Candidate,
+	})
+	self.setCandidate(isCandidate)
+}
+
+func (self *stateObject) setCandidate(isCandidate bool) {
+	self.data.Candidate = isCandidate
+}
+
+func (self *stateObject) Commission() uint8 {
+	return self.data.Commission
+}
+
+func (self *stateObject) SetCommission(commission uint8) {
+	self.db.journal = append(self.db.journal, commissionChange{
+		account: &self.address,
+		prev:    self.data.Commission,
+	})
+	self.setCommission(commission)
+}
+
+func (self *stateObject) setCommission(commission uint8) {
+	self.data.Commission = commission
+}

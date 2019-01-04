@@ -95,6 +95,15 @@ type (
 		prevalue *accountProxiedBalance
 	}
 
+	candidateChange struct {
+		account *common.Address
+		prev    bool
+	}
+	commissionChange struct {
+		account *common.Address
+		prev    uint8
+	}
+
 	codeChange struct {
 		account            *common.Address
 		prevcode, prevhash []byte
@@ -187,7 +196,7 @@ func (ch proxiedBalanceChange) undo(s *StateDB) {
 }
 
 func (ch depositProxiedBalanceChange) undo(s *StateDB) {
-	s.getStateObject(*ch.account).SetDepositProxiedBalance(ch.prev)
+	s.getStateObject(*ch.account).setDepositProxiedBalance(ch.prev)
 }
 
 func (ch nonceChange) undo(s *StateDB) {
@@ -212,6 +221,14 @@ func (ch addTX3Change) undo(s *StateDB) {
 
 func (ch accountProxiedBalanceChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setAccountProxiedBalance(ch.key, ch.prevalue)
+}
+
+func (ch candidateChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setCandidate(ch.prev)
+}
+
+func (ch commissionChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setCommission(ch.prev)
 }
 
 func (ch refundChange) undo(s *StateDB) {

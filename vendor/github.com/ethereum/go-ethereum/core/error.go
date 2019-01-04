@@ -42,4 +42,13 @@ var (
 	// ErrInsufficientProxiedBalance is returned if the cancellation amount of executing a transaction
 	// is higher than the proxied balance of the user's account.
 	ErrInsufficientProxiedBalance = errors.New("cancel amount greater than your Proxied Balance")
+
+	// ErrAlreadyCandidate is returned if the request address has become candidate already
+	ErrAlreadyCandidate = errors.New("address become candidate already")
+
+	// ErrNotCandidate is returned if the request address is not a candidate
+	ErrNotCandidate = errors.New("address not candidate")
+
+	// ErrCommission is returned if the request Commission value not between 0 and 100
+	ErrCommission = errors.New("commission percentage (between 0 and 100) out of range ")
 )
