@@ -450,10 +450,6 @@ func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
 }
 
 func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error {
-	// we need to wait for the child chain started
-	chainMgr.createChildChainLock.RLock()
-	defer chainMgr.createChildChainLock.RUnlock()
-
 	log.Debug("SaveChildChainProofDataToMainChain - start")
 
 	var proofData types.ChildChainProofData
@@ -478,6 +474,18 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 		ep := epoch.FromBytes(tdmExtra.EpochBytes)
 		if ep != nil {
 			ci := core.GetChainInfo(cch.chainInfoDB, tdmExtra.ChainID)
+			// ChainInfo is nil means we need to wait for Child Chain to be launched, this could happened during catch-up scenario
+			if ci == nil {
+				for {
+					// wait for 3 sec and try again
+					time.Sleep(3 * time.Second)
+					ci = core.GetChainInfo(cch.chainInfoDB, tdmExtra.ChainID)
+					if ci != nil {
+						break
+					}
+				}
+			}
+
 			if ep.Number == 0 || ep.Number > ci.EpochNumber {
 				ci.EpochNumber = ep.Number
 				ci.Epoch = ep

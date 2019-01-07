@@ -1026,43 +1026,29 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 // Prevote for LockedBlock if we're locked, or ProposalBlock if valid.
 // Otherwise vote nil.
 func (cs *ConsensusState) enterPrevote(height uint64, round int) {
-	if cs.Height != height || round < cs.Round || (cs.Round == round && RoundStepPrevote <= cs.Step) {
+	if cs.Height != height || round < cs.Round || (cs.Round == round && RoundStepPrevoteWait < cs.Step) {
 		cs.logger.Warnf("enterPrevote(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step)
 		return
 	}
 
 	defer func() {
 		// Done enterPrevote:
-		cs.updateRoundStep(round, RoundStepPrevote)
-		cs.newStep()
+		if cs.Step == RoundStepPropose {
+			cs.updateRoundStep(round, RoundStepPrevote)
+			cs.newStep()
+		}
+
+		//trigger the timer in bls-vote mode to make the steps go ahead
+		cs.enterPrevoteWait(height, round)
 	}()
-
-	// fire event for how we got here
-	//if cs.isProposalComplete() {
-	//	types.FireEventCompleteProposal(cs.evsw, cs.RoundStateEvent())
-	//} else {
-	//	// we received +2/3 prevotes for a future round
-	//	// TODO: catchup event?
-	//}
-
-	//??
-	if cs.Proposal == nil {
-		types.FireEventCompleteProposal(cs.evsw, cs.RoundStateEvent())
-	} else {
-		// we received +2/3 prevotes for a future round
-		// TODO: catchup event?
-	}
 
 	cs.logger.Infof("enterPrevote(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step)
 
 	// Sign and broadcast vote as necessary
-	cs.doPrevote(height, round)
+	if cs.isProposalComplete() {
+		cs.doPrevote(height, round)
+	}
 
-	//trigger the timer in bls-vote mode to make the steps go ahead
-	cs.enterPrevoteWait(height, round)
-
-	// Once `addVote` hits any +2/3 prevotes, we will go to PrevoteWait
-	// (so we have more time to try and collect +2/3 prevotes for a single block)
 }
 
 func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
@@ -1504,7 +1490,7 @@ func (cs *ConsensusState) addProposalBlockPart(height uint64, round int, part *t
 
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
 		//log.Info("Received complete proposal block", "height", cs.ProposalBlock.Height, "hash", cs.ProposalBlock.Hash())
-		if cs.Step == RoundStepPropose && cs.isProposalComplete() {
+		if RoundStepPropose <= cs.Step && cs.Step <= RoundStepPrevoteWait && cs.isProposalComplete() {
 			// Move onto the next step
 			cs.enterPrevote(height, cs.Round)
 		} else if cs.Step == RoundStepCommit {
@@ -1512,12 +1498,6 @@ func (cs *ConsensusState) addProposalBlockPart(height uint64, round int, part *t
 			cs.tryFinalizeCommit(height)
 		}
 
-		//if cs.Step == RoundStepPrevote {
-		//	sign_aggr := cs.VoteSignAggr.getSignAggr(cs.Round, types.VoteTypePrevote)
-		//	if sign_aggr != nil && sign_aggr.HasTwoThirdsMajority(cs.Validators) {
-		//		cs.enterPrecommit(cs.Height, cs.Round)
-		//	}
-		//}
 		return true, err
 	}
 	return added, nil
