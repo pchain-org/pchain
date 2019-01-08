@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -20,6 +21,10 @@ func NewPublicDelegateAPI(b Backend) *PublicDelegateAPI {
 		b: b,
 	}
 }
+
+var (
+	defaultSelfSecurityDeposit = math.MustParseBig256("100000000000000000000000") // 100,000 * e18
+)
 
 func (api *PublicDelegateAPI) Delegate(ctx context.Context, from, candidate common.Address, amount *hexutil.Big) (common.Hash, error) {
 
@@ -149,16 +154,6 @@ func del_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 	// Add Balance to Candidate's Proxied Balance
 	state.AddProxiedBalanceByUser(args.Candidate, from, amount)
 
-	//op := types.DelegateOp{
-	//	From:      from,
-	//	Candidate: args.Candidate,
-	//	Amount:    tx.Value(),
-	//}
-	//
-	//if ok := ops.Append(&op); !ok {
-	//	return fmt.Errorf("pending ops conflict: %v", op)
-	//}
-
 	return nil
 }
 
@@ -184,16 +179,6 @@ func cdel_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	state.SubDelegateBalance(from, args.Amount)
 	state.AddBalance(from, args.Amount)
 
-	//op := types.CancelDelegateOp{
-	//	From:      from,
-	//	Candidate: args.Candidate,
-	//	Amount:    args.Amount,
-	//}
-	//
-	//if ok := ops.Append(&op); !ok {
-	//	return fmt.Errorf("pending ops conflict: %v", op)
-	//}
-
 	return nil
 }
 
@@ -216,6 +201,9 @@ func appcdd_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pend
 
 	// Do job
 	state.ApplyForCandidate(from, args.Commission)
+	// Add security deposit to self
+	state.AddProxiedBalanceByUser(from, from, defaultSelfSecurityDeposit)
+
 	return nil
 }
 
@@ -237,8 +225,22 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	}
 
 	// Do job
-	state.CancelCandidate(from)
-	//TODO Refund all the amount back to users
+	allRefund := true
+	// Refund all the amount back to users
+	state.ForEachProxied(from, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
+		// Refund Proxied Amount
+		state.SubProxiedBalanceByUser(from, key, proxiedBalance)
+		state.AddBalance(key, proxiedBalance)
+
+		if depositProxiedBalance.Sign() > 0 {
+			allRefund = false
+			// Refund Deposit to PendingRefund if deposit > 0
+			state.AddPendingRefundBalanceByUser(from, key, depositProxiedBalance)
+		}
+		return true
+	})
+	// TODO Add Pending Refund Set
+	state.CancelCandidate(from, allRefund)
 
 	return nil
 }
@@ -276,6 +278,11 @@ func cancelDelegateValidation(from common.Address, tx *types.Transaction, state 
 		return nil, err
 	}
 
+	// Check Self Address
+	if from == args.Candidate {
+		return nil, core.ErrCancelSelfDelegate
+	}
+
 	// Check Proxied Amount in Candidate Balance
 	existProxiedBalance := state.GetProxiedBalanceByUser(args.Candidate, from)
 	if args.Amount.Cmp(existProxiedBalance) == 1 {
@@ -288,9 +295,14 @@ func cancelDelegateValidation(from common.Address, tx *types.Transaction, state 
 }
 
 func candidateValidation(from common.Address, tx *types.Transaction, state *state.StateDB) (*pabi.CandidateArgs, error) {
-	// Check already Candidate
-	if state.IsCandidate(from) {
+	// Check cleaned Candidate
+	if !state.IsCleanAddress(from) {
 		return nil, core.ErrAlreadyCandidate
+	}
+
+	// Check Security Deposit
+	if state.GetBalance(from).Cmp(defaultSelfSecurityDeposit) == -1 {
+		return nil, core.ErrInsufficientFunds
 	}
 
 	var args pabi.CandidateArgs

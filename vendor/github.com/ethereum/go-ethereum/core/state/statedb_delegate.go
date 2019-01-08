@@ -54,22 +54,15 @@ func (self *StateDB) GetTotalDepositProxiedBalance(addr common.Address) *big.Int
 	return common.Big0
 }
 
-// To be removed
-// AddDepositProxiedBalance adds deposit proxied amount to the account associated with addr
-func (self *StateDB) AddTotalDepositProxiedBalance(addr common.Address, amount *big.Int) {
-	stateObject := self.GetOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.AddDepositProxiedBalance(amount)
-	}
-}
+// ----- PendingRefundBalance (Total)
 
-// To be removed
-// SubDepositProxiedBalance subtracts deposit proxied amount from the account associated with addr
-func (self *StateDB) SubTotalDepositProxiedBalance(addr common.Address, amount *big.Int) {
-	stateObject := self.GetOrNewStateObject(addr)
+// GetTotalPendingRefundBalance Retrieve the pending refund balance from the given address or 0 if object not found
+func (self *StateDB) GetTotalPendingRefundBalance(addr common.Address) *big.Int {
+	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
-		stateObject.SubDepositProxiedBalance(amount)
+		return stateObject.PendingRefundBalance()
 	}
+	return common.Big0
 }
 
 // ----- Proxied Trie
@@ -108,7 +101,7 @@ func (self *StateDB) AddProxiedBalanceByUser(addr, user common.Address, amount *
 	}
 }
 
-// SubProxiedBalance subtracts proxied amount from the account associated with addr
+// SubProxiedBalanceByUser subtracts proxied amount from the account associated with addr
 func (self *StateDB) SubProxiedBalanceByUser(addr, user common.Address, amount *big.Int) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
@@ -128,6 +121,114 @@ func (self *StateDB) SubProxiedBalanceByUser(addr, user common.Address, amount *
 	}
 }
 
+// GetDepositProxiedBalanceByUser
+func (self *StateDB) GetDepositProxiedBalanceByUser(addr, user common.Address) *big.Int {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		apb := stateObject.GetAccountProxiedBalance(self.db, user)
+		if apb == nil {
+			return common.Big0
+		} else {
+			return apb.DepositProxiedBalance
+		}
+	}
+	return common.Big0
+}
+
+// AddDepositProxiedBalanceByUser adds proxied amount to the account associated with addr
+func (self *StateDB) AddDepositProxiedBalanceByUser(addr, user common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		// Get AccountProxiedBalance and update DepositProxiedBalance
+		apb := stateObject.GetAccountProxiedBalance(self.db, user)
+		var dirtyApb *accountProxiedBalance
+		if apb == nil {
+			dirtyApb = NewAccountProxiedBalance()
+		} else {
+			dirtyApb = apb.Copy()
+		}
+		dirtyApb.DepositProxiedBalance = new(big.Int).Add(dirtyApb.DepositProxiedBalance, amount)
+		stateObject.SetAccountProxiedBalance(self.db, user, dirtyApb)
+
+		// Add amount to Total Proxied Balance
+		stateObject.AddDepositProxiedBalance(amount)
+	}
+}
+
+// SubDepositProxiedBalanceByUser subtracts proxied amount from the account associated with addr
+func (self *StateDB) SubDepositProxiedBalanceByUser(addr, user common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		// Get AccountProxiedBalance and update DepositProxiedBalance
+		apb := stateObject.GetAccountProxiedBalance(self.db, user)
+		var dirtyApb *accountProxiedBalance
+		if apb == nil {
+			dirtyApb = NewAccountProxiedBalance()
+		} else {
+			dirtyApb = apb.Copy()
+		}
+		dirtyApb.DepositProxiedBalance = new(big.Int).Sub(dirtyApb.DepositProxiedBalance, amount)
+		stateObject.SetAccountProxiedBalance(self.db, user, dirtyApb)
+
+		// Sub amount from Total Proxied Balance
+		stateObject.SubDepositProxiedBalance(amount)
+	}
+}
+
+// GetPendingRefundBalanceByUser
+func (self *StateDB) GetPendingRefundBalanceByUser(addr, user common.Address) *big.Int {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		apb := stateObject.GetAccountProxiedBalance(self.db, user)
+		if apb == nil {
+			return common.Big0
+		} else {
+			return apb.PendingRefundBalance
+		}
+	}
+	return common.Big0
+}
+
+// AddPendingRefundBalanceByUser adds pending refund amount to the account associated with addr
+func (self *StateDB) AddPendingRefundBalanceByUser(addr, user common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		// Get AccountProxiedBalance and update PendingRefundBalance
+		apb := stateObject.GetAccountProxiedBalance(self.db, user)
+		var dirtyApb *accountProxiedBalance
+		if apb == nil {
+			dirtyApb = NewAccountProxiedBalance()
+		} else {
+			dirtyApb = apb.Copy()
+		}
+		dirtyApb.PendingRefundBalance = new(big.Int).Add(dirtyApb.PendingRefundBalance, amount)
+		stateObject.SetAccountProxiedBalance(self.db, user, dirtyApb)
+
+		// Add amount to Total Proxied Balance
+		stateObject.AddPendingRefundBalance(amount)
+	}
+}
+
+// SubPendingRefundBalanceByUser subtracts pending refund amount from the account associated with addr
+func (self *StateDB) SubPendingRefundBalanceByUser(addr, user common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		// Get AccountProxiedBalance and update PendingRefundBalance
+		apb := stateObject.GetAccountProxiedBalance(self.db, user)
+		var dirtyApb *accountProxiedBalance
+		if apb == nil {
+			dirtyApb = NewAccountProxiedBalance()
+		} else {
+			dirtyApb = apb.Copy()
+		}
+		dirtyApb.PendingRefundBalance = new(big.Int).Sub(dirtyApb.PendingRefundBalance, amount)
+		stateObject.SetAccountProxiedBalance(self.db, user, dirtyApb)
+
+		// Sub amount from Total Proxied Balance
+		stateObject.SubPendingRefundBalance(amount)
+	}
+}
+
 // ----- Candidate
 
 // IsCandidate Retrieve the candidate flag of the given address or false if object not found
@@ -137,6 +238,14 @@ func (self *StateDB) IsCandidate(addr common.Address) bool {
 		return stateObject.IsCandidate()
 	}
 	return false
+}
+
+func (self *StateDB) IsCleanAddress(addr common.Address) bool {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		return !stateObject.IsCandidate() && stateObject.IsEmptyTrie()
+	}
+	return true
 }
 
 // GetCommission Retrieve the commission percentage of the given address or 0 if object not found
@@ -158,10 +267,12 @@ func (self *StateDB) ApplyForCandidate(addr common.Address, commission uint8) {
 }
 
 // CancelCandidate Set the Candidate Flag of the given address to false and commission to 0
-func (self *StateDB) CancelCandidate(addr common.Address) {
+func (self *StateDB) CancelCandidate(addr common.Address, allRefund bool) {
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCandidate(false)
-		stateObject.SetCommission(0)
+		if allRefund {
+			stateObject.SetCommission(0)
+		}
 	}
 }

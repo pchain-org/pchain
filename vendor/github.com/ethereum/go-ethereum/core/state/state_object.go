@@ -104,7 +104,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash) && s.data.DepositBalance.Sign() == 0 && len(s.data.ChildChainDepositBalance) == 0 && s.data.ChainBalance.Sign() == 0 && s.data.DelegateBalance.Sign() == 0 && s.data.ProxiedBalance.Sign() == 0 && s.data.DepositProxiedBalance.Sign() == 0
+	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash) && s.data.DepositBalance.Sign() == 0 && len(s.data.ChildChainDepositBalance) == 0 && s.data.ChainBalance.Sign() == 0 && s.data.DelegateBalance.Sign() == 0 && s.data.ProxiedBalance.Sign() == 0 && s.data.DepositProxiedBalance.Sign() == 0 && s.data.PendingRefundBalance.Sign() == 0
 }
 
 // Account is the Ethereum consensus representation of accounts.
@@ -124,6 +124,7 @@ type Account struct {
 	DelegateBalance       *big.Int    // the accumulative balance which this account delegate the Balance to other user
 	ProxiedBalance        *big.Int    // the accumulative balance which other user delegate to this account (this balance can be revoked, can be deposit for validator)
 	DepositProxiedBalance *big.Int    // the deposit proxied balance for validator which come from ProxiedBalance (this balance can not be revoked)
+	PendingRefundBalance  *big.Int    // the accumulative balance which other user try to cancel their delegate balance (this balance will be refund to user's address after epoch end)
 	ProxiedRoot           common.Hash // merkle root of the Proxied trie
 	// Candidate
 	Candidate  bool  // flag for Account, true indicate the account has been applied for the Delegation Candidate
@@ -150,6 +151,9 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 	}
 	if data.DepositProxiedBalance == nil {
 		data.DepositProxiedBalance = new(big.Int)
+	}
+	if data.PendingRefundBalance == nil {
+		data.PendingRefundBalance = new(big.Int)
 	}
 
 	if data.CodeHash == nil {

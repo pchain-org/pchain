@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
 )
@@ -11,10 +12,11 @@ import (
 type accountProxiedBalance struct {
 	ProxiedBalance        *big.Int
 	DepositProxiedBalance *big.Int
+	PendingRefundBalance  *big.Int
 }
 
 func (a *accountProxiedBalance) String() (str string) {
-	return fmt.Sprintf("pb: %v, dpb: %v", a.ProxiedBalance, a.DepositProxiedBalance)
+	return fmt.Sprintf("pb: %v, dpb: %v, rb: %v", a.ProxiedBalance, a.DepositProxiedBalance, a.PendingRefundBalance)
 }
 
 func (a *accountProxiedBalance) Copy() *accountProxiedBalance {
@@ -26,13 +28,14 @@ func (a *accountProxiedBalance) Equal(b *accountProxiedBalance) bool {
 	if b == nil {
 		return false
 	}
-	return a.ProxiedBalance.Cmp(b.ProxiedBalance) == 0 && a.DepositProxiedBalance.Cmp(b.DepositProxiedBalance) == 0
+	return a.ProxiedBalance.Cmp(b.ProxiedBalance) == 0 && a.DepositProxiedBalance.Cmp(b.DepositProxiedBalance) == 0 && a.PendingRefundBalance.Cmp(b.PendingRefundBalance) == 0
 }
 
 func NewAccountProxiedBalance() *accountProxiedBalance {
 	return &accountProxiedBalance{
 		ProxiedBalance:        big.NewInt(0),
 		DepositProxiedBalance: big.NewInt(0),
+		PendingRefundBalance:  big.NewInt(0),
 	}
 }
 
@@ -182,6 +185,49 @@ func (self *stateObject) DepositProxiedBalance() *big.Int {
 	return self.data.DepositProxiedBalance
 }
 
+// ----- PendingRefundBalance
+
+// AddPendingRefundBalance add amount to c's PendingRefundBalance.
+func (c *stateObject) AddPendingRefundBalance(amount *big.Int) {
+	// EIP158: We must check emptiness for the objects such that the account
+	// clearing (0,0,0 objects) can take effect.
+	if amount.Sign() == 0 {
+		if c.empty() {
+			c.touch()
+		}
+		return
+	}
+	c.SetPendingRefundBalance(new(big.Int).Add(c.PendingRefundBalance(), amount))
+}
+
+// SubPendingRefundBalance removes amount from c's PendingRefundBalance.
+func (c *stateObject) SubPendingRefundBalance(amount *big.Int) {
+	if amount.Sign() == 0 {
+		return
+	}
+	c.SetPendingRefundBalance(new(big.Int).Sub(c.PendingRefundBalance(), amount))
+}
+
+func (self *stateObject) SetPendingRefundBalance(amount *big.Int) {
+	self.db.journal = append(self.db.journal, pendingRefundBalanceChange{
+		account: &self.address,
+		prev:    new(big.Int).Set(self.data.PendingRefundBalance),
+	})
+	self.setPendingRefundBalance(amount)
+}
+
+func (self *stateObject) setPendingRefundBalance(amount *big.Int) {
+	self.data.PendingRefundBalance = amount
+	if self.onDirty != nil {
+		self.onDirty(self.Address())
+		self.onDirty = nil
+	}
+}
+
+func (self *stateObject) PendingRefundBalance() *big.Int {
+	return self.data.PendingRefundBalance
+}
+
 // ----- Delegate Trie
 
 func (c *stateObject) getProxiedTrie(db Database) Trie {
@@ -285,6 +331,10 @@ func (self *stateObject) CommitProxiedTrie(db Database) error {
 		self.data.ProxiedRoot = root
 	}
 	return err
+}
+
+func (self *stateObject) IsEmptyTrie() bool {
+	return self.data.ProxiedRoot == types.EmptyRootHash
 }
 
 // ----- Candidate

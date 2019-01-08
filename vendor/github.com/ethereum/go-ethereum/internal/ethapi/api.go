@@ -515,20 +515,24 @@ func (s *PublicBlockChainAPI) GetFullBalance(ctx context.Context, address common
 		"delegateBalance":       (*hexutil.Big)(state.GetDelegateBalance(address)),
 		"proxiedBalance":        (*hexutil.Big)(state.GetTotalProxiedBalance(address)),
 		"depositProxiedBalance": (*hexutil.Big)(state.GetTotalDepositProxiedBalance(address)),
+		"pendingRefundBalance":  (*hexutil.Big)(state.GetTotalPendingRefundBalance(address)),
 	}
 
 	if fullProxied {
 		detail := make(map[common.Address]struct {
 			ProxiedBalance        *hexutil.Big
 			DepositProxiedBalance *hexutil.Big
+			PendingRefundBalance  *hexutil.Big
 		})
-		state.ForEachProxied(address, func(key common.Address, proxiedBalance, depositProxiedBalance *big.Int) bool {
+		state.ForEachProxied(address, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
 			detail[key] = struct {
 				ProxiedBalance        *hexutil.Big
 				DepositProxiedBalance *hexutil.Big
+				PendingRefundBalance  *hexutil.Big
 			}{
 				ProxiedBalance:        (*hexutil.Big)(proxiedBalance),
 				DepositProxiedBalance: (*hexutil.Big)(depositProxiedBalance),
+				PendingRefundBalance:  (*hexutil.Big)(pendingRefundBalance),
 			}
 			return true
 		})

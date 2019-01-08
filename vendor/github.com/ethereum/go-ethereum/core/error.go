@@ -39,6 +39,9 @@ var (
 	// ErrInvalidTx4 is returned if the tx4 has been checked during execution
 	ErrInvalidTx4 = errors.New("invalid Tx4")
 
+	// ErrCancelSelfDelegate is returned if the cancel delegate apply to the self address
+	ErrCancelSelfDelegate = errors.New("can not cancel self delegation")
+
 	// ErrInsufficientProxiedBalance is returned if the cancellation amount of executing a transaction
 	// is higher than the proxied balance of the user's account.
 	ErrInsufficientProxiedBalance = errors.New("cancel amount greater than your Proxied Balance")

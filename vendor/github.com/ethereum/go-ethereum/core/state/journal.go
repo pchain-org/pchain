@@ -72,6 +72,10 @@ type (
 		account *common.Address
 		prev    *big.Int
 	}
+	pendingRefundBalanceChange struct {
+		account *common.Address
+		prev    *big.Int
+	}
 
 	nonceChange struct {
 		account *common.Address
@@ -197,6 +201,10 @@ func (ch proxiedBalanceChange) undo(s *StateDB) {
 
 func (ch depositProxiedBalanceChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setDepositProxiedBalance(ch.prev)
+}
+
+func (ch pendingRefundBalanceChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setPendingRefundBalance(ch.prev)
 }
 
 func (ch nonceChange) undo(s *StateDB) {

@@ -533,7 +533,7 @@ func (db *StateDB) ForEachTX3(addr common.Address, cb func(tx3 common.Hash) bool
 	}
 }
 
-func (db *StateDB) ForEachProxied(addr common.Address, cb func(key common.Address, proxiedBalance, depositProxiedBalance *big.Int) bool) {
+func (db *StateDB) ForEachProxied(addr common.Address, cb func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool) {
 	so := db.getStateObject(addr)
 	if so == nil {
 		return
@@ -542,12 +542,12 @@ func (db *StateDB) ForEachProxied(addr common.Address, cb func(key common.Addres
 	for it.Next() {
 		key := common.BytesToAddress(db.trie.GetKey(it.Key))
 		if value, dirty := so.dirtyProxied[key]; dirty {
-			cb(key, value.ProxiedBalance, value.DepositProxiedBalance)
+			cb(key, value.ProxiedBalance, value.DepositProxiedBalance, value.PendingRefundBalance)
 			continue
 		}
 		var apb accountProxiedBalance
 		rlp.DecodeBytes(it.Value, &apb)
-		cb(key, apb.ProxiedBalance, apb.DepositProxiedBalance)
+		cb(key, apb.ProxiedBalance, apb.DepositProxiedBalance, apb.PendingRefundBalance)
 	}
 }
 
