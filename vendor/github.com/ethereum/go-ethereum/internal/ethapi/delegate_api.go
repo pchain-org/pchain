@@ -26,7 +26,7 @@ var (
 	defaultSelfSecurityDeposit = math.MustParseBig256("100000000000000000000000") // 100,000 * e18
 )
 
-func (api *PublicDelegateAPI) Delegate(ctx context.Context, from, candidate common.Address, amount *hexutil.Big) (common.Hash, error) {
+func (api *PublicDelegateAPI) Delegate(ctx context.Context, from, candidate common.Address, amount *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	input, err := pabi.ChainABI.Pack(pabi.Delegate.String(), candidate)
 	if err != nil {
@@ -39,7 +39,7 @@ func (api *PublicDelegateAPI) Delegate(ctx context.Context, from, candidate comm
 		From:     from,
 		To:       &pabi.ChainContractMagicAddr,
 		Gas:      (*hexutil.Uint64)(&defaultGas),
-		GasPrice: nil,
+		GasPrice: gasPrice,
 		Value:    amount,
 		Input:    (*hexutil.Bytes)(&input),
 		Nonce:    nil,
@@ -47,7 +47,7 @@ func (api *PublicDelegateAPI) Delegate(ctx context.Context, from, candidate comm
 	return api.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-func (api *PublicDelegateAPI) CancelDelegate(ctx context.Context, from, candidate common.Address, amount *hexutil.Big) (common.Hash, error) {
+func (api *PublicDelegateAPI) CancelDelegate(ctx context.Context, from, candidate common.Address, amount *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	input, err := pabi.ChainABI.Pack(pabi.CancelDelegate.String(), candidate, (*big.Int)(amount))
 	if err != nil {
@@ -60,7 +60,7 @@ func (api *PublicDelegateAPI) CancelDelegate(ctx context.Context, from, candidat
 		From:     from,
 		To:       &pabi.ChainContractMagicAddr,
 		Gas:      (*hexutil.Uint64)(&defaultGas),
-		GasPrice: nil,
+		GasPrice: gasPrice,
 		Value:    nil,
 		Input:    (*hexutil.Bytes)(&input),
 		Nonce:    nil,
@@ -69,7 +69,7 @@ func (api *PublicDelegateAPI) CancelDelegate(ctx context.Context, from, candidat
 	return api.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-func (api *PublicDelegateAPI) ApplyCandidate(ctx context.Context, from common.Address, commission uint8) (common.Hash, error) {
+func (api *PublicDelegateAPI) ApplyCandidate(ctx context.Context, from common.Address, commission uint8, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	input, err := pabi.ChainABI.Pack(pabi.Candidate.String(), commission)
 	if err != nil {
@@ -82,7 +82,7 @@ func (api *PublicDelegateAPI) ApplyCandidate(ctx context.Context, from common.Ad
 		From:     from,
 		To:       &pabi.ChainContractMagicAddr,
 		Gas:      (*hexutil.Uint64)(&defaultGas),
-		GasPrice: nil,
+		GasPrice: gasPrice,
 		Value:    nil,
 		Input:    (*hexutil.Bytes)(&input),
 		Nonce:    nil,
@@ -90,7 +90,7 @@ func (api *PublicDelegateAPI) ApplyCandidate(ctx context.Context, from common.Ad
 	return api.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-func (api *PublicDelegateAPI) CancelCandidate(ctx context.Context, from common.Address) (common.Hash, error) {
+func (api *PublicDelegateAPI) CancelCandidate(ctx context.Context, from common.Address, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	input, err := pabi.ChainABI.Pack(pabi.CancelCandidate.String())
 	if err != nil {
@@ -103,7 +103,7 @@ func (api *PublicDelegateAPI) CancelCandidate(ctx context.Context, from common.A
 		From:     from,
 		To:       &pabi.ChainContractMagicAddr,
 		Gas:      (*hexutil.Uint64)(&defaultGas),
-		GasPrice: nil,
+		GasPrice: gasPrice,
 		Value:    nil,
 		Input:    (*hexutil.Bytes)(&input),
 		Nonce:    nil,
@@ -175,9 +175,22 @@ func cdel_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	}
 
 	// Apply Logic
-	state.SubProxiedBalanceByUser(args.Candidate, from, args.Amount)
-	state.SubDelegateBalance(from, args.Amount)
-	state.AddBalance(from, args.Amount)
+	// if request amount < proxied amount, refund it immediately
+	// otherwise, refund the proxied amount, and put the rest to pending refund balance
+	proxiedBalance := state.GetProxiedBalanceByUser(args.Candidate, from)
+	var immediatelyRefund *big.Int
+	if args.Amount.Cmp(proxiedBalance) <= 0 {
+		immediatelyRefund = args.Amount
+	} else {
+		immediatelyRefund = proxiedBalance
+		restRefund := new(big.Int).Sub(args.Amount, proxiedBalance)
+		state.AddPendingRefundBalanceByUser(args.Candidate, from, restRefund)
+		// TODO Add Pending Refund Set
+	}
+
+	state.SubProxiedBalanceByUser(args.Candidate, from, immediatelyRefund)
+	state.SubDelegateBalance(from, immediatelyRefund)
+	state.AddBalance(from, immediatelyRefund)
 
 	return nil
 }
@@ -199,10 +212,12 @@ func appcdd_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pend
 		return verror
 	}
 
-	// Do job
-	state.ApplyForCandidate(from, args.Commission)
 	// Add security deposit to self
+	state.SubBalance(from, defaultSelfSecurityDeposit)
+	state.AddDelegateBalance(from, defaultSelfSecurityDeposit)
 	state.AddProxiedBalanceByUser(from, from, defaultSelfSecurityDeposit)
+	// Become a Candidate
+	state.ApplyForCandidate(from, args.Commission)
 
 	return nil
 }
@@ -230,6 +245,7 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	state.ForEachProxied(from, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
 		// Refund Proxied Amount
 		state.SubProxiedBalanceByUser(from, key, proxiedBalance)
+		state.SubDelegateBalance(key, proxiedBalance)
 		state.AddBalance(key, proxiedBalance)
 
 		if depositProxiedBalance.Sign() > 0 {
@@ -284,8 +300,14 @@ func cancelDelegateValidation(from common.Address, tx *types.Transaction, state 
 	}
 
 	// Check Proxied Amount in Candidate Balance
-	existProxiedBalance := state.GetProxiedBalanceByUser(args.Candidate, from)
-	if args.Amount.Cmp(existProxiedBalance) == 1 {
+	proxiedBalance := state.GetProxiedBalanceByUser(args.Candidate, from)
+	depositProxiedBalance := state.GetDepositProxiedBalanceByUser(args.Candidate, from)
+	pendingRefundBalance := state.GetPendingRefundBalanceByUser(args.Candidate, from)
+	// net = deposit - pending refund
+	netDeposit := new(big.Int).Sub(depositProxiedBalance, pendingRefundBalance)
+	// available = proxied + net
+	availableRefundBalance := new(big.Int).Add(proxiedBalance, netDeposit)
+	if args.Amount.Cmp(availableRefundBalance) == 1 {
 		return nil, core.ErrInsufficientProxiedBalance
 	}
 

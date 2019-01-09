@@ -122,11 +122,26 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		if gasLimit < gas {
 			return nil, 0, vm.ErrOutOfGas
 		}
+
 		if applyCb := GetApplyCb(function); applyCb != nil {
-			cch.GetMutex().Lock()
-			defer cch.GetMutex().Unlock()
-			if err := applyCb(tx, statedb, ops, cch, mining); err != nil {
-				return nil, 0, err
+			if function.IsCrossChainType() {
+				cch.GetMutex().Lock()
+				defer cch.GetMutex().Unlock()
+				if fn, ok := applyCb.(CrossChainApplyCb); ok {
+					if err := fn(tx, statedb, ops, cch, mining); err != nil {
+						return nil, 0, err
+					}
+				} else {
+					panic("callback func is wrong, this should not happened, please check the code")
+				}
+			} else {
+				if fn, ok := applyCb.(NonCrossChainApplyCb); ok {
+					if err := fn(tx, statedb, bc, ops); err != nil {
+						return nil, 0, err
+					}
+				} else {
+					panic("callback func is wrong, this should not happened, please check the code")
+				}
 			}
 		}
 

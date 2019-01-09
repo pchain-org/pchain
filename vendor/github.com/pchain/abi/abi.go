@@ -7,27 +7,34 @@ import (
 	"strings"
 )
 
-type FunctionType int
+type FunctionType struct {
+	id    int
+	cross bool
+}
 
-const (
+var (
 	// Cross Chain Function
-	CreateChildChain FunctionType = iota
-	JoinChildChain
-	DepositInMainChain
-	DepositInChildChain
-	WithdrawFromChildChain
-	WithdrawFromMainChain
-	SaveDataToMainChain
+	CreateChildChain       = FunctionType{0, true}
+	JoinChildChain         = FunctionType{1, true}
+	DepositInMainChain     = FunctionType{2, true}
+	DepositInChildChain    = FunctionType{3, true}
+	WithdrawFromChildChain = FunctionType{4, true}
+	WithdrawFromMainChain  = FunctionType{5, true}
+	SaveDataToMainChain    = FunctionType{6, true}
 	// Non-Cross Chain Function
-	VoteNextEpoch
-	RevealVote
-	Delegate
-	CancelDelegate
-	Candidate
-	CancelCandidate
+	VoteNextEpoch   = FunctionType{10, false}
+	RevealVote      = FunctionType{11, false}
+	Delegate        = FunctionType{12, false}
+	CancelDelegate  = FunctionType{13, false}
+	Candidate       = FunctionType{14, false}
+	CancelCandidate = FunctionType{15, false}
 	// Unknown
-	Unknown
+	Unknown = FunctionType{-1, false}
 )
+
+func (t FunctionType) IsCrossChainType() bool {
+	return t.cross
+}
 
 func (t FunctionType) RequiredGas() uint64 {
 	switch t {
@@ -161,12 +168,10 @@ type WithdrawFromMainChainArgs struct {
 }
 
 type VoteNextEpochArgs struct {
-	ChainId  string
 	VoteHash common.Hash
 }
 
 type RevealVoteArgs struct {
-	ChainId   string
 	PubKey    []byte
 	Amount    *big.Int
 	Salt      string
@@ -319,10 +324,6 @@ const jsonChainABI = `
 		"constant": false,
 		"inputs": [
 			{
-				"name": "chainId",
-				"type": "string"
-			},
-			{
 				"name": "voteHash",
 				"type": "bytes32"
 			}
@@ -333,10 +334,6 @@ const jsonChainABI = `
 		"name": "RevealVote",
 		"constant": false,
 		"inputs": [
-			{
-				"name": "chainId",
-				"type": "string"
-			},
 			{
 				"name": "pubKey",
 				"type": "bytes"

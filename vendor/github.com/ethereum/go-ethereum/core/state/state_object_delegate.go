@@ -31,6 +31,10 @@ func (a *accountProxiedBalance) Equal(b *accountProxiedBalance) bool {
 	return a.ProxiedBalance.Cmp(b.ProxiedBalance) == 0 && a.DepositProxiedBalance.Cmp(b.DepositProxiedBalance) == 0 && a.PendingRefundBalance.Cmp(b.PendingRefundBalance) == 0
 }
 
+func (a *accountProxiedBalance) IsEmpty() bool {
+	return a.ProxiedBalance.Sign() == 0 && a.DepositProxiedBalance.Sign() == 0 && a.PendingRefundBalance.Sign() == 0
+}
+
 func NewAccountProxiedBalance() *accountProxiedBalance {
 	return &accountProxiedBalance{
 		ProxiedBalance:        big.NewInt(0),
@@ -302,7 +306,7 @@ func (self *stateObject) updateProxiedTrie(db Database) Trie {
 		}
 		self.originProxied[key] = value
 
-		if value == nil {
+		if value.IsEmpty() {
 			self.setError(tr.TryDelete(key[:]))
 			continue
 		}
@@ -335,6 +339,10 @@ func (self *stateObject) CommitProxiedTrie(db Database) error {
 
 func (self *stateObject) IsEmptyTrie() bool {
 	return self.data.ProxiedRoot == types.EmptyRootHash
+}
+
+func (self *stateObject) ProxiedRoot() common.Hash {
+	return self.data.ProxiedRoot
 }
 
 // ----- Candidate
