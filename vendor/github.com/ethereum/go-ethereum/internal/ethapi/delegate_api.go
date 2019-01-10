@@ -2,9 +2,13 @@ package ethapi
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -69,7 +73,7 @@ func (api *PublicDelegateAPI) CancelDelegate(ctx context.Context, from, candidat
 	return api.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-func (api *PublicDelegateAPI) ApplyCandidate(ctx context.Context, from common.Address, commission uint8, gasPrice *hexutil.Big) (common.Hash, error) {
+func (api *PublicDelegateAPI) ApplyCandidate(ctx context.Context, from common.Address, securityDeposit *hexutil.Big, commission uint8, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	input, err := pabi.ChainABI.Pack(pabi.Candidate.String(), commission)
 	if err != nil {
@@ -83,7 +87,7 @@ func (api *PublicDelegateAPI) ApplyCandidate(ctx context.Context, from common.Ad
 		To:       &pabi.ChainContractMagicAddr,
 		Gas:      (*hexutil.Uint64)(&defaultGas),
 		GasPrice: gasPrice,
-		Value:    nil,
+		Value:    securityDeposit,
 		Input:    (*hexutil.Bytes)(&input),
 		Nonce:    nil,
 	}
@@ -129,19 +133,19 @@ func init() {
 	core.RegisterApplyCb(pabi.CancelCandidate, ccdd_ApplyCb)
 }
 
-func del_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func del_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
 	from := derivedAddressFromTx(tx)
-	_, verror := delegateValidation(from, tx, state)
+	_, verror := delegateValidation(from, tx, state, bc)
 	if verror != nil {
 		return verror
 	}
 	return nil
 }
 
-func del_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func del_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
-	args, verror := delegateValidation(from, tx, state)
+	args, verror := delegateValidation(from, tx, state, bc)
 	if verror != nil {
 		return verror
 	}
@@ -157,19 +161,19 @@ func del_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 	return nil
 }
 
-func cdel_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func cdel_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
 	from := derivedAddressFromTx(tx)
-	_, verror := cancelDelegateValidation(from, tx, state)
+	_, verror := cancelDelegateValidation(from, tx, state, bc)
 	if verror != nil {
 		return verror
 	}
 	return nil
 }
 
-func cdel_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func cdel_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
-	args, verror := cancelDelegateValidation(from, tx, state)
+	args, verror := cancelDelegateValidation(from, tx, state, bc)
 	if verror != nil {
 		return verror
 	}
@@ -195,46 +199,47 @@ func cdel_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	return nil
 }
 
-func appcdd_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func appcdd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
 	from := derivedAddressFromTx(tx)
-	_, verror := candidateValidation(from, tx, state)
+	_, verror := candidateValidation(from, tx, state, bc)
 	if verror != nil {
 		return verror
 	}
 	return nil
 }
 
-func appcdd_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func appcdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
-	args, verror := candidateValidation(from, tx, state)
+	args, verror := candidateValidation(from, tx, state, bc)
 	if verror != nil {
 		return verror
 	}
 
+	amount := tx.Value()
 	// Add security deposit to self
-	state.SubBalance(from, defaultSelfSecurityDeposit)
-	state.AddDelegateBalance(from, defaultSelfSecurityDeposit)
-	state.AddProxiedBalanceByUser(from, from, defaultSelfSecurityDeposit)
+	state.SubBalance(from, amount)
+	state.AddDelegateBalance(from, amount)
+	state.AddProxiedBalanceByUser(from, from, amount)
 	// Become a Candidate
 	state.ApplyForCandidate(from, args.Commission)
 
 	return nil
 }
 
-func ccdd_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func ccdd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
 	from := derivedAddressFromTx(tx)
-	verror := cancelCandidateValidation(from, tx, state)
+	verror := cancelCandidateValidation(from, tx, state, bc)
 	if verror != nil {
 		return verror
 	}
 	return nil
 }
 
-func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
-	verror := cancelCandidateValidation(from, tx, state)
+	verror := cancelCandidateValidation(from, tx, state, bc)
 	if verror != nil {
 		return verror
 	}
@@ -263,7 +268,7 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 
 // Validation
 
-func delegateValidation(from common.Address, tx *types.Transaction, state *state.StateDB) (*pabi.DelegateArgs, error) {
+func delegateValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.DelegateArgs, error) {
 	// Check Amount
 	amount := tx.Value()
 	if state.GetBalance(from).Cmp(amount) == -1 {
@@ -282,11 +287,13 @@ func delegateValidation(from common.Address, tx *types.Transaction, state *state
 	}
 
 	// Check Epoch Height
-
+	if err := checkEpochInNormalStage(bc); err != nil {
+		return nil, err
+	}
 	return &args, nil
 }
 
-func cancelDelegateValidation(from common.Address, tx *types.Transaction, state *state.StateDB) (*pabi.CancelDelegateArgs, error) {
+func cancelDelegateValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.CancelDelegateArgs, error) {
 
 	var args pabi.CancelDelegateArgs
 	data := tx.Data()
@@ -312,19 +319,22 @@ func cancelDelegateValidation(from common.Address, tx *types.Transaction, state 
 	}
 
 	// Check Epoch Height
+	if err := checkEpochInNormalStage(bc); err != nil {
+		return nil, err
+	}
 
 	return &args, nil
 }
 
-func candidateValidation(from common.Address, tx *types.Transaction, state *state.StateDB) (*pabi.CandidateArgs, error) {
+func candidateValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.CandidateArgs, error) {
 	// Check cleaned Candidate
 	if !state.IsCleanAddress(from) {
 		return nil, core.ErrAlreadyCandidate
 	}
 
-	// Check Security Deposit
-	if state.GetBalance(from).Cmp(defaultSelfSecurityDeposit) == -1 {
-		return nil, core.ErrInsufficientFunds
+	// Check minimum Security Deposit
+	if tx.Value().Cmp(defaultSelfSecurityDeposit) == -1 {
+		return nil, core.ErrMinimumSecurityDeposit
 	}
 
 	var args pabi.CandidateArgs
@@ -339,17 +349,23 @@ func candidateValidation(from common.Address, tx *types.Transaction, state *stat
 	}
 
 	// Check Epoch Height
+	if err := checkEpochInNormalStage(bc); err != nil {
+		return nil, err
+	}
 
 	return &args, nil
 }
 
-func cancelCandidateValidation(from common.Address, tx *types.Transaction, state *state.StateDB) error {
+func cancelCandidateValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
 	// Check already Candidate
 	if !state.IsCandidate(from) {
 		return core.ErrNotCandidate
 	}
 
 	// Check Epoch Height
+	if err := checkEpochInNormalStage(bc); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -359,4 +375,22 @@ func derivedAddressFromTx(tx *types.Transaction) (from common.Address) {
 	signer := types.NewEIP155Signer(tx.ChainId())
 	from, _ = types.Sender(signer, tx)
 	return
+}
+
+func checkEpochInNormalStage(bc *core.BlockChain) error {
+	var ep *epoch.Epoch
+	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
+		ep = tdm.GetEpoch()
+	}
+
+	if ep == nil {
+		return errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
+	}
+
+	// Vote is valid between height 0% - 75%
+	height := bc.CurrentBlock().NumberU64()
+	if !ep.CheckInNormalStage(height) {
+		return errors.New(fmt.Sprintf("you can't send this tx during this time, current height %v", height))
+	}
+	return nil
 }

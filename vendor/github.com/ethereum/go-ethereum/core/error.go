@@ -52,6 +52,9 @@ var (
 	// ErrNotCandidate is returned if the request address is not a candidate
 	ErrNotCandidate = errors.New("address not candidate")
 
+	// ErrMinimumSecurityDeposit is returned if the request security deposit less than the minimum value
+	ErrMinimumSecurityDeposit = errors.New("security deposit not meet the minimum value")
+
 	// ErrCommission is returned if the request Commission value not between 0 and 100
 	ErrCommission = errors.New("commission percentage (between 0 and 100) out of range ")
 )

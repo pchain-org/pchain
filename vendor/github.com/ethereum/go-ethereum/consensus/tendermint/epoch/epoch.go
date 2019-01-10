@@ -307,6 +307,16 @@ func (epoch *Epoch) GetRevealVoteEndHeight() uint64 {
 	return uint64(math.Floor(percent)) + epoch.StartBlock
 }
 
+func (epoch *Epoch) CheckInNormalStage(height uint64) bool {
+	fCurBlockHeight := float64(height)
+	fStartBlock := float64(epoch.StartBlock)
+	fEndBlock := float64(epoch.EndBlock)
+
+	passRate := (fCurBlockHeight - fStartBlock) / (fEndBlock - fStartBlock)
+
+	return (0 <= passRate) && (passRate < NextEpochProposeStartPercent)
+}
+
 func (epoch *Epoch) CheckInHashVoteStage(height uint64) bool {
 	fCurBlockHeight := float64(height)
 	fStartBlock := float64(epoch.StartBlock)
