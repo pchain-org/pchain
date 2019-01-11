@@ -42,6 +42,9 @@ var (
 	// ErrCancelSelfDelegate is returned if the cancel delegate apply to the self address
 	ErrCancelSelfDelegate = errors.New("can not cancel self delegation")
 
+	// ErrDelegateAmount is returned if the delegate amount less than 0
+	ErrDelegateAmount = errors.New("delegation amount must be greater than 100 PAI")
+
 	// ErrInsufficientProxiedBalance is returned if the cancellation amount of executing a transaction
 	// is higher than the proxied balance of the user's account.
 	ErrInsufficientProxiedBalance = errors.New("cancel amount greater than your Proxied Balance")

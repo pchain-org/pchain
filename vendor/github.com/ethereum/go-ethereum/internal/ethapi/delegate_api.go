@@ -28,6 +28,7 @@ func NewPublicDelegateAPI(b Backend) *PublicDelegateAPI {
 
 var (
 	defaultSelfSecurityDeposit = math.MustParseBig256("100000000000000000000000") // 100,000 * e18
+	minimumDelegationAmount    = math.MustParseBig256("100000000000000000000")    // 100 * e18
 )
 
 func (api *PublicDelegateAPI) Delegate(ctx context.Context, from, candidate common.Address, amount *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
@@ -134,8 +135,7 @@ func init() {
 }
 
 func del_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
-	from := derivedAddressFromTx(tx)
-	_, verror := delegateValidation(from, tx, state, bc)
+	_, verror := delegateValidation(tx, state, bc)
 	if verror != nil {
 		return verror
 	}
@@ -145,7 +145,7 @@ func del_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockC
 func del_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
-	args, verror := delegateValidation(from, tx, state, bc)
+	args, verror := delegateValidation(tx, state, bc)
 	if verror != nil {
 		return verror
 	}
@@ -257,10 +257,11 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 			allRefund = false
 			// Refund Deposit to PendingRefund if deposit > 0
 			state.AddPendingRefundBalanceByUser(from, key, depositProxiedBalance)
+			// TODO Add Pending Refund Set
 		}
 		return true
 	})
-	// TODO Add Pending Refund Set
+
 	state.CancelCandidate(from, allRefund)
 
 	return nil
@@ -268,7 +269,12 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 
 // Validation
 
-func delegateValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.DelegateArgs, error) {
+func delegateValidation(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.DelegateArgs, error) {
+	// Check minimum delegate amount
+	if tx.Value().Cmp(minimumDelegationAmount) <= 0 {
+		return nil, core.ErrDelegateAmount
+	}
+
 	var args pabi.DelegateArgs
 	data := tx.Data()
 	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.Delegate.String(), data[4:]); err != nil {
