@@ -269,12 +269,6 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 // Validation
 
 func delegateValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.DelegateArgs, error) {
-	// Check Amount
-	amount := tx.Value()
-	if state.GetBalance(from).Cmp(amount) == -1 {
-		return nil, core.ErrInsufficientFunds
-	}
-
 	var args pabi.DelegateArgs
 	data := tx.Data()
 	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.Delegate.String(), data[4:]); err != nil {

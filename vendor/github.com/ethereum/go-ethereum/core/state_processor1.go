@@ -123,6 +123,11 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 			return nil, 0, vm.ErrOutOfGas
 		}
 
+		// Check Tx Amount
+		if statedb.GetBalance(from).Cmp(tx.Value()) == -1 {
+			return nil, 0, fmt.Errorf("insufficient PAI for tx amount (%x). Req %v, has %v", from.Bytes()[:4], tx.Value(), statedb.GetBalance(from))
+		}
+
 		if applyCb := GetApplyCb(function); applyCb != nil {
 			if function.IsCrossChainType() {
 				cch.GetMutex().Lock()
