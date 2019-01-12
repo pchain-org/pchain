@@ -536,6 +536,8 @@ func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime t
 	var epochNumberPerYear = epoch.rs.EpochNumberPerYear //12
 	var totalYear = epoch.rs.TotalYear                   // 23
 
+	const EMERGENCY_BLOCKS_OF_NEXT_EPOCH uint64 = 10
+
 	zeroEpoch := loadOneEpoch(epoch.db, 0, epoch.logger)
 	initStartTime := zeroEpoch.StartTime
 
@@ -549,6 +551,10 @@ func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime t
 
 	blocksOfNextEpoch = 0
 
+	log.Info("estimateForNextEpoch",
+		"epochLeftThisYear", epochLeftThisYear,
+		"timePerBlockThisEpoch", timePerBlockThisEpoch)
+
 	if epochLeftThisYear == 0 { //to another year
 
 		nextYearStartTime := initStartTime.AddDate(int(nextYear), 0, 0)
@@ -560,8 +566,18 @@ func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime t
 		epochTimePerEpochLeftNextYear := timeLeftNextYear.Nanoseconds() / int64(epochLeftNextYear)
 
 		blocksOfNextEpoch = uint64(epochTimePerEpochLeftNextYear / timePerBlockThisEpoch)
+
+		log.Info("estimateForNextEpoch 0",
+			"timePerBlockThisEpoch", timePerBlockThisEpoch,
+			"nextYearStartTime", nextYearStartTime,
+			"timeLeftNextYear", timeLeftNextYear,
+			"epochLeftNextYear", epochLeftNextYear,
+			"epochTimePerEpochLeftNextYear", epochTimePerEpochLeftNextYear,
+			"blocksOfNextEpoch", blocksOfNextEpoch)
+
 		if blocksOfNextEpoch == 0 {
-			epoch.logger.Crit("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
+			blocksOfNextEpoch = EMERGENCY_BLOCKS_OF_NEXT_EPOCH //make it move ahead
+			epoch.logger.Error("EstimateForNextEpoch Error: Please check the epoch_no_per_year setup in Genesis")
 		}
 
 		rewardPerEpochNextYear := calculateRewardPerEpochByYear(rewardFirstYear, int64(nextYear), int64(totalYear), int64(epochNumberPerYear))
@@ -577,8 +593,17 @@ func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime t
 		epochTimePerEpochLeftThisYear := timeLeftThisYear.Nanoseconds() / int64(epochLeftThisYear)
 
 		blocksOfNextEpoch = uint64(epochTimePerEpochLeftThisYear / timePerBlockThisEpoch)
+
+		log.Info("estimateForNextEpoch 1",
+			"timePerBlockThisEpoch", timePerBlockThisEpoch,
+			"nextYearStartTime", nextYearStartTime,
+			"timeLeftThisYear", timeLeftThisYear,
+			"epochTimePerEpochLeftThisYear", epochTimePerEpochLeftThisYear,
+			"blocksOfNextEpoch", blocksOfNextEpoch)
+
 		if blocksOfNextEpoch == 0 {
-			epoch.logger.Crit("EstimateForNextEpoch Failed: Please check the epoch_no_per_year setup in Genesis")
+			blocksOfNextEpoch = EMERGENCY_BLOCKS_OF_NEXT_EPOCH //make it move ahead
+			epoch.logger.Error("EstimateForNextEpoch Error: Please check the epoch_no_per_year setup in Genesis")
 		}
 
 		epoch.logger.Debugf("Current Epoch Number %v, This Year %v, Next Year %v, Epoch No Per Year %v, Epoch Left This year %v\n"+
