@@ -79,9 +79,9 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.GCModeFlag,
 			utils.EthStatsURLFlag,
 			utils.IdentityFlag,
-			utils.LightServFlag,
-			utils.LightPeersFlag,
-			utils.LightKDFFlag,
+			//utils.LightServFlag,
+			//utils.LightPeersFlag,
+			//utils.LightKDFFlag,
 		},
 	},
 	/*
