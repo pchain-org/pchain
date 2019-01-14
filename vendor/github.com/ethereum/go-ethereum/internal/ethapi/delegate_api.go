@@ -27,8 +27,8 @@ func NewPublicDelegateAPI(b Backend) *PublicDelegateAPI {
 }
 
 var (
-	defaultSelfSecurityDeposit = math.MustParseBig256("100000000000000000000000") // 100,000 * e18
-	minimumDelegationAmount    = math.MustParseBig256("100000000000000000000")    // 100 * e18
+	defaultSelfSecurityDeposit = math.MustParseBig256("10000000000000000000000") // 10,000 * e18
+	minimumDelegationAmount    = math.MustParseBig256("100000000000000000000")   // 100 * e18
 )
 
 func (api *PublicDelegateAPI) Delegate(ctx context.Context, from, candidate common.Address, amount *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
@@ -189,7 +189,8 @@ func cdel_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 		immediatelyRefund = proxiedBalance
 		restRefund := new(big.Int).Sub(args.Amount, proxiedBalance)
 		state.AddPendingRefundBalanceByUser(args.Candidate, from, restRefund)
-		// TODO Add Pending Refund Set
+		// TODO Add Pending Refund Set, Commit the Refund Set
+		state.MarkDelegateAddressRefund(args.Candidate)
 	}
 
 	state.SubProxiedBalanceByUser(args.Candidate, from, immediatelyRefund)
@@ -257,7 +258,8 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 			allRefund = false
 			// Refund Deposit to PendingRefund if deposit > 0
 			state.AddPendingRefundBalanceByUser(from, key, depositProxiedBalance)
-			// TODO Add Pending Refund Set
+			// TODO Add Pending Refund Set, Commit the Refund Set
+			state.MarkDelegateAddressRefund(from)
 		}
 		return true
 	})

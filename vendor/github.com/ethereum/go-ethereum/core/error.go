@@ -39,6 +39,7 @@ var (
 	// ErrInvalidTx4 is returned if the tx4 has been checked during execution
 	ErrInvalidTx4 = errors.New("invalid Tx4")
 
+	// Delegation Error
 	// ErrCancelSelfDelegate is returned if the cancel delegate apply to the self address
 	ErrCancelSelfDelegate = errors.New("can not cancel self delegation")
 
@@ -59,5 +60,12 @@ var (
 	ErrMinimumSecurityDeposit = errors.New("security deposit not meet the minimum value")
 
 	// ErrCommission is returned if the request Commission value not between 0 and 100
-	ErrCommission = errors.New("commission percentage (between 0 and 100) out of range ")
+	ErrCommission = errors.New("commission percentage (between 0 and 100) out of range")
+
+	// Vote Error
+	// ErrVoteAmountTooLow is returned if the vote amount less than proxied delegation amount
+	ErrVoteAmountTooLow = errors.New("vote amount too low")
+
+	// ErrVoteAmountTooHight is returned if the vote amount greater than proxied amount + self amount
+	ErrVoteAmountTooHight = errors.New("vote amount too high")
 )

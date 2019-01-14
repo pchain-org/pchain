@@ -276,3 +276,14 @@ func (self *StateDB) CancelCandidate(addr common.Address, allRefund bool) {
 		}
 	}
 }
+
+// ----- Refund Set
+
+// MarkDelegateAddressRefund adds the specified object to the dirty map to avoid
+func (self *StateDB) MarkDelegateAddressRefund(addr common.Address) {
+	self.delegateRefundSet[addr] = struct{}{}
+}
+
+func (self *StateDB) GetDelegateAddressRefundSet() map[common.Address]struct{} {
+	return self.delegateRefundSet
+}

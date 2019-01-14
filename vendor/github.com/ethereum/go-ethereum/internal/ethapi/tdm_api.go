@@ -131,17 +131,28 @@ func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChai
 	}
 
 	// Apply Logic
-	// if lock balance less than deposit amount, then add enough amount to locked balance
+	if state.IsCandidate(from) {
+		// Move delegate amount first if Candidate
+		state.ForEachProxied(from, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
+			// Move Proxied Amount to Deposit Proxied Amount
+			state.SubProxiedBalanceByUser(from, key, proxiedBalance)
+			state.AddDepositProxiedBalanceByUser(from, key, proxiedBalance)
+			return true
+		})
+	}
 
-	// Move delegate amount
-	if state.GetDepositBalance(from).Cmp(args.Amount) == -1 {
-		difference := new(big.Int).Sub(args.Amount, state.GetDepositBalance(from))
-		if state.GetBalance(from).Cmp(difference) == -1 {
-			return core.ErrInsufficientFunds
-		} else {
-			state.SubBalance(from, difference)
-			state.AddDepositBalance(from, difference)
-		}
+	// Rest Vote Amount
+	proxiedBalance := state.GetTotalProxiedBalance(from)
+	depositProxiedBalance := state.GetTotalDepositProxiedBalance(from)
+	pendingRefundBalance := state.GetTotalPendingRefundBalance(from)
+	netProxied := new(big.Int).Sub(new(big.Int).Add(proxiedBalance, depositProxiedBalance), pendingRefundBalance)
+	netSelfAmount := new(big.Int).Sub(args.Amount, netProxied)
+
+	// if lock balance less than net self amount, then add enough amount to locked balance
+	if state.GetDepositBalance(from).Cmp(netSelfAmount) == -1 {
+		difference := new(big.Int).Sub(netSelfAmount, state.GetDepositBalance(from))
+		state.SubBalance(from, difference)
+		state.AddDepositBalance(from, difference)
 	}
 
 	var pub crypto.BLSPubKey
@@ -186,15 +197,27 @@ func revealVoteValidation(from common.Address, tx *types.Transaction, state *sta
 		return nil, err
 	}
 
-	// Check Balance (Available + Lock)
-	total := new(big.Int).Add(state.GetBalance(from), state.GetDepositBalance(from))
-	if total.Cmp(args.Amount) == -1 {
-		return nil, core.ErrInsufficientFunds
+	var netProxied *big.Int
+	if state.IsCandidate(from) {
+		// is Candidate? Check Proxied Balance (Amount >= (proxiedBalance + depositProxiedBalance - pendingRefundBalance))
+		proxiedBalance := state.GetTotalProxiedBalance(from)
+		depositProxiedBalance := state.GetTotalDepositProxiedBalance(from)
+		pendingRefundBalance := state.GetTotalPendingRefundBalance(from)
+		netProxied = new(big.Int).Sub(new(big.Int).Add(proxiedBalance, depositProxiedBalance), pendingRefundBalance)
+	} else {
+		netProxied = common.Big0
+	}
+	if args.Amount == nil || args.Amount.Sign() < 0 || args.Amount.Cmp(netProxied) == -1 {
+		return nil, core.ErrVoteAmountTooLow
 	}
 
-	// Check Proxied Balance (Amount >= (proxiedBalance + depositProxiedBalance - pendingRefundBalance))
-
 	// Check Amount (Amount <= net proxied + balance + deposit)
+	balance := state.GetBalance(from)
+	deposit := state.GetDepositBalance(from)
+	maximumAmount := new(big.Int).Add(new(big.Int).Add(balance, deposit), netProxied)
+	if args.Amount.Cmp(maximumAmount) == 1 {
+		return nil, core.ErrVoteAmountTooHight
+	}
 
 	// Check Signature of the PubKey matched against the Address
 	if err := crypto.CheckConsensusPubKey(from, args.PubKey, args.Signature); err != nil {
