@@ -58,8 +58,8 @@ type StateDB struct {
 	stateObjectsDirty map[common.Address]struct{}
 
 	// Cache of Delegate Refund Set
-	// TODO Persist the Set
-	delegateRefundSet map[common.Address]struct{}
+	delegateRefundSet      DelegateRefundSet
+	delegateRefundSetDirty bool
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -94,13 +94,14 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		return nil, err
 	}
 	return &StateDB{
-		db:                db,
-		trie:              tr,
-		stateObjects:      make(map[common.Address]*stateObject),
-		stateObjectsDirty: make(map[common.Address]struct{}),
-		delegateRefundSet: make(map[common.Address]struct{}),
-		logs:              make(map[common.Hash][]*types.Log),
-		preimages:         make(map[common.Hash][]byte),
+		db:                     db,
+		trie:                   tr,
+		stateObjects:           make(map[common.Address]*stateObject),
+		stateObjectsDirty:      make(map[common.Address]struct{}),
+		delegateRefundSet:      make(map[common.Address]struct{}),
+		delegateRefundSetDirty: false,
+		logs:                   make(map[common.Hash][]*types.Log),
+		preimages:              make(map[common.Hash][]byte),
 	}, nil
 }
 
@@ -565,15 +566,16 @@ func (self *StateDB) Copy() *StateDB {
 
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
-		db:                self.db,
-		trie:              self.db.CopyTrie(self.trie),
-		stateObjects:      make(map[common.Address]*stateObject, len(self.stateObjectsDirty)),
-		stateObjectsDirty: make(map[common.Address]struct{}, len(self.stateObjectsDirty)),
-		delegateRefundSet: make(map[common.Address]struct{}, len(self.delegateRefundSet)),
-		refund:            self.refund,
-		logs:              make(map[common.Hash][]*types.Log, len(self.logs)),
-		logSize:           self.logSize,
-		preimages:         make(map[common.Hash][]byte),
+		db:                     self.db,
+		trie:                   self.db.CopyTrie(self.trie),
+		stateObjects:           make(map[common.Address]*stateObject, len(self.stateObjectsDirty)),
+		stateObjectsDirty:      make(map[common.Address]struct{}, len(self.stateObjectsDirty)),
+		delegateRefundSet:      make(map[common.Address]struct{}, len(self.delegateRefundSet)),
+		delegateRefundSetDirty: self.delegateRefundSetDirty,
+		refund:                 self.refund,
+		logs:                   make(map[common.Hash][]*types.Log, len(self.logs)),
+		logSize:                self.logSize,
+		preimages:              make(map[common.Hash][]byte),
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range self.stateObjectsDirty {
@@ -728,6 +730,16 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		}
 		delete(s.stateObjectsDirty, addr)
 	}
+	// Commit DelegateRefundSet to trie
+	if s.delegateRefundSetDirty {
+		data, err := rlp.EncodeToBytes(s.delegateRefundSet)
+		if err != nil {
+			panic(fmt.Errorf("can't encode delegate refund set : %v", err))
+		}
+		s.setError(s.trie.TryUpdate(refundSetKey, data))
+		s.delegateRefundSetDirty = false
+	}
+
 	// Write trie changes.
 	root, err = s.trie.Commit(func(leaf []byte, parent common.Hash) error {
 		var account Account

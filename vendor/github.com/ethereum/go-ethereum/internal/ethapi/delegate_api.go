@@ -28,7 +28,7 @@ func NewPublicDelegateAPI(b Backend) *PublicDelegateAPI {
 
 var (
 	defaultSelfSecurityDeposit = math.MustParseBig256("10000000000000000000000") // 10,000 * e18
-	minimumDelegationAmount    = math.MustParseBig256("100000000000000000000")   // 100 * e18
+	minimumDelegationAmount    = math.MustParseBig256("1000000000000000000000")  // 1000 * e18
 )
 
 func (api *PublicDelegateAPI) Delegate(ctx context.Context, from, candidate common.Address, amount *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
