@@ -1,5 +1,0 @@
-1, read and set default configuration
-ethermint-master\src\github.com\tendermint\ethermint\vendor\github.com\tendermint\tendermint\config\tendermint\config.go : GetConfig(rootDir string) cfg.Config
-
-2£¬read genesis.json and priv_validator.json
-ethermint-master\src\github.com\tendermint\ethermint\vendor\github.com\tendermint\tendermint\node\node.go : RunNode(config cfg.Config)
