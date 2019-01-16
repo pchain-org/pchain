@@ -273,7 +273,7 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 
 func delegateValidation(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.DelegateArgs, error) {
 	// Check minimum delegate amount
-	if tx.Value().Cmp(minimumDelegationAmount) <= 0 {
+	if tx.Value().Cmp(minimumDelegationAmount) < 0 {
 		return nil, core.ErrDelegateAmount
 	}
 
