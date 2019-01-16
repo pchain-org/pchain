@@ -50,10 +50,20 @@ func main() {
 		},
 
 		{
-			Action:      chain.GenerateNodeInfoCmd,
+			Action:      GenerateNodeInfoCmd,
 			Name:        "gen_node_info",
 			Usage:       "gen_node_info number", //generate node info for 'number' nodes
 			Description: "Generate node info for static-nodes.json",
+		},
+
+		{
+			Action:      GeneratePrivateValidatorCmd,
+			Name:        "gen_priv_validator",
+			Usage:       "gen_priv_validator address", //generate priv_validator.json for address
+			Flags: []cli.Flag{
+				utils.DataDirFlag,
+			},
+			Description: "Generate priv_validator.json for address",
 		},
 
 		// See consolecmd.go:
