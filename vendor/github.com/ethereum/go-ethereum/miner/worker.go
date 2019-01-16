@@ -133,7 +133,7 @@ type worker struct {
 	cch    core.CrossChainHelper
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase common.Address, eth Backend, mux *event.TypeMux, cch core.CrossChainHelper) *worker {
+func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, cch core.CrossChainHelper) *worker {
 	worker := &worker{
 		config:         config,
 		engine:         engine,
@@ -147,7 +147,6 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		chain:          eth.BlockChain(),
 		proc:           eth.BlockChain().Validator(),
 		possibleUncles: make(map[common.Hash]*types.Block),
-		coinbase:       coinbase,
 		agents:         make(map[Agent]struct{}),
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth, config.ChainLogger),
 		logger:         config.ChainLogger,
@@ -248,6 +247,11 @@ func (self *worker) stop() {
 
 	atomic.StoreInt32(&self.mining, 0)
 	atomic.StoreInt32(&self.atWork, 0)
+}
+
+// isRunning returns an indicator whether worker is running or not.
+func (w *worker) isRunning() bool {
+	return atomic.LoadInt32(&w.mining) == 1
 }
 
 func (self *worker) register(agent Agent) {
@@ -452,8 +456,12 @@ func (self *worker) commitNewWork() {
 		Extra:      self.extra,
 		Time:       big.NewInt(tstamp),
 	}
-	// Only set the coinbase if we are mining (avoid spurious block rewards)
-	if atomic.LoadInt32(&self.mining) == 1 {
+	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
+	if self.isRunning() {
+		if self.coinbase == (common.Address{}) {
+			log.Error("Refusing to mine without coinbase")
+			return
+		}
 		header.Coinbase = self.coinbase
 	}
 	if err := self.engine.Prepare(self.chain, header); err != nil {
@@ -528,8 +536,8 @@ func (self *worker) commitNewWork() {
 		return
 	}
 	// We only care about logging if we're actually mining.
-	if atomic.LoadInt32(&self.mining) == 1 {
-		self.logger.Info("Commit new mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
+	if self.isRunning() {
+		self.logger.Info("Commit new full mining work", "number", work.Block.Number(), "txs", work.tcount, "uncles", len(uncles), "elapsed", common.PrettyDuration(time.Since(tstart)))
 		self.unconfirmed.Shift(work.Block.NumberU64() - 1)
 	}
 	self.push(work)

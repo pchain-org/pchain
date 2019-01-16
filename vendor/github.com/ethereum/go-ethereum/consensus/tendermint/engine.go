@@ -360,7 +360,6 @@ func (sb *backend) VerifySeal(chain consensus.ChainReader, header *types.Header)
 // rules of a particular engine. The changes are executed inline.
 func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) error {
 
-	header.Coinbase = common.Address{}
 	header.Nonce = types.TendermintEmptyNonce
 	header.MixDigest = types.TendermintDigest
 
