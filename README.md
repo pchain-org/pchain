@@ -9,8 +9,15 @@ To get familiar with pchain, you could read about [Overview](https://github.com/
 Building pchain requires both a Go (version 1.10 or later) and a C compiler.
 You can install them using your favourite package manager.
 Once the dependencies are installed, run
-
+```
     make pchain
+```
+After run the command above,you will find pchain client in directory ./bin
+
+```
+$./bin/pchain --help
+
+```
 
 And to build and run pchain under Windows, you could refer to [Build and start pchain](https://github.com/pchain-org/pchain/wiki/Build-and-start-pchain)
 
