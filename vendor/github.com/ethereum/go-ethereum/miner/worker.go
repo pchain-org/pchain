@@ -129,8 +129,6 @@ type worker struct {
 	mining int32
 	atWork int32
 
-	totalUsedMoney *big.Int
-
 	logger log.Logger
 	cch    core.CrossChainHelper
 }
@@ -152,7 +150,6 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, coinbase com
 		coinbase:       coinbase,
 		agents:         make(map[Agent]struct{}),
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth, config.ChainLogger),
-		totalUsedMoney: big.NewInt(0),
 		logger:         config.ChainLogger,
 		cch:            cch,
 	}
@@ -297,7 +294,7 @@ func (self *worker) update() {
 				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
 				txset := types.NewTransactionsByPriceAndNonce(self.current.signer, txs)
 
-				self.current.commitTransactionsEx(self.mux, txset, self.chain, self.coinbase, self.totalUsedMoney, self.cch)
+				self.current.commitTransactionsEx(self.mux, txset, self.chain, self.coinbase, big.NewInt(0), self.cch)
 				self.currentMu.Unlock()
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
@@ -492,10 +489,11 @@ func (self *worker) commitNewWork() {
 		self.logger.Error("Failed to fetch pending transactions", "err", err)
 		return
 	}
-	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
 
+	totalUsedMoney := big.NewInt(0)
+	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
 	//work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
-	rmTxs := work.commitTransactionsEx(self.mux, txs, self.chain, self.coinbase, self.totalUsedMoney, self.cch)
+	rmTxs := work.commitTransactionsEx(self.mux, txs, self.chain, self.coinbase, totalUsedMoney, self.cch)
 
 	// Remove the Invalid Transactions during tx execution (eg: tx4)
 	if len(rmTxs) > 0 {
