@@ -12,5 +12,5 @@ export GOPATH
 echo $GOPATH
 cd "$pchaindir"
 echo `pwd`
-make build
-#go build -i -v -o $workspace/bin/pchain ./cmd
+#make build
+go build -i -v -o $workspace/bin/pchain ./cmd

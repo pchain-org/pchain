@@ -3,14 +3,15 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"sort"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/log"
 	cmn "github.com/tendermint/go-common"
 	crypto "github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-merkle"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // ValidatorSet represent a set of *Validator at a given height.
@@ -85,8 +86,10 @@ func (valSet *ValidatorSet) TalliedVotingPower(bitMap *cmn.BitArray) (*big.Int, 
 		return big.NewInt(0), fmt.Errorf("Size is not equal, validators size:%v, bitmap size:%v", valSet.Size(), bitMap.Size())
 	}
 	powerSum := big.NewInt(0)
-	for i := 0; i < (int)(bitMap.Size()); i++ {
-		powerSum.Add(powerSum, validators[i].VotingPower)
+	for i := (uint64)(0); i < bitMap.Size(); i++ {
+		if bitMap.GetIndex(i) {
+			powerSum.Add(powerSum, common.Big1)
+		}
 	}
 	return powerSum, nil
 }
@@ -138,13 +141,7 @@ func (valSet *ValidatorSet) Size() int {
 }
 
 func (valSet *ValidatorSet) TotalVotingPower() *big.Int {
-	if valSet.totalVotingPower == nil {
-		valSet.totalVotingPower = big.NewInt(0)
-		for _, val := range valSet.Validators {
-			valSet.totalVotingPower.Add(valSet.totalVotingPower, val.VotingPower)
-		}
-	}
-	return valSet.totalVotingPower
+	return big.NewInt(int64(valSet.Size()))
 }
 
 func (valSet *ValidatorSet) Hash() []byte {
@@ -254,10 +251,10 @@ func (valSet *ValidatorSet) VerifyCommit(chainID string, height uint64, commit *
 	}
 
 	/*
-	quorum := big.NewInt(0)
-	quorum.Mul(valSet.TotalVotingPower(), big.NewInt(2))
-	quorum.Div(quorum, big.NewInt(3))
-	quorum.Add(quorum, big.NewInt(1))
+		quorum := big.NewInt(0)
+		quorum.Mul(valSet.TotalVotingPower(), big.NewInt(2))
+		quorum.Div(quorum, big.NewInt(3))
+		quorum.Add(quorum, big.NewInt(1))
 	*/
 	quorum := Loose23MajorThreshold(valSet.TotalVotingPower(), commit.Round)
 
