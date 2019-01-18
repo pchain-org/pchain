@@ -423,7 +423,11 @@ func (pubKey BLSPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
 		if sign == nil {
 			return false
 		}
-		return bls.Verify(sign, msg, pubKey.getElement())
+		pub := pubKey.getElement()
+		if pub == nil {
+			return false
+		}
+		return bls.Verify(sign, msg, pub)
 	} else {
 		return false;
 	}
