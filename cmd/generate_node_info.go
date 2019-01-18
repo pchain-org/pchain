@@ -1,12 +1,12 @@
 package main
 
 import (
-	"gopkg.in/urfave/cli.v1"
-	"github.com/ethereum/go-ethereum/crypto"
-	"fmt"
 	"encoding/hex"
+	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"gopkg.in/urfave/cli.v1"
 	"net"
 	"strconv"
 )
@@ -18,7 +18,7 @@ func GenerateNodeInfoCmd(ctx *cli.Context) error {
 		return nil
 	}
 
-	for i := 0; i<number; i++ {
+	for i := 0; i < number; i++ {
 
 		nodeKey, err := crypto.GenerateKey()
 		if err != nil {

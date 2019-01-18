@@ -27,7 +27,7 @@ import (
 	//	"github.com/ethereum/go-ethereum/crypto"
 	"crypto/ecdsa"
 	"crypto/sha256"
-	"encoding/binary"
+	//"encoding/binary"
 	"github.com/ethereum/go-ethereum/crypto"
 	tmdcrypto "github.com/tendermint/go-crypto"
 	//	"golang.org/x/net/context"
@@ -105,6 +105,8 @@ func InitTimeoutParamsFromConfig(config cfg.Config) *TimeoutParams {
 type VRFProposer struct {
 	Height   uint64
 	Round    int
+
+	valIndex int
 	Proposer *types.Validator
 }
 
@@ -395,48 +397,50 @@ func BytesToBig(data []byte) *big.Int {
 
 //PDBFT VRF proposer selection
 func (cs *ConsensusState) updateProposer() {
-	if cs.proposer == nil {
-		cs.proposer = &VRFProposer{}
-	}
 
-	// New Height: Last Proposer = nil
-	// Same Height, New Round: Last Proposer != nil
-	// Last Proposer will not be consider as new VRF Proposer
-	lastProposer := cs.proposer.Proposer
+	//if need to re-initialize proposer, we use VRF
+	//if select proposer for different round in one height, we use round-robin
+	byVRF := false
+	if cs.proposer == nil || cs.proposer.Proposer == nil || cs.Height != cs.proposer.Height {
+		cs.proposer = &VRFProposer{}
+		byVRF = true
+	} else if cs.Round != cs.proposer.Round {
+		log.Debug("update proposer for changing round",
+			"cs.proposer.Round", cs.proposer.Round, "cs.Round", cs.Round)
+	}
 
 	cs.proposer.Height = cs.Height
 	cs.proposer.Round = cs.Round
-	var roundBytes = make([]byte, 8)
-	binary.BigEndian.PutUint64(roundBytes, uint64(cs.proposer.Round))
 
-	chainReader := cs.backend.ChainReader()
-	head := chainReader.CurrentHeader().Hash()
-	vrfBytes := append(roundBytes, head[:]...)
-	hs := sha256.New()
-	hs.Write(vrfBytes)
-	hv := hs.Sum(nil)
-	hash := new(big.Int)
-	hash.SetBytes(hv[:])
-	//n := big.NewInt(int64(cs.Validators.Size()))
-	n := big.NewInt(0)
-	validators := cs.Validators.Validators
-	for _, validator := range validators {
-		if lastProposer != nil && lastProposer.Equals(validator) {
-			continue
-		}
-		n.Add(n, validator.VotingPower)
-	}
-	n.Mod(hash, n)
 	idx := -1
-	for i, validator := range validators {
-		if lastProposer != nil && lastProposer.Equals(validator) {
-			continue
+	if byVRF {
+		var roundBytes= make([]byte, 8)
+		//binary.BigEndian.PutUint64(roundBytes, uint64(cs.proposer.Round))
+		chainReader := cs.backend.ChainReader()
+		head := chainReader.CurrentHeader().Hash()
+		vrfBytes := append(roundBytes, head[:]...)
+		hs := sha256.New()
+		hs.Write(vrfBytes)
+		hv := hs.Sum(nil)
+		hash := new(big.Int)
+		hash.SetBytes(hv[:])
+		//n := big.NewInt(int64(cs.Validators.Size()))
+		n := big.NewInt(0)
+		validators := cs.Validators.Validators
+		for _, validator := range validators {
+			n.Add(n, validator.VotingPower)
 		}
-		n.Sub(n, validator.VotingPower)
-		if n.Sign() == -1 {
-			idx = i
-			break
+		n.Mod(hash, n)
+
+		for i, validator := range validators {
+			n.Sub(n, validator.VotingPower)
+			if n.Sign() == -1 {
+				idx = i
+				break
+			}
 		}
+	} else {
+		idx = (cs.proposer.valIndex+1) % cs.Validators.Size()
 	}
 
 	//idx := int(n.Int64())
@@ -444,6 +448,7 @@ func (cs *ConsensusState) updateProposer() {
 		cs.proposer.Proposer = nil
 		PanicConsensus(Fmt("The index of proposer out of range", "index:", idx, "range:", cs.Validators.Size()))
 	} else {
+		cs.proposer.valIndex = idx
 		cs.proposer.Proposer = cs.Validators.Validators[idx]
 	}
 	log.Debug("update proposer", "height", cs.Height, "round", cs.Round, "idx", idx)
