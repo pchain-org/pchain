@@ -399,15 +399,18 @@ func (cs *ConsensusState) updateProposer() {
 		cs.proposer = &VRFProposer{}
 	}
 
-	chainReader := cs.backend.ChainReader()
-
-	head := chainReader.CurrentHeader().Hash()
+	// New Height: Last Proposer = nil
+	// Same Height, New Round: Last Proposer != nil
+	// Last Proposer will not be consider as new VRF Proposer
+	lastProposer := cs.proposer.Proposer
 
 	cs.proposer.Height = cs.Height
 	cs.proposer.Round = cs.Round
 	var roundBytes = make([]byte, 8)
 	binary.BigEndian.PutUint64(roundBytes, uint64(cs.proposer.Round))
 
+	chainReader := cs.backend.ChainReader()
+	head := chainReader.CurrentHeader().Hash()
 	vrfBytes := append(roundBytes, head[:]...)
 	hs := sha256.New()
 	hs.Write(vrfBytes)
@@ -418,13 +421,19 @@ func (cs *ConsensusState) updateProposer() {
 	n := big.NewInt(0)
 	validators := cs.Validators.Validators
 	for _, validator := range validators {
+		if lastProposer != nil && lastProposer.Equals(validator) {
+			continue
+		}
 		n.Add(n, validator.VotingPower)
 	}
 	n.Mod(hash, n)
 	idx := -1
 	for i, validator := range validators {
+		if lastProposer != nil && lastProposer.Equals(validator) {
+			continue
+		}
 		n.Sub(n, validator.VotingPower)
-		if n.Cmp(big.NewInt(0)) < 0 {
+		if n.Sign() == -1 {
 			idx = i
 			break
 		}
@@ -806,7 +815,6 @@ func (cs *ConsensusState) enterNewRound(height uint64, round int) {
 		// and meanwhile we might have received a proposal
 		// for round 0.
 	} else {
-		cs.proposer = nil
 		cs.Proposal = nil
 		cs.ProposalBlock = nil
 		cs.ProposalBlockParts = nil

@@ -70,7 +70,7 @@ func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine con
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
-		worker:   newWorker(config, engine, common.Address{}, eth, mux, cch),
+		worker:   newWorker(config, engine, eth, mux, cch),
 		canStart: 1,
 		logger:   config.ChainLogger,
 		cch:      cch,
@@ -124,16 +124,12 @@ func (self *Miner) Start(coinbase common.Address) {
 		self.logger.Info("Network syncing, will start miner afterwards")
 		return
 	}
-	atomic.StoreInt32(&self.mining, 1)
-
-	self.logger.Info("Starting mining operation")
 	self.worker.start()
 	self.worker.commitNewWork()
 }
 
 func (self *Miner) Stop() {
 	self.worker.stop()
-	atomic.StoreInt32(&self.mining, 0)
 	atomic.StoreInt32(&self.shouldStart, 0)
 }
 
@@ -149,7 +145,7 @@ func (self *Miner) Unregister(agent Agent) {
 }
 
 func (self *Miner) Mining() bool {
-	return atomic.LoadInt32(&self.mining) > 0
+	return self.worker.isRunning()
 }
 
 func (self *Miner) HashRate() (tot int64) {

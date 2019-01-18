@@ -9,27 +9,27 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	//"github.com/tendermint/go-data"
-	"io"
 	"github.com/tendermint/go-wire"
+	"io"
 )
 
 //------------------------ signature aggregation -------------------
 const MaxSignAggrSize = 22020096 // 21MB TODO make it configurable
 
 type SignAggr struct {
-	ChainID          string
-	Height           uint64           `json:"height"`
-	Round            int              `json:"round"`
-	Type             byte             `json:"type"`
-	NumValidators	 int              `json:"numValidators"`
-	BlockID		 BlockID	  `json:"blockid"`
-	Maj23		 BlockID	  `json:"maj23"`
-	BitArray         *BitArray        `json:"bitarray"`
-	Sum		 int64            `json:"sum"`
+	ChainID       string
+	Height        uint64    `json:"height"`
+	Round         int       `json:"round"`
+	Type          byte      `json:"type"`
+	NumValidators int       `json:"numValidators"`
+	BlockID       BlockID   `json:"blockid"`
+	Maj23         BlockID   `json:"maj23"`
+	BitArray      *BitArray `json:"bitarray"`
+	Sum           int64     `json:"sum"`
 
 	// BLS signature aggregation to be added here
-	SignatureAggr	crypto.BLSSignature	`json:"SignatureAggr"`
-	SignBytes 		[]byte 	`json:"sign_bytes"`
+	SignatureAggr crypto.BLSSignature `json:"SignatureAggr"`
+	SignBytes     []byte              `json:"sign_bytes"`
 }
 
 func (sa *SignAggr) WriteSignBytes(chainID string, w io.Writer, n *int, err *error) {
@@ -48,18 +48,18 @@ func (sa *SignAggr) WriteSignBytes(chainID string, w io.Writer, n *int, err *err
 }
 
 func MakeSignAggr(height uint64, round int, mtype byte, numValidators int, blockID BlockID, chainID string, bitArray *BitArray, signAggr crypto.BLSSignature) *SignAggr {
-        return &SignAggr{
-		Height	: height,
-		Round	: round,
-		Type	: mtype,
+	return &SignAggr{
+		Height:        height,
+		Round:         round,
+		Type:          mtype,
 		NumValidators: numValidators,
-		BlockID	: blockID,
-		Maj23	: blockID,
-		ChainID: chainID,
-                BitArray: bitArray,
-		SignatureAggr : signAggr,
-		Sum	: 0,
-        }
+		BlockID:       blockID,
+		Maj23:         blockID,
+		ChainID:       chainID,
+		BitArray:      bitArray,
+		SignatureAggr: signAggr,
+		Sum:           0,
+	}
 }
 
 func (sa *SignAggr) SignAggr() crypto.BLSSignature {
@@ -82,18 +82,18 @@ func (sa *SignAggr) HasTwoThirdsMajority(valSet *ValidatorSet) bool {
 	if valSet == nil {
 		return false
 	}
-	talliedVotingPower,err := valSet.TalliedVotingPower(sa.BitArray)
+	talliedVotingPower, err := valSet.TalliedVotingPower(sa.BitArray)
 	if err != nil {
 		return false
 	}
 
 	/*
-	quorum := big.NewInt(0)
-	quorum.Mul(valSet.totalVotingPower, big.NewInt(2))
-	quorum.Div(quorum, big.NewInt(3))
-	quorum.Add(quorum, big.NewInt(1))
+		quorum := big.NewInt(0)
+		quorum.Mul(valSet.totalVotingPower, big.NewInt(2))
+		quorum.Div(quorum, big.NewInt(3))
+		quorum.Add(quorum, big.NewInt(1))
 	*/
-	quorum := Loose23MajorThreshold(valSet.totalVotingPower, sa.Round)
+	quorum := Loose23MajorThreshold(valSet.TotalVotingPower(), sa.Round)
 
 	return talliedVotingPower.Cmp(quorum) >= 0
 }
@@ -128,22 +128,22 @@ func (sa *SignAggr) IsCommit() bool {
 }
 
 func (sa *SignAggr) MakeCommit() *Commit {
-//        if sa.Type != types.VoteTypePrecommit {
-//               PanicSanity("Cannot MakeCommit() unless SignAggr.Type is VoteTypePrecommit")
-//        }
+	//        if sa.Type != types.VoteTypePrecommit {
+	//               PanicSanity("Cannot MakeCommit() unless SignAggr.Type is VoteTypePrecommit")
+	//        }
 
-        // Make sure we have a 2/3 majority
-/*        if sa.HasTwoThirdsMajority()== false {
-                PanicSanity("Cannot MakeCommit() unless a blockhash has +2/3")
-        }
-*/
-        return &Commit{
-                BlockID:	sa.Maj23,
-                Height:		sa.Height,
-				Round:		sa.Round,
-				BitArray:	sa.BitArray.Copy(),
-				SignAggr:	sa.SignAggr(),
-        }
+	// Make sure we have a 2/3 majority
+	/*        if sa.HasTwoThirdsMajority()== false {
+	                  PanicSanity("Cannot MakeCommit() unless a blockhash has +2/3")
+	          }
+	*/
+	return &Commit{
+		BlockID:  sa.Maj23,
+		Height:   sa.Height,
+		Round:    sa.Round,
+		BitArray: sa.BitArray.Copy(),
+		SignAggr: sa.SignAggr(),
+	}
 }
 
 func (sa *SignAggr) SignAggrVerify(msg []byte, valSet *ValidatorSet) bool {
@@ -163,8 +163,8 @@ func (sa *SignAggr) HasTwoThirdsAny(valSet *ValidatorSet) bool {
 	}
 
 	/*
-	twoThird := new(big.Int).Mul(voteSet.valSet.TotalVotingPower(), big.NewInt(2))
-	twoThird.Div(twoThird, big.NewInt(3))sa
+		twoThird := new(big.Int).Mul(voteSet.valSet.TotalVotingPower(), big.NewInt(2))
+		twoThird.Div(twoThird, big.NewInt(3))sa
 	*/
 	twoThirdPlus1 := Loose23MajorThreshold(valSet.TotalVotingPower(), sa.Round)
 	twoThird := twoThirdPlus1.Sub(twoThirdPlus1, big.NewInt(1))

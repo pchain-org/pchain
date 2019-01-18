@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"strings"
 	"sync"
 
@@ -45,7 +46,7 @@ import (
 	NOTE: Assumes that the sum total of voting power does not exceed MaxUInt64.
 */
 
-const  LooseRound  = 30
+const LooseRound = 30
 
 //max { [(2*LooseRound - round)*totalVotingPower + 3*LooseRound]/(3*LooseRound), (totalVotingPower+3)/3 }
 func Loose23MajorThreshold(totalVotingPower *big.Int, round int) *big.Int {
@@ -59,7 +60,7 @@ func Loose23MajorThreshold(totalVotingPower *big.Int, round int) *big.Int {
 	}
 
 	quorum1 := big.NewInt(0)
-	quorum1.Mul(totalVotingPower, big.NewInt(int64(2*LooseRound - round)))
+	quorum1.Mul(totalVotingPower, big.NewInt(int64(2*LooseRound-round)))
 	quorum1.Add(quorum1, big.NewInt(3*LooseRound))
 	quorum1.Div(quorum1, big.NewInt(3*LooseRound))
 
@@ -209,7 +210,7 @@ func (voteSet *VoteSet) addVote(vote *Vote) (added bool, err error) {
 	}
 
 	// Add vote and get conflicting vote if any
-	added, conflicting := voteSet.addVerifiedVote(vote, blockKey, val.VotingPower)
+	added, conflicting := voteSet.addVerifiedVote(vote, blockKey, common.Big1)
 	if conflicting != nil {
 		return added, &ErrVoteConflictingVotes{
 			VoteA: conflicting,
@@ -286,9 +287,9 @@ func (voteSet *VoteSet) addVerifiedVote(vote *Vote, blockKey string, votingPower
 	origSum := new(big.Int).Set(votesByBlock.sum)
 
 	/*
-	twoThird := new(big.Int).Mul(voteSet.valSet.TotalVotingPower(), big.NewInt(2))
-	twoThird.Div(twoThird, big.NewInt(3))
-	quorum := new(big.Int).Add(twoThird, big.NewInt(1))
+		twoThird := new(big.Int).Mul(voteSet.valSet.TotalVotingPower(), big.NewInt(2))
+		twoThird.Div(twoThird, big.NewInt(3))
+		quorum := new(big.Int).Add(twoThird, big.NewInt(1))
 	*/
 	quorum := Loose23MajorThreshold(voteSet.valSet.TotalVotingPower(), int(vote.Round))
 
@@ -428,8 +429,8 @@ func (voteSet *VoteSet) HasTwoThirdsAny() bool {
 	defer voteSet.mtx.Unlock()
 
 	/*
-	twoThird := new(big.Int).Mul(voteSet.valSet.TotalVotingPower(), big.NewInt(2))
-	twoThird.Div(twoThird, big.NewInt(3))
+		twoThird := new(big.Int).Mul(voteSet.valSet.TotalVotingPower(), big.NewInt(2))
+		twoThird.Div(twoThird, big.NewInt(3))
 	*/
 	twoThirdPlus1 := Loose23MajorThreshold(voteSet.valSet.TotalVotingPower(), voteSet.round)
 	twoThird := twoThirdPlus1.Sub(twoThirdPlus1, big.NewInt(1))
