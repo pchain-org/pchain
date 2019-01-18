@@ -371,6 +371,10 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB) (bo
 					}
 					return true
 				})
+				// reset commission = 0 if not candidate
+				if !state.IsCandidate(refundAddress) {
+					state.ClearCommission(refundAddress)
+				}
 			}
 
 			// Step 2: Sort the Validators and potential Validators (with success vote) base on deposit amount + deposit proxied amount

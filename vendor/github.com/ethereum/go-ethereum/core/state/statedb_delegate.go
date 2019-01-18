@@ -279,6 +279,14 @@ func (self *StateDB) CancelCandidate(addr common.Address, allRefund bool) {
 	}
 }
 
+// ClearCommission Set the Candidate commission to 0
+func (self *StateDB) ClearCommission(addr common.Address) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetCommission(0)
+	}
+}
+
 // ----- Refund Set
 
 // MarkDelegateAddressRefund adds the specified object to the dirty map to avoid
