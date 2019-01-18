@@ -24,8 +24,8 @@ import (
 
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/bridge"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -85,23 +85,23 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	/*
-	{Name: "DEVELOPER CHAIN",
-		Flags: []cli.Flag{
-			utils.DeveloperFlag,
-			utils.DeveloperPeriodFlag,
+		{Name: "DEVELOPER CHAIN",
+			Flags: []cli.Flag{
+				utils.DeveloperFlag,
+				utils.DeveloperPeriodFlag,
+			},
 		},
-	},
-	{
-		Name: "ETHASH",
-		Flags: []cli.Flag{
-			utils.EthashCacheDirFlag,
-			utils.EthashCachesInMemoryFlag,
-			utils.EthashCachesOnDiskFlag,
-			utils.EthashDatasetDirFlag,
-			utils.EthashDatasetsInMemoryFlag,
-			utils.EthashDatasetsOnDiskFlag,
+		{
+			Name: "ETHASH",
+			Flags: []cli.Flag{
+				utils.EthashCacheDirFlag,
+				utils.EthashCachesInMemoryFlag,
+				utils.EthashCachesOnDiskFlag,
+				utils.EthashDatasetDirFlag,
+				utils.EthashDatasetsInMemoryFlag,
+				utils.EthashDatasetsOnDiskFlag,
+			},
 		},
-	},
 	*/
 	//{
 	//	Name: "DASHBOARD",
@@ -138,13 +138,13 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	/*
-	{
-		Name: "ACCOUNT",
-		Flags: []cli.Flag{
-			utils.UnlockedAccountFlag,
-			utils.PasswordFileFlag,
+		{
+			Name: "ACCOUNT",
+			Flags: []cli.Flag{
+				utils.UnlockedAccountFlag,
+				utils.PasswordFileFlag,
+			},
 		},
-	},
 	*/
 	{
 		Name: "API AND CONSOLE",
@@ -154,11 +154,11 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.RPCPortFlag,
 			utils.RPCApiFlag,
 			/*
-			utils.WSEnabledFlag,
-			utils.WSListenAddrFlag,
-			utils.WSPortFlag,
-			utils.WSApiFlag,
-			utils.WSAllowedOriginsFlag,
+				utils.WSEnabledFlag,
+				utils.WSListenAddrFlag,
+				utils.WSPortFlag,
+				utils.WSApiFlag,
+				utils.WSAllowedOriginsFlag,
 			*/
 			utils.IPCDisabledFlag,
 			utils.IPCPathFlag,
@@ -219,29 +219,29 @@ var AppHelpFlagGroups = []flagGroup{
 		}, bridge.DebugFlags...),
 	},
 	/*
-	{
-		Name:  "WHISPER (EXPERIMENTAL)",
-		Flags: gethmain.WhisperFlags,
-	},
-	{
-		Name: "DEPRECATED",
-		Flags: []cli.Flag{
-			utils.FastSyncFlag,
-			utils.LightModeFlag,
+		{
+			Name:  "WHISPER (EXPERIMENTAL)",
+			Flags: gethmain.WhisperFlags,
 		},
-	},
+		{
+			Name: "DEPRECATED",
+			Flags: []cli.Flag{
+				utils.FastSyncFlag,
+				utils.LightModeFlag,
+			},
+		},
 	*/
 	{
 		Name: "MISC",
 	},
 	/*
-	{
-		Name: "ISTANBUL",
-		Flags: []cli.Flag{
-			utils.IstanbulRequestTimeoutFlag,
-			utils.IstanbulBlockPeriodFlag,
+		{
+			Name: "ISTANBUL",
+			Flags: []cli.Flag{
+				utils.IstanbulRequestTimeoutFlag,
+				utils.IstanbulBlockPeriodFlag,
+			},
 		},
-	},
 	*/
 }
 

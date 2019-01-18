@@ -57,9 +57,9 @@ func main() {
 		},
 
 		{
-			Action:      GeneratePrivateValidatorCmd,
-			Name:        "gen_priv_validator",
-			Usage:       "gen_priv_validator address", //generate priv_validator.json for address
+			Action: GeneratePrivateValidatorCmd,
+			Name:   "gen_priv_validator",
+			Usage:  "gen_priv_validator address", //generate priv_validator.json for address
 			Flags: []cli.Flag{
 				utils.DataDirFlag,
 			},
@@ -132,16 +132,16 @@ func newCliApp(version, usage string) *cli.App {
 		utils.KeyStoreDirFlag,
 		utils.NoUSBFlag,
 		/*
-		utils.DashboardEnabledFlag,
-		utils.DashboardAddrFlag,
-		utils.DashboardPortFlag,
-		utils.DashboardRefreshFlag,
-		utils.EthashCacheDirFlag,
-		utils.EthashCachesInMemoryFlag,
-		utils.EthashCachesOnDiskFlag,
-		utils.EthashDatasetDirFlag,
-		utils.EthashDatasetsInMemoryFlag,
-		utils.EthashDatasetsOnDiskFlag,
+			utils.DashboardEnabledFlag,
+			utils.DashboardAddrFlag,
+			utils.DashboardPortFlag,
+			utils.DashboardRefreshFlag,
+			utils.EthashCacheDirFlag,
+			utils.EthashCachesInMemoryFlag,
+			utils.EthashCachesOnDiskFlag,
+			utils.EthashDatasetDirFlag,
+			utils.EthashDatasetsInMemoryFlag,
+			utils.EthashDatasetsOnDiskFlag,
 		*/
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
@@ -202,11 +202,11 @@ func newCliApp(version, usage string) *cli.App {
 		utils.RPCPortFlag,
 		utils.RPCApiFlag,
 		/*
-		utils.WSEnabledFlag,
-		utils.WSListenAddrFlag,
-		utils.WSPortFlag,
-		utils.WSApiFlag,
-		utils.WSAllowedOriginsFlag,
+			utils.WSEnabledFlag,
+			utils.WSListenAddrFlag,
+			utils.WSPortFlag,
+			utils.WSApiFlag,
+			utils.WSAllowedOriginsFlag,
 		*/
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
@@ -222,14 +222,14 @@ func newCliApp(version, usage string) *cli.App {
 		ChildChainFlag,
 
 		/*
-		//Tendermint flags
-		MonikerFlag,
-		NodeLaddrFlag,
-		SeedsFlag,
-		FastSyncFlag,
-		SkipUpnpFlag,
-		RpcLaddrFlag,
-		AddrFlag,
+			//Tendermint flags
+			MonikerFlag,
+			NodeLaddrFlag,
+			SeedsFlag,
+			FastSyncFlag,
+			SkipUpnpFlag,
+			RpcLaddrFlag,
+			AddrFlag,
 		*/
 	}
 	app.Flags = append(app.Flags, DebugFlags...)
