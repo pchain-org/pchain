@@ -57,7 +57,8 @@ func main() {
 		},
 
 		{
-			Action: GeneratePrivateValidatorCmd,
+			//Action: GeneratePrivateValidatorCmd,
+			Action: utils.MigrateFlags(GeneratePrivateValidatorCmd),
 			Name:   "gen_priv_validator",
 			Usage:  "gen_priv_validator address", //generate priv_validator.json for address
 			Flags: []cli.Flag{

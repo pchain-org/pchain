@@ -110,7 +110,6 @@ Print a short summary of all accounts`,
 					utils.DataDirFlag,
 					utils.KeyStoreDirFlag,
 					utils.PasswordFileFlag,
-					utils.LightKDFFlag,
 				},
 				Description: `
     pchain account new
@@ -164,7 +163,6 @@ changing your password is only possible interactively.
 					utils.DataDirFlag,
 					utils.KeyStoreDirFlag,
 					utils.PasswordFileFlag,
-					utils.LightKDFFlag,
 				},
 				ArgsUsage: "<keyFile>",
 				Description: `
@@ -194,7 +192,6 @@ nodes.
 )
 
 func accountList(ctx *cli.Context) error {
-	makeFlagsGlobal(ctx)
 
 	stack, _ := gethmain.MakeConfigNode(ctx, clientIdentifier)
 
@@ -295,7 +292,6 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
-	makeFlagsGlobal(ctx)
 
 	cfg := gethmain.GethConfig{Node: gethmain.DefaultNodeConfig()}
 	// Load config file.
@@ -328,8 +324,6 @@ func accountCreate(ctx *cli.Context) error {
 // accountUpdate transitions an account from a previous format to the current
 // one, also providing the possibility to change the pass-phrase.
 func accountUpdate(ctx *cli.Context) error {
-
-	makeFlagsGlobal(ctx)
 
 	if len(ctx.Args()) == 0 {
 		utils.Fatalf("No accounts specified to update")
@@ -370,7 +364,6 @@ func importWallet(ctx *cli.Context) error {
 }
 
 func accountImport(ctx *cli.Context) error {
-	makeFlagsGlobal(ctx)
 
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
@@ -390,18 +383,4 @@ func accountImport(ctx *cli.Context) error {
 	}
 	fmt.Printf("Address: {%x}\n", acct.Address)
 	return nil
-}
-
-func makeFlagsGlobal(ctx *cli.Context) {
-
-	flagNames := ctx.FlagNames()
-	for i := 0; i < len(flagNames); i++ {
-		flagName := flagNames[i]
-		if !ctx.GlobalIsSet(flagName) {
-			flagValue := ctx.String(flagName)
-			if flagValue != "" {
-				ctx.GlobalSet(flagName, flagValue)
-			}
-		}
-	}
 }

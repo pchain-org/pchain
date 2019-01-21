@@ -1348,7 +1348,9 @@ func MigrateFlags(action func(ctx *cli.Context) error) func(*cli.Context) error 
 	return func(ctx *cli.Context) error {
 		for _, name := range ctx.FlagNames() {
 			if ctx.IsSet(name) {
-				ctx.GlobalSet(name, ctx.String(name))
+				if !ctx.GlobalIsSet(name) {
+					ctx.GlobalSet(name, ctx.String(name))
+				}
 			}
 		}
 		return action(ctx)
