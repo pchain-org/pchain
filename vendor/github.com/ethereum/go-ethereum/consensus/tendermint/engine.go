@@ -452,13 +452,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	}
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
-	if ok, newValidators, refunds, _ := sb.core.consensusState.Epoch.ShouldEnterNewEpoch(header.Number.Uint64()); ok {
-		// Create a new Change Epoch Op. (Epoch Op should be the last one to be execute)
-		for _, r := range refunds {
-			state.SubDepositBalance(r.Address, r.Amount)
-			state.AddBalance(r.Address, r.Amount)
-		}
-
+	if ok, newValidators, _ := sb.core.consensusState.Epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			NewValidators: newValidators,
 		})

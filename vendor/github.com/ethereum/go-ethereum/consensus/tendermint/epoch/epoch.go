@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/log"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
@@ -307,6 +308,16 @@ func (epoch *Epoch) GetRevealVoteEndHeight() uint64 {
 	return uint64(math.Floor(percent)) + epoch.StartBlock
 }
 
+func (epoch *Epoch) CheckInNormalStage(height uint64) bool {
+	fCurBlockHeight := float64(height)
+	fStartBlock := float64(epoch.StartBlock)
+	fEndBlock := float64(epoch.EndBlock)
+
+	passRate := (fCurBlockHeight - fStartBlock) / (fEndBlock - fStartBlock)
+
+	return (0 <= passRate) && (passRate < NextEpochProposeStartPercent)
+}
+
 func (epoch *Epoch) CheckInHashVoteStage(height uint64) bool {
 	fCurBlockHeight := float64(height)
 	fStartBlock := float64(epoch.StartBlock)
@@ -344,23 +355,93 @@ func (epoch *Epoch) GetPreviousEpoch() *Epoch {
 	return epoch.previousEpoch
 }
 
-func (epoch *Epoch) ShouldEnterNewEpoch(height uint64) (bool, *tmTypes.ValidatorSet, []*tmTypes.RefundValidatorAmount, error) {
+func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB) (bool, *tmTypes.ValidatorSet, error) {
 
 	if height == epoch.EndBlock {
 		if epoch.nextEpoch != nil {
-			// Fetch the Validators and update it base on the votes
+			// Step 1: Refund the Delegate (subtract the pending refund / deposit proxied amount)
+			for refundAddress := range state.GetDelegateAddressRefundSet() {
+				state.ForEachProxied(refundAddress, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
+					if pendingRefundBalance.Sign() > 0 {
+						// Refund Pending Refund
+						state.SubDepositProxiedBalanceByUser(refundAddress, key, pendingRefundBalance)
+						state.SubPendingRefundBalanceByUser(refundAddress, key, pendingRefundBalance)
+						state.SubDelegateBalance(key, pendingRefundBalance)
+						state.AddBalance(key, pendingRefundBalance)
+					}
+					return true
+				})
+				// reset commission = 0 if not candidate
+				if !state.IsCandidate(refundAddress) {
+					state.ClearCommission(refundAddress)
+				}
+			}
+
+			// Step 2: Sort the Validators and potential Validators (with success vote) base on deposit amount + deposit proxied amount
+			// Step 2.1: Update deposit amount base on the vote (Add/Substract deposit amount base on vote)
+			// Step 2.2: Sort the address with deposit + deposit proxied amount
 			newValidators := epoch.nextEpoch.Validators.Copy()
-			refund, err := updateEpochValidatorSet(newValidators, epoch.nextEpoch.validatorVoteSet)
+			for _, v := range newValidators.Validators {
+				vAddr := common.BytesToAddress(v.Address)
+				totalProxiedBalance := new(big.Int).Add(state.GetTotalProxiedBalance(vAddr), state.GetTotalDepositProxiedBalance(vAddr))
+				// Voting Power = Delegated amount + Deposit amount
+				v.VotingPower = new(big.Int).Add(totalProxiedBalance, state.GetDepositBalance(vAddr))
+			}
+
+			// Update Validators with vote
+			refunds, err := updateEpochValidatorSet(newValidators, epoch.nextEpoch.validatorVoteSet)
 			if err != nil {
 				epoch.logger.Warn("Error changing validator set", "error", err)
-				return false, nil, nil, err
+				return false, nil, err
 			}
-			return true, newValidators, refund, nil
+
+			// Now newValidators become a real new Validators
+			// Step 3: Special Case: For the existing Validator + Candidate + no vote, Move proxied amount to deposit proxied amount  (proxied amount -> deposit proxied amount)
+			// (if has vote, proxied amount has already move to deposit proxied amount during apply reveal vote)
+			for _, v := range newValidators.Validators {
+				vAddr := common.BytesToAddress(v.Address)
+				if state.IsCandidate(vAddr) && state.GetTotalProxiedBalance(vAddr).Sign() > 0 {
+					state.ForEachProxied(vAddr, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
+						if proxiedBalance.Sign() > 0 {
+							// Deposit the proxied amount
+							state.SubProxiedBalanceByUser(vAddr, key, proxiedBalance)
+							state.AddDepositProxiedBalanceByUser(vAddr, key, proxiedBalance)
+						}
+						return true
+					})
+				}
+			}
+
+			// Step 4: For vote out Address, refund deposit (deposit amount -> balance, deposit proxied amount -> proxied amount)
+			for _, r := range refunds {
+				if !r.Voteout {
+					// Normal Refund, refund the deposit back to the self balance
+					state.SubDepositBalance(r.Address, r.Amount)
+					state.AddBalance(r.Address, r.Amount)
+				} else {
+					// Voteout Refund, refund the deposit both to self and proxied (if available)
+					if state.IsCandidate(r.Address) {
+						state.ForEachProxied(r.Address, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
+							if depositProxiedBalance.Sign() > 0 {
+								state.SubDepositProxiedBalanceByUser(r.Address, key, depositProxiedBalance)
+								state.AddProxiedBalanceByUser(r.Address, key, depositProxiedBalance)
+							}
+							return true
+						})
+					}
+					// Refund all the self deposit balance
+					depositBalance := state.GetDepositBalance(r.Address)
+					state.SubDepositBalance(r.Address, depositBalance)
+					state.AddBalance(r.Address, depositBalance)
+				}
+			}
+
+			return true, newValidators, nil
 		} else {
-			return false, nil, nil, NextEpochNotExist
+			return false, nil, NextEpochNotExist
 		}
 	}
-	return false, nil, nil, nil
+	return false, nil, nil
 }
 
 // Move to New Epoch
@@ -422,7 +503,7 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 			}
 			newValSize++
 		} else if v.Amount.Sign() == 0 {
-			refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: validator.VotingPower})
+			refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: validator.VotingPower, Voteout: false})
 			// Remove the Validator
 			_, removed := validators.Remove(validator.Address)
 			if !removed {
@@ -432,7 +513,7 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 			//refund if new amount less than the voting power
 			if v.Amount.Cmp(validator.VotingPower) == -1 {
 				refundAmount := new(big.Int).Sub(validator.VotingPower, v.Amount)
-				refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: refundAmount})
+				refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: refundAmount, Voteout: false})
 			}
 
 			// Update the Validator Amount
@@ -460,7 +541,7 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 		// Add knockout validator to refund list
 		knockout := validators.Validators[valSize:]
 		for _, k := range knockout {
-			refund = append(refund, &tmTypes.RefundValidatorAmount{Address: common.BytesToAddress(k.Address), Amount: k.VotingPower})
+			refund = append(refund, &tmTypes.RefundValidatorAmount{Address: common.BytesToAddress(k.Address), Amount: nil, Voteout: true})
 		}
 
 		validators.Validators = validators.Validators[:valSize]
@@ -532,7 +613,7 @@ func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
 
 func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime time.Time) (rewardPerBlock *big.Int, blocksOfNextEpoch uint64) {
 
-	var rewardFirstYear = epoch.rs.RewardFirstYear       //20000000e+18 //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
+	var rewardFirstYear = epoch.rs.RewardFirstYear       //20000000e+18 //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PI by 10 years
 	var epochNumberPerYear = epoch.rs.EpochNumberPerYear //12
 	var totalYear = epoch.rs.TotalYear                   // 23
 

@@ -81,7 +81,8 @@ func (vc validatorCodec) Compare(o1 interface{}, o2 interface{}) int {
 
 type RefundValidatorAmount struct {
 	Address common.Address
-	Amount  *big.Int
+	Amount  *big.Int // Amount will be nil when Voteout is true
+	Voteout bool     // Voteout means refund all the amount (self deposit + delegate)
 }
 
 // SwitchEpoch op

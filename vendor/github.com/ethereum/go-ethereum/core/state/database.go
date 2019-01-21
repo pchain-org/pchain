@@ -52,6 +52,9 @@ type Database interface {
 	// OpenTX3Trie opens the tx3 trie of an account
 	OpenTX3Trie(addrHash, root common.Hash) (Trie, error)
 
+	// OpenProxiedTrie opens the proxied trie of an account
+	OpenProxiedTrie(addrHash, root common.Hash) (Trie, error)
+
 	// CopyTrie returns an independent copy of the given trie.
 	CopyTrie(Trie) Trie
 
@@ -137,6 +140,11 @@ func (db *cachingDB) OpenTX1Trie(addrHash, root common.Hash) (Trie, error) {
 
 // OpenTX3Trie opens the tx3 trie of an account
 func (db *cachingDB) OpenTX3Trie(addrHash, root common.Hash) (Trie, error) {
+	return trie.NewSecure(root, db.db, 0)
+}
+
+// OpenProxiedTrie opens the proxied trie of an account
+func (db *cachingDB) OpenProxiedTrie(addrHash, root common.Hash) (Trie, error) {
 	return trie.NewSecure(root, db.db, 0)
 }
 

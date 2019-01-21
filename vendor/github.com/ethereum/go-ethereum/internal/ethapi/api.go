@@ -447,7 +447,7 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr c
 // addr = ecrecover(hash, signature)
 //
 // Note, the signature must conform to the secp256k1 curve R, S and V values, where
-// the V value must be be 27 or 28 for legacy reasons.
+// the V value must be 27 or 28 for legacy reasons.
 //
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
 func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error) {
@@ -459,13 +459,11 @@ func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Byt
 	}
 	sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
 
-	rpk, err := crypto.Ecrecover(signHash(data), sig)
+	rpk, err := crypto.SigToPub(signHash(data), sig)
 	if err != nil {
 		return common.Address{}, err
 	}
-	pubKey := crypto.ToECDSAPub(rpk)
-	recoveredAddr := crypto.PubkeyToAddress(*pubKey)
-	return recoveredAddr, nil
+	return crypto.PubkeyToAddress(*rpk), nil
 }
 
 // SignAndSendTransaction was renamed to SendTransaction. This method is deprecated
@@ -494,13 +492,54 @@ func (s *PublicBlockChainAPI) BlockNumber() *big.Int {
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
-func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*big.Int, error) {
+func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*hexutil.Big, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
 		return nil, err
 	}
-	b := state.GetBalance(address)
-	return b, state.Error()
+	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
+}
+
+// GetFullBalance returns the amount of wei for the given address in the state of the
+// given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
+// block numbers are also allowed.
+func (s *PublicBlockChainAPI) GetFullBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber, fullProxied bool) (map[string]interface{}, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	fields := map[string]interface{}{
+		"balance":               (*hexutil.Big)(state.GetBalance(address)),
+		"depositBalance":        (*hexutil.Big)(state.GetDepositBalance(address)),
+		"delegateBalance":       (*hexutil.Big)(state.GetDelegateBalance(address)),
+		"proxiedBalance":        (*hexutil.Big)(state.GetTotalProxiedBalance(address)),
+		"depositProxiedBalance": (*hexutil.Big)(state.GetTotalDepositProxiedBalance(address)),
+		"pendingRefundBalance":  (*hexutil.Big)(state.GetTotalPendingRefundBalance(address)),
+	}
+
+	if fullProxied {
+		detail := make(map[common.Address]struct {
+			ProxiedBalance        *hexutil.Big
+			DepositProxiedBalance *hexutil.Big
+			PendingRefundBalance  *hexutil.Big
+		})
+		state.ForEachProxied(address, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
+			detail[key] = struct {
+				ProxiedBalance        *hexutil.Big
+				DepositProxiedBalance *hexutil.Big
+				PendingRefundBalance  *hexutil.Big
+			}{
+				ProxiedBalance:        (*hexutil.Big)(proxiedBalance),
+				DepositProxiedBalance: (*hexutil.Big)(depositProxiedBalance),
+				PendingRefundBalance:  (*hexutil.Big)(pendingRefundBalance),
+			}
+			return true
+		})
+
+		fields["proxied_detail"] = detail
+	}
+	return fields, state.Error()
 }
 
 // GetBlockByNumber returns the requested block. When blockNr is -1 the chain head is returned. When fullTx is true all

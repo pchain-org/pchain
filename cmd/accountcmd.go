@@ -31,40 +31,40 @@ import (
 
 var (
 	/*
-		walletCommand = cli.Command{
-			Name:      "wallet",
-			Usage:     "Manage pchain presale wallets",
-			ArgsUsage: "",
-			Category:  "ACCOUNT COMMANDS",
-			Description: `
-	    pchain wallet import /path/to/my/presale.wallet
+			walletCommand = cli.Command{
+				Name:      "wallet",
+				Usage:     "Manage pchain presale wallets",
+				ArgsUsage: "",
+				Category:  "ACCOUNT COMMANDS",
+				Description: `
+		    pchain wallet import /path/to/my/presale.wallet
 
-	will prompt for your password and imports your PAI presale account.
-	It can be used non-interactively with the --password option taking a
-	passwordfile as argument containing the wallet password in plaintext.`,
-			Subcommands: []cli.Command{
-				{
+		will prompt for your password and imports your PChain presale account.
+		It can be used non-interactively with the --password option taking a
+		passwordfile as argument containing the wallet password in plaintext.`,
+				Subcommands: []cli.Command{
+					{
 
-					Name:      "import",
-					Usage:     "Import pchain presale wallet",
-					ArgsUsage: "<keyFile>",
-					Action:    utils.MigrateFlags(importWallet),
-					Category:  "ACCOUNT COMMANDS",
-					Flags: []cli.Flag{
-						utils.DataDirFlag,
-						utils.KeyStoreDirFlag,
-						utils.PasswordFileFlag,
-						utils.LightKDFFlag,
+						Name:      "import",
+						Usage:     "Import pchain presale wallet",
+						ArgsUsage: "<keyFile>",
+						Action:    utils.MigrateFlags(importWallet),
+						Category:  "ACCOUNT COMMANDS",
+						Flags: []cli.Flag{
+							utils.DataDirFlag,
+							utils.KeyStoreDirFlag,
+							utils.PasswordFileFlag,
+							utils.LightKDFFlag,
+						},
+						Description: `
+			pchain wallet [options] /path/to/my/presale.wallet
+
+		will prompt for your password and imports your PChain presale account.
+		It can be used non-interactively with the --password option taking a
+		passwordfile as argument containing the wallet password in plaintext.`,
 					},
-					Description: `
-		pchain wallet [options] /path/to/my/presale.wallet
-
-	will prompt for your password and imports your PAI presale account.
-	It can be used non-interactively with the --password option taking a
-	passwordfile as argument containing the wallet password in plaintext.`,
 				},
-			},
-		}
+			}
 	*/
 	accountCommand = cli.Command{
 		Name:     "account",

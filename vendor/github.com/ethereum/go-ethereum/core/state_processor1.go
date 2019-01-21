@@ -109,7 +109,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		gasLimit := tx.Gas()
 		gasValue := new(big.Int).Mul(new(big.Int).SetUint64(gasLimit), tx.GasPrice())
 		if statedb.GetBalance(from).Cmp(gasValue) < 0 {
-			return nil, 0, fmt.Errorf("insufficient PAI for gas (%x). Req %v, has %v", from.Bytes()[:4], gasValue, statedb.GetBalance(from))
+			return nil, 0, fmt.Errorf("insufficient PI for gas (%x). Req %v, has %v", from.Bytes()[:4], gasValue, statedb.GetBalance(from))
 		}
 		if err := gp.SubGas(gasLimit); err != nil {
 			return nil, 0, err
@@ -122,11 +122,31 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		if gasLimit < gas {
 			return nil, 0, vm.ErrOutOfGas
 		}
+
+		// Check Tx Amount
+		if statedb.GetBalance(from).Cmp(tx.Value()) == -1 {
+			return nil, 0, fmt.Errorf("insufficient PI for tx amount (%x). Req %v, has %v", from.Bytes()[:4], tx.Value(), statedb.GetBalance(from))
+		}
+
 		if applyCb := GetApplyCb(function); applyCb != nil {
-			cch.GetMutex().Lock()
-			defer cch.GetMutex().Unlock()
-			if err := applyCb(tx, statedb, ops, cch, mining); err != nil {
-				return nil, 0, err
+			if function.IsCrossChainType() {
+				cch.GetMutex().Lock()
+				defer cch.GetMutex().Unlock()
+				if fn, ok := applyCb.(CrossChainApplyCb); ok {
+					if err := fn(tx, statedb, ops, cch, mining); err != nil {
+						return nil, 0, err
+					}
+				} else {
+					panic("callback func is wrong, this should not happened, please check the code")
+				}
+			} else {
+				if fn, ok := applyCb.(NonCrossChainApplyCb); ok {
+					if err := fn(tx, statedb, bc, ops); err != nil {
+						return nil, 0, err
+					}
+				} else {
+					panic("callback func is wrong, this should not happened, please check the code")
+				}
 			}
 		}
 
