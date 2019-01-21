@@ -109,7 +109,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		gasLimit := tx.Gas()
 		gasValue := new(big.Int).Mul(new(big.Int).SetUint64(gasLimit), tx.GasPrice())
 		if statedb.GetBalance(from).Cmp(gasValue) < 0 {
-			return nil, 0, fmt.Errorf("insufficient PAI for gas (%x). Req %v, has %v", from.Bytes()[:4], gasValue, statedb.GetBalance(from))
+			return nil, 0, fmt.Errorf("insufficient PI for gas (%x). Req %v, has %v", from.Bytes()[:4], gasValue, statedb.GetBalance(from))
 		}
 		if err := gp.SubGas(gasLimit); err != nil {
 			return nil, 0, err
@@ -125,7 +125,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 		// Check Tx Amount
 		if statedb.GetBalance(from).Cmp(tx.Value()) == -1 {
-			return nil, 0, fmt.Errorf("insufficient PAI for tx amount (%x). Req %v, has %v", from.Bytes()[:4], tx.Value(), statedb.GetBalance(from))
+			return nil, 0, fmt.Errorf("insufficient PI for tx amount (%x). Req %v, has %v", from.Bytes()[:4], tx.Value(), statedb.GetBalance(from))
 		}
 
 		if applyCb := GetApplyCb(function); applyCb != nil {

@@ -613,7 +613,7 @@ func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
 
 func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime time.Time) (rewardPerBlock *big.Int, blocksOfNextEpoch uint64) {
 
-	var rewardFirstYear = epoch.rs.RewardFirstYear       //20000000e+18 //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PAI by 10 years
+	var rewardFirstYear = epoch.rs.RewardFirstYear       //20000000e+18 //2 + 1.8 + 1.6 + ... + 0.2；release all left 110000000 PI by 10 years
 	var epochNumberPerYear = epoch.rs.EpochNumberPerYear //12
 	var totalYear = epoch.rs.TotalYear                   // 23
 
