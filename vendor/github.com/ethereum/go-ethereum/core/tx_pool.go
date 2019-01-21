@@ -616,12 +616,26 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if err != nil {
 			return err
 		}
-		log.Info("validateTx Chain Function", function.String())
+		log.Infof("validateTx Chain Function %v", function.String())
 		if validateCb := GetValidateCb(function); validateCb != nil {
-			pool.cch.GetMutex().Lock()
-			defer pool.cch.GetMutex().Unlock()
-			if err := validateCb(tx, pool.currentState, pool.cch); err != nil {
-				return err
+			if function.IsCrossChainType() {
+				pool.cch.GetMutex().Lock()
+				defer pool.cch.GetMutex().Unlock()
+				if fn, ok := validateCb.(CrossChainValidateCb); ok {
+					if err := fn(tx, pool.currentState, pool.cch); err != nil {
+						return err
+					}
+				} else {
+					panic("callback func is wrong, this should not happened, please check the code")
+				}
+			} else {
+				if fn, ok := validateCb.(NonCrossChainValidateCb); ok {
+					if err := fn(tx, pool.currentState, pool.chain.(*BlockChain)); err != nil {
+						return err
+					}
+				} else {
+					panic("callback func is wrong, this should not happened, please check the code")
+				}
 			}
 		}
 	}

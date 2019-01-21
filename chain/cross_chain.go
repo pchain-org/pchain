@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -81,7 +80,7 @@ func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId st
 	// Check the minimum deposit amount
 	officialMinimumDeposit := math.MustParseBig256(OFFICIAL_MINIMUM_DEPOSIT)
 	if minDepositAmount.Cmp(officialMinimumDeposit) == -1 {
-		return fmt.Errorf("Deposit amount is not meet the minimum official deposit amount (%v PAI)", new(big.Int).Div(officialMinimumDeposit, big.NewInt(params.Ether)))
+		return fmt.Errorf("Deposit amount is not meet the minimum official deposit amount (%v PI)", new(big.Int).Div(officialMinimumDeposit, big.NewInt(params.PI)))
 	}
 
 	// Check start/end block
@@ -127,7 +126,7 @@ func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, consens
 	}
 
 	// Check Signature of the PubKey matched against the Address
-	if err := checkConsensusPubKey(from, consensusPubkey, signature); err != nil {
+	if err := crypto.CheckConsensusPubKey(from, consensusPubkey, signature); err != nil {
 		return err
 	}
 
@@ -212,37 +211,6 @@ func (cch *CrossChainHelper) ProcessPostPendingData(newPendingIdxBytes []byte, d
 	core.ProcessPostPendingData(cch.chainInfoDB, newPendingIdxBytes, deleteChildChainIds)
 }
 
-func (cch *CrossChainHelper) ValidateVoteNextEpoch(chainId string) error {
-
-	var ethereum *eth.Ethereum
-	if chainId == MainChain {
-		ethereum = MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	} else {
-		ethereum = MustGetEthereumFromNode(chainMgr.childChains[chainId].EthNode)
-	}
-
-	var ep *epoch.Epoch
-	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
-		ep = tdm.GetEpoch()
-	}
-
-	if ep == nil {
-		return errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
-	}
-
-	// Check Epoch in Hash Vote stage
-	if ep.GetNextEpoch() == nil {
-		return errors.New("next Epoch is nil, You can't vote the next epoch")
-	}
-
-	// Vote is valid between height 75% - 85%
-	height := ethereum.BlockChain().CurrentBlock().NumberU64()
-	if !ep.CheckInHashVoteStage(height) {
-		return errors.New(fmt.Sprintf("you can't send the hash vote during this time, current height %v", height))
-	}
-	return nil
-}
-
 func (cch *CrossChainHelper) VoteNextEpoch(ep *epoch.Epoch, from common.Address, voteHash common.Hash, txHash common.Hash) error {
 
 	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
@@ -263,71 +231,6 @@ func (cch *CrossChainHelper) VoteNextEpoch(ep *epoch.Epoch, from common.Address,
 	}
 	// Save the VoteSet
 	epoch.SaveEpochVoteSet(ep.GetDB(), ep.GetNextEpoch().Number, voteSet)
-	return nil
-}
-
-func (cch *CrossChainHelper) ValidateRevealVote(chainId string, from common.Address, consensusPubkey []byte, depositAmount *big.Int, salt string, signature []byte) error {
-	// Check Signature of the PubKey matched against the Address
-	if err := checkConsensusPubKey(from, consensusPubkey, signature); err != nil {
-		return err
-	}
-
-	var ethereum *eth.Ethereum
-	if chainId == MainChain {
-		ethereum = MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
-	} else {
-		ethereum = MustGetEthereumFromNode(chainMgr.childChains[chainId].EthNode)
-	}
-
-	var ep *epoch.Epoch
-	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
-		ep = tdm.GetEpoch()
-	}
-
-	if ep == nil {
-		return errors.New("epoch is nil, are you running on Tendermint Consensus Engine")
-	}
-
-	// Check Epoch in Reveal Vote stage
-	if ep.GetNextEpoch() == nil {
-		return errors.New("next Epoch is nil, You can't vote the next epoch")
-	}
-
-	// Vote is valid between height 85% - 95%
-	height := ethereum.BlockChain().CurrentBlock().NumberU64()
-	if !ep.CheckInRevealVoteStage(height) {
-		return errors.New(fmt.Sprintf("you can't send the reveal vote during this time, current height %v", height))
-	}
-
-	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
-	vote, exist := voteSet.GetVoteByAddress(from)
-
-	// Check Vote exist
-	if !exist {
-		return errors.New(fmt.Sprintf("Can not found the vote for Address %x", from))
-	}
-
-	if len(vote.VoteHash) == 0 {
-		return errors.New(fmt.Sprintf("Address %x doesn't has vote hash", from))
-	}
-
-	// Check Vote Hash
-	byte_data := [][]byte{
-		from.Bytes(),
-		consensusPubkey,
-		depositAmount.Bytes(),
-		[]byte(salt),
-	}
-	voteHash := ethcrypto.Keccak256Hash(concatCopyPreAllocate(byte_data))
-	if vote.VoteHash != voteHash {
-		return errors.New("your vote doesn't match your vote hash, please check your vote")
-	}
-
-	// Check Logic - Amount can't be 0 for new Validator
-	if !ep.Validators.HasAddress(from.Bytes()) && depositAmount.Sign() <= 0 {
-		return errors.New("invalid vote!!! new validator's vote amount must be greater than 0")
-	}
-
 	return nil
 }
 
@@ -639,7 +542,7 @@ func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transac
 	}
 
 	// Does TX3 & TX4 Match
-	if from != tx3From || args.ChainId != tx3Args.ChainId || args.Amount.Cmp(tx3Args.Amount) != 0 {
+	if from != tx3From || args.ChainId != tx3Args.ChainId || args.Amount.Cmp(tx3.Value()) != 0 {
 		return errors.New("params are not consistent with tx in child chain")
 	}
 
@@ -684,39 +587,4 @@ func getEthereumFromNode(node *node.Node) (*eth.Ethereum, error) {
 	}
 
 	return ethereum, nil
-}
-
-func concatCopyPreAllocate(slices [][]byte) []byte {
-	var totalLen int
-	for _, s := range slices {
-		totalLen += len(s)
-	}
-	tmp := make([]byte, totalLen)
-	var i int
-	for _, s := range slices {
-		i += copy(tmp[i:], s)
-	}
-	return tmp
-}
-
-func checkConsensusPubKey(from common.Address, consensusPubkey, signature []byte) error {
-	if len(consensusPubkey) != 128 {
-		return errors.New("invalid consensus public key")
-	}
-
-	if len(signature) != 64 {
-		return errors.New("invalid signature")
-	}
-
-	// Get BLS Public Key
-	var blsPK crypto.BLSPubKey
-	copy(blsPK[:], consensusPubkey)
-	// Get BLS Signature
-	blsSign := crypto.BLSSignature(signature)
-	// Verify the Signature
-	success := blsPK.VerifyBytes(from.Bytes(), blsSign)
-	if !success {
-		return errors.New("consensus public key signature verification failed")
-	}
-	return nil
 }

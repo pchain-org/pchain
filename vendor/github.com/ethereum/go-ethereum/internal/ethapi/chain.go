@@ -33,7 +33,7 @@ func NewPublicChainAPI(b Backend) *PublicChainAPI {
 }
 
 func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Address, chainId string,
-	minValidators *hexutil.Uint, minDepositAmount *hexutil.Big, startBlock, endBlock *hexutil.Big, gas *hexutil.Uint64, gasPrice *hexutil.Big) (common.Hash, error) {
+	minValidators *hexutil.Uint, minDepositAmount *hexutil.Big, startBlock, endBlock *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
@@ -44,10 +44,12 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 		return common.Hash{}, err
 	}
 
+	defaultGas := pabi.CreateChildChain.RequiredGas()
+
 	args := SendTxArgs{
 		From:     from,
 		To:       &pabi.ChainContractMagicAddr,
-		Gas:      gas,
+		Gas:      (*hexutil.Uint64)(&defaultGas),
 		GasPrice: gasPrice,
 		Value:    nil,
 		Input:    (*hexutil.Bytes)(&input),
@@ -58,23 +60,25 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 }
 
 func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address, pubkey crypto.BLSPubKey, chainId string,
-	depositAmount *hexutil.Big, signature hexutil.Bytes, gas *hexutil.Uint64, gasPrice *hexutil.Big) (common.Hash, error) {
+	depositAmount *hexutil.Big, signature hexutil.Bytes, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
 	}
 
-	input, err := pabi.ChainABI.Pack(pabi.JoinChildChain.String(), pubkey.Bytes(), chainId, (*big.Int)(depositAmount), signature)
+	input, err := pabi.ChainABI.Pack(pabi.JoinChildChain.String(), pubkey.Bytes(), chainId, signature)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
+	defaultGas := pabi.JoinChildChain.RequiredGas()
+
 	args := SendTxArgs{
 		From:     from,
 		To:       &pabi.ChainContractMagicAddr,
-		Gas:      gas,
+		Gas:      (*hexutil.Uint64)(&defaultGas),
 		GasPrice: gasPrice,
-		Value:    nil,
+		Value:    depositAmount,
 		Input:    (*hexutil.Bytes)(&input),
 		Nonce:    nil,
 	}
@@ -83,7 +87,7 @@ func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address
 }
 
 func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Address, chainId string,
-	amount *hexutil.Big, gas *hexutil.Uint64, gasPrice *hexutil.Big) (common.Hash, error) {
+	amount *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
@@ -97,17 +101,19 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 		return common.Hash{}, errors.New("this api can only be called in main chain - pchain")
 	}
 
-	input, err := pabi.ChainABI.Pack(pabi.DepositInMainChain.String(), chainId, (*big.Int)(amount))
+	input, err := pabi.ChainABI.Pack(pabi.DepositInMainChain.String(), chainId)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
+	defaultGas := pabi.DepositInMainChain.RequiredGas()
+
 	args := SendTxArgs{
 		From:     from,
 		To:       &pabi.ChainContractMagicAddr,
-		Gas:      gas,
+		Gas:      (*hexutil.Uint64)(&defaultGas),
 		GasPrice: gasPrice,
-		Value:    nil,
+		Value:    amount,
 		Input:    (*hexutil.Bytes)(&input),
 		Nonce:    nil,
 	}
@@ -141,24 +147,26 @@ func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Ad
 }
 
 func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common.Address,
-	amount *hexutil.Big, gas *hexutil.Uint64, gasPrice *hexutil.Big) (common.Hash, error) {
+	amount *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
 	if chainId == "pchain" {
 		return common.Hash{}, errors.New("this api can only be called in child chain")
 	}
 
-	input, err := pabi.ChainABI.Pack(pabi.WithdrawFromChildChain.String(), chainId, (*big.Int)(amount))
+	input, err := pabi.ChainABI.Pack(pabi.WithdrawFromChildChain.String(), chainId)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
+	defaultGas := pabi.WithdrawFromChildChain.RequiredGas()
+
 	args := SendTxArgs{
 		From:     from,
 		To:       &pabi.ChainContractMagicAddr,
-		Gas:      gas,
+		Gas:      (*hexutil.Uint64)(&defaultGas),
 		GasPrice: gasPrice,
-		Value:    nil,
+		Value:    amount,
 		Input:    (*hexutil.Bytes)(&input),
 		Nonce:    nil,
 	}
@@ -418,12 +426,7 @@ func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 		return err
 	}
 
-	// Check Balance
-	if state.GetBalance(from).Cmp(args.DepositAmount) == -1 {
-		return core.ErrInsufficientFunds
-	}
-
-	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, args.DepositAmount, args.Signature); err != nil {
+	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, tx.Value(), args.Signature); err != nil {
 		return err
 	}
 
@@ -444,12 +447,9 @@ func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 		return err
 	}
 
-	// Check Balance
-	if state.GetBalance(from).Cmp(args.DepositAmount) == -1 {
-		return core.ErrInsufficientFunds
-	}
+	amount := tx.Value()
 
-	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, args.DepositAmount, args.Signature); err != nil {
+	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, amount, args.Signature); err != nil {
 		return err
 	}
 
@@ -460,26 +460,20 @@ func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 		From:          from,
 		PubKey:        pub,
 		ChainId:       args.ChainId,
-		DepositAmount: args.DepositAmount,
+		DepositAmount: amount,
 	}
 	if ok := ops.Append(&op); !ok {
 		return fmt.Errorf("pending ops conflict: %v", op)
 	}
 
 	// Everything fine, Lock the Balance for this account
-	state.SubBalance(from, args.DepositAmount)
-	state.AddChildChainDepositBalance(from, args.ChainId, args.DepositAmount)
+	state.SubBalance(from, amount)
+	state.AddChildChainDepositBalance(from, args.ChainId, amount)
 
 	return nil
 }
 
 func dimc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
-
-	signer := types.NewEIP155Signer(tx.ChainId())
-	from, err := types.Sender(signer, tx)
-	if err != nil {
-		return core.ErrInvalidSender
-	}
 
 	var args pabi.DepositInMainChainArgs
 	data := tx.Data()
@@ -490,10 +484,6 @@ func dimc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 	running := core.CheckChildChainRunning(cch.GetChainInfoDB(), args.ChainId)
 	if !running {
 		return fmt.Errorf("%s chain not running", args.ChainId)
-	}
-
-	if state.GetBalance(from).Cmp(args.Amount) < 0 {
-		return fmt.Errorf("%x has no enough balance for deposit", from)
 	}
 
 	return nil
@@ -518,16 +508,14 @@ func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return fmt.Errorf("%s chain not running", args.ChainId)
 	}
 
-	if state.GetBalance(from).Cmp(args.Amount) < 0 {
-		return fmt.Errorf("%x has no enough balance for deposit", from)
-	}
-
 	// mark from -> tx1 on the main chain (to find all tx1 when given 'from').
 	state.AddTX1(from, tx.Hash())
 
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
-	state.SubBalance(from, args.Amount)
-	state.AddChainBalance(chainInfo.Owner, args.Amount)
+
+	amount := tx.Value()
+	state.SubBalance(from, amount)
+	state.AddChainBalance(chainInfo.Owner, amount)
 
 	return nil
 }
@@ -616,27 +604,17 @@ func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	// mark from -> tx1 on the child chain (to indicate tx1's used).
 	state.AddTX1(from, args.TxHash)
 
-	state.AddBalance(dimcFrom, dimcArgs.Amount)
+	state.AddBalance(dimcFrom, dimcTx.Value())
 
 	return nil
 }
 
 func wfcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
-	from, err := types.Sender(signer, tx)
-	if err != nil {
-		return core.ErrInvalidSender
-	}
-
 	var args pabi.WithdrawFromChildChainArgs
 	data := tx.Data()
 	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromChildChain.String(), data[4:]); err != nil {
 		return err
-	}
-
-	if state.GetBalance(from).Cmp(args.Amount) < 0 {
-		return errors.New("no enough balance to withdraw")
 	}
 
 	return nil
@@ -656,14 +634,10 @@ func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return err
 	}
 
-	if state.GetBalance(from).Cmp(args.Amount) < 0 {
-		return errors.New("no enough balance to withdraw")
-	}
-
 	// mark from -> tx3 on the child chain (to find all tx3 when given 'from').
 	state.AddTX3(from, tx.Hash())
 
-	state.SubBalance(from, args.Amount)
+	state.SubBalance(from, tx.Value())
 
 	return nil
 }
@@ -732,7 +706,7 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 			return err
 		}
 
-		if from != wfccFrom || args.ChainId != wfccArgs.ChainId || args.Amount.Cmp(wfccArgs.Amount) != 0 {
+		if from != wfccFrom || args.ChainId != wfccArgs.ChainId || args.Amount.Cmp(wfccTx.Value()) != 0 {
 			return core.ErrInvalidTx4
 		}
 	}

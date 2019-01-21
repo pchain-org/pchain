@@ -63,7 +63,6 @@ type Agent interface {
 // Work is the workers current environment and holds
 // all of the current state information
 type Work struct {
-	config *params.ChainConfig
 	signer types.Signer
 
 	state     *state.StateDB // apply state changes here
@@ -129,8 +128,6 @@ type worker struct {
 	mining int32
 	atWork int32
 
-	totalUsedMoney *big.Int
-
 	logger log.Logger
 	cch    core.CrossChainHelper
 }
@@ -151,7 +148,6 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 		possibleUncles: make(map[common.Hash]*types.Block),
 		agents:         make(map[Agent]struct{}),
 		unconfirmed:    newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth, config.ChainLogger),
-		totalUsedMoney: big.NewInt(0),
 		logger:         config.ChainLogger,
 		cch:            cch,
 	}
@@ -301,7 +297,7 @@ func (self *worker) update() {
 				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
 				txset := types.NewTransactionsByPriceAndNonce(self.current.signer, txs)
 
-				self.current.commitTransactionsEx(self.mux, txset, self.chain, self.coinbase, self.totalUsedMoney, self.cch)
+				self.commitTransactionsEx(txset, self.coinbase, big.NewInt(0), self.cch)
 				self.currentMu.Unlock()
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
@@ -402,7 +398,6 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		return err
 	}
 	work := &Work{
-		config:    self.config,
 		signer:    types.NewEIP155Signer(self.config.ChainId),
 		state:     state,
 		ancestors: set.New(),
@@ -495,15 +490,18 @@ func (self *worker) commitNewWork() {
 	if self.config.DAOForkSupport && self.config.DAOForkBlock != nil && self.config.DAOForkBlock.Cmp(header.Number) == 0 {
 		misc.ApplyDAOHardFork(work.state)
 	}
+
+	// Fill the block with all available pending transactions.
 	pending, err := self.eth.TxPool().Pending()
 	if err != nil {
 		self.logger.Error("Failed to fetch pending transactions", "err", err)
 		return
 	}
-	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
 
+	totalUsedMoney := big.NewInt(0)
+	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
 	//work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
-	rmTxs := work.commitTransactionsEx(self.mux, txs, self.chain, self.coinbase, self.totalUsedMoney, self.cch)
+	rmTxs := self.commitTransactionsEx(txs, self.coinbase, totalUsedMoney, self.cch)
 
 	// Remove the Invalid Transactions during tx execution (eg: tx4)
 	if len(rmTxs) > 0 {
@@ -560,15 +558,16 @@ func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
 	return nil
 }
 
-func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsByPriceAndNonce, bc *core.BlockChain, coinbase common.Address) {
-	gp := new(core.GasPool).AddGas(env.header.GasLimit)
+func (w *worker) commitTransactionsEx(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, totalUsedMoney *big.Int, cch core.CrossChainHelper) (rmTxs types.Transactions) {
+
+	gp := new(core.GasPool).AddGas(w.current.header.GasLimit)
 
 	var coalescedLogs []*types.Log
 
 	for {
 		// If we don't have enough gas for any further transactions then we're done
 		if gp.Gas() < params.TxGas {
-			env.logger.Trace("Not enough gas for further transactions", "gp", gp)
+			w.logger.Trace("Not enough gas for further transactions", "have", gp, "want", params.TxGas)
 			break
 		}
 		// Retrieve the next transaction and abort if all done
@@ -580,157 +579,57 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 		// during transaction acceptance is the transaction pool.
 		//
 		// We use the eip155 signer regardless of the current hf.
-		from, _ := types.Sender(env.signer, tx)
+		from, _ := types.Sender(w.current.signer, tx)
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
-		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
-			env.logger.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
-
-			txs.Pop()
-			continue
-		}
-		// Start executing the transaction
-		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
-
-		err, logs := env.commitTransaction(tx, bc, coinbase, gp)
-		switch err {
-		case core.ErrGasLimitReached:
-			// Pop the current out-of-gas transaction without shifting in the next from the account
-			env.logger.Trace("Gas limit exceeded for current block", "sender", from)
-			txs.Pop()
-
-		case core.ErrNonceTooLow:
-			// New head notification data race between the transaction pool and miner, shift
-			env.logger.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
-			txs.Shift()
-
-		case core.ErrNonceTooHigh:
-			// Reorg notification data race between the transaction pool and miner, skip account =
-			env.logger.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
-			txs.Pop()
-
-		case nil:
-			// Everything ok, collect the logs and shift in the next transaction from the same account
-			coalescedLogs = append(coalescedLogs, logs...)
-			env.tcount++
-			txs.Shift()
-
-		default:
-			// Strange error, discard the transaction and get the next in line (note, the
-			// nonce-too-high clause will prevent us from executing in vain).
-			env.logger.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
-			txs.Shift()
-		}
-	}
-
-	if len(coalescedLogs) > 0 || env.tcount > 0 {
-		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
-		// logs by filling in the block hash when the block was mined by the local miner. This can
-		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
-		cpy := make([]*types.Log, len(coalescedLogs))
-		for i, l := range coalescedLogs {
-			cpy[i] = new(types.Log)
-			*cpy[i] = *l
-		}
-		go func(logs []*types.Log, tcount int) {
-			if len(logs) > 0 {
-				mux.Post(core.PendingLogsEvent{Logs: logs})
-			}
-			if tcount > 0 {
-				mux.Post(core.PendingStateEvent{})
-			}
-		}(cpy, env.tcount)
-	}
-}
-
-func (env *Work) commitTransaction(tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool) (error, []*types.Log) {
-	snap := env.state.Snapshot()
-
-	receipt, _, err := core.ApplyTransaction(env.config, bc, &coinbase, gp, env.state, env.header, tx, &env.header.GasUsed, vm.Config{})
-	if err != nil {
-		env.state.RevertToSnapshot(snap)
-		return err, nil
-	}
-	env.txs = append(env.txs, tx)
-	env.receipts = append(env.receipts, receipt)
-
-	return nil, receipt.Logs
-}
-
-func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.TransactionsByPriceAndNonce, bc *core.BlockChain,
-	coinbase common.Address, totalUsedMoney *big.Int, cch core.CrossChainHelper) (rmTxs types.Transactions) {
-
-	gp := new(core.GasPool).AddGas(env.header.GasLimit)
-
-	var coalescedLogs []*types.Log
-
-	for {
-		// If we don't have enough gas for any further transactions then we're done
-		if gp.Gas() < params.TxGas {
-			env.logger.Trace("Not enough gas for further transactions", "gp", gp)
-			break
-		}
-		// Retrieve the next transaction and abort if all done
-		tx := txs.Peek()
-		if tx == nil {
-			break
-		}
-		// Error may be ignored here. The error has already been checked
-		// during transaction acceptance is the transaction pool.
-		//
-		// We use the eip155 signer regardless of the current hf.
-		from, _ := types.Sender(env.signer, tx)
-		// Check whether the tx is replay protected. If we're not in the EIP155 hf
-		// phase, start ignoring the sender until we do.
-		if tx.Protected() && !env.config.IsEIP155(env.header.Number) {
-			env.logger.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", env.config.EIP155Block)
+		if tx.Protected() && !w.config.IsEIP155(w.current.header.Number) {
+			w.logger.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.config.EIP155Block)
 
 			txs.Pop()
 			continue
 		}
 
 		// Start executing the transaction
-		env.state.Prepare(tx.Hash(), common.Hash{}, env.tcount)
+		w.current.state.Prepare(tx.Hash(), common.Hash{}, w.current.tcount)
 
-		err, logs := env.commitTransactionEx(tx, bc, coinbase, gp, totalUsedMoney, cch)
-
+		logs, err := w.commitTransactionEx(tx, coinbase, gp, totalUsedMoney, cch)
 		switch err {
 		case core.ErrGasLimitReached:
 			// Pop the current out-of-gas transaction without shifting in the next from the account
-			env.logger.Trace("Gas limit exceeded for current block", "sender", from)
+			w.logger.Trace("Gas limit exceeded for current block", "sender", from)
 			txs.Pop()
 
 		case core.ErrNonceTooLow:
 			// New head notification data race between the transaction pool and miner, shift
-			env.logger.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+			w.logger.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
 			txs.Shift()
 
 		case core.ErrNonceTooHigh:
 			// Reorg notification data race between the transaction pool and miner, skip account =
-			env.logger.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
+			w.logger.Trace("Skipping account with hight nonce", "sender", from, "nonce", tx.Nonce())
 			txs.Pop()
 
 		case core.ErrInvalidTx4:
 			// Remove the tx4
 			rmTxs = append(rmTxs, tx)
-			env.logger.Trace("Invalid Tx4, this tx will be removed", "hash", tx.Hash())
+			w.logger.Trace("Invalid Tx4, this tx will be removed", "hash", tx.Hash())
 			txs.Shift()
 
 		case nil:
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
-			env.tcount++
+			w.current.tcount++
 			txs.Shift()
 
 		default:
 			// Strange error, discard the transaction and get the next in line (note, the
 			// nonce-too-high clause will prevent us from executing in vain).
-			env.logger.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+			w.logger.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
 			txs.Shift()
 		}
 	}
 
-	if len(coalescedLogs) > 0 || env.tcount > 0 {
+	if len(coalescedLogs) > 0 || w.current.tcount > 0 {
 		// make a copy, the state caches the logs and these logs get "upgraded" from pending to mined
 		// logs by filling in the block hash when the block was mined by the local miner. This can
 		// cause a race condition if a log was "upgraded" before the PendingLogsEvent is processed.
@@ -741,27 +640,27 @@ func (env *Work) commitTransactionsEx(mux *event.TypeMux, txs *types.Transaction
 		}
 		go func(logs []*types.Log, tcount int) {
 			if len(logs) > 0 {
-				mux.Post(core.PendingLogsEvent{Logs: logs})
+				w.mux.Post(core.PendingLogsEvent{Logs: logs})
 			}
 			if tcount > 0 {
-				mux.Post(core.PendingStateEvent{})
+				w.mux.Post(core.PendingStateEvent{})
 			}
-		}(cpy, env.tcount)
+		}(cpy, w.current.tcount)
 	}
 	return
 }
 
-func (env *Work) commitTransactionEx(tx *types.Transaction, bc *core.BlockChain, coinbase common.Address, gp *core.GasPool, totalUsedMoney *big.Int, cch core.CrossChainHelper) (error, []*types.Log) {
-	snap := env.state.Snapshot()
+func (w *worker) commitTransactionEx(tx *types.Transaction, coinbase common.Address, gp *core.GasPool, totalUsedMoney *big.Int, cch core.CrossChainHelper) ([]*types.Log, error) {
+	snap := w.current.state.Snapshot()
 
-	receipt, _, err := core.ApplyTransactionEx(env.config, bc, nil, gp, env.state, env.ops, env.header, tx, &env.header.GasUsed, totalUsedMoney, vm.Config{}, cch, true)
+	receipt, _, err := core.ApplyTransactionEx(w.config, w.chain, nil, gp, w.current.state, w.current.ops, w.current.header, tx, &w.current.header.GasUsed, totalUsedMoney, vm.Config{}, cch, true)
 	if err != nil {
-		env.state.RevertToSnapshot(snap)
-		return err, nil
+		w.current.state.RevertToSnapshot(snap)
+		return nil, err
 	}
 
-	env.txs = append(env.txs, tx)
-	env.receipts = append(env.receipts, receipt)
+	w.current.txs = append(w.current.txs, tx)
+	w.current.receipts = append(w.current.receipts, receipt)
 
-	return nil, receipt.Logs
+	return receipt.Logs, nil
 }

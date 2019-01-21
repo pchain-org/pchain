@@ -7,21 +7,34 @@ import (
 	"strings"
 )
 
-type FunctionType int
+type FunctionType struct {
+	id    int
+	cross bool
+}
 
-const (
-	CreateChildChain FunctionType = iota
-	JoinChildChain
-	DepositInMainChain
-	DepositInChildChain
-	WithdrawFromChildChain
-	WithdrawFromMainChain
-	SaveDataToMainChain
-	VoteNextEpoch
-	RevealVote
+var (
+	// Cross Chain Function
+	CreateChildChain       = FunctionType{0, true}
+	JoinChildChain         = FunctionType{1, true}
+	DepositInMainChain     = FunctionType{2, true}
+	DepositInChildChain    = FunctionType{3, true}
+	WithdrawFromChildChain = FunctionType{4, true}
+	WithdrawFromMainChain  = FunctionType{5, true}
+	SaveDataToMainChain    = FunctionType{6, true}
+	// Non-Cross Chain Function
+	VoteNextEpoch   = FunctionType{10, false}
+	RevealVote      = FunctionType{11, false}
+	Delegate        = FunctionType{12, false}
+	CancelDelegate  = FunctionType{13, false}
+	Candidate       = FunctionType{14, false}
+	CancelCandidate = FunctionType{15, false}
 	// Unknown
-	Unknown
+	Unknown = FunctionType{-1, false}
 )
+
+func (t FunctionType) IsCrossChainType() bool {
+	return t.cross
+}
 
 func (t FunctionType) RequiredGas() uint64 {
 	switch t {
@@ -43,6 +56,10 @@ func (t FunctionType) RequiredGas() uint64 {
 		return 21000
 	case RevealVote:
 		return 21000
+	case Delegate, CancelDelegate, Candidate:
+		return 21000
+	case CancelCandidate:
+		return 100000
 	default:
 		return 0
 	}
@@ -68,6 +85,14 @@ func (t FunctionType) String() string {
 		return "VoteNextEpoch"
 	case RevealVote:
 		return "RevealVote"
+	case Delegate:
+		return "Delegate"
+	case CancelDelegate:
+		return "CancelDelegate"
+	case Candidate:
+		return "Candidate"
+	case CancelCandidate:
+		return "CancelCandidate"
 	default:
 		return "UnKnown"
 	}
@@ -93,6 +118,14 @@ func StringToFunctionType(s string) FunctionType {
 		return VoteNextEpoch
 	case "RevealVote":
 		return RevealVote
+	case "Delegate":
+		return Delegate
+	case "CancelDelegate":
+		return CancelDelegate
+	case "Candidate":
+		return Candidate
+	case "CancelCandidate":
+		return CancelCandidate
 	default:
 		return Unknown
 	}
@@ -107,15 +140,13 @@ type CreateChildChainArgs struct {
 }
 
 type JoinChildChainArgs struct {
-	PubKey        []byte
-	ChainId       string
-	DepositAmount *big.Int
-	Signature     []byte
+	PubKey    []byte
+	ChainId   string
+	Signature []byte
 }
 
 type DepositInMainChainArgs struct {
 	ChainId string
-	Amount  *big.Int
 }
 
 type DepositInChildChainArgs struct {
@@ -125,7 +156,6 @@ type DepositInChildChainArgs struct {
 
 type WithdrawFromChildChainArgs struct {
 	ChainId string
-	Amount  *big.Int
 }
 
 type WithdrawFromMainChainArgs struct {
@@ -135,16 +165,27 @@ type WithdrawFromMainChainArgs struct {
 }
 
 type VoteNextEpochArgs struct {
-	ChainId  string
 	VoteHash common.Hash
 }
 
 type RevealVoteArgs struct {
-	ChainId   string
 	PubKey    []byte
 	Amount    *big.Int
 	Salt      string
 	Signature []byte
+}
+
+type DelegateArgs struct {
+	Candidate common.Address
+}
+
+type CancelDelegateArgs struct {
+	Candidate common.Address
+	Amount    *big.Int
+}
+
+type CandidateArgs struct {
+	Commission uint8
 }
 
 const jsonChainABI = `
@@ -190,10 +231,6 @@ const jsonChainABI = `
 				"type": "string"
 			},
 			{
-				"name": "depositAmount",
-				"type": "uint256"
-			},
-			{
 				"name": "signature",
 				"type": "bytes"
 			}
@@ -207,10 +244,6 @@ const jsonChainABI = `
 			{
 				"name": "chainId",
 				"type": "string"
-			},
-			{
-				"name": "amount",
-				"type": "uint256"
 			}
 		]
 	},
@@ -237,10 +270,6 @@ const jsonChainABI = `
 			{
 				"name": "chainId",
 				"type": "string"
-			},
-			{
-				"name": "amount",
-				"type": "uint256"
 			}
 		]
 	},
@@ -280,10 +309,6 @@ const jsonChainABI = `
 		"constant": false,
 		"inputs": [
 			{
-				"name": "chainId",
-				"type": "string"
-			},
-			{
 				"name": "voteHash",
 				"type": "bytes32"
 			}
@@ -294,10 +319,6 @@ const jsonChainABI = `
 		"name": "RevealVote",
 		"constant": false,
 		"inputs": [
-			{
-				"name": "chainId",
-				"type": "string"
-			},
 			{
 				"name": "pubKey",
 				"type": "bytes"
@@ -315,6 +336,49 @@ const jsonChainABI = `
 				"type": "bytes"
 			}
 		]
+	},
+	{
+		"type": "function",
+		"name": "Delegate",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "candidate",
+				"type": "address"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "CancelDelegate",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "candidate",
+				"type": "address"
+			},
+			{
+				"name": "amount",
+				"type": "uint256"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "Candidate",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "commission",
+				"type": "uint8"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "CancelCandidate",
+		"constant": false,
+		"inputs": []
 	}
 ]`
 

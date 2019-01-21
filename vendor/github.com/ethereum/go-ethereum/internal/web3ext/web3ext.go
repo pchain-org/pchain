@@ -31,6 +31,9 @@ var Modules = map[string]string{
 	"swarmfs":    SWARMFS_JS,
 	"txpool":     TxPool_JS,
 	"istanbul":   Istanbul_JS,
+	// PChain JS
+	//"chain":      Chain_JS,
+
 }
 
 const Chequebook_JS = `
@@ -431,6 +434,12 @@ web3._extend({
 			},
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, web3._extend.utils.toHex]
+		}),
+		new web3._extend.Method({
+			name: 'getFullBalance',
+			call: 'eth_getFullBalance',
+			params: 3,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter, null]
 		}),
 	],
 	properties: [
