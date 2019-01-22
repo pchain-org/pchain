@@ -73,6 +73,9 @@ var (
 	recentAddresses, _ = lru.NewARC(inmemoryAddresses)
 
 	_ consensus.Engine = (*backend)(nil)
+
+	// TODO PChain Foundation Address
+	foundationAddress = common.HexToAddress("0x0000000000000000000000000000000000000000")
 )
 
 // APIs returns the RPC APIs this consensus engine provides.
@@ -431,7 +434,7 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 // Note, the block header and state database might be updated to reflect any
 // consensus rules that happen at finalization (e.g. block rewards).
 func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
+	totalGasFee *big.Int, uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
 
 	sb.logger.Infof("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
@@ -625,29 +628,6 @@ func (sb *backend) updateBlock(parent *types.Header, block *types.Block) (*types
 	return block.WithSeal(header), nil
 }
 
-// FIXME: Need to update this for Istanbul
-// sigHash returns the hash which is used as input for the Istanbul
-// signing. It is the hash of the entire header apart from the 65 byte signature
-// contained at the end of the extra data.
-//
-// Note, the method requires the extra data to be at least 65 bytes, otherwise it
-// panics. This is done to avoid accidentally using both forms (signature present
-// or not), which could be abused to produce different hashes for the same header.
-func sigHash(header *types.Header) (hash common.Hash) {
-
-	//logger.Info("Tendermint (backend) sigHash, add logic here")
-
-	return common.Hash{}
-}
-
-// ecrecover extracts the Ethereum account address from a signed header.
-func ecrecover(header *types.Header) (common.Address, error) {
-
-	//logger.Info("Tendermint (backend) ecrecover, add logic here")
-
-	return common.Address{}, nil
-}
-
 // prepareExtra returns a extra-data of the given header and validators
 func prepareExtra(header *types.Header, vals []common.Address) ([]byte, error) {
 
@@ -715,4 +695,34 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 
 	h.Extra = payload
 	return nil
+}
+
+// AccumulateRewards credits the coinbase of the given block with the mining reward.
+// Main Chain:
+// The total reward consists of the 80% of static block reward of the Epoch and total tx gas fee.
+// Child Chain:
+// The total reward consists of the static block reward of Owner setup and total tx gas fee.
+//
+// If the coinbase is Candidate, divide the rewards by weight
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch, totalGasFee *big.Int) {
+	// Main Chain
+	if config.PChainId == "pchain" {
+		totalReward := new(big.Int).Add(ep.RewardPerBlock, totalGasFee)
+		// 80% Real Reward
+		realReward := new(big.Int).Mul(totalReward, big.NewInt(8))
+		realReward.Quo(realReward, big.NewInt(10))
+		// 20% go to PChain Foundation (For official Child Chain running cost)
+		foundationReward := new(big.Int).Sub(totalReward, realReward)
+		state.AddBalance(foundationAddress, foundationReward)
+
+		if state.IsCandidate(header.Coinbase) {
+
+		} else {
+
+		}
+
+	} else {
+		// Child Chain
+
+	}
 }

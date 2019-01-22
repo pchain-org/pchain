@@ -129,6 +129,11 @@ type Account struct {
 	// Candidate
 	Candidate  bool  // flag for Account, true indicate the account has been applied for the Delegation Candidate
 	Commission uint8 // commission percentage of Delegation Candidate (0-100)
+
+	// RewardRoot common.Hash
+	//RewardBalance *big.Int
+	//RewardRoot    common.Hash
+
 }
 
 // newObject creates a state object.
