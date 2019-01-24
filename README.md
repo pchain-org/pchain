@@ -13,7 +13,7 @@ sudo add-apt-repository -y ppa:pchainorg/pchain
 sudo apt-get update
 sudo apt-get install pchain
 ```
-You should now be able to check the different options and commands with pchain --help.
+You should now be able to check the different options and commands with 'pchain --help'.
 
 Upgrade the latest version
 
@@ -21,6 +21,26 @@ Upgrade the latest version
 sudo apt-get update
 sudo apt-get dist-upgrade
 ```
+
+## Installation Instructions for Mac OS X
+
+you can use our Homebrew tap to install pchain. If you don't have Homebrew,[install it first](https://brew.sh/)
+
+Then run the following commands to add the tap and install `pchain`:
+
+```shell
+brew tap pchain-org/pchain
+brew install pchain
+```
+
+Upgrade the latest version
+
+```shell
+brew upgrade pchain
+```
+You should now be able to check the different options and commands with 'pchain --help'.
+
+After installing, run `pchain account new` to create an account on your node.
 
 ## Building the source
 just for developer,if you have installed pchain client,just skip this.
