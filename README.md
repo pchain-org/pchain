@@ -49,14 +49,14 @@ Building pchain requires both a Go (version 1.10 or later) and a C compiler.
 You can install them using your favourite package manager.
 Once the dependencies are installed, run
 ```shell
-    git clone https://github.com/pchain-org/pchain.git
-    cd pchain
-    make pchain
+git clone https://github.com/pchain-org/pchain.git
+cd pchain
+make pchain
 ```
 After run the command above,you will find pchain client in directory ./bin
 
 ```shell
-$./bin/pchain --help
+./bin/pchain --help
 
 ```
 
