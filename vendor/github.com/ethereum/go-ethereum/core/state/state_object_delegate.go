@@ -341,10 +341,6 @@ func (self *stateObject) IsEmptyTrie() bool {
 	return self.data.ProxiedRoot == types.EmptyRootHash
 }
 
-func (self *stateObject) ProxiedRoot() common.Hash {
-	return self.data.ProxiedRoot
-}
-
 // ----- Candidate
 
 func (self *stateObject) IsCandidate() bool {
@@ -361,6 +357,11 @@ func (self *stateObject) SetCandidate(isCandidate bool) {
 
 func (self *stateObject) setCandidate(isCandidate bool) {
 	self.data.Candidate = isCandidate
+
+	if self.onDirty != nil {
+		self.onDirty(self.Address())
+		self.onDirty = nil
+	}
 }
 
 func (self *stateObject) Commission() uint8 {
@@ -377,4 +378,9 @@ func (self *stateObject) SetCommission(commission uint8) {
 
 func (self *stateObject) setCommission(commission uint8) {
 	self.data.Commission = commission
+
+	if self.onDirty != nil {
+		self.onDirty(self.Address())
+		self.onDirty = nil
+	}
 }
