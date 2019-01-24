@@ -44,6 +44,7 @@ After installing, run `pchain account new` to create an account on your node.
 
 ## Building the source
 just for developer,if you have installed pchain client,just skip this.
+
 Building pchain requires both a Go (version 1.10 or later) and a C compiler.
 You can install them using your favourite package manager.
 Once the dependencies are installed, run
