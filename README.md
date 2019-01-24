@@ -4,8 +4,26 @@ Official golang implementation of the Pchain protocol.
 
 To get familiar with pchain, you could read about [Overview](https://github.com/pchain-org/pchain/wiki/Welcome-to-pchain)
 
-## Building the source
+## Installation Instructions for Ubuntu(Official recommendation 16.04)
 
+Installing from PPA
+```
+sudo apt-get install software-properties-common
+sudo add-apt-repository -y ppa:pchainorg/pchain
+sudo apt-get update
+sudo apt-get install pchain
+```
+You should now be able to check the different options and commands with pchain --help.
+
+Upgrade the latest version
+
+```
+sudo apt-get update
+sudo apt-get dist-upgrade
+```
+
+## Building the source
+just for developer,if you have installed pchain client,just skip this.
 Building pchain requires both a Go (version 1.10 or later) and a C compiler.
 You can install them using your favourite package manager.
 Once the dependencies are installed, run
