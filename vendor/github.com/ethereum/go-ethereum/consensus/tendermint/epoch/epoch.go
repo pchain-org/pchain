@@ -376,6 +376,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB) (bo
 					state.ClearCommission(refundAddress)
 				}
 			}
+			state.ClearDelegateRefundSet()
 
 			// Step 2: Sort the Validators and potential Validators (with success vote) base on deposit amount + deposit proxied amount
 			// Step 2.1: Update deposit amount base on the vote (Add/Substract deposit amount base on vote)
