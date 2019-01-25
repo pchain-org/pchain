@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/pchain/chain"
 	"github.com/pchain/version"
 	"gopkg.in/urfave/cli.v1"
@@ -87,7 +88,11 @@ func main() {
 		log.NewLogger("", commonLogDir, ctx.GlobalInt(verbosityFlag.Name), ctx.GlobalBool(debugFlag.Name), ctx.GlobalString(vmoduleFlag.Name), ctx.GlobalString(backtraceAtFlag.Name))
 
 		// Tendermint Config
-		chain.Config = chain.GetTendermintConfig(chain.MainChain, ctx)
+		chainId := params.MainnetChainConfig.PChainId
+		if ctx.GlobalBool(utils.TestnetFlag.Name) {
+			chainId = params.TestnetChainConfig.PChainId
+		}
+		chain.Config = chain.GetTendermintConfig(chainId, ctx)
 
 		runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -181,7 +186,7 @@ func newCliApp(version, usage string) *cli.App {
 		utils.NodeKeyHexFlag,
 		//utils.DeveloperFlag,
 		//utils.DeveloperPeriodFlag,
-		//utils.TestnetFlag,
+		utils.TestnetFlag,
 		//utils.RinkebyFlag,
 		//utils.OttomanFlag,
 		utils.VMEnableDebugFlag,

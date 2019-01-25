@@ -597,7 +597,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	// Not allow contract creation on PChain Main Chain
-	if pool.chainconfig.PChainId == "pchain" && tx.To() == nil {
+	if (pool.chainconfig.PChainId == params.MainnetChainConfig.PChainId || pool.chainconfig.PChainId == params.TestnetChainConfig.PChainId) && tx.To() == nil {
 		return ErrNoContractOnMainChain
 	}
 

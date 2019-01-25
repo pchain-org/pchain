@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	pabi "github.com/pchain/abi"
 	"github.com/pkg/errors"
 	"math/big"
@@ -86,7 +87,7 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, data []byte, prv *ecd
 
 // SaveBlockToMainChain save a block to main chain through eth_sendRawTransaction
 func (ec *Client) BroadcastDataToMainChain(ctx context.Context, chainId string, data []byte) error {
-	if chainId == "" || chainId == "pchain" {
+	if chainId == "" || chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
 		return errors.New("invalid child chainId")
 	}
 

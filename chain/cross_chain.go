@@ -56,7 +56,7 @@ func (cch *CrossChainHelper) GetClient() *ethclient.Client {
 // CanCreateChildChain check the condition before send the create child chain into the tx pool
 func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error {
 
-	if chainId == MainChain {
+	if chainId == MainChain || chainId == TestnetChain {
 		return errors.New("you can't create PChain as a child chain, try use other name instead")
 	}
 
@@ -121,7 +121,7 @@ func (cch *CrossChainHelper) CreateChildChain(from common.Address, chainId strin
 func (cch *CrossChainHelper) ValidateJoinChildChain(from common.Address, consensusPubkey []byte, chainId string, depositAmount *big.Int, signature []byte) error {
 	log.Debug("ValidateJoinChildChain - start")
 
-	if chainId == MainChain {
+	if chainId == MainChain || chainId == TestnetChain {
 		return errors.New("you can't join PChain as a child chain, try use other name instead")
 	}
 
@@ -297,7 +297,7 @@ func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
 	}
 
 	chainId := tdmExtra.ChainID
-	if chainId == "" || chainId == MainChain {
+	if chainId == "" || chainId == MainChain || chainId == TestnetChain {
 		return fmt.Errorf("invalid child chain id: %s", chainId)
 	}
 
@@ -368,7 +368,7 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 	}
 
 	chainId := tdmExtra.ChainID
-	if chainId == "" || chainId == MainChain {
+	if chainId == "" || chainId == MainChain || chainId == TestnetChain {
 		return fmt.Errorf("invalid child chain id: %s", chainId)
 	}
 
@@ -417,7 +417,7 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 	}
 
 	chainId := tdmExtra.ChainID
-	if chainId == "" || chainId == MainChain {
+	if chainId == "" || chainId == MainChain || chainId == TestnetChain {
 		return fmt.Errorf("invalid child chain id: %s", chainId)
 	}
 

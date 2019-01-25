@@ -27,7 +27,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 	}
 
 	// Not allow contract creation on PChain Main Chain
-	if config.PChainId == "pchain" && tx.To() == nil {
+	if (config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId) && tx.To() == nil {
 		return nil, 0, ErrNoContractOnMainChain
 	}
 
