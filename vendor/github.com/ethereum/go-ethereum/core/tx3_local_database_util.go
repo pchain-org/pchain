@@ -7,6 +7,7 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	pabi "github.com/pchain/abi"
@@ -128,7 +129,7 @@ func WriteTX3ProofData(db ethdb.Database, proofData *types.TX3ProofData) error {
 	}
 
 	chainId := tdmExtra.ChainID
-	if chainId == "" || chainId == "pchain" {
+	if chainId == "" || chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
 		return fmt.Errorf("invalid child chain id: %s", chainId)
 	}
 

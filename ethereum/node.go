@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -20,7 +21,7 @@ func MakeSystemNode(chainId, version string, ctx *cli.Context, cch core.CrossCha
 	//utils.RegisterEthService(stack, &cfg.Eth)
 	registerEthService(stack, &cfg.Eth, ctx, cch, mining)
 
-	if chainId == "pchain" && ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
+	if (chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId) && ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
 		// Only Main Chain can start the dashboard, the dashboard is still not complete
 		utils.RegisterDashboardService(stack, &cfg.Dashboard, "" /*gitCommit*/)
 	}
@@ -57,7 +58,7 @@ func registerEthService(stack *node.Node, cfg *eth.Config, cliCtx *cli.Context, 
 	} else {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			//return NewBackend(ctx, cfg, cliCtx, pNode, cch)
-			fullNode, err := eth.New(ctx, cfg, cliCtx, cch, stack.GetLogger(), mining)
+			fullNode, err := eth.New(ctx, cfg, cliCtx, cch, stack.GetLogger(), cliCtx.GlobalBool(utils.TestnetFlag.Name), mining)
 			if fullNode != nil && cfg.LightServ > 0 {
 				ls, _ := les.NewLesServer(fullNode, cfg)
 				fullNode.AddLesServer(ls)

@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"math/big"
 )
@@ -114,6 +115,19 @@ func (api *PublicDelegateAPI) CancelCandidate(ctx context.Context, from common.A
 		Nonce:    nil,
 	}
 	return api.b.GetInnerAPIBridge().SendTransaction(ctx, args)
+}
+
+func (api *PublicDelegateAPI) CheckCandidate(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (map[string]interface{}, error) {
+	state, _, err := api.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	fields := map[string]interface{}{
+		"candidate":  state.IsCandidate(address),
+		"commission": state.GetCommission(address),
+	}
+	return fields, state.Error()
 }
 
 func init() {

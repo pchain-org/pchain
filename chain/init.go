@@ -78,6 +78,9 @@ func InitCmd(ctx *cli.Context) error {
 	chainId := ctx.Args().Get(1)
 	if chainId == "" {
 		chainId = MainChain
+		if ctx.GlobalBool(utils.TestnetFlag.Name) {
+			chainId = TestnetChain
+		}
 	}
 
 	return init_cmd(ctx, GetTendermintConfig(chainId, ctx), chainId, ethGenesisPath)
@@ -101,7 +104,11 @@ func InitEthGenesis(ctx *cli.Context) error {
 	}
 	bal_str := args[0]
 
-	return init_eth_genesis(GetTendermintConfig(MainChain, ctx), bal_str)
+	chainId := MainChain
+	if ctx.GlobalBool(utils.TestnetFlag.Name) {
+		chainId = TestnetChain
+	}
+	return init_eth_genesis(GetTendermintConfig(chainId, ctx), bal_str)
 }
 
 func init_eth_genesis(config cfg.Config, balStr string) error {
@@ -216,7 +223,7 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 	if _, err := os.Stat(genFile); os.IsNotExist(err) {
 
 		var rewardScheme types.RewardSchemeDoc
-		if chainId == MainChain {
+		if chainId == MainChain || chainId == TestnetChain {
 			posReward, _ := new(big.Int).SetString(POSReward, 10)
 			LockReward, _ := new(big.Int).SetString(LockReward, 10)
 			totalReward := new(big.Int).Sub(posReward, LockReward)
@@ -236,7 +243,7 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 		}
 
 		var rewardPerBlock string
-		if chainId == MainChain {
+		if chainId == MainChain || chainId == TestnetChain {
 			rewardPerBlock = "1219698431069958847"
 		} else {
 			rewardPerBlock = "0"

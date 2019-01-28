@@ -1,20 +1,18 @@
 package tendermint
 
 import (
+	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	cmn "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	dbm "github.com/tendermint/go-db"
+	"io/ioutil"
 	"os"
 	"strings"
-	"time"
-
-	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/params"
-	"io/ioutil"
 )
 
 type Node struct {
@@ -266,16 +264,18 @@ func MakeTendermintNode(backend *backend, config cfg.Config, chainConfig *params
 	var genDoc *types.GenesisDoc
 	genDocFile := config.GetString("genesis_file")
 
-	for {
-		if !cmn.FileExists(genDocFile) {
-			backend.logger.Infof("Waiting for genesis file %v...", genDocFile)
-			time.Sleep(time.Second)
-			continue
+	if !cmn.FileExists(genDocFile) {
+		if chainConfig.PChainId == params.MainnetChainConfig.PChainId {
+			genDoc, _ = types.GenesisDocFromJSON([]byte(types.MainnetGenesisJSON))
+		} else if chainConfig.PChainId == params.TestnetChainConfig.PChainId {
+			genDoc, _ = types.GenesisDocFromJSON([]byte(types.TestnetGenesisJSON))
+		} else {
+			return nil
 		}
+	} else {
 		genDoc = readGenesisFromFile(genDocFile)
-		config.Set("chain_id", genDoc.ChainID)
-		break
 	}
+	config.Set("chain_id", genDoc.ChainID)
 
 	return NewNodeNotStart(backend, config, chainConfig, cch, genDoc)
 }

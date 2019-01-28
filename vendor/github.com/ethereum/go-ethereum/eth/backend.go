@@ -109,7 +109,7 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
-	cch core.CrossChainHelper, logger log.Logger, mining bool) (*Ethereum, error) {
+	cch core.CrossChainHelper, logger log.Logger, isTestnet bool, mining bool) (*Ethereum, error) {
 
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -122,7 +122,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		return nil, err
 	}
 	stopDbUpgrade := upgradeDeduplicateData(chainDb)
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithDefault(chainDb, config.Genesis, isTestnet)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}

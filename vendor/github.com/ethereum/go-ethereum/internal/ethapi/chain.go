@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
@@ -93,12 +94,12 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
 	}
 
-	if chainId == "pchain" {
-		return common.Hash{}, errors.New("chainId should not be \"pchain\"")
+	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
+		return common.Hash{}, errors.New("chainId should not be " + params.MainnetChainConfig.PChainId + " or " + params.TestnetChainConfig.PChainId)
 	}
 
-	if s.b.ChainConfig().PChainId != "pchain" {
-		return common.Hash{}, errors.New("this api can only be called in main chain - pchain")
+	if s.b.ChainConfig().PChainId != params.MainnetChainConfig.PChainId && s.b.ChainConfig().PChainId != params.TestnetChainConfig.PChainId {
+		return common.Hash{}, errors.New("this api can only be called in main chain")
 	}
 
 	input, err := pabi.ChainABI.Pack(pabi.DepositInMainChain.String(), chainId)
@@ -124,7 +125,7 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Address, txHash common.Hash) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
-	if chainId == "pchain" {
+	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
 		return common.Hash{}, errors.New("this api can only be called in child chain")
 	}
 
@@ -150,7 +151,7 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 	amount *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
-	if chainId == "pchain" {
+	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
 		return common.Hash{}, errors.New("this api can only be called in child chain")
 	}
 
@@ -176,8 +177,8 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 
 func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.Address, amount *hexutil.Big, chainId string, txHash common.Hash) (common.Hash, error) {
 
-	if chainId == "pchain" {
-		return common.Hash{}, errors.New("argument can't be the main chain - pchain")
+	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
+		return common.Hash{}, errors.New("argument can't be the main chain")
 	}
 
 	input, err := pabi.ChainABI.Pack(pabi.WithdrawFromMainChain.String(), chainId, (*big.Int)(amount), txHash)
@@ -239,7 +240,7 @@ func (s *PublicChainAPI) GetAllTX3(ctx context.Context, from common.Address, blo
 
 func (s *PublicChainAPI) BroadcastTX3ProofData(ctx context.Context, bs hexutil.Bytes) error {
 	chainId := s.b.ChainConfig().PChainId
-	if chainId != "pchain" {
+	if chainId != params.MainnetChainConfig.PChainId && chainId != params.TestnetChainConfig.PChainId {
 		return errors.New("this api can only be called in the main chain")
 	}
 

@@ -64,7 +64,11 @@ func (cm *ChainManager) InitP2P() {
 
 func (cm *ChainManager) LoadMainChain(ctx *cli.Context) error {
 	// Load Main Chain
-	cm.mainChain = LoadMainChain(cm.ctx, MainChain)
+	chainId := MainChain
+	if ctx.GlobalBool(utils.TestnetFlag.Name) {
+		chainId = TestnetChain
+	}
+	cm.mainChain = LoadMainChain(cm.ctx, chainId)
 	if cm.mainChain == nil {
 		return errors.New("Load main chain failed")
 	}
@@ -131,11 +135,16 @@ func (cm *ChainManager) InitCrossChainHelper() {
 		cm.mainChain.Config.GetString("db_backend"),
 		cm.ctx.GlobalString(utils.DataDirFlag.Name))
 	cm.cch.localTX3CacheDB, _ = ethdb.NewLDBDatabase(path.Join(cm.ctx.GlobalString(utils.DataDirFlag.Name), "tx3cache"), 0, 0)
+
+	chainId := MainChain
+	if cm.ctx.GlobalBool(utils.TestnetFlag.Name) {
+		chainId = TestnetChain
+	}
 	if cm.ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
 		host := "127.0.0.1" //cm.ctx.GlobalString(utils.RPCListenAddrFlag.Name)
 		port := cm.ctx.GlobalInt(utils.RPCPortFlag.Name)
 		url := net.JoinHostPort(host, strconv.Itoa(port))
-		url = "http://" + url + "/pchain"
+		url = "http://" + url + "/" + chainId
 		client, err := ethclient.Dial(url)
 		if err != nil {
 			log.Errorf("can't connect to %s, err: %v, exit", url, err)
