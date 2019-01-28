@@ -128,7 +128,7 @@ var (
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
-		Usage: "Network identifier (integer)",
+		Usage: "Network identifier (integer, mainnet=1, testnet=2)",
 		Value: eth.DefaultConfig.NetworkId,
 	}
 	TestnetFlag = cli.BoolFlag{
@@ -1123,13 +1123,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 
 	// Override any default configs for hard coded networks.
 	switch {
-	/*
-		case ctx.GlobalBool(TestnetFlag.Name):
-			if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-				cfg.NetworkId = 3
-			}
-			cfg.Genesis = core.DefaultTestnetGenesisBlock()
-	*/
+	case ctx.GlobalBool(TestnetFlag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 2
+		}
+		//
+		//cfg.Genesis = core.DefaultTestnetGenesisBlock()
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
