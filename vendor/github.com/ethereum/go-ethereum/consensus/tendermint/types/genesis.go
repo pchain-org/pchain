@@ -119,7 +119,7 @@ var MainnetGenesisJSON string = `{
 
 var TestnetGenesisJSON string = `{
 	"app_hash": "",
-	"chain_id": "pchain",
+	"chain_id": "pchain_testnet",
 	"consensus": "pos",
 	"current_epoch": {
 		"block_generated": "0",
