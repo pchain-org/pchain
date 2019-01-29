@@ -292,8 +292,10 @@ func (self *StateDB) ClearCommission(addr common.Address) {
 
 // MarkDelegateAddressRefund adds the specified object to the dirty map to avoid
 func (self *StateDB) MarkDelegateAddressRefund(addr common.Address) {
-	self.delegateRefundSet[addr] = struct{}{}
-	self.delegateRefundSetDirty = true
+	if _, exist := self.GetDelegateAddressRefundSet()[addr]; !exist {
+		self.delegateRefundSet[addr] = struct{}{}
+		self.delegateRefundSetDirty = true
+	}
 }
 
 func (self *StateDB) GetDelegateAddressRefundSet() DelegateRefundSet {
@@ -312,8 +314,8 @@ func (self *StateDB) GetDelegateAddressRefundSet() DelegateRefundSet {
 		if err != nil {
 			self.setError(err)
 		}
+		self.delegateRefundSet = value
 	}
-	self.delegateRefundSet = value
 	return value
 }
 

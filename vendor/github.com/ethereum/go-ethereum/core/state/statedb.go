@@ -61,6 +61,10 @@ type StateDB struct {
 	delegateRefundSet      DelegateRefundSet
 	delegateRefundSetDirty bool
 
+	// Cache of Reward Set
+	rewardSet      RewardSet
+	rewardSetDirty bool
+
 	// DB error.
 	// State objects are used by the consensus core and VM which are
 	// unable to deal with database-level errors. Any error that occurs
@@ -101,6 +105,8 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		stateObjectsDirty:      make(map[common.Address]struct{}),
 		delegateRefundSet:      make(DelegateRefundSet),
 		delegateRefundSetDirty: false,
+		rewardSet:              make(RewardSet),
+		rewardSetDirty:         false,
 		logs:                   make(map[common.Hash][]*types.Log),
 		preimages:              make(map[common.Hash][]byte),
 	}, nil
@@ -128,6 +134,7 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.stateObjects = make(map[common.Address]*stateObject)
 	self.stateObjectsDirty = make(map[common.Address]struct{})
 	self.delegateRefundSet = make(DelegateRefundSet)
+	self.rewardSet = make(RewardSet)
 	self.thash = common.Hash{}
 	self.bhash = common.Hash{}
 	self.txIndex = 0
@@ -573,6 +580,8 @@ func (self *StateDB) Copy() *StateDB {
 		stateObjectsDirty:      make(map[common.Address]struct{}, len(self.stateObjectsDirty)),
 		delegateRefundSet:      make(DelegateRefundSet, len(self.delegateRefundSet)),
 		delegateRefundSetDirty: self.delegateRefundSetDirty,
+		rewardSet:              make(RewardSet, len(self.rewardSet)),
+		rewardSetDirty:         self.rewardSetDirty,
 		refund:                 self.refund,
 		logs:                   make(map[common.Hash][]*types.Log, len(self.logs)),
 		logSize:                self.logSize,
@@ -585,6 +594,9 @@ func (self *StateDB) Copy() *StateDB {
 	}
 	for addr := range self.delegateRefundSet {
 		state.delegateRefundSet[addr] = struct{}{}
+	}
+	for addr := range self.rewardSet {
+		state.rewardSet[addr] = struct{}{}
 	}
 	for hash, logs := range self.logs {
 		state.logs[hash] = make([]*types.Log, len(logs))
@@ -642,6 +654,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			stateObject.updateTX1Root(s.db)
 			stateObject.updateTX3Root(s.db)
 			stateObject.updateProxiedRoot(s.db)
+			stateObject.updateRewardRoot(s.db)
 			s.updateStateObject(stateObject)
 		}
 	}
@@ -649,6 +662,11 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	// Update Delegate Refund Set if something changed
 	if s.delegateRefundSetDirty {
 		s.commitDelegateRefundSet()
+	}
+
+	// Update Reward Set if something changed
+	if s.rewardSetDirty {
+		s.commitRewardSet()
 	}
 
 	// Invalidate journal because reverting across transactions is not allowed.
@@ -732,6 +750,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 			if err := stateObject.CommitProxiedTrie(s.db); err != nil {
 				return common.Hash{}, err
 			}
+			// Write any Reward Balance changes in the state object to its reward trie.
+			if err := stateObject.CommitRewardTrie(s.db); err != nil {
+				return common.Hash{}, err
+			}
 			// Update the object in the main account trie.
 			s.updateStateObject(stateObject)
 		}
@@ -742,6 +764,12 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 	if s.delegateRefundSetDirty {
 		s.commitDelegateRefundSet()
 		s.delegateRefundSetDirty = false
+	}
+
+	// Commit Reward Set to the trie
+	if s.rewardSetDirty {
+		s.commitRewardSet()
+		s.rewardSetDirty = false
 	}
 
 	// Write trie changes.
@@ -761,6 +789,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		}
 		if account.ProxiedRoot != emptyState {
 			s.db.TrieDB().Reference(account.ProxiedRoot, parent)
+		}
+		if account.RewardRoot != emptyState {
+			s.db.TrieDB().Reference(account.RewardRoot, parent)
 		}
 		code := common.BytesToHash(account.CodeHash)
 		if code != emptyCode {

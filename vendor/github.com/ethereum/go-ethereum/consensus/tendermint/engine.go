@@ -454,6 +454,10 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		}
 	}
 
+	// Calculate the rewards
+	// TODO: we need consider reward here
+	accumulateRewards(sb.chainConfig, state, header, sb.GetEpoch(), totalGasFee)
+
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := sb.core.consensusState.Epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
@@ -461,9 +465,6 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		})
 
 	}
-
-	// Calculate the rewards, and drop the uncles
-	// TODO: we need consider reward here
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
@@ -707,22 +708,67 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch, totalGasFee *big.Int) {
 	// Main Chain
 	if config.PChainId == "pchain" {
+		// Total Reward = Block Reward + Total Gas Fee
+		// Coinbase Reward   = 80% of Total Reward
+		// Foundation Reward = 20% of Total Reward
+		// Coinbase Reward   = Self Reward + Delegate Reward (if Deposit Proxied Balance > 0)
+		//
+		// IF commission > 0
+		// Self Reward       = Self Reward + Commission Reward
+		// Commission Reward = Delegate Reward * Commission / 100
+
 		totalReward := new(big.Int).Add(ep.RewardPerBlock, totalGasFee)
-		// 80% Real Reward
-		realReward := new(big.Int).Mul(totalReward, big.NewInt(8))
-		realReward.Quo(realReward, big.NewInt(10))
+		// 80% Coinbase Reward
+		coinbaseReward := new(big.Int).Mul(totalReward, big.NewInt(8))
+		coinbaseReward.Quo(coinbaseReward, big.NewInt(10))
 		// 20% go to PChain Foundation (For official Child Chain running cost)
-		foundationReward := new(big.Int).Sub(totalReward, realReward)
+		foundationReward := new(big.Int).Sub(totalReward, coinbaseReward)
 		state.AddBalance(foundationAddress, foundationReward)
 
-		if state.IsCandidate(header.Coinbase) {
+		// Deposit Part
+		selfDeposit := state.GetDepositBalance(header.Coinbase)
+		proxiedDeposit := state.GetTotalDepositProxiedBalance(header.Coinbase)
+		totalDeposit := new(big.Int).Add(selfDeposit, proxiedDeposit)
 
+		var selfReward, delegateReward *big.Int
+		if proxiedDeposit.Sign() == 0 {
+			selfReward = coinbaseReward
 		} else {
+			selfReward = new(big.Int)
+			selfPercent := new(big.Float).Quo(new(big.Float).SetInt(selfDeposit), new(big.Float).SetInt(totalDeposit))
+			new(big.Float).Mul(new(big.Float).SetInt(coinbaseReward), selfPercent).Int(selfReward)
 
+			delegateReward = new(big.Int).Sub(coinbaseReward, selfReward)
+			commission := state.GetCommission(header.Coinbase)
+			if commission > 0 {
+				commissionReward := new(big.Int).Mul(delegateReward, big.NewInt(int64(commission)))
+				commissionReward.Quo(commissionReward, big.NewInt(100))
+				// Add the commission to self reward
+				selfReward.Add(selfReward, commissionReward)
+				// Sub the commission from delegate reward
+				delegateReward.Sub(delegateReward, commissionReward)
+			}
 		}
+
+		// Move the reward to Reward Trie
+		divideRewardByEpoch(state, header.Coinbase, ep.Number, selfReward)
 
 	} else {
 		// Child Chain
 
 	}
+}
+
+func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64, reward *big.Int) {
+	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
+	lastEpochReward := new(big.Int).Set(reward)
+	for i := epochNumber; i < epochNumber+12; i++ {
+		if i == epochNumber+11 {
+			state.AddRewardBalanceByEpochNumber(addr, i, lastEpochReward)
+		} else {
+			state.AddRewardBalanceByEpochNumber(addr, i, epochReward)
+			lastEpochReward.Sub(lastEpochReward, epochReward)
+		}
+	}
+	state.MarkAddressReward(addr)
 }
