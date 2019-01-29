@@ -919,9 +919,6 @@ func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
 		}
 	}
 
-	// fmt.Println("defaultDecideProposal: cs nodeInfo %#v\n", cs.nodeInfo)
-	cs.logger.Debugf("defaultDecideProposal: Proposer (peer key %s)", proposerPeerKey)
-
 	// Make proposal
 	polRound, polBlockID := cs.VoteSignAggr.POLInfo()
 	cs.logger.Debugf("proposal hash: %X", block.Hash())
@@ -929,6 +926,10 @@ func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
 		panic("Node id is nil")
 	}
 	proposerPeerKey = NodeID
+
+	// fmt.Println("defaultDecideProposal: cs nodeInfo %#v\n", cs.nodeInfo)
+	cs.logger.Debugf("defaultDecideProposal: Proposer (peer key %s)", proposerPeerKey)
+
 	proposal := types.NewProposal(height, round, block.Hash(), blockParts.Header(), polRound, polBlockID, proposerPeerKey)
 	err := cs.privValidator.SignProposal(cs.state.TdmExtra.ChainID, proposal)
 	if err == nil {
