@@ -455,7 +455,6 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	}
 
 	// Calculate the rewards
-	// TODO: we need consider reward here
 	accumulateRewards(sb.chainConfig, state, header, sb.GetEpoch(), totalGasFee)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
@@ -727,11 +726,11 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 		// Deposit Part
 		selfDeposit := state.GetDepositBalance(header.Coinbase)
-		proxiedDeposit := state.GetTotalDepositProxiedBalance(header.Coinbase)
-		totalDeposit := new(big.Int).Add(selfDeposit, proxiedDeposit)
+		totalProxiedDeposit := state.GetTotalDepositProxiedBalance(header.Coinbase)
+		totalDeposit := new(big.Int).Add(selfDeposit, totalProxiedDeposit)
 
 		var selfReward, delegateReward *big.Int
-		if proxiedDeposit.Sign() == 0 {
+		if totalProxiedDeposit.Sign() == 0 {
 			selfReward = coinbaseReward
 		} else {
 			selfReward = new(big.Int)
@@ -750,9 +749,32 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			}
 		}
 
-		// Move the reward to Reward Trie
+		// Move the self reward to Reward Trie
 		divideRewardByEpoch(state, header.Coinbase, ep.Number, selfReward)
 
+		// Calculate the Delegate Reward
+		if delegateReward != nil && delegateReward.Sign() > 0 {
+			totalIndividualReward := big.NewInt(0)
+			// Split the reward based on Weight stack
+			state.ForEachProxied(header.Coinbase, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
+				// deposit * delegateReward / total deposit
+				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
+				divideRewardByEpoch(state, key, ep.Number, individualReward)
+				totalIndividualReward.Add(totalIndividualReward, individualReward)
+				return true
+			})
+			// Recheck the Total Individual Reward, Float the difference
+			cmp := delegateReward.Cmp(totalIndividualReward)
+			if cmp == 1 {
+				// if delegate reward > actual given reward, give remaining reward to Candidate
+				diff := new(big.Int).Sub(delegateReward, totalIndividualReward)
+				state.AddRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
+			} else if cmp == -1 {
+				// if delegate reward < actual given reward, subtract the diff from Candidate
+				diff := new(big.Int).Sub(totalIndividualReward, delegateReward)
+				state.SubRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
+			}
+		}
 	} else {
 		// Child Chain
 
