@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/tendermint/go-merkle"
 	"math/big"
 	"sort"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/log"
 	cmn "github.com/tendermint/go-common"
-	crypto "github.com/tendermint/go-crypto"
-	"github.com/tendermint/go-merkle"
+	"github.com/tendermint/go-crypto"
 )
 
 // ValidatorSet represent a set of *Validator at a given height.
@@ -114,17 +114,40 @@ func (valSet *ValidatorSet) Equals(other *ValidatorSet) bool {
 // HasAddress returns true if address given is in the validator set, false -
 // otherwise.
 func (valSet *ValidatorSet) HasAddress(address []byte) bool {
-	idx := sort.Search(len(valSet.Validators), func(i int) bool {
-		return bytes.Compare(address, valSet.Validators[i].Address) <= 0
-	})
-	return idx < len(valSet.Validators) && bytes.Equal(valSet.Validators[idx].Address, address)
+	/*
+		idx := sort.Search(len(valSet.Validators), func(i int) bool {
+
+			log.Debugf("valSet.Validators[i].Address is %x", valSet.Validators[i].Address)
+			result := bytes.Compare(address, valSet.Validators[i].Address) <= 0
+			log.Debugf("compare result is", result)
+			return result
+		})
+		return idx < len(valSet.Validators) && bytes.Equal(valSet.Validators[idx].Address, address)
+	*/
+
+	for i := 0; i < len(valSet.Validators); i++ {
+		if bytes.Compare(address, valSet.Validators[i].Address) == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func (valSet *ValidatorSet) GetByAddress(address []byte) (index int, val *Validator) {
-	idx := sort.Search(len(valSet.Validators), func(i int) bool {
-		return bytes.Compare(address, valSet.Validators[i].Address) <= 0
-	})
-	if idx != len(valSet.Validators) && bytes.Compare(valSet.Validators[idx].Address, address) == 0 {
+
+	idx := -1
+	for i := 0; i < len(valSet.Validators); i++ {
+		if bytes.Compare(address, valSet.Validators[i].Address) == 0 {
+			idx = i
+			break
+		}
+	}
+	/*
+		idx := sort.Search(len(valSet.Validators), func(i int) bool {
+			return bytes.Compare(address, valSet.Validators[i].Address) <= 0
+		})
+	*/
+	if idx != -1 {
 		return idx, valSet.Validators[idx].Copy()
 	} else {
 		return 0, nil
@@ -157,17 +180,28 @@ func (valSet *ValidatorSet) Hash() []byte {
 
 func (valSet *ValidatorSet) Add(val *Validator) (added bool) {
 	val = val.Copy()
-	idx := sort.Search(len(valSet.Validators), func(i int) bool {
-		return bytes.Compare(val.Address, valSet.Validators[i].Address) <= 0
-	})
-	if idx == len(valSet.Validators) {
+
+	idx := -1
+	for i := 0; i < len(valSet.Validators); i++ {
+		if bytes.Compare(val.Address, valSet.Validators[i].Address) == 0 {
+			idx = i
+			break
+		}
+	}
+	/*
+		idx := sort.Search(len(valSet.Validators), func(i int) bool {
+			return bytes.Compare(val.Address, valSet.Validators[i].Address) <= 0
+		})
+	*/
+	//if idx == len(valSet.Validators) {
+	if idx == -1 {
 		valSet.Validators = append(valSet.Validators, val)
 		// Invalidate cache
 		valSet.totalVotingPower = nil
 		return true
-	} else if bytes.Compare(valSet.Validators[idx].Address, val.Address) == 0 {
+	} else { /* if bytes.Compare(valSet.Validators[idx].Address, val.Address) == 0 {*/
 		return false
-	} else {
+	} /*else {
 		newValidators := make([]*Validator, len(valSet.Validators)+1)
 		copy(newValidators[:idx], valSet.Validators[:idx])
 		newValidators[idx] = val
@@ -176,7 +210,7 @@ func (valSet *ValidatorSet) Add(val *Validator) (added bool) {
 		// Invalidate cache
 		valSet.totalVotingPower = nil
 		return true
-	}
+	}*/
 }
 
 func (valSet *ValidatorSet) Update(val *Validator) (updated bool) {
@@ -192,10 +226,20 @@ func (valSet *ValidatorSet) Update(val *Validator) (updated bool) {
 }
 
 func (valSet *ValidatorSet) Remove(address []byte) (val *Validator, removed bool) {
-	idx := sort.Search(len(valSet.Validators), func(i int) bool {
-		return bytes.Compare(address, valSet.Validators[i].Address) <= 0
-	})
-	if idx == len(valSet.Validators) || bytes.Compare(valSet.Validators[idx].Address, address) != 0 {
+	/*
+		idx := sort.Search(len(valSet.Validators), func(i int) bool {
+			return bytes.Compare(address, valSet.Validators[i].Address) <= 0
+		})
+	*/
+	idx := -1
+	for i := 0; i < len(valSet.Validators); i++ {
+		if bytes.Compare(val.Address, valSet.Validators[i].Address) == 0 {
+			idx = i
+			break
+		}
+	}
+
+	if idx == -1 /*idx == len(valSet.Validators) || bytes.Compare(valSet.Validators[idx].Address, address) != 0*/ {
 		return nil, false
 	} else {
 		removedVal := valSet.Validators[idx]
