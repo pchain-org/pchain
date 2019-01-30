@@ -2584,6 +2584,26 @@ Web3.prototype.isIBAN = utils.isIBAN;
 Web3.prototype.padLeft = utils.padLeft;
 Web3.prototype.padRight = utils.padRight;
 
+Web3.prototype.getVoteHash =  function(from,pubKey,amount,salt){
+  if(pubKey.substr(0, 2) === '0x') pubKey = pubKey.substr(2);
+
+  if( (typeof amount) == "string" && amount.substr(0, 2) === '0x'){
+    amount = amount.substr(2);
+  }else{
+    amount = amount.toString("16");
+  }
+
+  amount = (amount.length%2 == 0)?amount:("0"+amount);
+
+  var saltCode = "";
+  for(var i=0;i<salt.length;i++){
+    saltCode += salt[i].charCodeAt().toString("16");
+  }
+
+  var  concatString = from+pubKey+amount+saltCode;
+
+  return "0x" + sha3(concatString.toLowerCase(),{encoding: 'hex'});
+};
 
 Web3.prototype.sha3 = function(string, options) {
     return '0x' + sha3(string, options);
