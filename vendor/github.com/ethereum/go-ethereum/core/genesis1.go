@@ -215,8 +215,8 @@ var DefaultMainnetGenesisJSON = `{
 
 var DefaultTestnetGenesisJSON = `{
     "config": {
-            "pChainId": "pchain_testnet",
-            "chainId": 42460770020262823510151683529142069458623418178575843997998748350526605723058,
+            "pChainId": "testnet",
+            "chainId": 98411113441374360242664033072086975431386585974419604025805951356851497696398,
             "homesteadBlock": 0,
             "eip150Block": 0,
             "eip150Hash": "0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0",
