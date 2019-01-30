@@ -18,7 +18,9 @@ package params
 
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the main Ethereum network.
-var MainnetBootnodes []string
+var MainnetBootnodes = []string{
+	//"enode://2f4e54707966c3dadbcd2c2f373332f792467f0c147c817f024a5e5da7caece383437f3ce3db46f7604b8efd88db356abe81b1b024ed00be75c0ad17ae3c15b5@119.28.27.208:30308",
+}
 
 //var MainnetBootnodes = []string{
 //	// Ethereum Foundation Go Bootnodes
@@ -32,6 +34,11 @@ var MainnetBootnodes []string
 //	"enode://979b7fa28feeb35a4741660a16076f1943202cb72b6af70d327f053e248bab9ba81760f39d0701ef1d8f89cc1fbd2cacba0710a12cd5314d5e0c9021aa3637f9@5.1.83.226:30303", // DE
 //}
 
+var TestnetBootnodes = []string{
+	"enode://4537ff7d59e71b0e205cbc53011ec93a41519e5ac45df0188f1291b28e213a2598c545e49bc2ba79c94acae54ef219816ebd1f7c9e14971ba89e705fc646a58c@54.189.122.88:30201",
+}
+
+/*
 // TestnetBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Ropsten test network.
 var TestnetBootnodes = []string{
@@ -40,6 +47,7 @@ var TestnetBootnodes = []string{
 	"enode://6332792c4a00e3e4ee0926ed89e0d27ef985424d97b6a45bf0f23e51f0dcb5e66b875777506458aea7af6f9e4ffb69f43f3778ee73c81ed9d34c51c4b16b0b0f@52.232.243.152:30303", // Parity
 	"enode://94c15d1b9e2fe7ce56e458b9a3b672ef11894ddedd0c6f247e0f1d3487f52b66208fb4aeb8179fce6e3a749ea93ed147c37976d67af557508d199d9594c35f09@192.81.208.223:30303", // @gpip
 }
+*/
 
 // RinkebyBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Rinkeby test network.

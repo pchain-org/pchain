@@ -16,7 +16,8 @@ import (
 
 const (
 	// Client identifier to advertise over the network
-	MainChain = "pchain"
+	MainChain    = "pchain"
+	TestnetChain = "testnet"
 )
 
 type Chain struct {

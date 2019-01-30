@@ -65,14 +65,14 @@ type flagGroup struct {
 // AppHelpFlagGroups is the application flags, grouped by functionality.
 var AppHelpFlagGroups = []flagGroup{
 	{
-		Name: "ETHEREUM",
+		Name: "PCHAIN",
 		Flags: []cli.Flag{
 			//configFileFlag,
 			utils.DataDirFlag,
 			utils.KeyStoreDirFlag,
 			utils.NoUSBFlag,
 			utils.NetworkIdFlag,
-			//utils.TestnetFlag,
+			utils.TestnetFlag,
 			//utils.RinkebyFlag,
 			//utils.OttomanFlag,
 			utils.SyncModeFlag,

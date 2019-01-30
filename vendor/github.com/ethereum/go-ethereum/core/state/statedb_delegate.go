@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"io"
@@ -296,7 +297,7 @@ func (self *StateDB) MarkDelegateAddressRefund(addr common.Address) {
 }
 
 func (self *StateDB) GetDelegateAddressRefundSet() DelegateRefundSet {
-	if self.delegateRefundSet != nil {
+	if len(self.delegateRefundSet) != 0 {
 		return self.delegateRefundSet
 	}
 	// Try to get from Trie
@@ -314,6 +315,20 @@ func (self *StateDB) GetDelegateAddressRefundSet() DelegateRefundSet {
 	}
 	self.delegateRefundSet = value
 	return value
+}
+
+func (self *StateDB) commitDelegateRefundSet() {
+	data, err := rlp.EncodeToBytes(self.delegateRefundSet)
+	if err != nil {
+		panic(fmt.Errorf("can't encode delegate refund set : %v", err))
+	}
+	self.setError(self.trie.TryUpdate(refundSetKey, data))
+}
+
+func (self *StateDB) ClearDelegateRefundSet() {
+	self.setError(self.trie.TryDelete(refundSetKey))
+	self.delegateRefundSet = make(DelegateRefundSet)
+	self.delegateRefundSetDirty = false
 }
 
 // Store the Delegate Refund Set

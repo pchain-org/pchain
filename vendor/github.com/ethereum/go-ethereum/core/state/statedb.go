@@ -93,12 +93,13 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &StateDB{
 		db:                     db,
 		trie:                   tr,
 		stateObjects:           make(map[common.Address]*stateObject),
 		stateObjectsDirty:      make(map[common.Address]struct{}),
-		delegateRefundSet:      make(map[common.Address]struct{}),
+		delegateRefundSet:      make(DelegateRefundSet),
 		delegateRefundSetDirty: false,
 		logs:                   make(map[common.Hash][]*types.Log),
 		preimages:              make(map[common.Hash][]byte),
@@ -126,7 +127,7 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.trie = tr
 	self.stateObjects = make(map[common.Address]*stateObject)
 	self.stateObjectsDirty = make(map[common.Address]struct{})
-	self.delegateRefundSet = make(map[common.Address]struct{})
+	self.delegateRefundSet = make(DelegateRefundSet)
 	self.thash = common.Hash{}
 	self.bhash = common.Hash{}
 	self.txIndex = 0
@@ -570,7 +571,7 @@ func (self *StateDB) Copy() *StateDB {
 		trie:                   self.db.CopyTrie(self.trie),
 		stateObjects:           make(map[common.Address]*stateObject, len(self.stateObjectsDirty)),
 		stateObjectsDirty:      make(map[common.Address]struct{}, len(self.stateObjectsDirty)),
-		delegateRefundSet:      make(map[common.Address]struct{}, len(self.delegateRefundSet)),
+		delegateRefundSet:      make(DelegateRefundSet, len(self.delegateRefundSet)),
 		delegateRefundSetDirty: self.delegateRefundSetDirty,
 		refund:                 self.refund,
 		logs:                   make(map[common.Hash][]*types.Log, len(self.logs)),
@@ -644,6 +645,12 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 			s.updateStateObject(stateObject)
 		}
 	}
+
+	// Update Delegate Refund Set if something changed
+	if s.delegateRefundSetDirty {
+		s.commitDelegateRefundSet()
+	}
+
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
 }
@@ -730,13 +737,10 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		}
 		delete(s.stateObjectsDirty, addr)
 	}
-	// Commit DelegateRefundSet to trie
+
+	// Commit Delegate Refund Set to the trie
 	if s.delegateRefundSetDirty {
-		data, err := rlp.EncodeToBytes(s.delegateRefundSet)
-		if err != nil {
-			panic(fmt.Errorf("can't encode delegate refund set : %v", err))
-		}
-		s.setError(s.trie.TryUpdate(refundSetKey, data))
+		s.commitDelegateRefundSet()
 		s.delegateRefundSetDirty = false
 	}
 

@@ -103,8 +103,8 @@ func InitTimeoutParamsFromConfig(config cfg.Config) *TimeoutParams {
 
 //-------------------------------------
 type VRFProposer struct {
-	Height   uint64
-	Round    int
+	Height uint64
+	Round  int
 
 	valIndex int
 	Proposer *types.Validator
@@ -414,7 +414,7 @@ func (cs *ConsensusState) updateProposer() {
 
 	idx := -1
 	if byVRF {
-		var roundBytes= make([]byte, 8)
+		var roundBytes = make([]byte, 8)
 		//binary.BigEndian.PutUint64(roundBytes, uint64(cs.proposer.Round))
 		chainReader := cs.backend.ChainReader()
 		head := chainReader.CurrentHeader().Hash()
@@ -440,7 +440,7 @@ func (cs *ConsensusState) updateProposer() {
 			}
 		}
 	} else {
-		idx = (cs.proposer.valIndex+1) % cs.Validators.Size()
+		idx = (cs.proposer.valIndex + 1) % cs.Validators.Size()
 	}
 
 	//idx := int(n.Int64())
@@ -865,7 +865,8 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 	// Save block to main chain (this happens only on validator node).
 	// Note!!! This will BLOCK the WHOLE consensus stack since it blocks receiveRoutine.
 	// TODO: what if there're more than one round for a height? 'saveBlockToMainChain' would be called more than once
-	if cs.state.TdmExtra.NeedToSave && cs.state.TdmExtra.ChainID != "pchain" {
+	if cs.state.TdmExtra.NeedToSave &&
+		(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
 		if cs.privValidator != nil && cs.IsProposer() {
 			cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
 			lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
@@ -874,7 +875,8 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		}
 	}
 
-	if cs.state.TdmExtra.NeedToBroadcast && cs.state.TdmExtra.ChainID != "pchain" {
+	if cs.state.TdmExtra.NeedToBroadcast &&
+		(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
 		if cs.privValidator != nil && cs.IsProposer() {
 			cs.logger.Infof("enterPropose: broadcastTX3ProofDataToMainChain height: %v", cs.state.TdmExtra.Height)
 			lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
@@ -917,9 +919,6 @@ func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
 		}
 	}
 
-	// fmt.Println("defaultDecideProposal: cs nodeInfo %#v\n", cs.nodeInfo)
-	cs.logger.Debugf("defaultDecideProposal: Proposer (peer key %s)", proposerPeerKey)
-
 	// Make proposal
 	polRound, polBlockID := cs.VoteSignAggr.POLInfo()
 	cs.logger.Debugf("proposal hash: %X", block.Hash())
@@ -927,6 +926,10 @@ func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
 		panic("Node id is nil")
 	}
 	proposerPeerKey = NodeID
+
+	// fmt.Println("defaultDecideProposal: cs nodeInfo %#v\n", cs.nodeInfo)
+	cs.logger.Debugf("defaultDecideProposal: Proposer (peer key %s)", proposerPeerKey)
+
 	proposal := types.NewProposal(height, round, block.Hash(), blockParts.Header(), polRound, polBlockID, proposerPeerKey)
 	err := cs.privValidator.SignProposal(cs.state.TdmExtra.ChainID, proposal)
 	if err == nil {
@@ -1367,7 +1370,7 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 		block.TdmExtra.SeenCommitHash = seenCommit.Hash()
 
 		// update 'NeedToSave' field here
-		if block.TdmExtra.ChainID != "pchain" {
+		if block.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && block.TdmExtra.ChainID != params.TestnetChainConfig.PChainId {
 			// check epoch
 			if len(block.TdmExtra.EpochBytes) > 0 {
 				block.TdmExtra.NeedToSave = true
