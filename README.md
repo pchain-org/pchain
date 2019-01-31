@@ -7,15 +7,18 @@ To get familiar with pchain, you could read about [Overview](https://github.com/
 ## Installation Instructions for Ubuntu(Official recommendation 16.04)
 
 Installing from PPA
+
 ```
-sudo apt-get install software-properties-common
+sudo apt update
+sudo apt upgrade -y
+sudo apt install software-properties-common
 sudo add-apt-repository -y ppa:pchainorg/pchain
-sudo apt-get update
-sudo apt-get install pchain
+sudo apt update
+sudo apt install pchain
 ```
 You should now be able to check the different options and commands with 'pchain --help'.
 
-Upgrade the latest version
+!!! Upgrade the latest version (if you are in 16.04 this will Upgrade to 18.04)
 
 ```
 sudo apt-get update
