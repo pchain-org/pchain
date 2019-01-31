@@ -49,6 +49,25 @@ After installing, run `pchain account new` to create an account on your node.
 just for developer,if you have installed pchain client,just skip this.
 
 Building pchain requires both a Go (version 1.10 or later) and a C compiler.
+```shell
+apt update && apt upgrade -y
+apt install build-essential #this will install C compiler on Ubuntu
+```
+GO installation:
+
+ Download the archive from https://golang.org/dl/ and extract it into /usr/local, creating a Go tree in /usr/local/go. For example:
+```shell
+tar -C /usr/local -xzf go$VERSION.$OS-$ARCH.tar.gz
+```
+Choose the archive file appropriate for your installation. For instance, if you are installing Go version 1.2.1 for 64-bit x86 on Linux, the archive you want is called go1.2.1.linux-amd64.tar.gz.
+Add /usr/local/go/bin to the PATH environment variable. You can do this by adding this line to your /etc/profile (for a system-wide installation) or $HOME/.profile:
+```shell
+export PATH=$PATH:/usr/local/go/bin
+```
+Note: changes made to a profile file may not apply until the next time you log into your computer. To apply the changes immediately:
+```shell
+source ~/.profile. 
+```
 You can install them using your favourite package manager.
 Once the dependencies are installed, run
 ```shell
