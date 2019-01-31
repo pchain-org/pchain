@@ -163,3 +163,43 @@ func (set *RewardSet) DecodeRLP(s *rlp.Stream) error {
 	*set = rewardSet
 	return nil
 }
+
+// ----- Child Chain Reward Per Block
+
+func (self *StateDB) SetChildChainRewardPerBlock(rewardPerBlock *big.Int) {
+	self.childChainRewardPerBlock = rewardPerBlock
+	self.childChainRewardPerBlockDirty = true
+}
+
+func (self *StateDB) GetChildChainRewardPerBlock() *big.Int {
+	if self.childChainRewardPerBlock != nil {
+		return self.childChainRewardPerBlock
+	}
+	// Try to get from Trie
+	enc, err := self.trie.TryGet(childChainRewardPerBlockKey)
+	if err != nil {
+		self.setError(err)
+		return nil
+	}
+	value := new(big.Int)
+	if len(enc) > 0 {
+		err := rlp.DecodeBytes(enc, value)
+		if err != nil {
+			self.setError(err)
+		}
+		self.childChainRewardPerBlock = value
+	}
+	return value
+}
+
+func (self *StateDB) commitChildChainRewardPerBlock() {
+	data, err := rlp.EncodeToBytes(self.childChainRewardPerBlock)
+	if err != nil {
+		panic(fmt.Errorf("can't encode child chain reward per block : %v", err))
+	}
+	self.setError(self.trie.TryUpdate(childChainRewardPerBlockKey, data))
+}
+
+// Child Chain Reward Per Block
+
+var childChainRewardPerBlockKey = []byte("RewardPerBlock")

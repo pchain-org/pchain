@@ -68,4 +68,7 @@ var (
 
 	// ErrVoteAmountTooHight is returned if the vote amount greater than proxied amount + self amount
 	ErrVoteAmountTooHight = errors.New("vote amount too high")
+
+	// ErrNotOwner is returned if the Address not owner
+	ErrNotOwner = errors.New("address not owner")
 )
