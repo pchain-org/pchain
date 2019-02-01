@@ -110,7 +110,7 @@ Validator is a node participating in PCHAIN for the verification and consensus p
 
 Please Read The Wiki [How To Become A Validator](https://github.com/pchain-org/pchain/wiki/How-To-Become-A-Validator)
 
-### How to Become a Candidate
+### How to Become A Candidate
 
 Candidate is a node competing Validator with the support of delegators and the PCHAIN delegation mechanism.
 
