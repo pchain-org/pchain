@@ -75,7 +75,7 @@ Pchain Main network will come soon.
 $ pchain --testnet --networkid=10000 --port=30201 --rpc --rpcapi "db,eth,net,web3,admin,tdm,miner,personal,chain,txpool" --mine
 ```
 
-You can set your own datad directory by '--datadir yourOwnDirectory'
+You can set your own data directory by '--datadir yourOwnDirectory'
 
 If you want to close RPC,just drop the options '--rpc' and '--rpcapi'
 
