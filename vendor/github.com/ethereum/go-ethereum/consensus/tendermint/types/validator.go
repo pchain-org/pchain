@@ -22,9 +22,9 @@ type Validator struct {
 	RemainingEpoch uint64        `json:"epoch"`
 }
 
-func NewValidator(pubKey crypto.PubKey, votingPower *big.Int) *Validator {
+func NewValidator(address []byte, pubKey crypto.PubKey, votingPower *big.Int) *Validator {
 	return &Validator{
-		Address:     pubKey.Address(),
+		Address:     address,
 		PubKey:      pubKey,
 		VotingPower: votingPower,
 	}
