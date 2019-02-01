@@ -21,9 +21,9 @@ type Validator struct {
 	VotingPower *big.Int      `json:"voting_power"`
 }
 
-func NewValidator(pubKey crypto.PubKey, votingPower *big.Int) *Validator {
+func NewValidator(address []byte, pubKey crypto.PubKey, votingPower *big.Int) *Validator {
 	return &Validator{
-		Address:     pubKey.Address(),
+		Address:     address,
 		PubKey:      pubKey,
 		VotingPower: votingPower,
 	}
