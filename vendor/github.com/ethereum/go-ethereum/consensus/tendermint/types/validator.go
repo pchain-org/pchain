@@ -16,9 +16,10 @@ import (
 // Volatile state for each Validator
 // TODO: make non-volatile identity
 type Validator struct {
-	Address     []byte        `json:"address"`
-	PubKey      crypto.PubKey `json:"pub_key"`
-	VotingPower *big.Int      `json:"voting_power"`
+	Address        []byte        `json:"address"`
+	PubKey         crypto.PubKey `json:"pub_key"`
+	VotingPower    *big.Int      `json:"voting_power"`
+	RemainingEpoch uint64        `json:"epoch"`
 }
 
 func NewValidator(pubKey crypto.PubKey, votingPower *big.Int) *Validator {

@@ -22,10 +22,11 @@ var CONSENSUS_POS string = "pos"
 var CONSENSUS_POW string = "pow"
 
 type GenesisValidator struct {
-	EthAccount common.Address `json:"eth_account"`
-	PubKey     crypto.PubKey  `json:"pub_key"`
-	Amount     *big.Int       `json:"amount"`
-	Name       string         `json:"name"`
+	EthAccount     common.Address `json:"eth_account"`
+	PubKey         crypto.PubKey  `json:"pub_key"`
+	Amount         *big.Int       `json:"amount"`
+	Name           string         `json:"name"`
+	RemainingEpoch uint64         `json:"epoch"`
 }
 
 type OneEpochDoc struct {
@@ -66,12 +67,4 @@ func (genDoc *GenesisDoc) SaveAs(file string) error {
 func GenesisDocFromJSON(jsonBlob []byte) (genDoc *GenesisDoc, err error) {
 	wire.ReadJSONPtr(&genDoc, jsonBlob, &err)
 	return
-}
-
-func GenesisValidatorsString(vs []*GenesisValidator) string {
-	s := make([]GenesisValidator, len(vs))
-	for i, v := range vs {
-		s[i] = GenesisValidator{v.EthAccount, v.PubKey, v.Amount, v.Name}
-	}
-	return string(wire.JSONBytes(s))
 }
