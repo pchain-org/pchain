@@ -8,6 +8,7 @@ To get familiar with pchain, you could read about [Overview](https://github.com/
 
 Installing from PPA
 ```
+sudo apt-get update
 sudo apt-get install software-properties-common
 sudo add-apt-repository -y ppa:pchainorg/pchain
 sudo apt-get update
@@ -72,17 +73,17 @@ Pchain Main network will come soon.
 ### Full Node On the Pchain Test network
 
 ```
-$ pchain --testnet --networkid=10000 --port=30201 --rpc --rpcapi "db,eth,net,web3,admin,tdm,miner,personal,chain,txpool" --mine
+$ pchain --testnet --networkid=10000 --port=30201 
 ```
 
 You can set your own data directory by '--datadir yourOwnDirectory'
 
-If you want to close RPC,just drop the options '--rpc' and '--rpcapi'
+If you want to open RPC,just add the options '--rpc' and '--rpcapi "db,eth,net,web3,admin,tdm,miner,personal,chain,txpool" '. More details,please read [How To Interact With Pchain](https://github.com/pchain-org/pchain#how-to-interact-with-pchainrpc-or-ipc-console)
 
 you can add '&' at the end of command above,Pchain client will run in the background
 
 ```
-$ pchain --testnet --networkid=10000 --port=30201 --rpc --rpcapi "db,eth,net,web3,admin,tdm,miner,personal,chain,txpool" --mine &
+$ pchain --testnet --networkid=10000 --port=30201  &
 ```
 
 | Platform | Default Datadir Directory |
