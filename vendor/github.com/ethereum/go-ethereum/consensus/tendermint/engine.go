@@ -603,6 +603,11 @@ func (sb *backend) SetEpoch(ep *epoch.Epoch) {
 	sb.core.consensusState.Epoch = ep
 }
 
+// Return the private validator address of consensus
+func (sb *backend) PrivateValidator() common.Address {
+	return sb.core.privValidator.Address
+}
+
 // update timestamp and signature of the block based on its number of transactions
 func (sb *backend) updateBlock(parent *types.Header, block *types.Block) (*types.Block, error) {
 

@@ -164,4 +164,6 @@ type Tendermint interface {
 	GetEpoch() *epoch.Epoch
 
 	SetEpoch(ep *epoch.Epoch)
+
+	PrivateValidator() common.Address
 }
