@@ -3,6 +3,7 @@ package chain
 import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
@@ -258,10 +259,13 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 	validator := false
 
-	// TODO CHECK Ethereum backend
 	var ethereum *eth.Ethereum
 	cm.mainChain.EthNode.Service(&ethereum)
-	localEtherbase, _ := ethereum.Etherbase()
+
+	var localEtherbase common.Address
+	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
+		localEtherbase = tdm.PrivateValidator()
+	}
 
 	for _, v := range cci.JoinedValidators {
 		if v.Address == localEtherbase {
@@ -368,7 +372,11 @@ func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainIn
 func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool {
 	var ethereum *eth.Ethereum
 	cm.mainChain.EthNode.Service(&ethereum)
-	localEtherbase, _ := ethereum.Etherbase()
+
+	var localEtherbase common.Address
+	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
+		localEtherbase = tdm.PrivateValidator()
+	}
 
 	return childEpoch.Validators.HasAddress(localEtherbase[:])
 }
