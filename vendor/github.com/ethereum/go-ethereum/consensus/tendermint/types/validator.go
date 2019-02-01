@@ -19,7 +19,7 @@ type Validator struct {
 	Address        []byte        `json:"address"`
 	PubKey         crypto.PubKey `json:"pub_key"`
 	VotingPower    *big.Int      `json:"voting_power"`
-	RemainingEpoch uint64        `json:"epoch"`
+	RemainingEpoch uint64        `json:"remain_epoch"`
 }
 
 func NewValidator(address []byte, pubKey crypto.PubKey, votingPower *big.Int) *Validator {
@@ -49,10 +49,11 @@ func (v *Validator) String() string {
 	if v == nil {
 		return "nil-Validator"
 	}
-	return fmt.Sprintf("Validator{ADD:%X PK:%X VP:%v}",
+	return fmt.Sprintf("Validator{ADD:%X PK:%X VP:%v EP:%d}",
 		v.Address,
 		v.PubKey,
-		v.VotingPower)
+		v.VotingPower,
+		v.RemainingEpoch)
 }
 
 func (v *Validator) Hash() []byte {

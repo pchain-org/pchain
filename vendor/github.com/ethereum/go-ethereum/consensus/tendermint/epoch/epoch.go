@@ -31,6 +31,7 @@ const (
 	NextEpochRevealVoteEndPercent = 0.95
 
 	MinimumValidatorsSize = 10
+	MaximumValidatorsSize = 200
 
 	epochKey       = "Epoch:%v"
 	latestEpochKey = "LatestEpoch"
@@ -536,8 +537,17 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 
 	// Determine the Validator Size
 	valSize := oldValSize + newValSize/2
-	if valSize > MinimumValidatorsSize {
+	if valSize > MaximumValidatorsSize {
+		valSize = MaximumValidatorsSize
+	} else if valSize < MinimumValidatorsSize {
 		valSize = MinimumValidatorsSize
+	}
+
+	// Subtract the remaining epoch value
+	for _, v := range validators.Validators {
+		if v.RemainingEpoch > 0 {
+			v.RemainingEpoch--
+		}
 	}
 
 	// If actual size of Validators greater than Determine Validator Size
@@ -545,7 +555,12 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 	if validators.Size() > valSize {
 		// Sort the Validator Set with Amount
 		sort.Slice(validators.Validators, func(i, j int) bool {
-			return validators.Validators[i].VotingPower.Cmp(validators.Validators[j].VotingPower) == 1
+			// Compare with remaining epoch first then, voting power
+			if validators.Validators[i].RemainingEpoch == validators.Validators[j].RemainingEpoch {
+				return validators.Validators[i].VotingPower.Cmp(validators.Validators[j].VotingPower) == 1
+			} else {
+				return validators.Validators[i].RemainingEpoch > validators.Validators[j].RemainingEpoch
+			}
 		})
 		// Add knockout validator to refund list
 		knockout := validators.Validators[valSize:]
