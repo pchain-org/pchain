@@ -498,7 +498,7 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 		_, validator := validators.GetByAddress(v.Address[:])
 		if validator == nil {
 			// Add the new validator
-			added := validators.Add(tmTypes.NewValidator(v.PubKey, v.Amount))
+			added := validators.Add(tmTypes.NewValidator(v.Address[:], v.PubKey, v.Amount))
 			if !added {
 				return nil, fmt.Errorf("Failed to add new validator %x with voting power %d", v.Address, v.Amount)
 			}

@@ -436,7 +436,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	sb.logger.Infof("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
 	// Check if any Child Chain need to be launch and Update their account balance accordingly
-	if sb.chainConfig.PChainId == params.MainnetChainConfig.PChainId {
+	if sb.chainConfig.PChainId == params.MainnetChainConfig.PChainId || sb.chainConfig.PChainId == params.TestnetChainConfig.PChainId {
 		// Check the Child Chain Start
 		readyId, updateBytes, removedId := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
 		if len(readyId) > 0 || updateBytes != nil || len(removedId) > 0 {
