@@ -66,9 +66,10 @@ If you want to build and run pchain under Windows(Not recommended), you could re
 If you want to know more about our Command Line Options,please consult our 
 [CLI Wiki page](https://github.com/pchain-org/pchain/wiki/Command-Line-Options)
 
-### Full Node On The Main Pchain Network
+### Full Node On The Pchain Main Network
 
 Pchain Main network will come soon.
+
 
 ### Full Node On the Pchain Test network
 
