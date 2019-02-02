@@ -1,12 +1,14 @@
 package state
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"io"
 	"math/big"
+	"sort"
 )
 
 // ----- RewardBalance (Total)
@@ -148,6 +150,9 @@ func (set RewardSet) EncodeRLP(w io.Writer) error {
 	for addr := range set {
 		list = append(list, addr)
 	}
+	sort.Slice(list, func(i, j int) bool {
+		return bytes.Compare(list[i].Bytes(), list[j].Bytes()) == 1
+	})
 	return rlp.Encode(w, list)
 }
 
