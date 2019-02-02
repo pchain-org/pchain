@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/pchain/p2p"
 	"github.com/pchain/rpc"
 	"github.com/pkg/errors"
@@ -78,9 +79,6 @@ func (cm *ChainManager) LoadMainChain(ctx *cli.Context) error {
 }
 
 func (cm *ChainManager) LoadChains(childIds []string) error {
-
-	// Wait for Main Chain Start Complete
-	<-cm.mainStartDone
 
 	childChainIds := core.GetChildChainIds(cm.cch.chainInfoDB)
 	log.Infof("Before Load Child Chains, childChainIds is %v, len is %d", childChainIds, len(childChainIds))
@@ -174,7 +172,16 @@ func (cm *ChainManager) StartMainChain() error {
 	cm.mainStartDone = make(chan struct{})
 
 	cm.mainChain.EthNode.SetP2PServer(cm.server.Server())
+
+	if address, ok := cm.getNodeValidator(cm.mainChain.EthNode); ok {
+		cm.server.AddLocalValidator(cm.mainChain.Id, address)
+	}
+
 	err := StartChain(cm.ctx, cm.mainChain, cm.mainStartDone)
+
+	// Wait for Main Chain Start Complete
+	<-cm.mainStartDone
+
 	return err
 }
 
@@ -194,9 +201,14 @@ func (cm *ChainManager) StartChains() error {
 
 		chain.EthNode.SetP2PServer(srv)
 
+		if address, ok := cm.getNodeValidator(chain.EthNode); ok {
+			cm.server.AddLocalValidator(chain.Id, address)
+		}
+
 		startDone := make(chan struct{})
 		StartChain(cm.ctx, chain, startDone)
 		<-startDone
+
 		// Tell other peers that we have added into a new child chain
 		cm.server.BroadcastNewChildChainMsg(chain.Id)
 	}
@@ -337,11 +349,17 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 	chain.EthNode.SetP2PServer(srv)
 
+	if address, ok := cm.getNodeValidator(chain.EthNode); ok {
+		srv.AddLocalValidator(chain.Id, address)
+	}
+
 	// Start the new Child Chain, and it will start child chain reactors as well
 	quit := make(chan int)
 	cm.childQuits[chain.Id] = quit
 
-	err = StartChain(cm.ctx, chain, nil)
+	startDone := make(chan struct{})
+	err = StartChain(cm.ctx, chain, startDone)
+	<-startDone
 	if err != nil {
 		return
 	}
@@ -392,4 +410,22 @@ func (cm *ChainManager) WaitChainsStop() {
 func (cm *ChainManager) Stop() {
 	rpc.StopRPC()
 	cm.server.Stop()
+}
+
+func (cm *ChainManager) getNodeValidator(ethNode *node.Node) (common.Address, bool) {
+
+	log.Debug("getNodeValidator")
+	var ethereum *eth.Ethereum
+	ethNode.Service(&ethereum)
+
+	var etherbase common.Address
+	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
+		epoch := ethereum.Engine().(consensus.Tendermint).GetEpoch()
+		etherbase = tdm.PrivateValidator()
+		log.Debugf("getNodeValidator() etherbase is :%v", etherbase)
+		return etherbase, epoch.Validators.HasAddress(etherbase[:])
+	} else {
+		return etherbase, false
+	}
+
 }

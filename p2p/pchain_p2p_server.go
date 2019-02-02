@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -30,6 +31,8 @@ func NewP2PServer(ctx *cli.Context) *PChainP2PServer {
 	serverConfig := config.P2P
 	serverConfig.PrivateKey = config.NodeKey()
 	serverConfig.Name = config.NodeName()
+	serverConfig.EnableMsgEvents = true
+
 	if serverConfig.StaticNodes == nil {
 		serverConfig.StaticNodes = config.StaticNodes()
 	}
@@ -39,6 +42,9 @@ func NewP2PServer(ctx *cli.Context) *PChainP2PServer {
 	if serverConfig.NodeDatabase == "" {
 		serverConfig.NodeDatabase = config.NodeDB()
 	}
+	serverConfig.LocalValidators = make([]p2p.P2PValidator, 0)
+	serverConfig.Validators = make(map[p2p.P2PValidator]*p2p.P2PValidatorNodeInfo)
+
 	running := &p2p.Server{Config: serverConfig}
 	log.Info("Create peer-to-peer node", "instance", serverConfig.Name)
 
@@ -58,4 +64,12 @@ func (srv *PChainP2PServer) Stop() {
 
 func (srv *PChainP2PServer) BroadcastNewChildChainMsg(childId string) {
 	srv.server.BroadcastMsg(p2p.BroadcastNewChildChainMsg, childId)
+}
+
+func (srv *PChainP2PServer) AddLocalValidator(chainId string, address common.Address) {
+	srv.server.AddLocalValidator(chainId, address)
+}
+
+func (srv *PChainP2PServer) RemoveLocalValidator(chainId string, address common.Address) {
+	srv.server.RemoveLocalValidator(chainId, address)
 }
