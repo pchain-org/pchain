@@ -204,7 +204,7 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	}
 
 	// Check the MainChainNumber if on Child Chain
-	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId {
+	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId && sb.chainConfig.PChainId != params.TestnetChainConfig.PChainId {
 		if header.MainChainNumber == nil {
 			return errInvalidMainChainNumber
 		}
@@ -423,7 +423,7 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	//}
 
 	// Add Main Chain Height if running on Child Chain
-	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId {
+	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId && sb.chainConfig.PChainId != params.TestnetChainConfig.PChainId {
 		header.MainChainNumber = sb.core.cch.GetHeightFromMainChain()
 	}
 
