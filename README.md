@@ -9,6 +9,7 @@ To get familiar with pchain, you could read about [Overview](https://github.com/
 Installing from PPA
 ```
 sudo apt update
+sudo apt upgrade
 sudo apt install software-properties-common
 sudo add-apt-repository -y ppa:pchainorg/pchain
 sudo apt update
