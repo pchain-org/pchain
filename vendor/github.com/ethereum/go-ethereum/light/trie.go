@@ -64,6 +64,10 @@ func (db *odrDatabase) OpenProxiedTrie(addrHash, root common.Hash) (state.Trie, 
 	return &odrTrie{db: db, id: StorageTrieID(db.id, addrHash, root)}, nil
 }
 
+func (db *odrDatabase) OpenRewardTrie(addrHash, root common.Hash) (state.Trie, error) {
+	return &odrTrie{db: db, id: StorageTrieID(db.id, addrHash, root)}, nil
+}
+
 func (db *odrDatabase) CopyTrie(t state.Trie) state.Trie {
 	switch t := t.(type) {
 	case *odrTrie:

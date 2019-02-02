@@ -21,6 +21,7 @@ var (
 	WithdrawFromChildChain = FunctionType{4, true}
 	WithdrawFromMainChain  = FunctionType{5, true}
 	SaveDataToMainChain    = FunctionType{6, true}
+	SetBlockReward         = FunctionType{7, true}
 	// Non-Cross Chain Function
 	VoteNextEpoch   = FunctionType{10, false}
 	RevealVote      = FunctionType{11, false}
@@ -60,6 +61,8 @@ func (t FunctionType) RequiredGas() uint64 {
 		return 21000
 	case CancelCandidate:
 		return 100000
+	case SetBlockReward:
+		return 21000
 	default:
 		return 0
 	}
@@ -93,6 +96,8 @@ func (t FunctionType) String() string {
 		return "Candidate"
 	case CancelCandidate:
 		return "CancelCandidate"
+	case SetBlockReward:
+		return "SetBlockReward"
 	default:
 		return "UnKnown"
 	}
@@ -126,6 +131,8 @@ func StringToFunctionType(s string) FunctionType {
 		return Candidate
 	case "CancelCandidate":
 		return CancelCandidate
+	case "SetBlockReward":
+		return SetBlockReward
 	default:
 		return Unknown
 	}
@@ -186,6 +193,11 @@ type CancelDelegateArgs struct {
 
 type CandidateArgs struct {
 	Commission uint8
+}
+
+type SetBlockRewardArgs struct {
+	ChainId string
+	Reward  *big.Int
 }
 
 const jsonChainABI = `
@@ -379,6 +391,21 @@ const jsonChainABI = `
 		"name": "CancelCandidate",
 		"constant": false,
 		"inputs": []
+	},
+	{
+		"type": "function",
+		"name": "SetBlockReward",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "chainId",
+				"type": "string"
+			},
+			{
+				"name": "reward",
+				"type": "uint256"
+			}
+		]
 	}
 ]`
 

@@ -369,6 +369,15 @@ func candidateValidation(from common.Address, tx *types.Transaction, state *stat
 		return nil, err
 	}
 
+	// Annual/SemiAnnual supernode can not be candidate
+	var ep *epoch.Epoch
+	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
+		ep = tdm.GetEpoch()
+	}
+	if _, supernode := ep.Validators.GetByAddress(from.Bytes()); supernode != nil && supernode.RemainingEpoch > 0 {
+		return nil, core.ErrCannotCandidate
+	}
+
 	return &args, nil
 }
 

@@ -73,6 +73,11 @@ var (
 	recentAddresses, _ = lru.NewARC(inmemoryAddresses)
 
 	_ consensus.Engine = (*backend)(nil)
+
+	// TODO PChain Foundation Address
+	foundationAddress = common.HexToAddress("0x0000000000000000000000000000000000000000")
+	// Address for Child Chain Reward
+	childChainRewardAddress = common.BytesToAddress([]byte{100})
 )
 
 // APIs returns the RPC APIs this consensus engine provides.
@@ -431,7 +436,7 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 // Note, the block header and state database might be updated to reflect any
 // consensus rules that happen at finalization (e.g. block rewards).
 func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
+	totalGasFee *big.Int, uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
 
 	sb.logger.Infof("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
@@ -451,6 +456,9 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		}
 	}
 
+	// Calculate the rewards
+	accumulateRewards(sb.chainConfig, state, header, sb.GetEpoch(), totalGasFee)
+
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := sb.core.consensusState.Epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
@@ -458,9 +466,6 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		})
 
 	}
-
-	// Calculate the rewards, and drop the uncles
-	// TODO: we need consider reward here
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
@@ -630,29 +635,6 @@ func (sb *backend) updateBlock(parent *types.Header, block *types.Block) (*types
 	return block.WithSeal(header), nil
 }
 
-// FIXME: Need to update this for Istanbul
-// sigHash returns the hash which is used as input for the Istanbul
-// signing. It is the hash of the entire header apart from the 65 byte signature
-// contained at the end of the extra data.
-//
-// Note, the method requires the extra data to be at least 65 bytes, otherwise it
-// panics. This is done to avoid accidentally using both forms (signature present
-// or not), which could be abused to produce different hashes for the same header.
-func sigHash(header *types.Header) (hash common.Hash) {
-
-	//logger.Info("Tendermint (backend) sigHash, add logic here")
-
-	return common.Hash{}
-}
-
-// ecrecover extracts the Ethereum account address from a signed header.
-func ecrecover(header *types.Header) (common.Address, error) {
-
-	//logger.Info("Tendermint (backend) ecrecover, add logic here")
-
-	return common.Address{}, nil
-}
-
 // prepareExtra returns a extra-data of the given header and validators
 func prepareExtra(header *types.Header, vals []common.Address) ([]byte, error) {
 
@@ -720,4 +702,121 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 
 	h.Extra = payload
 	return nil
+}
+
+// AccumulateRewards credits the coinbase of the given block with the mining reward.
+// Main Chain:
+// The total reward consists of the 80% of static block reward of the Epoch and total tx gas fee.
+// Child Chain:
+// The total reward consists of the static block reward of Owner setup and total tx gas fee.
+//
+// If the coinbase is Candidate, divide the rewards by weight
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch, totalGasFee *big.Int) {
+	// Total Reward = Block Reward + Total Gas Fee
+	var coinbaseReward *big.Int
+	if config.PChainId == "pchain" {
+		// Main Chain
+
+		// Coinbase Reward   = 80% of Total Reward
+		// Foundation Reward = 20% of Total Reward
+		rewardPerBlock := ep.RewardPerBlock
+		if rewardPerBlock != nil && rewardPerBlock.Sign() == 1 {
+			// 80% Coinbase Reward
+			coinbaseReward = new(big.Int).Mul(rewardPerBlock, big.NewInt(8))
+			coinbaseReward.Quo(coinbaseReward, big.NewInt(10))
+			// 20% go to PChain Foundation (For official Child Chain running cost)
+			foundationReward := new(big.Int).Sub(rewardPerBlock, coinbaseReward)
+			state.AddBalance(foundationAddress, foundationReward)
+
+		} else {
+			coinbaseReward = totalGasFee
+		}
+	} else {
+		// Child Chain
+		rewardPerBlock := state.GetChildChainRewardPerBlock()
+		if rewardPerBlock != nil && rewardPerBlock.Sign() == 1 {
+			childChainRewardBalance := state.GetBalance(childChainRewardAddress)
+			if childChainRewardBalance.Cmp(rewardPerBlock) == -1 {
+				rewardPerBlock = childChainRewardBalance
+			}
+			// sub balance from childChainRewardAddress, reward per blocks
+			state.SubBalance(childChainRewardAddress, rewardPerBlock)
+
+			coinbaseReward = new(big.Int).Add(rewardPerBlock, totalGasFee)
+		} else {
+			coinbaseReward = totalGasFee
+		}
+	}
+
+	// Coinbase Reward   = Self Reward + Delegate Reward (if Deposit Proxied Balance > 0)
+	//
+	// IF commission > 0
+	// Self Reward       = Self Reward + Commission Reward
+	// Commission Reward = Delegate Reward * Commission / 100
+
+	// Deposit Part
+	selfDeposit := state.GetDepositBalance(header.Coinbase)
+	totalProxiedDeposit := state.GetTotalDepositProxiedBalance(header.Coinbase)
+	totalDeposit := new(big.Int).Add(selfDeposit, totalProxiedDeposit)
+
+	var selfReward, delegateReward *big.Int
+	if totalProxiedDeposit.Sign() == 0 {
+		selfReward = coinbaseReward
+	} else {
+		selfReward = new(big.Int)
+		selfPercent := new(big.Float).Quo(new(big.Float).SetInt(selfDeposit), new(big.Float).SetInt(totalDeposit))
+		new(big.Float).Mul(new(big.Float).SetInt(coinbaseReward), selfPercent).Int(selfReward)
+
+		delegateReward = new(big.Int).Sub(coinbaseReward, selfReward)
+		commission := state.GetCommission(header.Coinbase)
+		if commission > 0 {
+			commissionReward := new(big.Int).Mul(delegateReward, big.NewInt(int64(commission)))
+			commissionReward.Quo(commissionReward, big.NewInt(100))
+			// Add the commission to self reward
+			selfReward.Add(selfReward, commissionReward)
+			// Sub the commission from delegate reward
+			delegateReward.Sub(delegateReward, commissionReward)
+		}
+	}
+
+	// Move the self reward to Reward Trie
+	divideRewardByEpoch(state, header.Coinbase, ep.Number, selfReward)
+
+	// Calculate the Delegate Reward
+	if delegateReward != nil && delegateReward.Sign() > 0 {
+		totalIndividualReward := big.NewInt(0)
+		// Split the reward based on Weight stack
+		state.ForEachProxied(header.Coinbase, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
+			// deposit * delegateReward / total deposit
+			individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
+			divideRewardByEpoch(state, key, ep.Number, individualReward)
+			totalIndividualReward.Add(totalIndividualReward, individualReward)
+			return true
+		})
+		// Recheck the Total Individual Reward, Float the difference
+		cmp := delegateReward.Cmp(totalIndividualReward)
+		if cmp == 1 {
+			// if delegate reward > actual given reward, give remaining reward to Candidate
+			diff := new(big.Int).Sub(delegateReward, totalIndividualReward)
+			state.AddRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
+		} else if cmp == -1 {
+			// if delegate reward < actual given reward, subtract the diff from Candidate
+			diff := new(big.Int).Sub(totalIndividualReward, delegateReward)
+			state.SubRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
+		}
+	}
+}
+
+func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64, reward *big.Int) {
+	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
+	lastEpochReward := new(big.Int).Set(reward)
+	for i := epochNumber; i < epochNumber+12; i++ {
+		if i == epochNumber+11 {
+			state.AddRewardBalanceByEpochNumber(addr, i, lastEpochReward)
+		} else {
+			state.AddRewardBalanceByEpochNumber(addr, i, epochReward)
+			lastEpochReward.Sub(lastEpochReward, epochReward)
+		}
+	}
+	state.MarkAddressReward(addr)
 }

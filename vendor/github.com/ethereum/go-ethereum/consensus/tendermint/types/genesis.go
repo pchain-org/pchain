@@ -22,10 +22,11 @@ var CONSENSUS_POS string = "pos"
 var CONSENSUS_POW string = "pow"
 
 type GenesisValidator struct {
-	EthAccount common.Address `json:"eth_account"`
-	PubKey     crypto.PubKey  `json:"pub_key"`
-	Amount     *big.Int       `json:"amount"`
-	Name       string         `json:"name"`
+	EthAccount     common.Address `json:"eth_account"`
+	PubKey         crypto.PubKey  `json:"pub_key"`
+	Amount         *big.Int       `json:"amount"`
+	Name           string         `json:"name"`
+	RemainingEpoch uint64         `json:"epoch"`
 }
 
 type OneEpochDoc struct {

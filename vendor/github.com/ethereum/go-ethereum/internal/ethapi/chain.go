@@ -330,6 +330,40 @@ func (s *PublicChainAPI) SignAddress(from common.Address, consensusPrivateKey he
 	return blsSign, nil
 }
 
+func (s *PublicChainAPI) SetBlockReward(ctx context.Context, from common.Address, reward *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
+	chainId := s.b.ChainConfig().PChainId
+	if chainId == "pchain" {
+		return common.Hash{}, errors.New("this api can only be called in child chain")
+	}
+
+	input, err := pabi.ChainABI.Pack(pabi.SetBlockReward.String(), chainId, (*big.Int)(reward))
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	defaultGas := pabi.SetBlockReward.RequiredGas()
+
+	args := SendTxArgs{
+		From:     from,
+		To:       &pabi.ChainContractMagicAddr,
+		Gas:      (*hexutil.Uint64)(&defaultGas),
+		GasPrice: gasPrice,
+		Value:    nil,
+		Input:    (*hexutil.Bytes)(&input),
+		Nonce:    nil,
+	}
+
+	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
+}
+
+func (s *PublicChainAPI) GetBlockReward(ctx context.Context, blockNr rpc.BlockNumber) (*hexutil.Big, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+	return (*hexutil.Big)(state.GetChildChainRewardPerBlock()), nil
+}
+
 func init() {
 	//CreateChildChain
 	core.RegisterValidateCb(pabi.CreateChildChain, ccc_ValidateCb)
@@ -358,6 +392,10 @@ func init() {
 	//SD2MCFuncName
 	core.RegisterValidateCb(pabi.SaveDataToMainChain, sd2mc_ValidateCb)
 	core.RegisterApplyCb(pabi.SaveDataToMainChain, sd2mc_ApplyCb)
+
+	//SetBlockReward
+	core.RegisterValidateCb(pabi.SetBlockReward, sbr_ValidateCb)
+	core.RegisterApplyCb(pabi.SetBlockReward, sbr_ApplyCb)
 }
 
 func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
@@ -767,6 +805,26 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 	return nil
 }
 
+func sbr_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+	from := derivedAddressFromTx(tx)
+	_, verror := setBlockRewardValidation(from, tx, cch)
+	if verror != nil {
+		return verror
+	}
+	return nil
+}
+
+func sbr_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+	from := derivedAddressFromTx(tx)
+	args, verror := setBlockRewardValidation(from, tx, cch)
+	if verror != nil {
+		return verror
+	}
+
+	state.SetChildChainRewardPerBlock(args.Reward)
+	return nil
+}
+
 type ChainStatus struct {
 	ChainID    string            `json:"chain_id"`
 	Owner      common.Address    `json:"owner"`
@@ -778,4 +836,26 @@ type ChainStatus struct {
 type ChainValidator struct {
 	Account     common.Address `json:"address"`
 	VotingPower *big.Int       `json:"voting_power"`
+}
+
+// Validation
+
+func setBlockRewardValidation(from common.Address, tx *types.Transaction, cch core.CrossChainHelper) (*pabi.SetBlockRewardArgs, error) {
+
+	var args pabi.SetBlockRewardArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.SetBlockReward.String(), data[4:]); err != nil {
+		return nil, err
+	}
+
+	ci := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
+	if ci == nil || ci.Owner != from {
+		return nil, core.ErrNotOwner
+	}
+
+	if args.Reward.Sign() == -1 {
+		return nil, core.ErrNegativeValue
+	}
+
+	return &args, nil
 }
