@@ -332,7 +332,7 @@ func (s *PublicChainAPI) SignAddress(from common.Address, consensusPrivateKey he
 
 func (s *PublicChainAPI) SetBlockReward(ctx context.Context, from common.Address, reward *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 	chainId := s.b.ChainConfig().PChainId
-	if chainId == "pchain" {
+	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
 		return common.Hash{}, errors.New("this api can only be called in child chain")
 	}
 
