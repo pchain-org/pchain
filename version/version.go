@@ -2,14 +2,13 @@ package version
 
 import (
 	"fmt"
-
 )
 
 const (
-	Major = 0          // Major version component of the current release
-	Minor = 8          // Minor version component of the current release
-	Patch = 0          // Patch version component of the current release
-	Meta  = "test2.0" // Version metadata to append to the version string
+	Major = 0         // Major version component of the current release
+	Minor = 8         // Minor version component of the current release
+	Patch = 0         // Patch version component of the current release
+	Meta  = "test2.3" // Version metadata to append to the version string
 )
 
 var (
