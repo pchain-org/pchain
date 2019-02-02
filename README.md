@@ -71,7 +71,7 @@ If you want to know more about our Command Line Options,please consult our
 Pchain Main network will come soon.
 
 
-### Full Node On the Pchain Test network
+### Full Node On the Pchain Test Network 
 
 ```
 $ pchain --testnet --networkid=10000 --port=30201 
