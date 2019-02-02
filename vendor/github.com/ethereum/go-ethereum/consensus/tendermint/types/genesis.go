@@ -69,14 +69,6 @@ func GenesisDocFromJSON(jsonBlob []byte) (genDoc *GenesisDoc, err error) {
 	return
 }
 
-func GenesisValidatorsString(vs []*GenesisValidator) string {
-	s := make([]GenesisValidator, len(vs))
-	for i, v := range vs {
-		s[i] = GenesisValidator{v.EthAccount, v.PubKey, v.Amount, v.Name}
-	}
-	return string(wire.JSONBytes(s))
-}
-
 var MainnetGenesisJSON string = `{
 	"app_hash": "",
 	"chain_id": "pchain",
