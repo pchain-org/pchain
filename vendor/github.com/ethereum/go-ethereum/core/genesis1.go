@@ -214,62 +214,63 @@ var DefaultMainnetGenesisJSON = `{
 }`
 
 var DefaultTestnetGenesisJSON = `{
-	"config": {
-		"pChainId": "testnet",
-		"chainId": 24160843454325667600331855523506733810605584168331177014437733538279768116753,
-		"homesteadBlock": 0,
-		"eip150Block": 0,
-		"eip150Hash": "0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0",
-		"eip155Block": 0,
-		"eip158Block": 0,
-		"byzantiumBlock": 0,
-		"tendermint": {
-			"epoch": 30000,
-			"policy": 0
-		}
-	},
-	"nonce": "0xdeadbeefdeadbeef",
-	"timestamp": "0x0",
-	"extraData": "0x307830",
-	"gasLimit": "0x8000000",
-	"difficulty": "0x400",
-	"mixHash": "0x3030303030303030303030303030303030303030303030303030303030303030",
-	"coinbase": "0x4cacbcbf218679dcc9574a90a2061bca4a8d8b6c",
-	"alloc": {
-		"05f256d2d5d512c59ba09b56a4fb202e5c883268": {
-			"balance": "0x1ed09bead87c0378d8e6400000000",
-			"amount": "0x64"
-		},
-		"3d0e1a7a7674164acf29085b101b000a8a109cc1": {
-			"balance": "0x1ed09bead87c0378d8e6400000000",
-			"amount": "0x64"
-		},
-		"4cacbcbf218679dcc9574a90a2061bca4a8d8b6c": {
-			"balance": "0x1ed09bead87c0378d8e6400000000",
-			"amount": "0x64"
-		},
-		"50ca5341dfe4b07c41854ff79bdb8ab4e11c996d": {
-			"balance": "0x1ed09bead87c0378d8e6400000000",
-			"amount": "0x64"
-		},
-		"79cd31b59e3faab6deea68fbbaafa4da748bbdf6": {
-			"balance": "0x1ed09bead87c0378d8e6400000000",
-			"amount": "0x64"
-		},
-		"b3c925a77a24d7c92ec5c06719fd76b51cf6809b": {
-			"balance": "0x1ed09bead87c0378d8e6400000000",
-			"amount": "0x64"
-		},
-		"c6179a651918888251380a4e3fee6af81cf091d1": {
-			"balance": "0x1ed09bead87c0378d8e6400000000",
-			"amount": "0x64"
-		},
-		"d2fd09246e2ced295411f1f863e6e7b5929bcc59": {
-			"balance": "0x1ed09bead87c0378d8e6400000000",
-			"amount": "0x64"
-		}
-	},
-	"number": "0x0",
-	"gasUsed": "0x0",
-	"parentHash": "0x3030303030303030303030303030303030303030303030303030303030303030"
-}`
+        "config": {
+                "pChainId": "testnet",
+                "chainId": 98411113441374360242664033072086975431386585974419604025805951356851497696398,
+                "homesteadBlock": 0,
+                "eip150Block": 0,
+                "eip150Hash": "0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0",
+                "eip155Block": 0,
+                "eip158Block": 0,
+                "byzantiumBlock": 0,
+                "tendermint": {
+                        "epoch": 30000,
+                        "policy": 0
+                }
+        },
+        "nonce": "0xdeadbeefdeadbeef",
+        "timestamp": "0x0",
+        "extraData": "0x307830",
+        "gasLimit": "0x8000000",
+        "difficulty": "0x400",
+        "mixHash": "0x3030303030303030303030303030303030303030303030303030303030303030",
+        "coinbase": "0x4cacbcbf218679dcc9574a90a2061bca4a8d8b6c",
+        "alloc": {
+                "05f256d2d5d512c59ba09b56a4fb202e5c883268": {
+                        "balance": "0xffd09bead87c0378d8e6400000000",
+                        "amount": "0x2a5a058fc295ec000000"
+                },
+                "3d0e1a7a7674164acf29085b101b000a8a109cc1": {
+                        "balance": "0xffd09bead87c0378d8e6400000000",
+                        "amount": "0x2a5a058fc295ec000000"
+                },
+                "4cacbcbf218679dcc9574a90a2061bca4a8d8b6c": {
+                        "balance": "0xffd09bead87c0378d8e6400000000",
+                        "amount": "0x2a5a058fc295ec000000"
+                },
+                "50ca5341dfe4b07c41854ff79bdb8ab4e11c996d": {
+                        "balance": "0xffd09bead87c0378d8e6400000000",
+                        "amount": "0x2a5a058fc295ec000000"
+                },
+                "79cd31b59e3faab6deea68fbbaafa4da748bbdf6": {
+                        "balance": "0xffd09bead87c0378d8e6400000000",
+                        "amount": "0x2a5a058fc295ec000000"
+                },
+                "b3c925a77a24d7c92ec5c06719fd76b51cf6809b": {
+                        "balance": "0xffd09bead87c0378d8e6400000000",
+                        "amount": "0x2a5a058fc295ec000000"
+                },
+                "c6179a651918888251380a4e3fee6af81cf091d1": {
+                        "balance": "0xffd09bead87c0378d8e6400000000",
+                        "amount": "0x2a5a058fc295ec000000"
+                },
+                "d2fd09246e2ced295411f1f863e6e7b5929bcc59": {
+                        "balance": "0xffd09bead87c0378d8e6400000000",
+                        "amount": "0x2a5a058fc295ec000000"
+                }
+        },
+        "number": "0x0",
+        "gasUsed": "0x0",
+        "parentHash": "0x3030303030303030303030303030303030303030303030303030303030303030"
+}
+`
