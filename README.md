@@ -105,6 +105,10 @@ Specifying the `--testnet` flag however will reconfigure your pchain instance a 
 
 Please Read The Wiki [How To Interact With Pchain](https://github.com/pchain-org/pchain/wiki/How-To-Interact-With-Pchain)
 
+### How To Get Free Testnet PI (Pchain Token)
+
+[Get Free PI](https://testnet.pchain.org/vfaucet.html)
+
 ### How To Become A Validator
 
 Validator is a node participating in PCHAIN for the verification and consensus process of generating the block. 
