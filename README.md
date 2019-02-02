@@ -74,7 +74,7 @@ Pchain Main network will come soon.
 ### Full Node On the Pchain Test Network 
 
 ```
-$ pchain --testnet --networkid=10000 --port=30201 
+$ pchain --testnet
 ```
 
 You can set your own data directory by '--datadir yourOwnDirectory'
@@ -84,7 +84,7 @@ If you want to open RPC,just add the options '--rpc' and '--rpcapi "db,eth,net,w
 you can add '&' at the end of command above,Pchain client will run in the background
 
 ```
-$ pchain --testnet --networkid=10000 --port=30201  &
+$ pchain --testnet  &
 ```
 
 | Platform | Default Datadir Directory |
@@ -107,7 +107,7 @@ Please Read The Wiki [How To Interact With Pchain](https://github.com/pchain-org
 
 ### How To Get Free Testnet PI (Pchain Token)
 
-[Get Free PI](https://testnet.pchain.org/vfaucet.html)
+[Get Free Testnet PI](https://testnet.pchain.org/vfaucet.html)
 
 ### How To Become A Validator
 
