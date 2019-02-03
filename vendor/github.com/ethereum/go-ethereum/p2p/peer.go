@@ -328,7 +328,7 @@ func (p *Peer) handle(msg Msg) error {
 			p.log.Debugf("decode error: %v", err)
 			return err
 		}
-		p.log.Debugf("validation node address： %x", valNodeInfo.Validator.Address)
+		p.log.Debugf("validation node address: %x", valNodeInfo.Validator.Address)
 
 		data, err:= rlp.EncodeToBytes(valNodeInfo)
 		if err != nil {
@@ -350,7 +350,7 @@ func (p *Peer) handle(msg Msg) error {
 			p.log.Debugf("decode error: %v", err)
 			return err
 		}
-		p.log.Debugf("validation node address： %x", valNodeInfo.Validator.Address)
+		p.log.Debugf("validation node address: %x", valNodeInfo.Validator.Address)
 		data, err:= rlp.EncodeToBytes(valNodeInfo)
 		if err != nil {
 			p.log.Debugf("encode error: %v", err)

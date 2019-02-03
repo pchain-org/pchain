@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/core"
@@ -26,6 +27,10 @@ func NewPublicTdmAPI(b Backend) *PublicTdmAPI {
 		b: b,
 	}
 }
+
+var (
+	minimumVoteAmount = math.MustParseBig256("100000000000000000000000") // 100,000 * e18
+)
 
 func (api *PublicTdmAPI) VoteNextEpoch(ctx context.Context, from common.Address, voteHash common.Hash, gasPrice *hexutil.Big) (common.Hash, error) {
 
@@ -211,6 +216,11 @@ func revealVoteValidation(from common.Address, tx *types.Transaction, state *sta
 		return nil, core.ErrVoteAmountTooLow
 	}
 
+	// Non Candidate, Check Amount greater than minimumVoteAmount
+	if !state.IsCandidate(from) && args.Amount.Sign() == 1 && args.Amount.Cmp(minimumVoteAmount) == -1 {
+		return nil, core.ErrVoteAmountTooLow
+	}
+
 	// Check Amount (Amount <= net proxied + balance + deposit)
 	balance := state.GetBalance(from)
 	deposit := state.GetDepositBalance(from)
@@ -256,8 +266,15 @@ func revealVoteValidation(from common.Address, tx *types.Transaction, state *sta
 	}
 
 	// Check Logic - Amount can't be 0 for new Validator
-	if !ep.Validators.HasAddress(from.Bytes()) && args.Amount.Sign() <= 0 {
+	if !ep.Validators.HasAddress(from.Bytes()) && args.Amount.Sign() == 0 {
 		return nil, errors.New("invalid vote!!! new validator's vote amount must be greater than 0")
+	}
+
+	// Check Logic - SuperNode with remaining epoch can not decrease the stack
+	if _, supernode := ep.Validators.GetByAddress(from.Bytes()); supernode != nil {
+		if supernode.RemainingEpoch > 0 && args.Amount.Cmp(state.GetDepositBalance(from)) == -1 {
+			return nil, core.ErrVoteAmountTooLow
+		}
 	}
 
 	return &args, nil

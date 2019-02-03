@@ -37,9 +37,10 @@ func (api *API) GetEpoch(number uint64) (*tdmTypes.EpochApi, error) {
 	validators := make([]*tdmTypes.EpochValidator, len(resultEpoch.Validators.Validators))
 	for i, val := range resultEpoch.Validators.Validators {
 		validators[i] = &tdmTypes.EpochValidator{
-			Address: common.BytesToAddress(val.Address),
-			PubKey:  val.PubKey,
-			Amount:  val.VotingPower,
+			Address:        common.BytesToAddress(val.Address),
+			PubKey:         val.PubKey,
+			Amount:         val.VotingPower,
+			RemainingEpoch: val.RemainingEpoch,
 		}
 	}
 
@@ -108,9 +109,10 @@ func (api *API) GetNextEpochValidators() ([]*tdmTypes.EpochValidator, error) {
 		validators := make([]*tdmTypes.EpochValidator, 0, len(nextValidators.Validators))
 		for _, val := range nextValidators.Validators {
 			validators = append(validators, &tdmTypes.EpochValidator{
-				Address: common.BytesToAddress(val.Address),
-				PubKey:  val.PubKey,
-				Amount:  val.VotingPower,
+				Address:        common.BytesToAddress(val.Address),
+				PubKey:         val.PubKey,
+				Amount:         val.VotingPower,
+				RemainingEpoch: val.RemainingEpoch,
 			})
 		}
 
