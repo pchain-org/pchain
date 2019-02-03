@@ -53,6 +53,9 @@ var (
 	// ErrAlreadyCandidate is returned if the request address has become candidate already
 	ErrAlreadyCandidate = errors.New("address become candidate already")
 
+	// ErrCannotCandidate is returned if the request address belongs to Annual/SemiAnnual Supernode
+	ErrCannotCandidate = errors.New("Annual/SemiAnnual Supernode can not become candidate")
+
 	// ErrNotCandidate is returned if the request address is not a candidate
 	ErrNotCandidate = errors.New("address not candidate")
 
@@ -68,4 +71,7 @@ var (
 
 	// ErrVoteAmountTooHight is returned if the vote amount greater than proxied amount + self amount
 	ErrVoteAmountTooHight = errors.New("vote amount too high")
+
+	// ErrNotOwner is returned if the Address not owner
+	ErrNotOwner = errors.New("address not owner")
 )

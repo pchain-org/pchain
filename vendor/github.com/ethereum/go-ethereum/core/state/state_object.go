@@ -92,6 +92,10 @@ type stateObject struct {
 	originProxied Proxied // cache data of proxied trie
 	dirtyProxied  Proxied // dirty data of proxied trie, need to be flushed to disk later
 
+	rewardTrie   Trie   // Reward Trie, store the pending reward balance for this account
+	originReward Reward // cache data of Reward trie
+	dirtyReward  Reward // dirty data of Reward trie, need to be flushed to disk later
+
 	// Cache flags.
 	// When an object is marked suicided it will be delete from the trie
 	// during the "update" phase of the state transition.
@@ -129,6 +133,11 @@ type Account struct {
 	// Candidate
 	Candidate  bool  // flag for Account, true indicate the account has been applied for the Delegation Candidate
 	Commission uint8 // commission percentage of Delegation Candidate (0-100)
+
+	// Reward
+	RewardBalance *big.Int    // the accumulative reward balance for this account
+	RewardRoot    common.Hash // merkle root of the Reward trie
+
 }
 
 // newObject creates a state object.
@@ -155,6 +164,10 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 	if data.PendingRefundBalance == nil {
 		data.PendingRefundBalance = new(big.Int)
 	}
+	// init reward balance
+	if data.RewardBalance == nil {
+		data.RewardBalance = new(big.Int)
+	}
 
 	if data.CodeHash == nil {
 		data.CodeHash = emptyCodeHash
@@ -170,6 +183,8 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 		dirtyTX3:      make(map[common.Hash]struct{}),
 		originProxied: make(Proxied),
 		dirtyProxied:  make(Proxied),
+		originReward:  make(Reward),
+		dirtyReward:   make(Reward),
 		onDirty:       onDirty,
 	}
 }
@@ -548,6 +563,9 @@ func (self *stateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)
 	if self.proxiedTrie != nil {
 		stateObject.proxiedTrie = db.db.CopyTrie(self.proxiedTrie)
 	}
+	if self.rewardTrie != nil {
+		stateObject.rewardTrie = db.db.CopyTrie(self.rewardTrie)
+	}
 	stateObject.code = self.code
 	stateObject.dirtyStorage = self.dirtyStorage.Copy()
 	stateObject.originStorage = self.originStorage.Copy()
@@ -564,6 +582,8 @@ func (self *stateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)
 	}
 	stateObject.dirtyProxied = self.dirtyProxied.Copy()
 	stateObject.originProxied = self.originProxied.Copy()
+	stateObject.dirtyReward = self.dirtyReward.Copy()
+	stateObject.originReward = self.originReward.Copy()
 	return stateObject
 }
 

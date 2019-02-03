@@ -503,29 +503,30 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 // GetFullBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
-func (s *PublicBlockChainAPI) GetFullBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber, fullProxied bool) (map[string]interface{}, error) {
+func (s *PublicBlockChainAPI) GetFullBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber, fullDetail bool) (map[string]interface{}, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
 		return nil, err
 	}
 
 	fields := map[string]interface{}{
-		"balance":               (*hexutil.Big)(state.GetBalance(address)),
-		"depositBalance":        (*hexutil.Big)(state.GetDepositBalance(address)),
-		"delegateBalance":       (*hexutil.Big)(state.GetDelegateBalance(address)),
-		"proxiedBalance":        (*hexutil.Big)(state.GetTotalProxiedBalance(address)),
-		"depositProxiedBalance": (*hexutil.Big)(state.GetTotalDepositProxiedBalance(address)),
-		"pendingRefundBalance":  (*hexutil.Big)(state.GetTotalPendingRefundBalance(address)),
+		"balance":                     (*hexutil.Big)(state.GetBalance(address)),
+		"total_depositBalance":        (*hexutil.Big)(state.GetDepositBalance(address)),
+		"total_delegateBalance":       (*hexutil.Big)(state.GetDelegateBalance(address)),
+		"total_proxiedBalance":        (*hexutil.Big)(state.GetTotalProxiedBalance(address)),
+		"total_depositProxiedBalance": (*hexutil.Big)(state.GetTotalDepositProxiedBalance(address)),
+		"total_pendingRefundBalance":  (*hexutil.Big)(state.GetTotalPendingRefundBalance(address)),
+		"total_rewardBalance":         (*hexutil.Big)(state.GetTotalRewardBalance(address)),
 	}
 
-	if fullProxied {
-		detail := make(map[common.Address]struct {
+	if fullDetail {
+		proxied_detail := make(map[common.Address]struct {
 			ProxiedBalance        *hexutil.Big
 			DepositProxiedBalance *hexutil.Big
 			PendingRefundBalance  *hexutil.Big
 		})
 		state.ForEachProxied(address, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
-			detail[key] = struct {
+			proxied_detail[key] = struct {
 				ProxiedBalance        *hexutil.Big
 				DepositProxiedBalance *hexutil.Big
 				PendingRefundBalance  *hexutil.Big
@@ -537,9 +538,24 @@ func (s *PublicBlockChainAPI) GetFullBalance(ctx context.Context, address common
 			return true
 		})
 
-		fields["proxied_detail"] = detail
+		fields["proxied_detail"] = proxied_detail
+
+		reward_detail := make(map[EpochLabel]*hexutil.Big)
+		state.ForEachReward(address, func(key uint64, rewardBalance *big.Int) bool {
+			reward_detail[EpochLabel(key)] = (*hexutil.Big)(rewardBalance)
+			return true
+		})
+
+		fields["reward_detail"] = reward_detail
 	}
 	return fields, state.Error()
+}
+
+type EpochLabel uint64
+
+func (e EpochLabel) MarshalText() ([]byte, error) {
+	output := fmt.Sprintf("epoch_%d", e)
+	return []byte(output), nil
 }
 
 // GetBlockByNumber returns the requested block. When blockNr is -1 the chain head is returned. When fullTx is true all

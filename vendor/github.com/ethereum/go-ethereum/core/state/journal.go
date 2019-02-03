@@ -76,6 +76,10 @@ type (
 		account *common.Address
 		prev    *big.Int
 	}
+	rewardBalanceChange struct {
+		account *common.Address
+		prev    *big.Int
+	}
 
 	nonceChange struct {
 		account *common.Address
@@ -97,6 +101,11 @@ type (
 		account  *common.Address
 		key      common.Address
 		prevalue *accountProxiedBalance
+	}
+	epochRewardBalanceChange struct {
+		account  *common.Address
+		key      uint64
+		prevalue *big.Int
 	}
 
 	candidateChange struct {
@@ -207,6 +216,10 @@ func (ch pendingRefundBalanceChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setPendingRefundBalance(ch.prev)
 }
 
+func (ch rewardBalanceChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setRewardBalance(ch.prev)
+}
+
 func (ch nonceChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setNonce(ch.prev)
 }
@@ -229,6 +242,10 @@ func (ch addTX3Change) undo(s *StateDB) {
 
 func (ch accountProxiedBalanceChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setAccountProxiedBalance(ch.key, ch.prevalue)
+}
+
+func (ch epochRewardBalanceChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setEpochRewardBalance(ch.key, ch.prevalue)
 }
 
 func (ch candidateChange) undo(s *StateDB) {

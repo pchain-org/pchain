@@ -31,6 +31,7 @@ const (
 	NextEpochRevealVoteEndPercent = 0.95
 
 	MinimumValidatorsSize = 10
+	MaximumValidatorsSize = 200
 
 	epochKey       = "Epoch:%v"
 	latestEpochKey = "LatestEpoch"
@@ -136,17 +137,12 @@ func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc, logger log.Logger) *
 
 	validators := make([]*tmTypes.Validator, len(oneEpoch.Validators))
 	for i, val := range oneEpoch.Validators {
-		pubKey := val.PubKey
-		// address := pubKey.Address()
-		//TODO: very important, here the address should be the ethereum account,
-		//TODO: at least, should add one additional ethereum account
-		address := val.EthAccount.Bytes()
-
 		// Make validator
 		validators[i] = &tmTypes.Validator{
-			Address:     address,
-			PubKey:      pubKey,
-			VotingPower: val.Amount,
+			Address:        val.EthAccount.Bytes(),
+			PubKey:         val.PubKey,
+			VotingPower:    val.Amount,
+			RemainingEpoch: val.RemainingEpoch,
 		}
 	}
 
@@ -359,6 +355,19 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB) (bo
 
 	if height == epoch.EndBlock {
 		if epoch.nextEpoch != nil {
+			// Step 0: Give the Epoch Reward
+			currentEpochNumber := epoch.Number
+			for rewardAddress := range state.GetRewardSet() {
+				currentEpochReward := state.GetRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber)
+				state.SubRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
+				state.AddBalance(rewardAddress, currentEpochReward)
+
+				// Check Remaining Reward Balance
+				if state.GetTotalRewardBalance(rewardAddress).Sign() == 0 {
+					state.ClearRewardSetByAddress(rewardAddress)
+				}
+			}
+
 			// Step 1: Refund the Delegate (subtract the pending refund / deposit proxied amount)
 			for refundAddress := range state.GetDelegateAddressRefundSet() {
 				state.ForEachProxied(refundAddress, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
@@ -386,7 +395,12 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB) (bo
 				vAddr := common.BytesToAddress(v.Address)
 				totalProxiedBalance := new(big.Int).Add(state.GetTotalProxiedBalance(vAddr), state.GetTotalDepositProxiedBalance(vAddr))
 				// Voting Power = Delegated amount + Deposit amount
-				v.VotingPower = new(big.Int).Add(totalProxiedBalance, state.GetDepositBalance(vAddr))
+				newVotingPower := new(big.Int).Add(totalProxiedBalance, state.GetDepositBalance(vAddr))
+				if newVotingPower.Sign() == 0 {
+					newValidators.Remove(v.Address)
+				} else {
+					v.VotingPower = newVotingPower
+				}
 			}
 
 			// Update Validators with vote
@@ -480,56 +494,65 @@ func DryRunUpdateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *Ep
 // updateEpochValidatorSet Update the Current Epoch Validator by vote
 //
 func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet) ([]*tmTypes.RefundValidatorAmount, error) {
-	if voteSet.IsEmpty() {
-		// No vote, keep the current validator set
-		return nil, nil
-	}
 
 	// Refund List will be vaildators contain from Vote (exit validator or less amount than previous amount) and Knockout after sort by amount
 	var refund []*tmTypes.RefundValidatorAmount
 	oldValSize, newValSize := validators.Size(), 0
-	// Process the Votes and merge into the Validator Set
-	for _, v := range voteSet.Votes {
-		// If vote not reveal, bypass this vote
-		if v.Amount == nil || v.Salt == "" || v.PubKey == nil {
-			continue
-		}
 
-		_, validator := validators.GetByAddress(v.Address[:])
-		if validator == nil {
-			// Add the new validator
-			added := validators.Add(tmTypes.NewValidator(v.Address[:], v.PubKey, v.Amount))
-			if !added {
-				return nil, fmt.Errorf("Failed to add new validator %x with voting power %d", v.Address, v.Amount)
-			}
-			newValSize++
-		} else if v.Amount.Sign() == 0 {
-			refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: validator.VotingPower, Voteout: false})
-			// Remove the Validator
-			_, removed := validators.Remove(validator.Address)
-			if !removed {
-				return nil, fmt.Errorf("Failed to remove validator %x", validator.Address)
-			}
-		} else {
-			//refund if new amount less than the voting power
-			if v.Amount.Cmp(validator.VotingPower) == -1 {
-				refundAmount := new(big.Int).Sub(validator.VotingPower, v.Amount)
-				refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: refundAmount, Voteout: false})
+	// Process the Vote if vote set not empty
+	if !voteSet.IsEmpty() {
+		// Process the Votes and merge into the Validator Set
+		for _, v := range voteSet.Votes {
+			// If vote not reveal, bypass this vote
+			if v.Amount == nil || v.Salt == "" || v.PubKey == nil {
+				continue
 			}
 
-			// Update the Validator Amount
-			validator.VotingPower = v.Amount
-			updated := validators.Update(validator)
-			if !updated {
-				return nil, fmt.Errorf("Failed to update validator %x with voting power %d", validator.Address, v.Amount)
+			_, validator := validators.GetByAddress(v.Address[:])
+			if validator == nil {
+				// Add the new validator
+				added := validators.Add(tmTypes.NewValidator(v.Address[:], v.PubKey, v.Amount))
+				if !added {
+					return nil, fmt.Errorf("Failed to add new validator %x with voting power %d", v.Address, v.Amount)
+				}
+				newValSize++
+			} else if v.Amount.Sign() == 0 {
+				refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: validator.VotingPower, Voteout: false})
+				// Remove the Validator
+				_, removed := validators.Remove(validator.Address)
+				if !removed {
+					return nil, fmt.Errorf("Failed to remove validator %x", validator.Address)
+				}
+			} else {
+				//refund if new amount less than the voting power
+				if v.Amount.Cmp(validator.VotingPower) == -1 {
+					refundAmount := new(big.Int).Sub(validator.VotingPower, v.Amount)
+					refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: refundAmount, Voteout: false})
+				}
+
+				// Update the Validator Amount
+				validator.VotingPower = v.Amount
+				updated := validators.Update(validator)
+				if !updated {
+					return nil, fmt.Errorf("Failed to update validator %x with voting power %d", validator.Address, v.Amount)
+				}
 			}
 		}
 	}
 
 	// Determine the Validator Size
 	valSize := oldValSize + newValSize/2
-	if valSize > MinimumValidatorsSize {
+	if valSize > MaximumValidatorsSize {
+		valSize = MaximumValidatorsSize
+	} else if valSize < MinimumValidatorsSize {
 		valSize = MinimumValidatorsSize
+	}
+
+	// Subtract the remaining epoch value
+	for _, v := range validators.Validators {
+		if v.RemainingEpoch > 0 {
+			v.RemainingEpoch--
+		}
 	}
 
 	// If actual size of Validators greater than Determine Validator Size
@@ -537,7 +560,12 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 	if validators.Size() > valSize {
 		// Sort the Validator Set with Amount
 		sort.Slice(validators.Validators, func(i, j int) bool {
-			return validators.Validators[i].VotingPower.Cmp(validators.Validators[j].VotingPower) == 1
+			// Compare with remaining epoch first then, voting power
+			if validators.Validators[i].RemainingEpoch == validators.Validators[j].RemainingEpoch {
+				return validators.Validators[i].VotingPower.Cmp(validators.Validators[j].VotingPower) == 1
+			} else {
+				return validators.Validators[i].RemainingEpoch > validators.Validators[j].RemainingEpoch
+			}
 		})
 		// Add knockout validator to refund list
 		knockout := validators.Validators[valSize:]
