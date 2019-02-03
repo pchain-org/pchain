@@ -1906,10 +1906,15 @@ var unitMap = {
     'milliether':    '1000000000000000',
     'milli':         '1000000000000000',
     'ether':        '1000000000000000000',
+    'pi':        '1000000000000000000',
     'kether':       '1000000000000000000000',
+    'kpi':       '1000000000000000000000',
     'grand':        '1000000000000000000000',
     'mether':       '1000000000000000000000000',
+    'mpi':       '1000000000000000000000000',
     'gether':       '1000000000000000000000000000',
+    'gpi':       '1000000000000000000000000000',
+    'tpi':       '1000000000000000000000000000000',
     'tether':       '1000000000000000000000000000000'
 };
 
@@ -2531,6 +2536,7 @@ function Web3 (provider) {
     this._requestManager = new RequestManager(provider);
     this.currentProvider = provider;
     this.eth = new Eth(this);
+    this.pi = new Eth(this);
     this.db = new DB(this);
     this.shh = new Shh(this);
     this.net = new Net(this);
