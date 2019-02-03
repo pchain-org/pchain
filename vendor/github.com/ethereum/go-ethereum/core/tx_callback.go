@@ -43,6 +43,8 @@ type CrossChainHelper interface {
 	GetEpochFromMainChain() *epoch.Epoch
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
 
+	ChangeValidators(chainId string)
+
 	// for epoch only
 	VerifyChildChainProofData(bs []byte) error
 	SaveChildChainProofDataToMainChain(bs []byte) error

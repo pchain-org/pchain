@@ -24,6 +24,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -33,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -100,6 +102,13 @@ type Config struct {
 	// Trusted nodes are used as pre-configured connections which are always
 	// allowed to connect, even above the peer limit.
 	TrustedNodes []*discover.Node
+
+	// Validators that this node acts as
+	LocalValidators []P2PValidator
+
+	// Validators set in all chains
+	// Should find nodes for all of them to support bls transport in PDBFT module
+	Validators map[P2PValidator]*P2PValidatorNodeInfo
 
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the
@@ -175,6 +184,8 @@ type Server struct {
 	loopWG        sync.WaitGroup // loop, listenLoop
 	peerFeed      event.Feed
 	log           log.Logger
+
+	events        chan *PeerEvent
 }
 
 type peerOpFunc func(map[discover.NodeID]*Peer)
@@ -412,6 +423,9 @@ func (srv *Server) Start() (err error) {
 	srv.removestatic = make(chan *discover.Node)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
+	srv.events = make(chan *PeerEvent)
+
+	srv.SubscribeEvents(srv.events)
 
 	var (
 		conn      *net.UDPConn
@@ -655,6 +669,8 @@ running:
 				if p.Inbound() {
 					inboundCount++
 				}
+
+				srv.validatorAddPeer(p)
 			}
 			// The dialer logic relies on the assumption that
 			// dial tasks complete after the peer has been added or
@@ -671,6 +687,47 @@ running:
 			delete(peers, pd.ID())
 			if pd.Inbound() {
 				inboundCount--
+			}
+			srv.validatorDelPeer(pd.ID())
+
+		case evt := <-srv.events:
+			log.Debugf("peer events received: %v", evt)
+			switch evt.Type {
+
+			case PeerEventTypeRefreshValidator:
+				var valNodeInfo P2PValidatorNodeInfo
+				if err := rlp.DecodeBytes([]byte(evt.Protocol), &valNodeInfo); err != nil {
+					log.Debugf("rlp decode valNodeInfo failed with %v", err)
+				}
+
+				peerArr := make([]*Peer, 0)
+				for _, p := range peers {
+					peerArr = append(peerArr, p)
+				}
+
+				if err := srv.validatorAdd(valNodeInfo, peerArr); err != nil {
+					log.Debugf("add valNodeInfo to local failed with %v", err)
+				}
+
+				log.Debugf("Got refresh validation node infomation from validation %x", valNodeInfo.Validator.Address)
+
+			case PeerEventTypeRemoveValidator:
+				var valNodeInfo P2PValidatorNodeInfo
+				if err := rlp.DecodeBytes([]byte(evt.Protocol), &valNodeInfo); err != nil {
+					log.Debugf("rlp decode valNodeInfo failed with %v", err)
+				}
+
+				peerArr := make([]*Peer, 0)
+				for _, p := range peers {
+					peerArr = append(peerArr, p)
+				}
+
+				if err := srv.validatorRemove(valNodeInfo, peerArr); err != nil {
+					log.Debugf("remove valNodeInfo from local failed with %v", err)
+				}
+
+				log.Debugf("Got remove validation node infomation from validation %x", valNodeInfo.Validator.Address)
+
 			}
 		}
 	}
@@ -983,5 +1040,211 @@ func (srv *Server) BroadcastMsg(msgCode uint64, data interface{}) {
 	peers := srv.Peers()
 	for _, p := range peers {
 		Send(p.rw, BroadcastNewChildChainMsg, data)
+	}
+}
+
+func (srv *Server) AddLocalValidator(chainId string, address common.Address) {
+
+	log.Debug("AddLocalValidator")
+
+	validator := P2PValidator{
+		ChainId:chainId,
+		Address:address,
+	}
+
+	for i:=0; i<len(srv.LocalValidators); i++ {
+		if validator == srv.LocalValidators[i] {
+			return
+		}
+	}
+
+	srv.LocalValidators = append(srv.LocalValidators, validator)
+
+	srv.broadcastRefreshValidatorNodeInfo(P2PValidatorNodeInfo{
+		Node: *srv.Self(),
+		TimeStamp: 	time.Now(),
+		Validator:  validator,
+	}, nil)
+}
+
+func (srv *Server) RemoveLocalValidator(chainId string, address common.Address) {
+
+	log.Debug("RemoveLocalValidator")
+
+	validator := P2PValidator {
+		ChainId: chainId,
+		Address: address,
+	}
+
+	idx := -1
+	for i:=0; i<len(srv.LocalValidators); i++ {
+		if validator == srv.LocalValidators[i] {
+			idx = i
+			break
+		}
+	}
+
+	if idx < 0 {
+		return
+	}
+
+	srv.LocalValidators = append(srv.LocalValidators[:idx], srv.LocalValidators[idx+1:]...)
+
+	srv.broadcastRemoveValidatorNodeInfo(P2PValidatorNodeInfo{
+		Node: *srv.Self(),
+		TimeStamp: 	time.Now(),
+		Validator:  validator,
+	}, nil)
+}
+
+func (srv *Server) validatorAdd(valNodeInfo P2PValidatorNodeInfo, peers []*Peer) error {
+
+	log.Debug("validatorAdd")
+
+	validator := valNodeInfo.Validator
+
+	//if the node info goes from this node, just skip
+	if srv.Self().ID == valNodeInfo.Node.ID {
+		return nil
+	}
+
+	//if the node does exist, we skip it; this could also avoid repeated propagate
+	if nodeInfo, ok := srv.Validators[validator]; ok {
+		if reflect.DeepEqual(valNodeInfo, *nodeInfo) {
+			log.Debug("DeepEqal if true, validator found")
+			return nil
+		}
+	}
+
+	log.Debug("validator not found")
+	srv.Validators[validator] = &valNodeInfo
+	inSameChain := false
+	//if this validator is in the same chains which we join as validator, connect to it
+	for i:=0; i<len(srv.LocalValidators); i++ {
+		if validator.ChainId == srv.LocalValidators[i].ChainId {
+			inSameChain = true
+			break
+		}
+	}
+
+	shouldAdd := true
+	if inSameChain {
+		for _, p := range peers {
+			if p.ID() == valNodeInfo.Node.ID {
+				shouldAdd = false
+				break
+			}
+		}
+	}
+
+	if shouldAdd {
+		srv.addstatic <- &valNodeInfo.Node
+	}
+
+	//broadcast this node info to peers
+	srv.broadcastRefreshValidatorNodeInfo(valNodeInfo, peers);
+
+	return nil
+}
+
+func (srv *Server) validatorRemove(valNodeInfo P2PValidatorNodeInfo, peers []*Peer) error {
+
+	log.Debug("validatorRemove")
+
+	//if the node info goes from this node, just skip
+	if srv.Self().ID == valNodeInfo.Node.ID {
+		return nil
+	}
+
+	validator := valNodeInfo.Validator
+	//if the node does not exist, we skip it
+	// in some cases the msg may need send, but ignoring it does not matter
+	if _, ok := srv.Validators[validator]; !ok {
+		return nil
+	}
+
+	delete(srv.Validators, validator)
+
+	inSameChain := 0
+	//if this validator is in the same chains which we join as validator
+	for i:=0; i<len(srv.LocalValidators); i++ {
+		if validator.ChainId == srv.LocalValidators[i].ChainId {
+			inSameChain ++
+		}
+	}
+
+	shouldRemove := false
+	//if there is only one validator in one chain connected with this peer, disconnect
+	if inSameChain == 1 {
+		for _, p := range peers {
+			if p.ID() == valNodeInfo.Node.ID {
+				//there peer is connected only for we are validator in one single chain, now can remove it
+				shouldRemove = true
+				break
+			}
+		}
+	}
+
+	if shouldRemove {
+		srv.removestatic <- &valNodeInfo.Node
+	}
+
+	//broadcast this node info to peers
+	srv.broadcastRemoveValidatorNodeInfo(valNodeInfo, peers);
+
+	return nil
+}
+
+func (srv *Server) validatorAddPeer(peer *Peer) error {
+
+	log.Debug("validatorAddPeer")
+
+	var err error = nil
+	for _, validatorNodeInfo := range srv.Validators {
+		err1 := Send(peer.rw, RefreshValidatorNodeInfoMsg, validatorNodeInfo)
+		if err == nil && err1 != nil {
+			err = err1
+		}
+	}
+
+	for i := 0; i<len(srv.LocalValidators); i++ {
+		err1 := Send(peer.rw, RefreshValidatorNodeInfoMsg, P2PValidatorNodeInfo{
+			Node: *srv.Self(),
+			TimeStamp: time.Now(),
+			Validator: srv.LocalValidators[i],
+		})
+		if err == nil && err1 != nil {
+			err = err1
+		}
+	}
+
+	return err
+}
+
+func (srv *Server) validatorDelPeer(nodeId discover.NodeID) error {
+
+	log.Debug("validatorDelPeer")
+	return nil
+}
+
+func (srv *Server) broadcastRefreshValidatorNodeInfo(data interface{}, peers []*Peer) {
+
+	log.Debug("broadcastRefreshValidatorNodeInfo")
+	if peers == nil {
+		peers = srv.Peers()
+	}
+	for _, p := range peers {
+		Send(p.rw, RefreshValidatorNodeInfoMsg, data)
+	}
+}
+
+func (srv *Server) broadcastRemoveValidatorNodeInfo(data interface{}, peers []*Peer) {
+
+	log.Debug("broadcastRemoveValidatorNodeInfo")
+	if peers == nil {
+		peers = srv.Peers()
+	}
+	for _, p := range peers {
+		Send(p.rw, RemoveValidatorNodeInfoMsg, data)
 	}
 }

@@ -39,6 +39,7 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 		nextEp, err := eng.GetEpoch().EnterNewEpoch(op.NewValidators)
 		if err == nil {
 			eng.SetEpoch(nextEp)
+			cch.ChangeValidators(op.ChainId)//must after eng.SetEpoch(nextEp), it uses epoch just set
 		}
 		return err
 	default:

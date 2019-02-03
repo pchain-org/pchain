@@ -51,6 +51,9 @@ const (
 	// PChain message belonging to pchain/64
 	BroadcastNewChildChainMsg = 0x04
 	ConfirmNewChildChainMsg   = 0x05
+
+	RefreshValidatorNodeInfoMsg	= 0x06
+	RemoveValidatorNodeInfoMsg	= 0x07
 )
 
 // protoHandshake is the RLP structure of the protocol handshake.
@@ -84,6 +87,14 @@ const (
 	// PeerEventTypeMsgRecv is the type of event emitted when a
 	// message is received from a peer
 	PeerEventTypeMsgRecv PeerEventType = "msgrecv"
+
+	// PeerEventTypeMsgSend is the type of event emitted when a
+	// message is successfully sent to a peer
+	PeerEventTypeRefreshValidator PeerEventType = "refreshvalidator"
+
+	// PeerEventTypeMsgRecv is the type of event emitted when a
+	// message is received from a peer
+	PeerEventTypeRemoveValidator PeerEventType = "removevalidator"
 )
 
 // PeerEvent is an event emitted when peers are either added or dropped from
@@ -309,6 +320,50 @@ func (p *Peer) handle(msg Msg) error {
 		p.log.Infof("Got confirm msg from Peer %v, Before add protocol. Caps %v, Running Proto %+v", p.String(), p.Caps(), p.Info().Protocols)
 		p.checkAndUpdateProtocol(chainId)
 		p.log.Infof("Got confirm msg After add protocol. Caps %v, Running Proto %+v", p.Caps(), p.Info().Protocols)
+
+	case msg.Code == RefreshValidatorNodeInfoMsg:
+		p.log.Debug("Got refresh validation node infomation")
+		var valNodeInfo P2PValidatorNodeInfo
+		if err := msg.Decode(&valNodeInfo); err != nil {
+			p.log.Debugf("decode error: %v", err)
+			return err
+		}
+		p.log.Debugf("validation node address: %x", valNodeInfo.Validator.Address)
+
+		data, err:= rlp.EncodeToBytes(valNodeInfo)
+		if err != nil {
+			p.log.Debugf("encode error: %v", err)
+			return err
+		}
+		p.events.Send(&PeerEvent{
+			Type: PeerEventTypeRefreshValidator,
+			Peer: p.ID(),
+			Protocol: string(data),
+		})
+
+		p.log.Debugf("RefreshValidatorNodeInfoMsg handled")
+
+	case msg.Code == RemoveValidatorNodeInfoMsg:
+		p.log.Debug("Got remove validation node infomation")
+		var valNodeInfo P2PValidatorNodeInfo
+		if err := msg.Decode(&valNodeInfo); err != nil {
+			p.log.Debugf("decode error: %v", err)
+			return err
+		}
+		p.log.Debugf("validation node address: %x", valNodeInfo.Validator.Address)
+		data, err:= rlp.EncodeToBytes(valNodeInfo)
+		if err != nil {
+			p.log.Debugf("encode error: %v", err)
+			return err
+		}
+		p.events.Send(&PeerEvent{
+			Type: PeerEventTypeRemoveValidator,
+			Peer: p.ID(),
+			Protocol: string(data),
+		})
+
+		p.log.Debug("RemoveValidatorNodeInfoMsg handled")
+
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
 		return msg.Discard()
