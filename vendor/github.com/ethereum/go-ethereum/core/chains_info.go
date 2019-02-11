@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
@@ -13,7 +14,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 type CoreChainInfo struct {
@@ -367,6 +367,7 @@ func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) 
 				for _, jv := range cci.JoinedValidators {
 					// Deposit will move to the Child Chain Account
 					stateDB.SubChildChainDepositBalance(jv.Address, v.ChainID, jv.DepositAmount)
+					stateDB.AddChainBalance(cci.Owner, jv.DepositAmount)
 				}
 				// Append the Chain ID to Ready Launch List
 				readyForLaunch = append(readyForLaunch, v.ChainID)

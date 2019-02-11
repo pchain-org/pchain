@@ -310,16 +310,15 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		return
 	}
 
-	// Load the KeyStore file from MainChain
+	// Load the KeyStore file from MainChain (Optional)
+	var keyJson []byte
 	wallet, walletErr := cm.mainChain.EthNode.AccountManager().Find(accounts.Account{Address: localEtherbase})
-	if walletErr != nil {
-		log.Errorf("Failed to Find the Account %v, Error: %v", localEtherbase, walletErr)
-		return
-	}
-	keyJson, readKeyErr := ioutil.ReadFile(wallet.URL().Path)
-	if readKeyErr != nil {
-		log.Errorf("Failed to Read the KeyStore %v, Error: %v", localEtherbase, readKeyErr)
-		return
+	if walletErr == nil {
+		var readKeyErr error
+		keyJson, readKeyErr = ioutil.ReadFile(wallet.URL().Path)
+		if readKeyErr != nil {
+			log.Errorf("Failed to Read the KeyStore %v, Error: %v", localEtherbase, readKeyErr)
+		}
 	}
 
 	// child chain uses the same validator with the main chain.

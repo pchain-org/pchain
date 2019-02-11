@@ -102,12 +102,14 @@ func CreateChildChain(ctx *cli.Context, chainId string, validator tdmTypes.PrivV
 	// Get Tendermint config base on chain id
 	config := GetTendermintConfig(chainId, ctx)
 
-	// Save the KeyStore File
-	keystoreDir := config.GetString("keystore")
-	keyJsonFilePath := filepath.Join(keystoreDir, keystore.KeyFileName(validator.Address))
-	saveKeyError := keystore.WriteKeyStore(keyJsonFilePath, keyJson)
-	if saveKeyError != nil {
-		return saveKeyError
+	// Save the KeyStore File (Optional)
+	if len(keyJson) > 0 {
+		keystoreDir := config.GetString("keystore")
+		keyJsonFilePath := filepath.Join(keystoreDir, keystore.KeyFileName(validator.Address))
+		saveKeyError := keystore.WriteKeyStore(keyJsonFilePath, keyJson)
+		if saveKeyError != nil {
+			return saveKeyError
+		}
 	}
 
 	// Save the Validator Json File
