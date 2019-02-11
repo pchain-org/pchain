@@ -705,7 +705,7 @@ running:
 					peerArr = append(peerArr, p)
 				}
 
-				if err := srv.validatorAdd(valNodeInfo, peerArr); err != nil {
+				if err := srv.validatorAdd(valNodeInfo, peerArr, dialstate); err != nil {
 					log.Debugf("add valNodeInfo to local failed with %v", err)
 				}
 
@@ -722,7 +722,7 @@ running:
 					peerArr = append(peerArr, p)
 				}
 
-				if err := srv.validatorRemove(valNodeInfo, peerArr); err != nil {
+				if err := srv.validatorRemove(valNodeInfo, peerArr, dialstate); err != nil {
 					log.Debugf("remove valNodeInfo from local failed with %v", err)
 				}
 
@@ -1097,7 +1097,7 @@ func (srv *Server) RemoveLocalValidator(chainId string, address common.Address) 
 	}, nil)
 }
 
-func (srv *Server) validatorAdd(valNodeInfo P2PValidatorNodeInfo, peers []*Peer) error {
+func (srv *Server) validatorAdd(valNodeInfo P2PValidatorNodeInfo, peers []*Peer, dialstate dialer) error {
 
 	log.Debug("validatorAdd")
 
@@ -1127,18 +1127,16 @@ func (srv *Server) validatorAdd(valNodeInfo P2PValidatorNodeInfo, peers []*Peer)
 		}
 	}
 
-	shouldAdd := true
-	if inSameChain {
-		for _, p := range peers {
-			if p.ID() == valNodeInfo.Node.ID {
-				shouldAdd = false
-				break
-			}
+	notPeer := true
+	for _, p := range peers {
+		if p.ID() == valNodeInfo.Node.ID {
+			notPeer = false
+			break
 		}
 	}
 
-	if shouldAdd {
-		srv.addstatic <- &valNodeInfo.Node
+	if inSameChain && notPeer {
+		dialstate.addStatic(&valNodeInfo.Node)
 	}
 
 	//broadcast this node info to peers
@@ -1147,7 +1145,7 @@ func (srv *Server) validatorAdd(valNodeInfo P2PValidatorNodeInfo, peers []*Peer)
 	return nil
 }
 
-func (srv *Server) validatorRemove(valNodeInfo P2PValidatorNodeInfo, peers []*Peer) error {
+func (srv *Server) validatorRemove(valNodeInfo P2PValidatorNodeInfo, peers []*Peer, dialstate dialer) error {
 
 	log.Debug("validatorRemove")
 
@@ -1186,7 +1184,7 @@ func (srv *Server) validatorRemove(valNodeInfo P2PValidatorNodeInfo, peers []*Pe
 	}
 
 	if shouldRemove {
-		srv.removestatic <- &valNodeInfo.Node
+		dialstate.removeStatic(&valNodeInfo.Node)
 	}
 
 	//broadcast this node info to peers
