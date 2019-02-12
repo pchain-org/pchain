@@ -264,13 +264,13 @@ func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Trans
 	return tx
 }
 
-func (cch *CrossChainHelper) GetEpochFromMainChain() *epoch.Epoch {
+func (cch *CrossChainHelper) GetEpochFromMainChain() (string, *epoch.Epoch) {
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
 	var ep *epoch.Epoch
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
 		ep = tdm.GetEpoch()
 	}
-	return ep
+	return ethereum.ChainConfig().PChainId, ep
 }
 
 func (cch *CrossChainHelper) ChangeValidators(chainId string) {

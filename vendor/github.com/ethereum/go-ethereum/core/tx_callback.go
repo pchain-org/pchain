@@ -40,7 +40,7 @@ type CrossChainHelper interface {
 	RevealVote(ep *epoch.Epoch, from common.Address, pubkey crypto.PubKey, depositAmount *big.Int, salt string, txHash common.Hash) error
 
 	GetHeightFromMainChain() *big.Int
-	GetEpochFromMainChain() *epoch.Epoch
+	GetEpochFromMainChain() (string, *epoch.Epoch)
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
 
 	ChangeValidators(chainId string)
