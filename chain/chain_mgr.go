@@ -139,6 +139,8 @@ func (cm *ChainManager) InitCrossChainHelper() {
 	if cm.ctx.GlobalBool(utils.TestnetFlag.Name) {
 		chainId = TestnetChain
 	}
+	cm.cch.mainChainId = chainId
+
 	if cm.ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
 		host := "127.0.0.1" //cm.ctx.GlobalString(utils.RPCListenAddrFlag.Name)
 		port := cm.ctx.GlobalInt(utils.RPCPortFlag.Name)
@@ -149,7 +151,6 @@ func (cm *ChainManager) InitCrossChainHelper() {
 			log.Errorf("can't connect to %s, err: %v, exit", url, err)
 			os.Exit(0)
 		}
-
 		cm.cch.client = client
 	}
 }

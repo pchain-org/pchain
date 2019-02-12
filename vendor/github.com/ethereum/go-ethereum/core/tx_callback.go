@@ -27,6 +27,7 @@ type TX3LocalCache interface {
 type CrossChainHelper interface {
 	GetMutex() *sync.Mutex
 	GetClient() *ethclient.Client
+	GetMainChainId() string
 	GetChainInfoDB() dbm.DB
 
 	CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error

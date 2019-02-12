@@ -27,8 +27,8 @@ func (ec *Client) BlockNumber(ctx context.Context) (*big.Int, error) {
 	return (*big.Int)(&hex), nil
 }
 
-// SaveBlockToMainChain save a block to main chain through eth_sendRawTransaction
-func (ec *Client) SendDataToMainChain(ctx context.Context, data []byte, prv *ecdsa.PrivateKey) (common.Hash, error) {
+// SendDataToMainChain send epoch data to main chain through eth_sendRawTransaction
+func (ec *Client) SendDataToMainChain(ctx context.Context, data []byte, prv *ecdsa.PrivateKey, mainChainId string) (common.Hash, error) {
 
 	// data
 	bs, err := pabi.ChainABI.Pack(pabi.SaveDataToMainChain.String(), data)
@@ -45,7 +45,7 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, data []byte, prv *ecd
 	}
 
 	// tx signer for the main chain
-	digest := crypto.Keccak256([]byte("pchain"))
+	digest := crypto.Keccak256([]byte(mainChainId))
 	signer := types.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
 
 	var hash = common.Hash{}
@@ -85,7 +85,7 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, data []byte, prv *ecd
 	return hash, err
 }
 
-// SaveBlockToMainChain save a block to main chain through eth_sendRawTransaction
+// BroadcastDataToMainChain send tx3 proof data to MainChain via rpc call, then broadcast it via p2p network
 func (ec *Client) BroadcastDataToMainChain(ctx context.Context, chainId string, data []byte) error {
 	if chainId == "" || chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
 		return errors.New("invalid child chainId")

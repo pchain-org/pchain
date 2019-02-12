@@ -2048,7 +2048,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
 	} else {
 		panic("saveDataToMainChain: unexpected privValidator type")
 	}
-	hash, err := client.SendDataToMainChain(ctx, bs, prv)
+	hash, err := client.SendDataToMainChain(ctx, bs, prv, cs.cch.GetMainChainId())
 	if err != nil {
 		cs.logger.Error("saveDataToMainChain(rpc) failed", "err", err)
 		return
