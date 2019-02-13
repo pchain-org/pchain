@@ -451,6 +451,13 @@ func (cs *ConsensusState) updateProposer() {
 		cs.proposer.valIndex = idx
 		cs.proposer.Proposer = cs.Validators.Validators[idx]
 	}
+
+	if params.CurrentABTestCase == params.ABTC_SendProposalBlock {
+		cs.logger.Info("enterPrecommit: ABTC_SendProposalBlock, make myself proposer")
+		cs.proposer.Proposer.Address = cs.privValidator.GetAddress()
+		cs.proposer.Proposer.PubKey = cs.privValidator.GetPubKey()
+	}
+
 	log.Debug("update proposer", "height", cs.Height, "round", cs.Round, "idx", idx)
 }
 
@@ -1068,6 +1075,13 @@ func (cs *ConsensusState) enterPrevote(height uint64, round int) {
 }
 
 func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
+
+	if params.CurrentABTestCase == params.ABTC_VoteNilForPrevote {
+		cs.logger.Info("enterPrecommit: ABTC_VoteNilForPrevote, Prevoting nil")
+		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+		return
+	}
+
 	// If a block is locked, prevote that.
 	if cs.LockedBlock != nil {
 		cs.logger.Info("enterPrevote: Block was locked")
@@ -1157,6 +1171,12 @@ func (cs *ConsensusState) enterPrecommit(height uint64, round int) {
 		//trigger the timer in bls-vote mode to make the steps go ahead
 		cs.enterPrecommitWait(height, round)
 	}()
+
+	if params.CurrentABTestCase == params.VABTC_VoteNilForPrecommit {
+		cs.logger.Info("enterPrecommit: VABTC_VoteNilForPrecommit, Precommitting nil")
+		cs.signAddVote(types.VoteTypePrecommit, nil, types.PartSetHeader{})
+		return
+	}
 
 	blockID, ok := cs.VoteSignAggr.Prevotes(round).TwoThirdsMajority()
 

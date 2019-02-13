@@ -1,11 +1,12 @@
 package main
 
 import (
+	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/pchain/chain"
 	"gopkg.in/urfave/cli.v1"
 	"strings"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
 )
 
 func pchainCmd(ctx *cli.Context) error {
@@ -22,6 +23,9 @@ func pchainCmd(ctx *cli.Context) error {
 
 	// ChildChainFlag flag
 	requestChildChain := strings.Split(ctx.GlobalString(ChildChainFlag.Name), ",")
+
+	//only for test cases, should not merge to 'master' branch
+	params.CurrentABTestCase = ctx.GlobalUint64(ABTestCaseFlag.Name)
 
 	// Initial P2P Server
 	chainMgr.InitP2P()

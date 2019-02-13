@@ -227,6 +227,9 @@ func newCliApp(version, usage string) *cli.App {
 		LogDirFlag,
 		ChildChainFlag,
 
+		//abnormal behavior test cases flag
+		ABTestCaseFlag,
+
 		/*
 			//Tendermint flags
 			MonikerFlag,

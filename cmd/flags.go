@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/urfave/cli.v1"
 	"runtime"
 )
@@ -21,6 +22,13 @@ var (
 	ChildChainFlag = cli.StringFlag{
 		Name:  "childChain",
 		Usage: "Specify one or more child chain should be start. Ex: child-1,child-2",
+	}
+
+	//Abnormal Behavior Test Cases
+	ABTestCaseFlag = cli.Uint64Flag{
+		Name:  "abTestCase",
+		Usage: "PChain abnormal behavior test case",
+		Value: params.ABTC_NormalBehavior,
 	}
 
 	// ----------------------------
