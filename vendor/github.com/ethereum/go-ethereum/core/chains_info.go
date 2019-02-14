@@ -172,6 +172,9 @@ func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
 		return ci.Epoch
 	} else {
 		epoch := ci.Epoch
+		if epoch == nil {
+			return nil
+		}
 		if blockNumber >= epoch.StartBlock && blockNumber <= epoch.EndBlock {
 			return epoch
 		}
