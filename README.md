@@ -1,5 +1,7 @@
 ## Pchain
 
+[中文README](https://github.com/pchain-org/pchain/wiki/README_CN)
+
 Official golang implementation of the Pchain protocol.
 
 To get familiar with pchain, you could read about [Overview](https://github.com/pchain-org/pchain/wiki/Welcome-to-pchain)
