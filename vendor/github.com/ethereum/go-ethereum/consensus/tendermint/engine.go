@@ -145,11 +145,7 @@ func (sb *backend) Stop() error {
 // block, which may be different from the header's coinbase if a consensus
 // engine is based on signatures.
 func (sb *backend) Author(header *types.Header) (common.Address, error) {
-
-	sb.logger.Info("Tendermint (backend) Author, add logic here")
-
-	return common.HexToAddress("0x136c0e42f4e1b4efd930d2d88a3f3aa4996b6e2e"), nil
-	//return common.Address{}, nil
+	return header.Coinbase, nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules of a
@@ -462,7 +458,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := sb.core.consensusState.Epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
-			ChainId: sb.chainConfig.PChainId,
+			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
 		})
 
@@ -732,6 +728,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			foundationReward := new(big.Int).Sub(rewardPerBlock, coinbaseReward)
 			state.AddBalance(foundationAddress, foundationReward)
 
+			coinbaseReward.Add(coinbaseReward, totalGasFee)
 		} else {
 			coinbaseReward = totalGasFee
 		}

@@ -267,7 +267,7 @@ func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
 	chainInfoDB := cch.GetChainInfoDB()
 
 	// Load Main Chain
-	mainChainEpoch := s.b.GetCrossChainHelper().GetEpochFromMainChain()
+	mainChainId, mainChainEpoch := s.b.GetCrossChainHelper().GetEpochFromMainChain()
 	mainChainValidators := make([]*ChainValidator, 0, mainChainEpoch.Validators.Size())
 	for _, val := range mainChainEpoch.Validators.Validators {
 		mainChainValidators = append(mainChainValidators, &ChainValidator{
@@ -276,7 +276,7 @@ func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
 		})
 	}
 	mainChainStatus := &ChainStatus{
-		ChainID:    "pchain",
+		ChainID:    mainChainId,
 		Number:     mainChainEpoch.Number,
 		StartTime:  mainChainEpoch.StartTime,
 		Validators: mainChainValidators,

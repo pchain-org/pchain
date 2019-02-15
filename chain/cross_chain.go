@@ -38,7 +38,8 @@ type CrossChainHelper struct {
 	chainInfoDB     dbm.DB
 	localTX3CacheDB ethdb.Database
 	//the client does only connect to main chain
-	client *ethclient.Client
+	client      *ethclient.Client
+	mainChainId string
 }
 
 func (cch *CrossChainHelper) GetMutex() *sync.Mutex {
@@ -51,6 +52,10 @@ func (cch *CrossChainHelper) GetChainInfoDB() dbm.DB {
 
 func (cch *CrossChainHelper) GetClient() *ethclient.Client {
 	return cch.client
+}
+
+func (cch *CrossChainHelper) GetMainChainId() string {
+	return cch.mainChainId
 }
 
 // CanCreateChildChain check the condition before send the create child chain into the tx pool
@@ -264,13 +269,13 @@ func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Trans
 	return tx
 }
 
-func (cch *CrossChainHelper) GetEpochFromMainChain() *epoch.Epoch {
+func (cch *CrossChainHelper) GetEpochFromMainChain() (string, *epoch.Epoch) {
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
 	var ep *epoch.Epoch
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
 		ep = tdm.GetEpoch()
 	}
-	return ep
+	return ethereum.ChainConfig().PChainId, ep
 }
 
 func (cch *CrossChainHelper) ChangeValidators(chainId string) {
