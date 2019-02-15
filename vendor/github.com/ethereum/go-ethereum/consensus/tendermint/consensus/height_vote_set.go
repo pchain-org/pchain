@@ -4,6 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"strings"
 	"sync"
+	"errors"
 
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	. "github.com/tendermint/go-common"
@@ -123,7 +124,7 @@ func (hvs *HeightVoteSet) AddVote(vote *types.Vote, peerKey string) (added bool,
 			// for more than one round.  Bad peer!
 			// TODO punish peer.
 			hvs.logger.Warn("Deal with peer giving votes from unwanted rounds")
-			return
+			return false, errors.New("Deal with peer giving votes from unwanted rounds")
 		}
 	}
 	added, err = voteSet.AddVote(vote)
