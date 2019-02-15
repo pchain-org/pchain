@@ -21,7 +21,7 @@ func GeneratePrivateValidatorCmd(ctx *cli.Context) error {
 		return nil
 	}
 
-	datadir := ctx.GlobalString(utils.DataDirFlag.Name);
+	datadir := ctx.GlobalString(utils.DataDirFlag.Name)
 	if err := os.MkdirAll(datadir, 0700); err != nil {
 		return err
 	}

@@ -1631,7 +1631,7 @@ func (cs *ConsensusState) BLSVerifySignAggr(signAggr *types.SignAggr) (bool, err
 
 func (cs *ConsensusState) blsVerifySignAggr(signAggr *types.SignAggr) (bool, error) {
 	cs.logger.Debug("enter BLSVerifySignAggr()")
-	cs.logger.Infof("sign aggr bitmap:%+v", signAggr.BitArray)
+	cs.logger.Debugf("sign aggr bitmap:%+v", signAggr.BitArray)
 	if signAggr == nil {
 		cs.logger.Info("Invalid Sign(nil)")
 		return false, fmt.Errorf("Invalid SignAggr(nil)")
@@ -1897,7 +1897,7 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	cs.logger.Info("Enter sendMaj23SignAggr()")
 
 	var votes []*types.Vote
-	var blockID, maj23 types.BlockID
+	var maj23 types.BlockID
 	var ok bool
 
 	if voteType == types.VoteTypePrevote {
@@ -1909,7 +1909,8 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	}
 
 	if ok == false {
-		cs.logger.Error("Votset does not have +2/3 voting")
+		cs.logger.Error("Votset does not have +2/3 voting, not send")
+		return
 	}
 
 	cs.logger.Debugf("vote len is: %v", len(votes))
@@ -1917,15 +1918,15 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	signBitArray := NewBitArray((uint64)(numValidators))
 	var sigs []*tmdcrypto.Signature
 	var ss []byte
+
 	for index, vote := range votes {
-		if vote != nil {
-			blockID = vote.BlockID
+		if vote != nil && maj23.Equals(vote.BlockID) {
 			ss = vote.SignBytes
 			signBitArray.SetIndex((uint64)(index), true)
 			sigs = append(sigs, &(vote.Signature))
 		}
 	}
-	cs.logger.Debugf("send maj block ID: %X", blockID.Hash)
+	cs.logger.Debugf("send maj block ID: %X", maj23.Hash)
 
 	// step 1: build BLS signature aggregation based on signatures in votes
 	// bitarray, signAggr := BuildSignAggr(votes)
@@ -1935,7 +1936,7 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 		return
 	}
 
-	signAggr := types.MakeSignAggr(cs.Height, cs.Round, voteType, numValidators, blockID, cs.Votes.chainID, signBitArray, signature)
+	signAggr := types.MakeSignAggr(cs.Height, cs.Round, voteType, numValidators, maj23, cs.Votes.chainID, signBitArray, signature)
 	signAggr.SignBytes = ss
 
 	// Set sign bitmap
