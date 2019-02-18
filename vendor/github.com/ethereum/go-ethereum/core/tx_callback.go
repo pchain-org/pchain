@@ -27,6 +27,7 @@ type TX3LocalCache interface {
 type CrossChainHelper interface {
 	GetMutex() *sync.Mutex
 	GetClient() *ethclient.Client
+	GetMainChainId() string
 	GetChainInfoDB() dbm.DB
 
 	CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error
@@ -40,7 +41,7 @@ type CrossChainHelper interface {
 	RevealVote(ep *epoch.Epoch, from common.Address, pubkey crypto.PubKey, depositAmount *big.Int, salt string, txHash common.Hash) error
 
 	GetHeightFromMainChain() *big.Int
-	GetEpochFromMainChain() *epoch.Epoch
+	GetEpochFromMainChain() (string, *epoch.Epoch)
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
 
 	ChangeValidators(chainId string)

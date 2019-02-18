@@ -257,7 +257,7 @@ func revealVoteValidation(from common.Address, tx *types.Transaction, state *sta
 	byte_data := [][]byte{
 		from.Bytes(),
 		args.PubKey,
-		args.Amount.Bytes(),
+		common.LeftPadBytes(args.Amount.Bytes(), 1),
 		[]byte(args.Salt),
 	}
 	voteHash := ethcrypto.Keccak256Hash(concatCopyPreAllocate(byte_data))
