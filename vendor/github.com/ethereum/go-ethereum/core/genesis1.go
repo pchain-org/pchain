@@ -233,8 +233,8 @@ var DefaultTestnetGenesisJSON = `{
         "extraData": "0x307830",
         "gasLimit": "0x8000000",
         "difficulty": "0x400",
-        "mixHash": "0x3030303030303030303030303030303030303030303030303030303030303030",
-        "coinbase": "0x4cacbcbf218679dcc9574a90a2061bca4a8d8b6c",
+        "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "coinbase": "0xf84634254ea1189516e66d9b007760092d9b8922",
         "alloc": {
                 "05f256d2d5d512c59ba09b56a4fb202e5c883268": {
                         "balance": "0xffd09bead87c0378d8e6400000000",
@@ -271,6 +271,6 @@ var DefaultTestnetGenesisJSON = `{
         },
         "number": "0x0",
         "gasUsed": "0x0",
-        "parentHash": "0x3030303030303030303030303030303030303030303030303030303030303030"
+        "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
 }
 `
