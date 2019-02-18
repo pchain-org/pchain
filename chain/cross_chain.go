@@ -300,28 +300,6 @@ func (cch *CrossChainHelper) ChangeValidators(chainId string) {
 	}
 }
 
-func (cch *CrossChainHelper) ChangeValidators(chainId string) {
-
-	if chainMgr == nil {
-		return
-	}
-
-	var chain *Chain = nil
-	if chainId == MainChain || chainId == TestnetChain {
-		chain = chainMgr.mainChain
-	} else if chn, ok := chainMgr.childChains[chainId]; ok {
-		chain = chn
-	}
-
-	if chain == nil || chain.EthNode == nil {
-		return
-	}
-
-	if address, ok := chainMgr.getNodeValidator(chain.EthNode); ok {
-		chainMgr.server.AddLocalValidator(chainId, address)
-	}
-}
-
 // verify the signature of validators who voted for the block
 // most of the logic here is from 'VerifyHeader'
 func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
