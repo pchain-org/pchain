@@ -89,11 +89,11 @@ If you want to build and run pchain under Windows(Not recommended), you could re
 If you want to know more about our Command Line Options,please consult our 
 [CLI Wiki page](https://github.com/pchain-org/pchain/wiki/Command-Line-Options)
 
-### Please Check Your Pchain Client Version (Latest:0.8.0-test2.3)
+### Please Check Your Pchain Client Version (Latest:0.9.0-test2.4)
 
 ```
 $ pchain version
-//0.8.0-test2.3
+//0.9.0-test2.4
 ```
 
 ### Full Node On The Pchain Main Network
