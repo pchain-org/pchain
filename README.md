@@ -19,7 +19,7 @@ sudo apt install pchain
 ```
 You should now be able to check the different options and commands with 'pchain --help'.
 
-Upgrade the latest version
+Upgrade the latest version of 'pchain'
 
 ```
 sudo apt update
@@ -37,7 +37,7 @@ brew tap pchain-org/pchain
 brew install pchain
 ```
 
-Upgrade the latest version
+Upgrade the latest version of 'pchain'
 
 ```shell
 brew upgrade pchain
