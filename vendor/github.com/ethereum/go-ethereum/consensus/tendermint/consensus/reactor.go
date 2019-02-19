@@ -322,6 +322,8 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 
 	types.AddListenerForEvent(conR.evsw, "conR", types.EventStringFinalCommitted(), func(data types.TMEventData) {
 		conR.logger.Info("registerEventCallbacks received Final Committed Event", "conR.conS.Step", conR.conS.Step)
+		conR.logger.Info("start new height to apply this commit")
+		conR.conS.StartNewHeight()
 	})
 }
 
