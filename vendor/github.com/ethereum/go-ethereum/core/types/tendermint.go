@@ -31,19 +31,6 @@ var (
 // decoded/encoded by rlp.
 func TendermintFilteredHeader(h *Header, keepSeal bool) *Header {
 	newHeader := CopyHeader(h)
-
-	/*
-		tdmExtra, err := ExtractTendermintExtra(newHeader)
-
-		if err != nil {
-			return nil
-		}
-
-		payload, err := rlp.EncodeToBytes(&tdmExtra)
-		if err != nil {
-			return nil
-		}
-	*/
 	payload := MagicExtra
 	newHeader.Extra = payload
 	return newHeader

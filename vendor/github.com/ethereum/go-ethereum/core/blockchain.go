@@ -501,7 +501,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 		bc.currentFastBlock.Store(block)
 	}
 
-	bc.logger.Infof("(bc *BlockChain) insert block number %v", block.NumberU64())
+	log.Info(fmt.Sprintf("(bc *BlockChain) insert block number %v, hash: %x", block.NumberU64(), block.Hash()))
 	ibCbMap := GetInsertBlockCbMap()
 	for _, cb := range ibCbMap {
 		cb(bc, block)
@@ -633,6 +633,50 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 		block = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	}
 	return uncles
+}
+
+// ChainValidator execute and validate the block with the current latest block.
+func (bc *BlockChain) ValidateBlock(block *types.Block) (*state.StateDB, types.Receipts, *types.PendingOps, error) {
+	log.Info("ValidateBlock checkpoint 0")
+	// If the header is a banned one, straight out abort
+	if BadHashes[block.Hash()] {
+		return nil, nil, nil, ErrBlacklistedHash
+	}
+
+	// Header verify
+	if err := bc.engine.(consensus.Tendermint).VerifyHeaderBeforeConsensus(bc, block.Header(), true); err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Body verify
+	if err := bc.Validator().ValidateBody(block); err != nil {
+		log.Debugf("ValidateBlock-ValidateBody return with error: %v", err)
+		return nil, nil, nil, err
+	}
+
+	var parent *types.Block
+	parent = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+	state, err := state.New(parent.Root(), bc.stateCache)
+	if err != nil {
+		log.Debugf("ValidateBlock-state.New return with error: %v", err)
+		return nil, nil, nil, err
+	}
+
+	// Process block using the parent state as reference point.
+	receipts, _, usedGas, ops, err := bc.processor.Process(block, state, bc.vmConfig)
+	if err != nil {
+		log.Debugf("ValidateBlock-Process return with error: %v", err)
+		return nil, nil, nil, err
+	}
+
+	// Validate the state using the default validator
+	err = bc.Validator().ValidateState(block, parent, state, receipts, usedGas)
+	if err != nil {
+		log.Debugf("ValidateBlock-ValidateState return with error: %v", err)
+		return nil, nil, nil, err
+	}
+
+	return state, receipts, ops, nil
 }
 
 // TrieNode retrieves a blob of data associated with a trie node (or code hash)

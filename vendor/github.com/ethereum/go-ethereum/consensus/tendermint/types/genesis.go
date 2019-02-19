@@ -124,6 +124,7 @@ var TestnetGenesisJSON string = `{
     "validators": [
       {
         "amount": "200000000000000000000000",
+        "epoch": 11,
         "eth_account": "D2FD09246E2CED295411F1F863E6E7B5929BCC59",
         "name": "",
         "pub_key": [
@@ -133,6 +134,7 @@ var TestnetGenesisJSON string = `{
       },
       {
         "amount": "200000000000000000000000",
+        "epoch": 11,
         "eth_account": "C6179A651918888251380A4E3FEE6AF81CF091D1",
         "name": "",
         "pub_key": [
@@ -142,6 +144,7 @@ var TestnetGenesisJSON string = `{
       },
       {
         "amount": "200000000000000000000000",
+        "epoch": 11,
         "eth_account": "79CD31B59E3FAAB6DEEA68FBBAAFA4DA748BBDF6",
         "name": "",
         "pub_key": [
@@ -151,6 +154,7 @@ var TestnetGenesisJSON string = `{
       },
       {
         "amount": "200000000000000000000000",
+        "epoch": 0,
         "eth_account": "4CACBCBF218679DCC9574A90A2061BCA4A8D8B6C",
         "name": "",
         "pub_key": [
@@ -160,7 +164,7 @@ var TestnetGenesisJSON string = `{
       }
     ]
   },
-  "genesis_time": "2018-12-06T08:16:31.221Z",
+  "genesis_time": "2019-02-18T07:12:15.424Z",
   "reward_scheme": {
     "epoch_no_per_year": "183",
     "reward_first_year": "37937500000000000000000000",

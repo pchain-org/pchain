@@ -14,7 +14,10 @@ const (
 	ABTC_VoteNilForPrevote uint64 = 2
 
 	//always vote nil for the precommit round
-	VABTC_VoteNilForPrecommit uint64 = 3
+	ABTC_VoteNilForPrecommit uint64 = 3
+
+	//add tx to transfer myself money when this node is proposer
+	ABTC_AddInvalidTx uint64 = 5
 )
 
 var (

@@ -36,7 +36,7 @@ import (
 )
 
 type Backend interface {
-	Commit(proposal *types.TdmBlock, seals [][]byte) error
+	Commit(proposal *types.TdmBlock, seals [][]byte, isProposer func() bool) error
 	ChainReader() consss.ChainReader
 	GetBroadcaster() consss.Broadcaster
 	GetLogger() log.Logger
@@ -1114,6 +1114,26 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 		return
 	}
 
+	// non-proposer should validate and execute block here.
+	if !cs.IsProposer() {
+		if cv, ok := cs.backend.ChainReader().(consss.ChainValidator); ok {
+			cs.logger.Info("enterPrevote: Validate/Execute Block")
+			state, receipts, ops, err := cv.ValidateBlock(cs.ProposalBlock.Block)
+			if err != nil {
+				// ProposalBlock is invalid, prevote nil.
+				cs.logger.Warnf("enterPrevote: ValidateBlock fail, error: %v", err)
+				cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+				return
+			}
+			cs.logger.Info("enterPrevote: Validate/Execute Block, Setup the IntermediateBlockResult")
+			cs.ProposalBlock.IntermediateResult = &types.IntermediateBlockResult{
+				State:    state,
+				Receipts: receipts,
+				Ops:      ops,
+			}
+		}
+	}
+
 	// Valdiate proposal block
 	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.TdmExtra.EpochBytes)
 	if proposedNextEpoch != nil && proposedNextEpoch.Number == cs.Epoch.Number+1 {
@@ -1172,8 +1192,8 @@ func (cs *ConsensusState) enterPrecommit(height uint64, round int) {
 		cs.enterPrecommitWait(height, round)
 	}()
 
-	if params.CurrentABTestCase == params.VABTC_VoteNilForPrecommit {
-		cs.logger.Info("enterPrecommit: VABTC_VoteNilForPrecommit, Precommitting nil")
+	if params.CurrentABTestCase == params.ABTC_VoteNilForPrecommit {
+		cs.logger.Info("enterPrecommit: ABTC_VoteNilForPrecommit, Precommitting nil")
 		cs.signAddVote(types.VoteTypePrecommit, nil, types.PartSetHeader{})
 		return
 	}
@@ -1420,7 +1440,7 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 		types.FireEventNewBlockHeader(cs.evsw, types.EventDataNewBlockHeader{int(block.TdmExtra.Height)})
 
 		//the second parameter as signature has been set above
-		err := cs.backend.Commit(block, [][]byte{})
+		err := cs.backend.Commit(block, [][]byte{}, cs.IsProposer)
 		if err != nil {
 			cs.logger.Errorf("Commit fail. error: %v", err)
 		}

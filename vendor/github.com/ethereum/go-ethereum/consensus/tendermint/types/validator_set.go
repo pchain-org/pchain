@@ -233,7 +233,7 @@ func (valSet *ValidatorSet) Remove(address []byte) (val *Validator, removed bool
 	*/
 	idx := -1
 	for i := 0; i < len(valSet.Validators); i++ {
-		if bytes.Compare(val.Address, valSet.Validators[i].Address) == 0 {
+		if bytes.Compare(address, valSet.Validators[i].Address) == 0 {
 			idx = i
 			break
 		}
