@@ -59,6 +59,9 @@ type ChainReader interface {
 	// CurrentBlock retrieves the current head block of the canonical chain. The
 	// block is retrieved from the blockchain's internal cache.
 	CurrentBlock() *types.Block
+
+	// State retrieves the current state of the canonical chain.
+	State() (*state.StateDB, error)
 }
 
 // ChainValidator execute and validate the block with the current latest block as parent.
@@ -165,6 +168,10 @@ type Tendermint interface {
 	Engine
 
 	EngineStartStop
+
+	ShouldStart() bool
+
+	IsStarted() bool
 
 	GetEpoch() *epoch.Epoch
 

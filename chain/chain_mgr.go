@@ -83,18 +83,7 @@ func (cm *ChainManager) LoadChains(childIds []string) error {
 	childChainIds := core.GetChildChainIds(cm.cch.chainInfoDB)
 	log.Infof("Before Load Child Chains, childChainIds is %v, len is %d", childChainIds, len(childChainIds))
 
-	readyToLoadChains := make(map[string]bool) // Key: Child Chain ID, Value: Enable Mining
-
-	// Check we are belong to the validator of Child Chain in DB first (Mining Mode)
-	for _, chainId := range childChainIds {
-		// TODO Check Validator Address in Tendermint
-		// Check Current Validator is Child Chain Validator
-		ci := core.GetChainInfo(cm.cch.chainInfoDB, chainId)
-		// Check if we are in this child chain
-		if ci.Epoch != nil && cm.checkCoinbaseInChildChain(ci.Epoch) {
-			readyToLoadChains[chainId] = true
-		}
-	}
+	readyToLoadChains := make(map[string]bool) // Key: Child Chain ID, Value: Enable Mining (deprecated)
 
 	// Check request from Child Chain
 	for _, requestId := range childIds {
@@ -116,8 +105,8 @@ func (cm *ChainManager) LoadChains(childIds []string) error {
 	log.Infof("Number of Child Chain to be load - %v", len(readyToLoadChains))
 	log.Infof("Start to Load Child Chain - %v", readyToLoadChains)
 
-	for chainId, mining := range readyToLoadChains {
-		chain := LoadChildChain(cm.ctx, chainId, mining)
+	for chainId := range readyToLoadChains {
+		chain := LoadChildChain(cm.ctx, chainId)
 		if chain == nil {
 			log.Errorf("Load Child Chain - %s Failed.", chainId)
 			continue
@@ -332,7 +321,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		return
 	}
 
-	chain := LoadChildChain(cm.ctx, chainId, true)
+	chain := LoadChildChain(cm.ctx, chainId)
 	if chain == nil {
 		log.Errorf("Child Chain %v load failed!", chainId)
 		return

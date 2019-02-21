@@ -102,9 +102,16 @@ func (api *API) GetNextEpochValidators() ([]*tdmTypes.EpochValidator, error) {
 	} else if height <= ep.GetVoteEndHeight() {
 		return nil, errors.New("hash vote stage now, please wait for reveal stage")
 	} else {
-		nextValidators := nextEp.Validators.Copy()
+		state, err := api.chain.State()
+		if err != nil {
+			return nil, err
+		}
 
-		epoch.DryRunUpdateEpochValidatorSet(nextValidators, nextEp.GetEpochValidatorVoteSet())
+		nextValidators := nextEp.Validators.Copy()
+		err = epoch.DryRunUpdateEpochValidatorSet(state, nextValidators, nextEp.GetEpochValidatorVoteSet())
+		if err != nil {
+			return nil, err
+		}
 
 		validators := make([]*tdmTypes.EpochValidator, 0, len(nextValidators.Validators))
 		for _, val := range nextValidators.Validators {

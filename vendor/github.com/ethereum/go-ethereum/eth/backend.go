@@ -99,6 +99,12 @@ type Ethereum struct {
 	netRPCService *ethapi.PublicNetAPI
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+
+	// Start/Stop Mining Event
+	startMiningCh  chan core.StartMiningEvent
+	startMiningSub event.Subscription
+	stopMiningCh   chan core.StopMiningEvent
+	stopMiningSub  event.Subscription
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
@@ -109,7 +115,7 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
 func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
-	cch core.CrossChainHelper, logger log.Logger, isTestnet bool, mining bool) (*Ethereum, error) {
+	cch core.CrossChainHelper, logger log.Logger, isTestnet bool) (*Ethereum, error) {
 
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
@@ -135,7 +141,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb, cliCtx, cch, mining),
+		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb, cliCtx, cch),
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		networkId:      config.NetworkId,
@@ -194,6 +200,10 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	}
 	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
 
+	// Start/Stop mining Feed
+	eth.startMiningSub = eth.blockchain.SubscribeStartMiningEvent(eth.startMiningCh)
+	eth.stopMiningSub = eth.blockchain.SubscribeStopMiningEvent(eth.stopMiningCh)
+
 	return eth, nil
 }
 
@@ -228,7 +238,7 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
 func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig *params.ChainConfig, db ethdb.Database,
-	cliCtx *cli.Context, cch core.CrossChainHelper, mining bool) consensus.Engine {
+	cliCtx *cli.Context, cch core.CrossChainHelper) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
@@ -247,7 +257,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 			config.Tendermint.Epoch = chainConfig.Tendermint.Epoch
 		}
 		config.Tendermint.ProposerPolicy = tendermint.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
-		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), db, cch, mining)
+		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), db, cch)
 	}
 
 	// Otherwise assume proof-of-work
@@ -479,8 +489,41 @@ func (s *Ethereum) Stop() error {
 	s.miner.Stop()
 	s.eventMux.Stop()
 
+	s.startMiningSub.Unsubscribe()
+	s.stopMiningSub.Unsubscribe()
+
 	s.chainDb.Close()
 	close(s.shutdownChan)
 
 	return nil
+}
+
+func (s *Ethereum) loopForMiningEvent() {
+	for {
+		select {
+		case <-s.startMiningCh:
+			if !s.IsMining() {
+				s.lock.RLock()
+				price := s.gasPrice
+				s.lock.RUnlock()
+				s.txPool.SetGasPrice(price)
+				s.chainConfig.ChainLogger.Info("PDBFT Consensus Engine will be start shortly")
+				s.StartMining(true)
+			} else {
+				s.chainConfig.ChainLogger.Info("PDBFT Consensus Engine already started")
+			}
+		case <-s.stopMiningCh:
+			if s.IsMining() {
+				s.chainConfig.ChainLogger.Info("PDBFT Consensus Engine will be stop shortly")
+				s.StopMining()
+			} else {
+				s.chainConfig.ChainLogger.Info("PDBFT Consensus Engine already stopped")
+			}
+		case <-s.startMiningSub.Err():
+			return
+
+		case <-s.stopMiningSub.Err():
+			return
+		}
+	}
 }

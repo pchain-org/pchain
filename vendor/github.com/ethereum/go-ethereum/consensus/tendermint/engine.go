@@ -596,6 +596,18 @@ func (sb *backend) ChainReader() consensus.ChainReader {
 	return sb.chain
 }
 
+func (sb *backend) ShouldStart() bool {
+	return sb.shouldStart
+}
+
+func (sb *backend) IsStarted() bool {
+	sb.coreMu.RLock()
+	start := sb.coreStarted
+	sb.coreMu.RUnlock()
+
+	return start
+}
+
 // GetEpoch Get Epoch from Tendermint Engine
 func (sb *backend) GetEpoch() *epoch.Epoch {
 	return sb.core.consensusState.Epoch

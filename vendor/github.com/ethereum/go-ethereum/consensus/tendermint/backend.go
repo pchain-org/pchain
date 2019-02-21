@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/hashicorp/golang-lru"
 	"gopkg.in/urfave/cli.v1"
 	"sync"
 )
@@ -19,7 +18,7 @@ import (
 // New creates an Ethereum backend for Tendermint core engine.
 func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 	privateKey *ecdsa.PrivateKey, db ethdb.Database,
-	cch core.CrossChainHelper, mining bool) consensus.Tendermint {
+	cch core.CrossChainHelper) consensus.Tendermint {
 	// Allocate the snapshot caches and create the engine
 	//recents, _ := lru.NewARC(inmemorySnapshots)
 	//recentMessages, _ := lru.NewARC(inmemoryPeers)
@@ -39,9 +38,8 @@ func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 		commitCh:  make(chan *ethTypes.Block, 1),
 		vcommitCh: make(chan *types.IntermediateBlockResult, 1),
 		//recents:          recents,
-		candidates:  make(map[common.Address]bool),
+		//candidates:  make(map[common.Address]bool),
 		coreStarted: false,
-		shouldStart: mining,
 		//recentMessages:   recentMessages,
 		//knownMessages:    knownMessages,
 	}
@@ -72,15 +70,15 @@ type backend struct {
 	coreMu            sync.RWMutex
 
 	// Current list of candidates we are pushing
-	candidates map[common.Address]bool
+	//candidates map[common.Address]bool
 	// Protects the signer fields
-	candidatesLock sync.RWMutex
+	//candidatesLock sync.RWMutex
 	// Snapshots for recent block to speed up reorgs
-	recents *lru.ARCCache
+	//recents *lru.ARCCache
 
 	// event subscription for ChainHeadEvent event
 	broadcaster consensus.Broadcaster
 
-	recentMessages *lru.ARCCache // the cache of peer's messages
-	knownMessages  *lru.ARCCache // the cache of self messages
+	//recentMessages *lru.ARCCache // the cache of peer's messages
+	//knownMessages  *lru.ARCCache // the cache of self messages
 }

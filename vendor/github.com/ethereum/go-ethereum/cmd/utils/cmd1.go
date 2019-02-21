@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/log"
 	"os"
 	"os/signal"
@@ -16,9 +17,21 @@ import (
 	//"github.com/ethereum/go-ethereum/console"
 )
 
-func StartNodeEx(ctx *cli.Context, stack *node.Node, mining bool) error {
+func StartNodeEx(ctx *cli.Context, stack *node.Node) error {
 
 	StartNode1(stack)
+
+	// Mine or not?
+	mining := false
+	var ethereum *eth.Ethereum
+	if err := stack.Service(&ethereum); err == nil {
+		if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
+			mining = tdm.ShouldStart()
+			if mining {
+				stack.GetLogger().Info("PDBFT Consensus Engine will be start shortly")
+			}
+		}
+	}
 
 	// Start auxiliary services if enabled
 	if mining || ctx.GlobalBool(DeveloperFlag.Name) {

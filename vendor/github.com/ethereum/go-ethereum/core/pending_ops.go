@@ -38,8 +38,12 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 		eng := bc.engine.(consensus.Tendermint)
 		nextEp, err := eng.GetEpoch().EnterNewEpoch(op.NewValidators)
 		if err == nil {
+			// Stop the Engine if we are not in the new validators
+			if !op.NewValidators.HasAddress(eng.PrivateValidator().Bytes()) && eng.IsStarted() {
+				bc.PostChainEvents([]interface{}{StopMiningEvent{}}, nil)
+			}
 			eng.SetEpoch(nextEp)
-			cch.ChangeValidators(op.ChainId)//must after eng.SetEpoch(nextEp), it uses epoch just set
+			cch.ChangeValidators(op.ChainId) //must after eng.SetEpoch(nextEp), it uses epoch just set
 		}
 		return err
 	default:
