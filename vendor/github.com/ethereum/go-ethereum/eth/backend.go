@@ -470,6 +470,10 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	if s.lesServer != nil {
 		s.lesServer.Start(srvr)
 	}
+
+	// Start the Auto Mining Loop
+	go s.loopForMiningEvent()
+
 	return nil
 }
 
