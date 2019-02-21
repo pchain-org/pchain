@@ -747,10 +747,12 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		totalIndividualReward := big.NewInt(0)
 		// Split the reward based on Weight stack
 		state.ForEachProxied(header.Coinbase, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
-			// deposit * delegateReward / total deposit
-			individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
-			divideRewardByEpoch(state, key, ep.Number, individualReward)
-			totalIndividualReward.Add(totalIndividualReward, individualReward)
+			if depositProxiedBalance.Sign() == 1 {
+				// deposit * delegateReward / total deposit
+				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
+				divideRewardByEpoch(state, key, ep.Number, individualReward)
+				totalIndividualReward.Add(totalIndividualReward, individualReward)
+			}
 			return true
 		})
 		// Recheck the Total Individual Reward, Float the difference
