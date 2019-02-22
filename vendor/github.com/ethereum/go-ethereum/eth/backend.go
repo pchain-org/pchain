@@ -99,12 +99,6 @@ type Ethereum struct {
 	netRPCService *ethapi.PublicNetAPI
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
-
-	// Start/Stop Mining Event
-	startMiningCh  chan core.StartMiningEvent
-	startMiningSub event.Subscription
-	stopMiningCh   chan core.StopMiningEvent
-	stopMiningSub  event.Subscription
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
@@ -199,10 +193,6 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		gpoParams.Default = config.GasPrice
 	}
 	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
-
-	// Start/Stop mining Feed
-	eth.startMiningSub = eth.blockchain.SubscribeStartMiningEvent(eth.startMiningCh)
-	eth.stopMiningSub = eth.blockchain.SubscribeStopMiningEvent(eth.stopMiningCh)
 
 	return eth, nil
 }
@@ -493,9 +483,6 @@ func (s *Ethereum) Stop() error {
 	s.miner.Stop()
 	s.eventMux.Stop()
 
-	s.startMiningSub.Unsubscribe()
-	s.stopMiningSub.Unsubscribe()
-
 	s.chainDb.Close()
 	close(s.shutdownChan)
 
@@ -503,30 +490,40 @@ func (s *Ethereum) Stop() error {
 }
 
 func (s *Ethereum) loopForMiningEvent() {
+	// Start/Stop mining Feed
+	startMiningCh := make(chan core.StartMiningEvent, 1)
+	startMiningSub := s.blockchain.SubscribeStartMiningEvent(startMiningCh)
+
+	stopMiningCh := make(chan core.StopMiningEvent, 1)
+	stopMiningSub := s.blockchain.SubscribeStopMiningEvent(stopMiningCh)
+
+	defer startMiningSub.Unsubscribe()
+	defer stopMiningSub.Unsubscribe()
+
 	for {
 		select {
-		case <-s.startMiningCh:
+		case <-startMiningCh:
 			if !s.IsMining() {
 				s.lock.RLock()
 				price := s.gasPrice
 				s.lock.RUnlock()
 				s.txPool.SetGasPrice(price)
 				s.chainConfig.ChainLogger.Info("PDBFT Consensus Engine will be start shortly")
+				s.engine.(consensus.Tendermint).ForceStart()
 				s.StartMining(true)
 			} else {
 				s.chainConfig.ChainLogger.Info("PDBFT Consensus Engine already started")
 			}
-		case <-s.stopMiningCh:
+		case <-stopMiningCh:
 			if s.IsMining() {
 				s.chainConfig.ChainLogger.Info("PDBFT Consensus Engine will be stop shortly")
 				s.StopMining()
 			} else {
 				s.chainConfig.ChainLogger.Info("PDBFT Consensus Engine already stopped")
 			}
-		case <-s.startMiningSub.Err():
+		case <-startMiningSub.Err():
 			return
-
-		case <-s.stopMiningSub.Err():
+		case <-stopMiningSub.Err():
 			return
 		}
 	}

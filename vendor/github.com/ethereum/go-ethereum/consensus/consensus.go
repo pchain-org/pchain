@@ -173,6 +173,10 @@ type Tendermint interface {
 
 	IsStarted() bool
 
+	// Normally Should Start flag will be set depends on the validator set
+	// Force Start only set the Should Start Flag to true, when node join the validator before epoch switch
+	ForceStart()
+
 	GetEpoch() *epoch.Epoch
 
 	SetEpoch(ep *epoch.Epoch)

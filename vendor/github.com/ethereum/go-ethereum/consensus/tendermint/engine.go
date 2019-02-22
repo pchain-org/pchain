@@ -608,6 +608,10 @@ func (sb *backend) IsStarted() bool {
 	return start
 }
 
+func (sb *backend) ForceStart() {
+	sb.shouldStart = true
+}
+
 // GetEpoch Get Epoch from Tendermint Engine
 func (sb *backend) GetEpoch() *epoch.Epoch {
 	return sb.core.consensusState.Epoch
