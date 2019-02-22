@@ -136,7 +136,12 @@ func (conR *ConsensusReactor) Receive(chID uint64, src consensus.Peer, msgBytes 
 	conR.logger.Debug("Receive", "src", src, "chId", chID, "msg", msg)
 
 	// Get peer states
-	ps := src.GetPeerState().(*PeerState)
+	ps, exist := src.GetPeerState().(*PeerState)
+	if !exist {
+		// in case of nil peer state, due to consensus reactor start in the middle of the running, re-add it into the reactor
+		conR.AddPeer(src)
+		ps = src.GetPeerState().(*PeerState)
+	}
 	//ps := src.Data.Get(conR.ChainId + "." + types.PeerStateKey).(*PeerState)
 
 	switch chID {
@@ -383,9 +388,9 @@ func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 
 func makeRoundStepMessages(rs *RoundState) (nrsMsg *NewRoundStepMessage, csMsg *CommitStepMessage) {
 	nrsMsg = &NewRoundStepMessage{
-		Height: rs.Height,
-		Round:  rs.Round,
-		Step:   rs.Step,
+		Height:                rs.Height,
+		Round:                 rs.Round,
+		Step:                  rs.Step,
 		SecondsSinceStartTime: int(time.Now().Sub(rs.StartTime).Seconds()),
 	}
 	if rs.Step == RoundStepCommit {
