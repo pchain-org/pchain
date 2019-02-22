@@ -85,6 +85,16 @@ func (cm *ChainManager) LoadChains(childIds []string) error {
 
 	readyToLoadChains := make(map[string]bool) // Key: Child Chain ID, Value: Enable Mining (deprecated)
 
+	// Check we are belong to the validator of Child Chain in DB first (Mining Mode)
+	for _, chainId := range childChainIds {
+		// Check Current Validator is Child Chain Validator
+		ci := core.GetChainInfo(cm.cch.chainInfoDB, chainId)
+		// Check if we are in this child chain
+		if ci.Epoch != nil && cm.checkCoinbaseInChildChain(ci.Epoch) {
+			readyToLoadChains[chainId] = true
+		}
+	}
+
 	// Check request from Child Chain
 	for _, requestId := range childIds {
 		if requestId == "" {

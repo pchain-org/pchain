@@ -27,7 +27,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 	}
 
 	// Not allow contract creation on PChain Main Chain
-	if (config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId) && tx.To() == nil {
+	if config.IsMainChain() && tx.To() == nil {
 		return nil, 0, ErrNoContractOnMainChain
 	}
 
@@ -91,6 +91,13 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 			return nil, 0, err
 		}
 		log.Infof("ApplyTransactionEx() 0, Chain Function is %v\n", function.String())
+
+		// check Function main/child flag
+		if config.IsMainChain() && !function.AllowInMainChain() {
+			return nil, 0, ErrNotAllowedInMainChain
+		} else if !config.IsMainChain() && !function.AllowInChildChain() {
+			return nil, 0, ErrNotAllowedInChildChain
+		}
 
 		from := msg.From()
 		// Make sure this transaction's nonce is correct
