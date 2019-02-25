@@ -199,12 +199,25 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		return errInvalidDifficulty
 	}
 
+	// In case of Epoch switch, we have to wait for the Epoch switched first, then verify the following fields
+	if header.Number.Uint64() > sb.GetEpoch().EndBlock {
+		for {
+			duration := 2 * time.Second
+			sb.logger.Infof("Tendermint (backend) VerifyHeader, Epoch Switch, wait for %v then try again", duration)
+			time.Sleep(duration)
+
+			if header.Number.Uint64() <= sb.GetEpoch().EndBlock {
+				break
+			}
+		}
+	}
+
 	if fieldError := sb.verifyCascadingFields(chain, header, parents); fieldError != nil {
 		return fieldError
 	}
 
 	// Check the MainChainNumber if on Child Chain
-	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId && sb.chainConfig.PChainId != params.TestnetChainConfig.PChainId {
+	if !sb.chainConfig.IsMainChain() {
 		if header.MainChainNumber == nil {
 			return errInvalidMainChainNumber
 		}
