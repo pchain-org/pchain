@@ -1203,6 +1203,12 @@ func (srv *Server) validatorAddPeer(peer *Peer) error {
 
 	var err error = nil
 	for _, validatorNodeInfo := range srv.Validators {
+
+		if peer.ID() == validatorNodeInfo.Node.ID {
+			//refresh the node's ip
+			validatorNodeInfo.Node.IP = peer.RemoteAddr().(*net.TCPAddr).IP
+		}
+
 		err1 := Send(peer.rw, RefreshValidatorNodeInfoMsg, validatorNodeInfo)
 		if err == nil && err1 != nil {
 			err = err1

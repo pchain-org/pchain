@@ -199,12 +199,25 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		return errInvalidDifficulty
 	}
 
+	// In case of Epoch switch, we have to wait for the Epoch switched first, then verify the following fields
+	if header.Number.Uint64() > sb.GetEpoch().EndBlock {
+		for {
+			duration := 2 * time.Second
+			sb.logger.Infof("Tendermint (backend) VerifyHeader, Epoch Switch, wait for %v then try again", duration)
+			time.Sleep(duration)
+
+			if header.Number.Uint64() <= sb.GetEpoch().EndBlock {
+				break
+			}
+		}
+	}
+
 	if fieldError := sb.verifyCascadingFields(chain, header, parents); fieldError != nil {
 		return fieldError
 	}
 
 	// Check the MainChainNumber if on Child Chain
-	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId && sb.chainConfig.PChainId != params.TestnetChainConfig.PChainId {
+	if !sb.chainConfig.IsMainChain() {
 		if header.MainChainNumber == nil {
 			return errInvalidMainChainNumber
 		}
@@ -290,7 +303,6 @@ func (sb *backend) VerifyHeaderBeforeConsensus(chain consensus.ChainReader, head
 
 	return nil
 }
-
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
 // concurrently. The method returns a quit channel to abort the operations and
@@ -602,6 +614,22 @@ func (sb *backend) ChainReader() consensus.ChainReader {
 	return sb.chain
 }
 
+func (sb *backend) ShouldStart() bool {
+	return sb.shouldStart
+}
+
+func (sb *backend) IsStarted() bool {
+	sb.coreMu.RLock()
+	start := sb.coreStarted
+	sb.coreMu.RUnlock()
+
+	return start
+}
+
+func (sb *backend) ForceStart() {
+	sb.shouldStart = true
+}
+
 // GetEpoch Get Epoch from Tendermint Engine
 func (sb *backend) GetEpoch() *epoch.Epoch {
 	return sb.core.consensusState.Epoch
@@ -753,10 +781,12 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		totalIndividualReward := big.NewInt(0)
 		// Split the reward based on Weight stack
 		state.ForEachProxied(header.Coinbase, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
-			// deposit * delegateReward / total deposit
-			individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
-			divideRewardByEpoch(state, key, ep.Number, individualReward)
-			totalIndividualReward.Add(totalIndividualReward, individualReward)
+			if depositProxiedBalance.Sign() == 1 {
+				// deposit * delegateReward / total deposit
+				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
+				divideRewardByEpoch(state, key, ep.Number, individualReward)
+				totalIndividualReward.Add(totalIndividualReward, individualReward)
+			}
 			return true
 		})
 		// Recheck the Total Individual Reward, Float the difference

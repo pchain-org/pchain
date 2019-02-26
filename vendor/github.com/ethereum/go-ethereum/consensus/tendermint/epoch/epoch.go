@@ -486,7 +486,25 @@ func (epoch *Epoch) EnterNewEpoch(newValidators *tmTypes.ValidatorSet) (*Epoch, 
 	}
 }
 
-func DryRunUpdateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet) error {
+// DryRunUpdateEpochValidatorSet Re-calculate the New Validator Set base on the current state db and vote set
+func DryRunUpdateEpochValidatorSet(state *state.StateDB, validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet) error {
+
+	for _, v := range validators.Validators {
+		vAddr := common.BytesToAddress(v.Address)
+
+		// Deposit Proxied + Proxied - Pending Refund
+		totalProxiedBalance := new(big.Int).Add(state.GetTotalProxiedBalance(vAddr), state.GetTotalDepositProxiedBalance(vAddr))
+		totalProxiedBalance.Sub(totalProxiedBalance, state.GetTotalPendingRefundBalance(vAddr))
+
+		// Voting Power = Delegated amount + Deposit amount
+		newVotingPower := new(big.Int).Add(totalProxiedBalance, state.GetDepositBalance(vAddr))
+		if newVotingPower.Sign() == 0 {
+			validators.Remove(v.Address)
+		} else {
+			v.VotingPower = newVotingPower
+		}
+	}
+
 	_, err := updateEpochValidatorSet(validators, voteSet)
 	return err
 }

@@ -98,10 +98,6 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 		return common.Hash{}, errors.New("chainId should not be " + params.MainnetChainConfig.PChainId + " or " + params.TestnetChainConfig.PChainId)
 	}
 
-	if s.b.ChainConfig().PChainId != params.MainnetChainConfig.PChainId && s.b.ChainConfig().PChainId != params.TestnetChainConfig.PChainId {
-		return common.Hash{}, errors.New("this api can only be called in main chain")
-	}
-
 	input, err := pabi.ChainABI.Pack(pabi.DepositInMainChain.String(), chainId)
 	if err != nil {
 		return common.Hash{}, err
@@ -125,9 +121,6 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Address, txHash common.Hash) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
-	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
-		return common.Hash{}, errors.New("this api can only be called in child chain")
-	}
 
 	input, err := pabi.ChainABI.Pack(pabi.DepositInChildChain.String(), chainId, txHash)
 	if err != nil {
@@ -151,10 +144,6 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 	amount *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
-	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
-		return common.Hash{}, errors.New("this api can only be called in child chain")
-	}
-
 	input, err := pabi.ChainABI.Pack(pabi.WithdrawFromChildChain.String(), chainId)
 	if err != nil {
 		return common.Hash{}, err
@@ -332,10 +321,6 @@ func (s *PublicChainAPI) SignAddress(from common.Address, consensusPrivateKey he
 
 func (s *PublicChainAPI) SetBlockReward(ctx context.Context, from common.Address, reward *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 	chainId := s.b.ChainConfig().PChainId
-	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
-		return common.Hash{}, errors.New("this api can only be called in child chain")
-	}
-
 	input, err := pabi.ChainABI.Pack(pabi.SetBlockReward.String(), chainId, (*big.Int)(reward))
 	if err != nil {
 		return common.Hash{}, err

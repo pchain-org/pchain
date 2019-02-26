@@ -74,4 +74,10 @@ var (
 
 	// ErrNotOwner is returned if the Address not owner
 	ErrNotOwner = errors.New("address not owner")
+
+	// ErrNotAllowedInMainChain is returned if the transaction with main flag = false be sent to main chain
+	ErrNotAllowedInMainChain = errors.New("transaction not allowed in main chain")
+
+	// ErrNotAllowedInChildChain is returned if the transaction with child flag = false be sent to child chain
+	ErrNotAllowedInChildChain = errors.New("transaction not allowed in child chain")
 )

@@ -597,7 +597,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	// Not allow contract creation on PChain Main Chain
-	if (pool.chainconfig.PChainId == params.MainnetChainConfig.PChainId || pool.chainconfig.PChainId == params.TestnetChainConfig.PChainId) && tx.To() == nil {
+	if pool.chainconfig.IsMainChain() && tx.To() == nil {
 		return ErrNoContractOnMainChain
 	}
 
@@ -616,6 +616,14 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if err != nil {
 			return err
 		}
+
+		// check Function main/child flag
+		if pool.chainconfig.IsMainChain() && !function.AllowInMainChain() {
+			return ErrNotAllowedInMainChain
+		} else if !pool.chainconfig.IsMainChain() && !function.AllowInChildChain() {
+			return ErrNotAllowedInChildChain
+		}
+
 		log.Infof("validateTx Chain Function %v", function.String())
 		if validateCb := GetValidateCb(function); validateCb != nil {
 			if function.IsCrossChainType() {

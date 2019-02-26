@@ -176,7 +176,6 @@ func newCliApp(version, usage string) *cli.App {
 		utils.EtherbaseFlag,
 		utils.GasPriceFlag,
 		utils.MinerThreadsFlag,
-		utils.MiningEnabledFlag,
 		utils.TargetGasLimitFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,

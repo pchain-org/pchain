@@ -9,12 +9,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
@@ -122,7 +122,7 @@ func (b *TdmBlock) ToBytes() []byte {
 		TdmExtra:     b.TdmExtra,
 		TX3ProofData: b.TX3ProofData,
 	}
-	
+
 	ret := wire.BinaryBytes(bb)
 	return ret
 }

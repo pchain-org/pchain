@@ -63,6 +63,7 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 
 func init() {
 	core.RegisterInsertBlockCb("UpdateLocalEpoch", updateLocalEpoch)
+	core.RegisterInsertBlockCb("AutoStartMining", autoStartMining)
 }
 
 func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
@@ -94,6 +95,23 @@ func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 			if currentEpoch.Number > 0 {
 				ep.UpdateEpochEndTime(currentEpoch.GetDB(), currentEpoch.Number-1, epochInBlock.StartTime)
 			}
+		}
+	}
+}
+
+func autoStartMining(bc *core.BlockChain, block *ethTypes.Block) {
+	eng := bc.Engine().(consensus.Tendermint)
+	currentEpoch := eng.GetEpoch()
+	// After Reveal Vote End stage, we should able to calculate the new validator
+	if block.NumberU64() == currentEpoch.GetRevealVoteEndHeight()+1 {
+		// Re-Calculate the next epoch validators
+		nextEp := currentEpoch.GetNextEpoch()
+		state, _ := bc.State()
+		nextValidators := nextEp.Validators.Copy()
+		ep.DryRunUpdateEpochValidatorSet(state, nextValidators, nextEp.GetEpochValidatorVoteSet())
+
+		if nextValidators.HasAddress(eng.PrivateValidator().Bytes()) && !eng.IsStarted() {
+			bc.PostChainEvents([]interface{}{core.StartMiningEvent{}}, nil)
 		}
 	}
 }

@@ -100,8 +100,11 @@ type BlockChain struct {
 	chainHeadFeed        event.Feed
 	logsFeed             event.Feed
 	createChildChainFeed event.Feed
-	scope                event.SubscriptionScope
-	genesisBlock         *types.Block
+	startMiningFeed      event.Feed
+	stopMiningFeed       event.Feed
+
+	scope        event.SubscriptionScope
+	genesisBlock *types.Block
 
 	mu      sync.RWMutex // global mutex for locking chain operations
 	chainmu sync.RWMutex // blockchain insertion lock
@@ -1445,6 +1448,12 @@ func (bc *BlockChain) PostChainEvents(events []interface{}, logs []*types.Log) {
 
 		case CreateChildChainEvent:
 			bc.createChildChainFeed.Send(ev)
+
+		case StartMiningEvent:
+			bc.startMiningFeed.Send(ev)
+
+		case StopMiningEvent:
+			bc.stopMiningFeed.Send(ev)
 		}
 	}
 }
@@ -1645,4 +1654,14 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // SubscribeCreateChildChainEvent registers a subscription of CreateChildChainEvent.
 func (bc *BlockChain) SubscribeCreateChildChainEvent(ch chan<- CreateChildChainEvent) event.Subscription {
 	return bc.scope.Track(bc.createChildChainFeed.Subscribe(ch))
+}
+
+// SubscribeStartMiningEvent registers a subscription of StartMiningEvent.
+func (bc *BlockChain) SubscribeStartMiningEvent(ch chan<- StartMiningEvent) event.Subscription {
+	return bc.scope.Track(bc.startMiningFeed.Subscribe(ch))
+}
+
+// SubscribeStopMiningEvent registers a subscription of StopMiningEvent.
+func (bc *BlockChain) SubscribeStopMiningEvent(ch chan<- StopMiningEvent) event.Subscription {
+	return bc.scope.Track(bc.stopMiningFeed.Subscribe(ch))
 }
