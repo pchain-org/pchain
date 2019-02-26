@@ -24,7 +24,6 @@ import (
 	"net"
 	"sync"
 	"time"
-	"reflect"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -1064,6 +1063,7 @@ func (srv *Server) AddLocalValidator(chainId string, address common.Address) {
 		Node: *srv.Self(),
 		TimeStamp: 	time.Now(),
 		Validator:  validator,
+		Original: true,
 	}, nil)
 }
 
@@ -1094,6 +1094,7 @@ func (srv *Server) RemoveLocalValidator(chainId string, address common.Address) 
 		Node: *srv.Self(),
 		TimeStamp: 	time.Now(),
 		Validator:  validator,
+		Original:   true,
 	}, nil)
 }
 
@@ -1110,8 +1111,11 @@ func (srv *Server) validatorAdd(valNodeInfo P2PValidatorNodeInfo, peers []*Peer,
 
 	//if the node does exist, we skip it; this could also avoid repeated propagate
 	if nodeInfo, ok := srv.Validators[validator]; ok {
-		if reflect.DeepEqual(valNodeInfo, *nodeInfo) {
-			log.Debug("DeepEqal if true, validator found")
+		con1 := valNodeInfo.Node.ID == nodeInfo.Node.ID
+		con2 := valNodeInfo.Node.IP.String() == nodeInfo.Node.IP.String()
+		log.Debugf("con1: %v, con2: %v", con1, con2)
+		if  con1 && con2 /*not compare PORT*/ {
+			log.Debug("validator found, not add")
 			return nil
 		}
 	}
@@ -1210,6 +1214,7 @@ func (srv *Server) validatorAddPeer(peer *Peer) error {
 			Node: *srv.Self(),
 			TimeStamp: time.Now(),
 			Validator: srv.LocalValidators[i],
+			Original: true,
 		})
 		if err == nil && err1 != nil {
 			err = err1
