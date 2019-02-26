@@ -191,7 +191,7 @@ func newCliApp(version, usage string) *cli.App {
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
-		//utils.RPCVirtualHostsFlag,
+		utils.RPCVirtualHostsFlag,
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
 		utils.FakePoWFlag,
