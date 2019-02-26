@@ -19,6 +19,7 @@ type P2PValidatorNodeInfo struct {
 	Node 		discover.Node
 	TimeStamp 	time.Time
 	Validator	P2PValidator
+	Original	bool
 }
 
 func (vni *P2PValidatorNodeInfo) Hash() common.Hash {

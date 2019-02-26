@@ -330,6 +330,13 @@ func (p *Peer) handle(msg Msg) error {
 		}
 		p.log.Debugf("validation node address: %x", valNodeInfo.Validator.Address)
 
+		if valNodeInfo.Original && p.Info().ID == valNodeInfo.Node.ID.String(){
+			valNodeInfo.Node.IP = p.RemoteAddr().(*net.TCPAddr).IP
+		}
+		valNodeInfo.Original = false
+
+		p.log.Debugf("validator node info: %v", valNodeInfo)
+
 		data, err:= rlp.EncodeToBytes(valNodeInfo)
 		if err != nil {
 			p.log.Debugf("encode error: %v", err)
@@ -351,6 +358,13 @@ func (p *Peer) handle(msg Msg) error {
 			return err
 		}
 		p.log.Debugf("validation node address: %x", valNodeInfo.Validator.Address)
+
+		if valNodeInfo.Original {
+			valNodeInfo.Node.IP = p.RemoteAddr().(*net.TCPAddr).IP
+			valNodeInfo.Original = false
+		}
+		p.log.Debugf("validator node info: %v", valNodeInfo)
+
 		data, err:= rlp.EncodeToBytes(valNodeInfo)
 		if err != nil {
 			p.log.Debugf("encode error: %v", err)
