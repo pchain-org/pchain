@@ -136,7 +136,7 @@ func (n *Node) GetRPCHandler() (http.Handler, error) {
 
 	n.rpcAPIs = apis
 
-	return rpc.NewCorsHandler(handler, n.config.HTTPCors), nil
+	return handler, nil
 }
 
 func (n *Node) startRPC1(services map[reflect.Type]Service) error {
@@ -150,7 +150,6 @@ func (n *Node) startRPC1(services map[reflect.Type]Service) error {
 		return err
 	}
 	if err := n.startWS(n.wsEndpoint, n.rpcAPIs, n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
-		n.stopHTTP()
 		n.stopIPC()
 		n.stopInProc()
 		return err

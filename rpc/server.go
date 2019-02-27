@@ -4,20 +4,22 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/tendermint/go-rpc/server"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
 	"net"
 	"net/http"
-	"strconv"
+	"strings"
 )
 
-var listeners map[string]net.Listener
-var muxes map[string]*http.ServeMux
+var (
+	listener net.Listener
+	mux      *http.ServeMux
+)
 
 func Hookup(chainId string, handler http.Handler) error {
-
-	log.Infof("Hookup RPC for (chainId, rpc Handler): (%v, %v)", chainId, handler)
-	for _, mux := range muxes {
+	if mux != nil {
+		log.Infof("Hookup RPC for (chainId, rpc Handler): (%v, %v)", chainId, handler)
 		if handler != nil {
 			mux.Handle("/"+chainId, handler)
 		} else {
@@ -30,35 +32,36 @@ func Hookup(chainId string, handler http.Handler) error {
 
 func StartRPC(ctx *cli.Context) error {
 
-	host := utils.MakeHTTPRpcHost(ctx)
-	port := ctx.GlobalInt(utils.RPCPortFlag.Name)
+	// Use Default Config
+	rpcConfig := node.DefaultConfig
 
-	addrArr := []string{"tcp://" + host + ":" + strconv.Itoa(port)}
+	// Setup the config from context
+	utils.SetHTTP(ctx, &rpcConfig)
 
-	// we may expose the rpc over both a unix and tcp socket
-	listeners = make(map[string]net.Listener)
-	muxes = make(map[string]*http.ServeMux)
+	endpoint := rpcConfig.HTTPEndpoint()
+	cors := rpcConfig.HTTPCors
+	vhosts := rpcConfig.HTTPVirtualHosts
 
-	for _, addr := range addrArr {
-
-		mux := http.NewServeMux()
-		listener, err := rpcserver.StartHTTPServer(addr, mux)
-		if err != nil {
-			return err
-		}
-
-		listeners[addr] = listener
-		muxes[addr] = mux
+	// Short circuit if the HTTP endpoint isn't being exposed
+	if endpoint == "" {
+		return nil
 	}
+
+	var err error
+	listener, mux, err = startPChainHTTPEndpoint(endpoint, cors, vhosts, rpcConfig.HTTPTimeouts)
+	if err != nil {
+		return err
+	}
+
+	log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%s", endpoint), "cors", strings.Join(cors, ","), "vhosts", strings.Join(vhosts, ","))
 	return nil
 }
 
 func StopRPC() {
-	for _, l := range listeners {
-		log.Info("Closing rpc listener", "listener", l)
-		if err := l.Close(); err != nil {
-			log.Error("Error closing listener", "listener", l, "error", err)
-		}
+	if listener != nil {
+		listener.Close()
+		listener = nil
+		log.Info("HTTP endpoint closed", "url", fmt.Sprintf("http://%s", listener.Addr().String()))
 	}
 }
 
@@ -68,4 +71,17 @@ func defaultHandler() http.Handler {
 		w.WriteHeader(http.StatusNotImplemented)
 		w.Write([]byte(fmt.Sprintf("blank output for not existed chain\n")))
 	})
+}
+
+func startPChainHTTPEndpoint(endpoint string, cors []string, vhosts []string, timeouts rpc.HTTPTimeouts) (net.Listener, *http.ServeMux, error) {
+	var (
+		listener net.Listener
+		err      error
+	)
+	if listener, err = net.Listen("tcp", endpoint); err != nil {
+		return nil, nil, err
+	}
+	mux := http.NewServeMux()
+	go rpc.NewHTTPServer(cors, vhosts, timeouts, mux).Serve(listener)
+	return listener, mux, err
 }
