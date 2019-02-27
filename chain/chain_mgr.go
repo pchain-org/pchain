@@ -223,9 +223,17 @@ func (cm *ChainManager) StartRPC() error {
 	if err != nil {
 		return err
 	} else {
-		rpc.Hookup(cm.mainChain.Id, cm.mainChain.RpcHandler)
+		if rpcHandler, err := cm.mainChain.EthNode.GetRPCHandler(); err == nil {
+			rpc.Hookup(cm.mainChain.Id, rpcHandler)
+		} else {
+			log.Errorf("Load Main Chain rpc handler failed: %v", err)
+		}
 		for _, chain := range cm.childChains {
-			rpc.Hookup(chain.Id, chain.RpcHandler)
+			if rpcHandler, err := chain.EthNode.GetRPCHandler(); err == nil {
+				rpc.Hookup(chain.Id, rpcHandler)
+			} else {
+				log.Errorf("Load Child Chain rpc handler failed: %v", err)
+			}
 		}
 	}
 
@@ -376,7 +384,11 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	go cm.server.BroadcastNewChildChainMsg(chainId)
 
 	//hookup rpc
-	rpc.Hookup(chain.Id, chain.RpcHandler)
+	if rpcHandler, err := chain.EthNode.GetRPCHandler(); err == nil {
+		rpc.Hookup(chain.Id, rpcHandler)
+	} else {
+		log.Errorf("Unable Hook up Child Chain (%v) RPC Handler: %v", chainId, err)
+	}
 }
 
 func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainInfo, ep *epoch.Epoch) {
