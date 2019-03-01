@@ -4,7 +4,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
-	"net/http"
 	"reflect"
 )
 
@@ -103,7 +102,7 @@ func (n *Node) GatherProtocols() []p2p.Protocol {
 	return protocols
 }
 
-func (n *Node) GetRPCHandler() (http.Handler, error) {
+func (n *Node) GetHTTPHandler() (*rpc.Server, error) {
 
 	// Generate the whitelist based on the allowed modules
 	whitelist := make(map[string]bool)
@@ -122,12 +121,35 @@ func (n *Node) GetRPCHandler() (http.Handler, error) {
 		}
 	}
 
-	log.Debugf("(n *Node) startHTTP()->before rpc.NewCorsHandler(cors, handler)")
-
 	// All listeners booted successfully
 	n.httpEndpoint = ""
 	n.httpListener = nil
 	n.httpHandler = nil
+
+	return handler, nil
+}
+
+func (n *Node) GetWSHandler() (*rpc.Server, error) {
+	// Generate the whitelist based on the allowed modules
+	whitelist := make(map[string]bool)
+	for _, module := range n.config.WSModules {
+		whitelist[module] = true
+	}
+	// Register all the APIs exposed by the services
+	handler := rpc.NewServer()
+	for _, api := range n.rpcAPIs {
+		if n.config.WSExposeAll || whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
+			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
+				return nil, err
+			}
+			log.Debug("WebSocket registered", "service", api.Service, "namespace", api.Namespace)
+		}
+	}
+
+	// All listeners booted successfully
+	n.wsEndpoint = ""
+	n.wsListener = nil
+	n.wsHandler = nil
 
 	return handler, nil
 }
@@ -144,11 +166,6 @@ func (n *Node) startRPC1(services map[reflect.Type]Service) error {
 		return err
 	}
 	if err := n.startIPC(apis); err != nil {
-		n.stopInProc()
-		return err
-	}
-	if err := n.startWS(n.wsEndpoint, apis, n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
-		n.stopIPC()
 		n.stopInProc()
 		return err
 	}
