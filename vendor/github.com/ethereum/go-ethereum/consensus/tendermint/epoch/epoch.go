@@ -126,15 +126,6 @@ func loadOneEpoch(db dbm.DB, epochNumber uint64, logger log.Logger) *Epoch {
 // Convert from OneEpochDoc (Json) to Epoch
 func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc, logger log.Logger) *Epoch {
 
-	number, _ := strconv.ParseUint(oneEpoch.Number, 10, 64)
-	RewardPerBlock, _ := new(big.Int).SetString(oneEpoch.RewardPerBlock, 10)
-	StartBlock, _ := strconv.ParseUint(oneEpoch.StartBlock, 10, 64)
-	EndBlock, _ := strconv.ParseUint(oneEpoch.EndBlock, 10, 64)
-	StartTime := time.Now()
-	EndTime := time.Unix(0, 0) //not accurate for current epoch
-	BlockGenerated, _ := strconv.Atoi(oneEpoch.BlockGenerated)
-	Status, _ := strconv.Atoi(oneEpoch.Status)
-
 	validators := make([]*tmTypes.Validator, len(oneEpoch.Validators))
 	for i, val := range oneEpoch.Validators {
 		// Make validator
@@ -149,14 +140,13 @@ func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc, logger log.Logger) *
 	te := &Epoch{
 		db: db,
 
-		Number:         number,
-		RewardPerBlock: RewardPerBlock,
-		StartBlock:     StartBlock,
-		EndBlock:       EndBlock,
-		StartTime:      StartTime,
-		EndTime:        EndTime,
-		BlockGenerated: BlockGenerated,
-		Status:         Status,
+		Number:         oneEpoch.Number,
+		RewardPerBlock: oneEpoch.RewardPerBlock,
+		StartBlock:     oneEpoch.StartBlock,
+		EndBlock:       oneEpoch.EndBlock,
+		StartTime:      time.Now(),
+		EndTime:        time.Unix(0, 0), //not accurate for current epoch
+		Status:         oneEpoch.Status,
 		Validators:     tmTypes.NewValidatorSet(validators),
 
 		logger: logger,

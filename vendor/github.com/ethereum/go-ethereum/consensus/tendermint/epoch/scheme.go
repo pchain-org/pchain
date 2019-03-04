@@ -7,7 +7,6 @@ import (
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
 	"math/big"
-	"strconv"
 	"sync"
 )
 
@@ -42,17 +41,12 @@ func LoadRewardScheme(db dbm.DB) *RewardScheme {
 // Convert Reward Scheme from json to struct
 func MakeRewardScheme(db dbm.DB, rsDoc *tmTypes.RewardSchemeDoc) *RewardScheme {
 
-	totalReward, _ := new(big.Int).SetString(rsDoc.TotalReward, 10)
-	rewardFirstYear, _ := new(big.Int).SetString(rsDoc.RewardFirstYear, 10)
-	epochNumberPerYear, _ := strconv.ParseUint(rsDoc.EpochNumberPerYear, 10, 64)
-	totalYear, _ := strconv.ParseUint(rsDoc.TotalYear, 10, 64)
-
 	rs := &RewardScheme{
 		db:                 db,
-		TotalReward:        totalReward,
-		RewardFirstYear:    rewardFirstYear,
-		EpochNumberPerYear: epochNumberPerYear,
-		TotalYear:          totalYear,
+		TotalReward:        rsDoc.TotalReward,
+		RewardFirstYear:    rsDoc.RewardFirstYear,
+		EpochNumberPerYear: rsDoc.EpochNumberPerYear,
+		TotalYear:          rsDoc.TotalYear,
 	}
 
 	return rs

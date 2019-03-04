@@ -2,30 +2,28 @@ package types
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/tendermint/go-crypto"
-	"math/big"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"time"
 )
 
 type EpochApi struct {
-	Number           uint64            `json:"number"`
-	RewardPerBlock   *big.Int          `json:"reward_per_block"`
-	StartBlock       uint64            `json:"start_block"`
-	EndBlock         uint64            `json:"end_block"`
+	Number           hexutil.Uint64    `json:"number"`
+	RewardPerBlock   *hexutil.Big      `json:"reward_per_block"`
+	StartBlock       hexutil.Uint64    `json:"start_block"`
+	EndBlock         hexutil.Uint64    `json:"end_block"`
 	StartTime        time.Time         `json:"start_time"`
 	EndTime          time.Time         `json:"end_time"`
-	VoteStartBlock   uint64            `json:"vote_start_block"`
-	VoteEndBlock     uint64            `json:"vote_end_block"`
-	RevealStartBlock uint64            `json:"reveal_start_block"`
-	RevealEndBlock   uint64            `json:"reveal_end_block"`
-	Status           int               `json:"status"`
+	VoteStartBlock   hexutil.Uint64    `json:"vote_start_block"`
+	VoteEndBlock     hexutil.Uint64    `json:"vote_end_block"`
+	RevealStartBlock hexutil.Uint64    `json:"reveal_start_block"`
+	RevealEndBlock   hexutil.Uint64    `json:"reveal_end_block"`
 	Validators       []*EpochValidator `json:"validators"`
 }
 
 type EpochVotesApi struct {
-	EpochNumber uint64                   `json:"vote_for_epoch"`
-	StartBlock  uint64                   `json:"start_block"`
-	EndBlock    uint64                   `json:"end_block"`
+	EpochNumber hexutil.Uint64           `json:"vote_for_epoch"`
+	StartBlock  hexutil.Uint64           `json:"start_block"`
+	EndBlock    hexutil.Uint64           `json:"end_block"`
 	Votes       []*EpochValidatorVoteApi `json:"votes"`
 }
 
@@ -38,7 +36,7 @@ type EpochValidatorVoteApi struct {
 
 type EpochValidator struct {
 	Address        common.Address `json:"address"`
-	PubKey         crypto.PubKey  `json:"public_key"`
-	Amount         *big.Int       `json:"voting_power"`
-	RemainingEpoch uint64         `json:"remain_epoch"`
+	PubKey         string         `json:"public_key"`
+	Amount         *hexutil.Big   `json:"voting_power"`
+	RemainingEpoch hexutil.Uint64 `json:"remain_epoch"`
 }
