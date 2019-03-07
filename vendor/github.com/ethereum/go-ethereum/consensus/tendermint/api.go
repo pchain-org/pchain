@@ -116,9 +116,13 @@ func (api *API) GetNextEpochValidators() ([]*tdmTypes.EpochValidator, error) {
 
 		validators := make([]*tdmTypes.EpochValidator, 0, len(nextValidators.Validators))
 		for _, val := range nextValidators.Validators {
+			var pkstring string
+			if val.PubKey != nil {
+				pkstring = val.PubKey.KeyString()
+			}
 			validators = append(validators, &tdmTypes.EpochValidator{
 				Address:        common.BytesToAddress(val.Address),
-				PubKey:         val.PubKey.KeyString(),
+				PubKey:         pkstring,
 				Amount:         (*hexutil.Big)(val.VotingPower),
 				RemainingEpoch: hexutil.Uint64(val.RemainingEpoch),
 			})
