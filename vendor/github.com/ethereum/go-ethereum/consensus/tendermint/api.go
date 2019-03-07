@@ -70,10 +70,15 @@ func (api *API) GetNextEpochVote() (*tdmTypes.EpochVotesApi, error) {
 		votes := ep.GetNextEpoch().GetEpochValidatorVoteSet().Votes
 		votesApi := make([]*tdmTypes.EpochValidatorVoteApi, 0, len(votes))
 		for _, v := range votes {
+			var pkstring string
+			if v.PubKey != nil {
+				pkstring = v.PubKey.KeyString()
+			}
+
 			votesApi = append(votesApi, &tdmTypes.EpochValidatorVoteApi{
 				EpochValidator: tdmTypes.EpochValidator{
 					Address: v.Address,
-					PubKey:  v.PubKey.KeyString(),
+					PubKey:  pkstring,
 					Amount:  (*hexutil.Big)(v.Amount),
 				},
 				Salt:     v.Salt,
