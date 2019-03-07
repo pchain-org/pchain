@@ -124,7 +124,7 @@ type Engine interface {
 // Handler should be implemented is the consensus needs to handle and send peer's message
 type Handler interface {
 	// NewChainHead handles a new head block comes
-	NewChainHead() error
+	NewChainHead(block *types.Block) error
 
 	// HandleMsg handles a message from peer
 	HandleMsg(chID uint64, src Peer, msgBytes []byte) (bool, error)

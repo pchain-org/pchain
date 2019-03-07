@@ -22,6 +22,7 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/core/types"
 	"time"
 )
 
@@ -72,13 +73,13 @@ func (sb *backend) GetBroadcaster() consensus.Broadcaster {
 	return sb.broadcaster
 }
 
-func (sb *backend) NewChainHead() error {
+func (sb *backend) NewChainHead(block *types.Block) error {
 	sb.coreMu.RLock()
 	defer sb.coreMu.RUnlock()
 	if !sb.coreStarted {
 		return ErrStoppedEngine
 	}
-	go tdmTypes.FireEventFinalCommitted(sb.core.EventSwitch(), tdmTypes.EventDataFinalCommitted{})
+	go tdmTypes.FireEventFinalCommitted(sb.core.EventSwitch(), tdmTypes.EventDataFinalCommitted{block.NumberU64()})
 	return nil
 }
 
