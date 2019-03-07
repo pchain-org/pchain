@@ -10,7 +10,6 @@ import (
 	"github.com/pchain/version"
 	cfg "github.com/tendermint/go-config"
 	"gopkg.in/urfave/cli.v1"
-	"net/http"
 	"path/filepath"
 )
 
@@ -21,10 +20,9 @@ const (
 )
 
 type Chain struct {
-	Id         string
-	Config     cfg.Config
-	EthNode    *eth.Node
-	RpcHandler http.Handler
+	Id      string
+	Config  cfg.Config
+	EthNode *eth.Node
 }
 
 func LoadMainChain(ctx *cli.Context, chainId string) *Chain {
@@ -37,13 +35,6 @@ func LoadMainChain(ctx *cli.Context, chainId string) *Chain {
 	log.Info("ethereum.MakeSystemNode")
 	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, GetCMInstance(ctx).cch)
 	chain.EthNode = stack
-
-	rpcHandler, err := stack.GetRPCHandler()
-	if err != nil {
-		log.Error("rpc_handler got failed, return")
-	}
-
-	chain.RpcHandler = rpcHandler
 
 	return chain
 }
@@ -68,14 +59,6 @@ func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
 	cch := GetCMInstance(ctx).cch
 	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, cch)
 	chain.EthNode = stack
-
-	rpcHandler, err := stack.GetRPCHandler()
-	if err != nil {
-		log.Info("rpc_handler got failed, return")
-		return nil
-	}
-
-	chain.RpcHandler = rpcHandler
 
 	return chain
 }

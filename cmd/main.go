@@ -190,8 +190,7 @@ func newCliApp(version, usage string) *cli.App {
 		//utils.OttomanFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
-		utils.RPCCORSDomainFlag,
-		utils.RPCVirtualHostsFlag,
+
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
 		utils.FakePoWFlag,
@@ -202,17 +201,20 @@ func newCliApp(version, usage string) *cli.App {
 		//gethmain.ConfigFileFlag,
 		//utils.IstanbulRequestTimeoutFlag,
 		//utils.IstanbulBlockPeriodFlag,
+		// RPC HTTP Flag
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
 		utils.RPCApiFlag,
-		/*
-			utils.WSEnabledFlag,
-			utils.WSListenAddrFlag,
-			utils.WSPortFlag,
-			utils.WSApiFlag,
-			utils.WSAllowedOriginsFlag,
-		*/
+		utils.RPCCORSDomainFlag,
+		utils.RPCVirtualHostsFlag,
+		// RPC WS Flag
+		utils.WSEnabledFlag,
+		utils.WSListenAddrFlag,
+		utils.WSPortFlag,
+		utils.WSApiFlag,
+		utils.WSAllowedOriginsFlag,
+
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
 

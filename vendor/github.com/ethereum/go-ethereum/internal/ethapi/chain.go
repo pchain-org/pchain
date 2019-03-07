@@ -36,10 +36,6 @@ func NewPublicChainAPI(b Backend) *PublicChainAPI {
 func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Address, chainId string,
 	minValidators *hexutil.Uint, minDepositAmount *hexutil.Big, startBlock, endBlock *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 
-	if chainId == "" || strings.Contains(chainId, ";") {
-		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
-	}
-
 	input, err := pabi.ChainABI.Pack(pabi.CreateChildChain.String(), chainId, uint16(*minValidators), (*big.Int)(minDepositAmount), (*big.Int)(startBlock), (*big.Int)(endBlock))
 	if err != nil {
 		return common.Hash{}, err

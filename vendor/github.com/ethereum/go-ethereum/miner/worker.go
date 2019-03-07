@@ -214,9 +214,9 @@ func (self *worker) start() {
 
 	atomic.StoreInt32(&self.mining, 1)
 
-	if istanbul, ok := self.engine.(consensus.Istanbul); ok {
-		istanbul.Start(self.chain, self.chain.CurrentBlock, self.chain.HasBadBlock)
-	}
+	//if istanbul, ok := self.engine.(consensus.Istanbul); ok {
+	//	istanbul.Start(self.chain, self.chain.CurrentBlock, self.chain.HasBadBlock)
+	//}
 
 	if tendermint, ok := self.engine.(consensus.Tendermint); ok {
 		err := tendermint.Start(self.chain, self.chain.CurrentBlock, self.chain.HasBadBlock)

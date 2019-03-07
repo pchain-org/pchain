@@ -24,8 +24,11 @@ import (
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"math/big"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -60,6 +63,19 @@ func (cch *CrossChainHelper) GetMainChainId() string {
 
 // CanCreateChildChain check the condition before send the create child chain into the tx pool
 func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error {
+
+	if chainId == "" || strings.Contains(chainId, ";") {
+		return errors.New("chainId is nil or empty, or contains ';', should be meaningful")
+	}
+
+	pass, _ := regexp.MatchString("^[a-z]+[a-z0-9_]*$", chainId)
+	if !pass {
+		return errors.New("chainId must be start with letter (a-z) and contains alphanumeric(lower case) or underscore, try use other name instead")
+	}
+
+	if utf8.RuneCountInString(chainId) > 30 {
+		return errors.New("max characters of chain id is 30, try use other name instead")
+	}
 
 	if chainId == MainChain || chainId == TestnetChain {
 		return errors.New("you can't create PChain as a child chain, try use other name instead")

@@ -153,13 +153,13 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.RPCListenAddrFlag,
 			utils.RPCPortFlag,
 			utils.RPCApiFlag,
-			/*
-				utils.WSEnabledFlag,
-				utils.WSListenAddrFlag,
-				utils.WSPortFlag,
-				utils.WSApiFlag,
-				utils.WSAllowedOriginsFlag,
-			*/
+
+			utils.WSEnabledFlag,
+			utils.WSListenAddrFlag,
+			utils.WSPortFlag,
+			utils.WSApiFlag,
+			utils.WSAllowedOriginsFlag,
+
 			utils.IPCDisabledFlag,
 			utils.IPCPathFlag,
 			utils.RPCCORSDomainFlag,

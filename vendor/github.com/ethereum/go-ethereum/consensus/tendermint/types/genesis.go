@@ -1,13 +1,16 @@
 package types
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"math/big"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
-	"github.com/tendermint/go-wire"
 )
 
 //------------------------------------------------------------
@@ -22,7 +25,7 @@ var CONSENSUS_POS string = "pos"
 var CONSENSUS_POW string = "pow"
 
 type GenesisValidator struct {
-	EthAccount     common.Address `json:"eth_account"`
+	EthAccount     common.Address `json:"address"`
 	PubKey         crypto.PubKey  `json:"pub_key"`
 	Amount         *big.Int       `json:"amount"`
 	Name           string         `json:"name"`
@@ -30,24 +33,22 @@ type GenesisValidator struct {
 }
 
 type OneEpochDoc struct {
-	Number         string             `json:"number"`
-	RewardPerBlock string             `json:"reward_per_block"`
-	StartBlock     string             `json:"start_block"`
-	EndBlock       string             `json:"end_block"`
-	BlockGenerated string             `json:"block_generated"`
-	Status         string             `json:"status"`
+	Number         uint64             `json:"number"`
+	RewardPerBlock *big.Int           `json:"reward_per_block"`
+	StartBlock     uint64             `json:"start_block"`
+	EndBlock       uint64             `json:"end_block"`
+	Status         int                `json:"status"`
 	Validators     []GenesisValidator `json:"validators"`
 }
 
 type RewardSchemeDoc struct {
-	TotalReward        string `json:"total_reward"`
-	RewardFirstYear    string `json:"reward_first_year"`
-	EpochNumberPerYear string `json:"epoch_no_per_year"`
-	TotalYear          string `json:"total_year"`
+	TotalReward        *big.Int `json:"total_reward"`
+	RewardFirstYear    *big.Int `json:"reward_first_year"`
+	EpochNumberPerYear uint64   `json:"epoch_no_per_year"`
+	TotalYear          uint64   `json:"total_year"`
 }
 
 type GenesisDoc struct {
-	AppHash      []byte          `json:"app_hash"`
 	ChainID      string          `json:"chain_id"`
 	Consensus    string          `json:"consensus"` //should be 'pos' or 'pow'
 	GenesisTime  time.Time       `json:"genesis_time"`
@@ -57,7 +58,11 @@ type GenesisDoc struct {
 
 // Utility method for saving GenensisDoc as JSON file.
 func (genDoc *GenesisDoc) SaveAs(file string) error {
-	genDocBytes := wire.JSONBytesPretty(genDoc)
+	genDocBytes, err := json.MarshalIndent(genDoc, "", "\t")
+	if err != nil {
+		fmt.Println(err)
+	}
+
 	return WriteFile(file, genDocBytes, 0644)
 }
 
@@ -65,7 +70,7 @@ func (genDoc *GenesisDoc) SaveAs(file string) error {
 // Make genesis state from file
 
 func GenesisDocFromJSON(jsonBlob []byte) (genDoc *GenesisDoc, err error) {
-	wire.ReadJSONPtr(&genDoc, jsonBlob, &err)
+	err = json.Unmarshal(jsonBlob, &genDoc)
 	return
 }
 
@@ -173,3 +178,136 @@ var TestnetGenesisJSON string = `{
   }
 }
 `
+
+func (ep OneEpochDoc) MarshalJSON() ([]byte, error) {
+	type hexEpoch struct {
+		Number         hexutil.Uint64     `json:"number"`
+		RewardPerBlock *hexutil.Big       `json:"reward_per_block"`
+		StartBlock     hexutil.Uint64     `json:"start_block"`
+		EndBlock       hexutil.Uint64     `json:"end_block"`
+		Validators     []GenesisValidator `json:"validators"`
+	}
+	var enc hexEpoch
+	enc.Number = hexutil.Uint64(ep.Number)
+	enc.RewardPerBlock = (*hexutil.Big)(ep.RewardPerBlock)
+	enc.StartBlock = hexutil.Uint64(ep.StartBlock)
+	enc.EndBlock = hexutil.Uint64(ep.EndBlock)
+	if ep.Validators != nil {
+		enc.Validators = ep.Validators
+	}
+	return json.Marshal(&enc)
+}
+
+func (ep *OneEpochDoc) UnmarshalJSON(input []byte) error {
+	type hexEpoch struct {
+		Number         hexutil.Uint64     `json:"number"`
+		RewardPerBlock *hexutil.Big       `json:"reward_per_block"`
+		StartBlock     hexutil.Uint64     `json:"start_block"`
+		EndBlock       hexutil.Uint64     `json:"end_block"`
+		Validators     []GenesisValidator `json:"validators"`
+	}
+	var dec hexEpoch
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	ep.Number = uint64(dec.Number)
+	ep.RewardPerBlock = (*big.Int)(dec.RewardPerBlock)
+	ep.StartBlock = uint64(dec.StartBlock)
+	ep.EndBlock = uint64(dec.EndBlock)
+	if dec.Validators == nil {
+		return errors.New("missing required field 'validators' for Genesis/epoch")
+	}
+	ep.Validators = dec.Validators
+	return nil
+}
+
+func (gv GenesisValidator) MarshalJSON() ([]byte, error) {
+	type hexValidator struct {
+		Address        common.Address `json:"address"`
+		PubKey         string         `json:"pub_key"`
+		Amount         *hexutil.Big   `json:"amount"`
+		Name           string         `json:"name"`
+		RemainingEpoch hexutil.Uint64 `json:"epoch"`
+	}
+	var enc hexValidator
+	enc.Address = gv.EthAccount
+	enc.PubKey = gv.PubKey.KeyString()
+	enc.Amount = (*hexutil.Big)(gv.Amount)
+	enc.Name = gv.Name
+	enc.RemainingEpoch = hexutil.Uint64(gv.RemainingEpoch)
+
+	return json.Marshal(&enc)
+}
+
+func (rs *GenesisValidator) UnmarshalJSON(input []byte) error {
+	type hexValidator struct {
+		Address        common.Address `json:"address"`
+		PubKey         string         `json:"pub_key"`
+		Amount         *hexutil.Big   `json:"amount"`
+		Name           string         `json:"name"`
+		RemainingEpoch hexutil.Uint64 `json:"epoch"`
+	}
+	var dec hexValidator
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	rs.EthAccount = dec.Address
+
+	pubkeyBytes := common.FromHex(dec.PubKey)
+	if dec.PubKey == "" || len(pubkeyBytes) != 128 {
+		return errors.New("wrong format of required field 'pub_key' for Genesis/epoch/validators")
+	}
+	var blsPK crypto.BLSPubKey
+	copy(blsPK[:], pubkeyBytes)
+	rs.PubKey = blsPK
+
+	if dec.Amount == nil {
+		return errors.New("missing required field 'amount' for Genesis/epoch/validators")
+	}
+	rs.Amount = (*big.Int)(dec.Amount)
+	rs.Name = dec.Name
+	rs.RemainingEpoch = uint64(dec.RemainingEpoch)
+	return nil
+}
+
+func (rs RewardSchemeDoc) MarshalJSON() ([]byte, error) {
+	type hexRewardScheme struct {
+		TotalReward        *hexutil.Big   `json:"total_reward"`
+		RewardFirstYear    *hexutil.Big   `json:"reward_first_year"`
+		EpochNumberPerYear hexutil.Uint64 `json:"epoch_no_per_year"`
+		TotalYear          hexutil.Uint64 `json:"total_year"`
+	}
+	var enc hexRewardScheme
+	enc.TotalReward = (*hexutil.Big)(rs.TotalReward)
+	enc.RewardFirstYear = (*hexutil.Big)(rs.RewardFirstYear)
+	enc.EpochNumberPerYear = hexutil.Uint64(rs.EpochNumberPerYear)
+	enc.TotalYear = hexutil.Uint64(rs.TotalYear)
+
+	return json.Marshal(&enc)
+}
+
+func (rs *RewardSchemeDoc) UnmarshalJSON(input []byte) error {
+	type hexRewardScheme struct {
+		TotalReward        *hexutil.Big   `json:"total_reward"`
+		RewardFirstYear    *hexutil.Big   `json:"reward_first_year"`
+		EpochNumberPerYear hexutil.Uint64 `json:"epoch_no_per_year"`
+		TotalYear          hexutil.Uint64 `json:"total_year"`
+	}
+	var dec hexRewardScheme
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if dec.TotalReward == nil {
+		return errors.New("missing required field 'total_reward' for Genesis/reward_scheme")
+	}
+	rs.TotalReward = (*big.Int)(dec.TotalReward)
+	if dec.RewardFirstYear == nil {
+		return errors.New("missing required field 'reward_first_year' for Genesis/reward_scheme")
+	}
+	rs.RewardFirstYear = (*big.Int)(dec.RewardFirstYear)
+
+	rs.EpochNumberPerYear = uint64(dec.EpochNumberPerYear)
+	rs.TotalYear = uint64(dec.TotalYear)
+
+	return nil
+}

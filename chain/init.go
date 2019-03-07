@@ -228,25 +228,25 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 			LockReward, _ := new(big.Int).SetString(LockReward, 10)
 			totalReward := new(big.Int).Sub(posReward, LockReward)
 			rewardScheme = types.RewardSchemeDoc{
-				TotalReward:        totalReward.String(),
-				RewardFirstYear:    new(big.Int).Div(totalReward, big.NewInt(8)).String(),
-				EpochNumberPerYear: "12",
-				TotalYear:          "23",
+				TotalReward:        totalReward,
+				RewardFirstYear:    new(big.Int).Div(totalReward, big.NewInt(8)),
+				EpochNumberPerYear: 12,
+				TotalYear:          23,
 			}
 		} else {
 			rewardScheme = types.RewardSchemeDoc{
-				TotalReward:        "0",
-				RewardFirstYear:    "0",
-				EpochNumberPerYear: "12",
-				TotalYear:          "0",
+				TotalReward:        big.NewInt(0),
+				RewardFirstYear:    big.NewInt(0),
+				EpochNumberPerYear: 12,
+				TotalYear:          0,
 			}
 		}
 
-		var rewardPerBlock string
+		var rewardPerBlock *big.Int
 		if chainId == MainChain || chainId == TestnetChain {
-			rewardPerBlock = "1219698431069958847"
+			rewardPerBlock = big.NewInt(1219698431069958847)
 		} else {
-			rewardPerBlock = "0"
+			rewardPerBlock = big.NewInt(0)
 		}
 
 		genDoc := types.GenesisDoc{
@@ -255,12 +255,11 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 			GenesisTime:  time.Now(),
 			RewardScheme: rewardScheme,
 			CurrentEpoch: types.OneEpochDoc{
-				Number:         "0",
+				Number:         0,
 				RewardPerBlock: rewardPerBlock,
-				StartBlock:     "0",
-				EndBlock:       "2592000",
-				BlockGenerated: "0",
-				Status:         "0",
+				StartBlock:     0,
+				EndBlock:       2592000,
+				Status:         0,
 			},
 		}
 

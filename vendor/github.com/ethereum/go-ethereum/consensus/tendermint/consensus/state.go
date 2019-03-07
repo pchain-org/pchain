@@ -325,10 +325,10 @@ func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.C
 		internalMsgQueue: make(chan msgInfo, msgQueueSize),
 		timeoutTicker:    NewTimeoutTicker(backend.GetLogger()),
 		timeoutParams:    InitTimeoutParamsFromConfig(config),
-		done:             make(chan struct{}),
-		blockFromMiner:   nil,
-		backend:          backend,
-		logger:           backend.GetLogger(),
+		//done:             make(chan struct{}),
+		blockFromMiner: nil,
+		backend:        backend,
+		logger:         backend.GetLogger(),
 	}
 
 	// set function defaults (may be overwritten before calling Start)
@@ -503,6 +503,8 @@ func (cs *ConsensusState) LoadCommit(height uint64) *types.Commit {
 }
 
 func (cs *ConsensusState) OnStart() error {
+
+	cs.done = make(chan struct{})
 
 	// NOTE: we will get a build up of garbage go routines
 	//  firing on the tockChan until the receiveRoutine is started
