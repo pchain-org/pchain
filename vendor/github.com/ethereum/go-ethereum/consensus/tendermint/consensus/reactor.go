@@ -326,9 +326,14 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 	})
 
 	types.AddListenerForEvent(conR.evsw, "conR", types.EventStringFinalCommitted(), func(data types.TMEventData) {
-		conR.logger.Info("registerEventCallbacks received Final Committed Event", "conR.conS.Step", conR.conS.Step)
-		conR.logger.Info("start new height to apply this commit")
-		conR.conS.StartNewHeight()
+		conR.logger.Info("registerEventCallbacks received Final Committed Event", "conR.conS.Height", conR.conS.Height, "conR.conS.Step", conR.conS.Step)
+		
+		edfc := data.(types.EventDataFinalCommitted)
+		
+		if edfc.BlockNumber == conR.conS.Height {
+			conR.logger.Info("start new height to apply this commit", "new height", edfc.BlockNumber + 1)
+			conR.conS.StartNewHeight()
+		}
 	})
 }
 

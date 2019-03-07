@@ -278,9 +278,9 @@ func (self *worker) update() {
 		// A real event arrived, process interesting content
 		select {
 		// Handle ChainHeadEvent
-		case <-self.chainHeadCh:
+		case ev := <-self.chainHeadCh:
 			if h, ok := self.engine.(consensus.Handler); ok {
-				h.NewChainHead()
+				h.NewChainHead(ev.Block)
 			}
 			self.commitNewWork()
 
