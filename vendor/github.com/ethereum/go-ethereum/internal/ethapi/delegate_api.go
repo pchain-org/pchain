@@ -149,7 +149,8 @@ func init() {
 }
 
 func del_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
-	_, verror := delegateValidation(tx, state, bc)
+	from := derivedAddressFromTx(tx)
+	_, verror := delegateValidation(from, tx, state, bc)
 	if verror != nil {
 		return verror
 	}
@@ -159,7 +160,7 @@ func del_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockC
 func del_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
-	args, verror := delegateValidation(tx, state, bc)
+	args, verror := delegateValidation(from, tx, state, bc)
 	if verror != nil {
 		return verror
 	}
@@ -285,7 +286,7 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 
 // Validation
 
-func delegateValidation(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.DelegateArgs, error) {
+func delegateValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.DelegateArgs, error) {
 	// Check minimum delegate amount
 	if tx.Value().Cmp(minimumDelegationAmount) < 0 {
 		return nil, core.ErrDelegateAmount
@@ -300,6 +301,18 @@ func delegateValidation(tx *types.Transaction, state *state.StateDB, bc *core.Bl
 	// Check Candidate
 	if !state.IsCandidate(args.Candidate) {
 		return nil, core.ErrNotCandidate
+	}
+
+	// If Candidate is supernode, only allow to increase the stack(whitelist proxied list), not allow to create the new stack
+	var ep *epoch.Epoch
+	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
+		ep = tdm.GetEpoch()
+	}
+	if _, supernode := ep.Validators.GetByAddress(args.Candidate.Bytes()); supernode != nil && supernode.RemainingEpoch > 0 {
+		depositBalance := state.GetDepositProxiedBalanceByUser(args.Candidate, from)
+		if depositBalance.Sign() == 0 {
+			return nil, core.ErrCannotDelegate
+		}
 	}
 
 	// Check Epoch Height
@@ -322,6 +335,15 @@ func cancelDelegateValidation(from common.Address, tx *types.Transaction, state 
 		return nil, core.ErrCancelSelfDelegate
 	}
 
+	// Super node Candidate can't decrease balance
+	var ep *epoch.Epoch
+	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
+		ep = tdm.GetEpoch()
+	}
+	if _, supernode := ep.Validators.GetByAddress(args.Candidate.Bytes()); supernode != nil && supernode.RemainingEpoch > 0 {
+		return nil, core.ErrCannotCancelDelegate
+	}
+
 	// Check Proxied Amount in Candidate Balance
 	proxiedBalance := state.GetProxiedBalanceByUser(args.Candidate, from)
 	depositProxiedBalance := state.GetDepositProxiedBalanceByUser(args.Candidate, from)
@@ -332,6 +354,11 @@ func cancelDelegateValidation(from common.Address, tx *types.Transaction, state 
 	availableRefundBalance := new(big.Int).Add(proxiedBalance, netDeposit)
 	if args.Amount.Cmp(availableRefundBalance) == 1 {
 		return nil, core.ErrInsufficientProxiedBalance
+	}
+
+	remainingBalance := new(big.Int).Sub(availableRefundBalance, args.Amount)
+	if remainingBalance.Sign() == 1 && remainingBalance.Cmp(minimumDelegationAmount) == -1 {
+		return nil, core.ErrDelegateAmount
 	}
 
 	// Check Epoch Height
@@ -369,7 +396,7 @@ func candidateValidation(from common.Address, tx *types.Transaction, state *stat
 		return nil, err
 	}
 
-	// Annual/SemiAnnual supernode can not be candidate
+	// Annual/SemiAnnual supernode can not become candidate
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
 		ep = tdm.GetEpoch()
@@ -385,6 +412,15 @@ func cancelCandidateValidation(from common.Address, tx *types.Transaction, state
 	// Check already Candidate
 	if !state.IsCandidate(from) {
 		return core.ErrNotCandidate
+	}
+
+	// Super node can't cancel Candidate
+	var ep *epoch.Epoch
+	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
+		ep = tdm.GetEpoch()
+	}
+	if _, supernode := ep.Validators.GetByAddress(from.Bytes()); supernode != nil && supernode.RemainingEpoch > 0 {
+		return core.ErrCannotCancelCandidate
 	}
 
 	// Check Epoch Height

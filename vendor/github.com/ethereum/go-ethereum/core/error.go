@@ -43,6 +43,12 @@ var (
 	// ErrCancelSelfDelegate is returned if the cancel delegate apply to the self address
 	ErrCancelSelfDelegate = errors.New("can not cancel self delegation")
 
+	// ErrCannotDelegate is returned if the request address does not have deposit balance in Annual/SemiAnnual Supernode
+	ErrCannotDelegate = errors.New("Annual/SemiAnnual Supernode candidate not accept new delegator")
+
+	// ErrCannotCancelDelegate is returned if the request address belongs to Annual/SemiAnnual Supernode
+	ErrCannotCancelDelegate = errors.New("Annual/SemiAnnual Supernode candidate can not cancel delegation")
+
 	// ErrDelegateAmount is returned if the delegate amount less than 0
 	ErrDelegateAmount = errors.New("delegation amount must be greater or equal to 1000 PI")
 
@@ -55,6 +61,9 @@ var (
 
 	// ErrCannotCandidate is returned if the request address belongs to Annual/SemiAnnual Supernode
 	ErrCannotCandidate = errors.New("Annual/SemiAnnual Supernode can not become candidate")
+
+	// ErrCannotCancelCandidate is returned if the request address belongs to Annual/SemiAnnual Supernode
+	ErrCannotCancelCandidate = errors.New("Annual/SemiAnnual Supernode can not cancel candidate")
 
 	// ErrNotCandidate is returned if the request address is not a candidate
 	ErrNotCandidate = errors.New("address not candidate")
