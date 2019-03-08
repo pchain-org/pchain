@@ -349,8 +349,10 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB) (bo
 			currentEpochNumber := epoch.Number
 			for rewardAddress := range state.GetRewardSet() {
 				currentEpochReward := state.GetRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber)
-				state.SubRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
-				state.AddBalance(rewardAddress, currentEpochReward)
+				if currentEpochReward.Sign() == 1 {
+					state.SubRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
+					state.AddBalance(rewardAddress, currentEpochReward)
+				}
 
 				// Check Remaining Reward Balance
 				if state.GetTotalRewardBalance(rewardAddress).Sign() == 0 {
