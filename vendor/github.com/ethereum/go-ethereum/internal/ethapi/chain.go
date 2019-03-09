@@ -2,6 +2,7 @@ package ethapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
-	"github.com/pkg/errors"
 	"github.com/tendermint/go-crypto"
 	"math/big"
 	"strings"
@@ -683,7 +683,9 @@ func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 	// Notice: there's no validation logic for tx3 here.
 
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
-	if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
+	if chainInfo == nil {
+		return errors.New("chain id not exist")
+	} else if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
 		return errors.New("no enough balance to withdraw")
 	}
 
