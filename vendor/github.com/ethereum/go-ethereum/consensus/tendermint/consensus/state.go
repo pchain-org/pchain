@@ -30,7 +30,6 @@ import (
 	//"encoding/binary"
 	"github.com/ethereum/go-ethereum/crypto"
 	tmdcrypto "github.com/tendermint/go-crypto"
-	//	"golang.org/x/net/context"
 	"math/big"
 	//"github.com/pchain/chain"
 )
