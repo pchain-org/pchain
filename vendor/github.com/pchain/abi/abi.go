@@ -22,7 +22,7 @@ var (
 	DepositInChildChain    = FunctionType{3, true, false, true}
 	WithdrawFromChildChain = FunctionType{4, true, false, true}
 	WithdrawFromMainChain  = FunctionType{5, true, true, false}
-	SaveDataToMainChain    = FunctionType{6, true, false, true}
+	SaveDataToMainChain    = FunctionType{6, true, true, false}
 	SetBlockReward         = FunctionType{7, true, false, true}
 	// Non-Cross Chain Function
 	VoteNextEpoch   = FunctionType{10, false, true, true}
