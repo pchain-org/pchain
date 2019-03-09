@@ -257,12 +257,12 @@ func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
 	for _, val := range mainChainEpoch.Validators.Validators {
 		mainChainValidators = append(mainChainValidators, &ChainValidator{
 			Account:     common.BytesToAddress(val.Address),
-			VotingPower: val.VotingPower,
+			VotingPower: (*hexutil.Big)(val.VotingPower),
 		})
 	}
 	mainChainStatus := &ChainStatus{
 		ChainID:    mainChainId,
-		Number:     mainChainEpoch.Number,
+		Number:     hexutil.Uint64(mainChainEpoch.Number),
 		StartTime:  mainChainEpoch.StartTime,
 		Validators: mainChainValidators,
 	}
@@ -285,14 +285,14 @@ func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
 		for _, val := range epoch.Validators.Validators {
 			validators = append(validators, &ChainValidator{
 				Account:     common.BytesToAddress(val.Address),
-				VotingPower: val.VotingPower,
+				VotingPower: (*hexutil.Big)(val.VotingPower),
 			})
 		}
 
 		chain_status := &ChainStatus{
 			ChainID:    chainInfo.ChainId,
 			Owner:      chainInfo.Owner,
-			Number:     epoch.Number,
+			Number:     hexutil.Uint64(epoch.Number),
 			StartTime:  epoch.StartTime,
 			Validators: validators,
 		}
@@ -811,14 +811,14 @@ func sbr_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 type ChainStatus struct {
 	ChainID    string            `json:"chain_id"`
 	Owner      common.Address    `json:"owner"`
-	Number     uint64            `json:"current_epoch"`
+	Number     hexutil.Uint64    `json:"current_epoch"`
 	StartTime  time.Time         `json:"epoch_start_time"`
 	Validators []*ChainValidator `json:"validators"`
 }
 
 type ChainValidator struct {
 	Account     common.Address `json:"address"`
-	VotingPower *big.Int       `json:"voting_power"`
+	VotingPower *hexutil.Big   `json:"voting_power"`
 }
 
 // Validation
