@@ -197,20 +197,55 @@ var DefaultMainnetGenesisJSON = `{
 	"gasLimit": "0x8000000",
 	"difficulty": "0x400",
 	"mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-	"coinbase": "0x7cefd90fc8369464db45503b708ba0ca7ae96ea8",
+	"coinbase": "0xf84634254ea1189516e66d9b007760092d9b8922",
 	"alloc": {
-		"d498329bda9dd1cddd397910e79baca72fae1e1c": {
-			"balance": "5027221",
-			"amount": "5027221"
- 		},
-		"e218d242af2159e6aba5176a1c2564291a48da2d": {
-			"balance": "10392399",
-			"amount": "10392399"
- 		}
-	},
-	"number": "0x0",
-	"gasUsed": "0x0",
-	"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+		"fbd64f3e2b9a40e3892e79af615f76e15f772440": {
+			"balance": "0x999999999999999999999999999",
+			"amount": "0x898ad220390e380000000",
+			"proxiedList": {
+							"0x3dcc1290132129c2095327afefccba91bff27f41": "0x30000"
+							},
+			"candidate": true,
+			"commission": 10
+		},
+		"49fab03ffaa398057507e0c08228315af30b55ea": {
+			"balance": "0x999999999999999999999999999",
+			"amount": "0x62a1310adfc7f40000000"
+		},
+		"b62073fd7055f30fd883d950651377c52158ad44": {
+			"balance": "0x999999999999999999999999999",
+			"amount": "0x8459520ab06af00000000"
+		},
+		"826b6e6a868a62508989666fa80f4b099a36f951": {
+			"balance": "0x999999999999999999999999999",
+			"amount": "0x493ca50db0fcac0000000"
+		},
+		"9db7b33f775b96d12a252e7eb10cfc643c5ea3fd": {
+			"balance": "0x999999999999999999999999999",
+			"amount": "0x5d48e40a0bf8c00000000"
+		},
+		"9632ea925d39fda19146fceb646b38ec66a5993a": {
+			"balance": "0x999999999999999999999999999",
+			"amount": "0x4ef075355c96700000000"
+		},
+		"3839d4958a8d930101eccb8089bcd2d9ee9c597e": {
+			"balance": "0x999999999999999999999999999",
+			"amount": "0x3796274caf64c80000000"
+		},
+		"8035a9b057055d4d117b3aba071e9db7d6055412": {
+			"balance": "0x999999999999999999999999999",
+			"amount": "0x32eb01744459de0000000"
+		},
+		"3dcc1290132129c2095327afefccba91bff27f41": {
+			"balance": "0x999999999999999999999999999",
+			"amount": "0x0",
+			"delegate": "0x30000"
+		},
+		"bb1a4b186d7e64000c4455e1f10ad5e9b12dbba5": {
+			"balance": "0x999999999999999999999999999",
+			"amount": "0x0"
+		}
+	}
 }`
 
 var DefaultTestnetGenesisJSON = `{

@@ -2,6 +2,7 @@ package tendermint
 
 import (
 	"bytes"
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
@@ -11,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru"
-	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/tendermint/go-wire"
 	"math/big"
 	"time"

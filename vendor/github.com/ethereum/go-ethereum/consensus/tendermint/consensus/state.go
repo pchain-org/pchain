@@ -30,7 +30,6 @@ import (
 	//"encoding/binary"
 	"github.com/ethereum/go-ethereum/crypto"
 	tmdcrypto "github.com/tendermint/go-crypto"
-	//	"golang.org/x/net/context"
 	"math/big"
 	//"github.com/pchain/chain"
 )
@@ -441,6 +440,22 @@ func (cs *ConsensusState) updateProposer() {
 		}
 	} else {
 		idx = (cs.proposer.valIndex + 1) % cs.Validators.Size()
+	}
+
+	//if the proposer did not vote last block, skip the node in this block
+	//but we do not check last block when the epoch has just changed
+	if cs.Epoch.StartBlock != cs.Height &&
+		cs.state.TdmExtra != nil &&
+		cs.state.TdmExtra.SeenCommit != nil &&
+		cs.state.TdmExtra.SeenCommit.BitArray != nil {
+
+		bitArray := cs.state.TdmExtra.SeenCommit.BitArray
+		for i:=0; i<cs.Validators.Size(); i++ {
+			if bitArray.GetIndex(uint64(idx)) {
+				break
+			}
+			idx = (idx + 1) % cs.Validators.Size()
+		}
 	}
 
 	//idx := int(n.Int64())

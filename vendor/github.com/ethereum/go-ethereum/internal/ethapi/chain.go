@@ -2,6 +2,7 @@ package ethapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
-	"github.com/pkg/errors"
 	"github.com/tendermint/go-crypto"
 	"math/big"
 	"strings"
@@ -257,12 +257,12 @@ func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
 	for _, val := range mainChainEpoch.Validators.Validators {
 		mainChainValidators = append(mainChainValidators, &ChainValidator{
 			Account:     common.BytesToAddress(val.Address),
-			VotingPower: val.VotingPower,
+			VotingPower: (*hexutil.Big)(val.VotingPower),
 		})
 	}
 	mainChainStatus := &ChainStatus{
 		ChainID:    mainChainId,
-		Number:     mainChainEpoch.Number,
+		Number:     hexutil.Uint64(mainChainEpoch.Number),
 		StartTime:  mainChainEpoch.StartTime,
 		Validators: mainChainValidators,
 	}
@@ -285,14 +285,14 @@ func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
 		for _, val := range epoch.Validators.Validators {
 			validators = append(validators, &ChainValidator{
 				Account:     common.BytesToAddress(val.Address),
-				VotingPower: val.VotingPower,
+				VotingPower: (*hexutil.Big)(val.VotingPower),
 			})
 		}
 
 		chain_status := &ChainStatus{
 			ChainID:    chainInfo.ChainId,
 			Owner:      chainInfo.Owner,
-			Number:     epoch.Number,
+			Number:     hexutil.Uint64(epoch.Number),
 			StartTime:  epoch.StartTime,
 			Validators: validators,
 		}
@@ -683,7 +683,9 @@ func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 	// Notice: there's no validation logic for tx3 here.
 
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
-	if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
+	if chainInfo == nil {
+		return errors.New("chain id not exist")
+	} else if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
 		return errors.New("no enough balance to withdraw")
 	}
 
@@ -809,14 +811,14 @@ func sbr_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 type ChainStatus struct {
 	ChainID    string            `json:"chain_id"`
 	Owner      common.Address    `json:"owner"`
-	Number     uint64            `json:"current_epoch"`
+	Number     hexutil.Uint64    `json:"current_epoch"`
 	StartTime  time.Time         `json:"epoch_start_time"`
 	Validators []*ChainValidator `json:"validators"`
 }
 
 type ChainValidator struct {
 	Account     common.Address `json:"address"`
-	VotingPower *big.Int       `json:"voting_power"`
+	VotingPower *hexutil.Big   `json:"voting_power"`
 }
 
 // Validation
