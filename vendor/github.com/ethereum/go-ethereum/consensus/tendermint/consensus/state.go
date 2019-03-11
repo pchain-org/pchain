@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"math"
 	"reflect"
@@ -413,36 +414,26 @@ func (cs *ConsensusState) updateProposer() {
 
 	idx := -1
 	if byVRF {
-		var roundBytes = make([]byte, 8)
-		//binary.BigEndian.PutUint64(roundBytes, uint64(cs.proposer.Round))
-		chainReader := cs.backend.ChainReader()
-		head := chainReader.CurrentHeader().Hash()
-		vrfBytes := append(roundBytes, head[:]...)
-		hs := sha256.New()
-		hs.Write(vrfBytes)
-		hv := hs.Sum(nil)
-		hash := new(big.Int)
-		hash.SetBytes(hv[:])
-		//n := big.NewInt(int64(cs.Validators.Size()))
-		n := big.NewInt(0)
-		validators := cs.Validators.Validators
-		for _, validator := range validators {
-			n.Add(n, validator.VotingPower)
-		}
-		n.Mod(hash, n)
 
-		for i, validator := range validators {
-			n.Sub(n, validator.VotingPower)
-			if n.Sign() == -1 {
-				idx = i
-				break
-			}
+		lastProposer, curProposer := cs.proposersByVRF()
+
+		idx = curProposer
+
+		//if current proposer was also last vrf proposer, but not voted within last height
+		//just skip the proposer within this height
+		if lastProposer > 0 &&
+			curProposer == lastProposer &&
+			cs.state.TdmExtra != nil &&
+			cs.state.TdmExtra.SeenCommit != nil &&
+			cs.state.TdmExtra.SeenCommit.BitArray != nil &&
+			!cs.state.TdmExtra.SeenCommit.BitArray.GetIndex(uint64(curProposer)) {
+			idx = (idx + 1) % cs.Validators.Size()
 		}
+
 	} else {
 		idx = (cs.proposer.valIndex + 1) % cs.Validators.Size()
 	}
 
-	//idx := int(n.Int64())
 	if idx >= cs.Validators.Size() || idx < 0 {
 		cs.proposer.Proposer = nil
 		PanicConsensus(Fmt("The index of proposer out of range", "index:", idx, "range:", cs.Validators.Size()))
@@ -451,6 +442,58 @@ func (cs *ConsensusState) updateProposer() {
 		cs.proposer.Proposer = cs.Validators.Validators[idx]
 	}
 	log.Debug("update proposer", "height", cs.Height, "round", cs.Round, "idx", idx)
+}
+
+func (cs *ConsensusState) proposersByVRF() (lastProposer int, curProposer int) {
+
+	chainReader := cs.backend.ChainReader()
+	header := chainReader.CurrentHeader()
+	headerHash := header.Hash()
+
+	curProposer = cs.proposerByVRF(headerHash, cs.Validators.Validators)
+
+	headerHeight := header.Number.Uint64()
+	if headerHeight == cs.Epoch.StartBlock {
+		return -1, curProposer
+	}
+
+	if headerHeight > 0 {
+		lastHeader := chainReader.GetHeaderByNumber(headerHeight - 1)
+		lastHeaderHash := lastHeader.Hash()
+		lastProposer = cs.proposerByVRF(lastHeaderHash, cs.Validators.Validators)
+		return lastProposer, curProposer
+	}
+
+	return -1, -1
+}
+
+func (cs *ConsensusState) proposerByVRF(headerHash common.Hash, validators []*types.Validator) (proposer int) {
+
+	idx := -1
+
+	var roundBytes = make([]byte, 8)
+	vrfBytes := append(roundBytes, headerHash[:]...)
+	hs := sha256.New()
+	hs.Write(vrfBytes)
+	hv := hs.Sum(nil)
+	hash := new(big.Int)
+	hash.SetBytes(hv[:])
+	//n := big.NewInt(int64(cs.Validators.Size()))
+	n := big.NewInt(0)
+	for _, validator := range validators {
+		n.Add(n, validator.VotingPower)
+	}
+	n.Mod(hash, n)
+
+	for i, validator := range validators {
+		n.Sub(n, validator.VotingPower)
+		if n.Sign() == -1 {
+			idx = i
+			break
+		}
+	}
+
+	return idx
 }
 
 // Sets our private validator account for signing votes.
