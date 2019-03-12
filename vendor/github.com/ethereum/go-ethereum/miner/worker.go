@@ -95,6 +95,9 @@ type worker struct {
 	config *params.ChainConfig
 	engine consensus.Engine
 
+	gasFloor uint64
+	gasCeil  uint64
+
 	mu sync.Mutex
 
 	// update loop
@@ -134,12 +137,14 @@ type worker struct {
 	cch    core.CrossChainHelper
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, cch core.CrossChainHelper) *worker {
+func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, gasFloor, gasCeil uint64, cch core.CrossChainHelper) *worker {
 	worker := &worker{
 		config:         config,
 		engine:         engine,
 		eth:            eth,
 		mux:            mux,
+		gasFloor:       gasFloor,
+		gasCeil:        gasCeil,
 		txCh:           make(chan core.TxPreEvent, txChanSize),
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
@@ -471,7 +476,7 @@ func (self *worker) commitNewWork() {
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
-		GasLimit:   core.CalcGasLimit(parent),
+		GasLimit:   core.CalcGasLimit(parent, self.gasFloor, self.gasCeil),
 		Extra:      self.extra,
 		Time:       big.NewInt(tstamp),
 	}

@@ -27,9 +27,10 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		DatabaseHandles         int  `toml:"-"`
 		DatabaseCache           int
 		Etherbase               common.Address `toml:",omitempty"`
-		MinerThreads            int            `toml:",omitempty"`
 		ExtraData               hexutil.Bytes  `toml:",omitempty"`
-		GasPrice                *big.Int
+		MinerGasFloor           uint64
+		MinerGasCeil            uint64
+		MinerGasPrice           *big.Int
 		Ethash                  ethash.Config
 		TxPool                  core.TxPoolConfig
 		GPO                     gasprice.Config
@@ -47,9 +48,10 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.DatabaseHandles = c.DatabaseHandles
 	enc.DatabaseCache = c.DatabaseCache
 	enc.Etherbase = c.Etherbase
-	enc.MinerThreads = c.MinerThreads
 	enc.ExtraData = c.ExtraData
-	enc.GasPrice = c.GasPrice
+	enc.MinerGasFloor = c.MinerGasFloor
+	enc.MinerGasCeil = c.MinerGasCeil
+	enc.MinerGasPrice = c.MinerGasPrice
 	enc.Ethash = c.Ethash
 	enc.TxPool = c.TxPool
 	enc.GPO = c.GPO
@@ -70,9 +72,10 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		DatabaseHandles         *int  `toml:"-"`
 		DatabaseCache           *int
 		Etherbase               *common.Address `toml:",omitempty"`
-		MinerThreads            *int            `toml:",omitempty"`
 		ExtraData               *hexutil.Bytes  `toml:",omitempty"`
-		GasPrice                *big.Int
+		MinerGasFloor           *uint64
+		MinerGasCeil            *uint64
+		MinerGasPrice           *big.Int
 		Ethash                  *ethash.Config
 		TxPool                  *core.TxPoolConfig
 		GPO                     *gasprice.Config
@@ -111,14 +114,17 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	if dec.Etherbase != nil {
 		c.Etherbase = *dec.Etherbase
 	}
-	if dec.MinerThreads != nil {
-		c.MinerThreads = *dec.MinerThreads
-	}
 	if dec.ExtraData != nil {
 		c.ExtraData = *dec.ExtraData
 	}
-	if dec.GasPrice != nil {
-		c.GasPrice = dec.GasPrice
+	if dec.MinerGasFloor != nil {
+		c.MinerGasFloor = *dec.MinerGasFloor
+	}
+	if dec.MinerGasCeil != nil {
+		c.MinerGasCeil = *dec.MinerGasCeil
+	}
+	if dec.MinerGasPrice != nil {
+		c.MinerGasPrice = dec.MinerGasPrice
 	}
 	if dec.Ethash != nil {
 		c.Ethash = *dec.Ethash

@@ -65,12 +65,12 @@ type Miner struct {
 	cch    core.CrossChainHelper
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, cch core.CrossChainHelper) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, gasFloor, gasCeil uint64, cch core.CrossChainHelper) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
-		worker:   newWorker(config, engine, eth, mux, cch),
+		worker:   newWorker(config, engine, eth, mux, gasFloor, gasCeil, cch),
 		canStart: 1,
 		logger:   config.ChainLogger,
 		cch:      cch,
