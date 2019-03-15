@@ -659,7 +659,7 @@ var DefaultMainnetGenesisJSON = `{
 			"balance": "0x0",
 			"amount": "0xe1f79aa2c18b7ad2765e"
 		},
-		"ea271dda6fed2116e1a0dbc8d0e9bae00b16fa7a": {
+		"ed0658b5b05b6fa365bed42746706f21c109447f": {
 			"balance": "0x1ca133a2c467c7b27ebea3d",
 			"amount": "0x0"
 		},
