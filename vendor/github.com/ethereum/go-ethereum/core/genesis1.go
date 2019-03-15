@@ -230,7 +230,7 @@ var DefaultMainnetGenesisJSON = `{
 		},
 		"0b3ab1e226d382285dad43deeacccf839de98261": {
 			"balance": "0x0",
-			"amount": "0x27b46536c66c8ad5b1700"
+			"amount": "0x27b46536c66c8e3000000"
 		},
 		"0cc0a3ad2d371d63f2c8127b650a51d0d5ab7a9b": {
 			"balance": "0x0",
@@ -325,7 +325,7 @@ var DefaultMainnetGenesisJSON = `{
 		},
 		"44461dfa999f908460898820664a13c2b0230fd2": {
 			"balance": "0x0",
-			"amount": "0x2907356344813a3db1700"
+			"amount": "0x2907356344813d9800000"
 		},
 		"44e4c3e17b5de1f7b9d40b2a6342c4551dba2e89": {
 			"balance": "0x0",
@@ -408,7 +408,7 @@ var DefaultMainnetGenesisJSON = `{
 		},
 		"6e6d80bd14a9a4c79a37fda65277045a0a8815a7": {
 			"balance": "0x0",
-			"amount": "0x27b46536c66c8ad5b1700"
+			"amount": "0x27b46536c66c8e3000000"
 		},
 		"715a0736212f16a152c7f921af6ffad117af3229": {
 			"balance": "0x0",
@@ -578,7 +578,7 @@ var DefaultMainnetGenesisJSON = `{
 		},
 		"c46f7498d76ea5d15173edf0e6a9ba59c68f666a": {
 			"balance": "0x0",
-			"amount": "0x34f086f3b33b64e5b1700"
+			"amount": "0x34f086f3b33b684000000"
 		},
 		"c56c8b2ffad06dc2c07a681e4af9f856400a70e4": {
 			"balance": "0x0",
@@ -660,7 +660,7 @@ var DefaultMainnetGenesisJSON = `{
 			"amount": "0xe1f79aa2c18b7ad2765e"
 		},
 		"ea271dda6fed2116e1a0dbc8d0e9bae00b16fa7a": {
-			"balance": "0x1ca133a2c467c7bfe7f8e3d",
+			"balance": "0x1ca133a2c467c7b27ebea3d",
 			"amount": "0x0"
 		},
 		"ea80fd3fcc41441075fad44302548cd484a6c7af": {
