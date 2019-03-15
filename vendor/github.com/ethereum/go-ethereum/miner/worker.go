@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -84,14 +85,18 @@ type Work struct {
 }
 
 type Result struct {
-	Work  *Work
-	Block *types.Block
+	Work         *Work
+	Block        *types.Block
+	Intermediate *tdmTypes.IntermediateBlockResult
 }
 
 // worker is the main object which takes care of applying messages to the new state
 type worker struct {
 	config *params.ChainConfig
 	engine consensus.Engine
+
+	gasFloor uint64
+	gasCeil  uint64
 
 	mu sync.Mutex
 
@@ -132,12 +137,14 @@ type worker struct {
 	cch    core.CrossChainHelper
 }
 
-func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, cch core.CrossChainHelper) *worker {
+func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, gasFloor, gasCeil uint64, cch core.CrossChainHelper) *worker {
 	worker := &worker{
 		config:         config,
 		engine:         engine,
 		eth:            eth,
 		mux:            mux,
+		gasFloor:       gasFloor,
+		gasCeil:        gasCeil,
 		txCh:           make(chan core.TxPreEvent, txChanSize),
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
@@ -212,9 +219,9 @@ func (self *worker) start() {
 
 	atomic.StoreInt32(&self.mining, 1)
 
-	if istanbul, ok := self.engine.(consensus.Istanbul); ok {
-		istanbul.Start(self.chain, self.chain.CurrentBlock, self.chain.HasBadBlock)
-	}
+	//if istanbul, ok := self.engine.(consensus.Istanbul); ok {
+	//	istanbul.Start(self.chain, self.chain.CurrentBlock, self.chain.HasBadBlock)
+	//}
 
 	if tendermint, ok := self.engine.(consensus.Tendermint); ok {
 		err := tendermint.Start(self.chain, self.chain.CurrentBlock, self.chain.HasBadBlock)
@@ -276,9 +283,9 @@ func (self *worker) update() {
 		// A real event arrived, process interesting content
 		select {
 		// Handle ChainHeadEvent
-		case <-self.chainHeadCh:
+		case ev := <-self.chainHeadCh:
 			if h, ok := self.engine.(consensus.Handler); ok {
-				h.NewChainHead()
+				h.NewChainHead(ev.Block)
 			}
 			self.commitNewWork()
 
@@ -326,26 +333,45 @@ func (self *worker) wait() {
 			if result == nil {
 				continue
 			}
-			block := result.Block
-			work := result.Work
 
-			// Update the block hash in all logs since it is now available and not when the
-			// receipt/log of individual transactions were created.
-			for _, r := range work.receipts {
-				for _, l := range r.Logs {
-					l.BlockHash = block.Hash()
+			var block *types.Block
+			var receipts types.Receipts
+			var state *state.StateDB
+			var ops *types.PendingOps
+
+			if result.Work != nil {
+				block = result.Block
+
+				work := result.Work
+				// Update the block hash in all logs since it is now available and not when the
+				// receipt/log of individual transactions were created.
+				for _, r := range work.receipts {
+					for _, l := range r.Logs {
+						l.BlockHash = block.Hash()
+					}
 				}
+				for _, log := range work.state.Logs() {
+					log.BlockHash = block.Hash()
+				}
+				receipts = work.receipts
+				state = work.state
+				ops = work.ops
+			} else if result.Intermediate != nil {
+				block = result.Intermediate.Block
+				receipts = result.Intermediate.Receipts
+				state = result.Intermediate.State
+				ops = result.Intermediate.Ops
+			} else {
+				continue
 			}
-			for _, log := range work.state.Logs() {
-				log.BlockHash = block.Hash()
-			}
-			stat, err := self.chain.WriteBlockWithState(block, work.receipts, work.state)
+
+			stat, err := self.chain.WriteBlockWithState(block, receipts, state)
 			if err != nil {
 				self.logger.Error("Failed writing block to chain", "err", err)
 				continue
 			}
 			// execute the pending ops.
-			for _, op := range work.ops.Ops() {
+			for _, op := range ops.Ops() {
 				if err := core.ApplyOp(op, self.chain, self.cch); err != nil {
 					log.Error("Failed executing op", op, "err", err)
 				}
@@ -359,7 +385,7 @@ func (self *worker) wait() {
 			self.mux.Post(core.NewMinedBlockEvent{Block: block})
 			var (
 				events []interface{}
-				logs   = work.state.Logs()
+				logs   = state.Logs()
 			)
 			events = append(events, core.ChainEvent{Block: block, Hash: block.Hash(), Logs: logs})
 			if stat == core.CanonStatTy {
@@ -450,7 +476,7 @@ func (self *worker) commitNewWork() {
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
-		GasLimit:   core.CalcGasLimit(parent),
+		GasLimit:   core.CalcGasLimit(parent, self.gasFloor, self.gasCeil),
 		Extra:      self.extra,
 		Time:       big.NewInt(tstamp),
 	}

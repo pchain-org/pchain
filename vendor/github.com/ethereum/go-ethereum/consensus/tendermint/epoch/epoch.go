@@ -126,15 +126,6 @@ func loadOneEpoch(db dbm.DB, epochNumber uint64, logger log.Logger) *Epoch {
 // Convert from OneEpochDoc (Json) to Epoch
 func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc, logger log.Logger) *Epoch {
 
-	number, _ := strconv.ParseUint(oneEpoch.Number, 10, 64)
-	RewardPerBlock, _ := new(big.Int).SetString(oneEpoch.RewardPerBlock, 10)
-	StartBlock, _ := strconv.ParseUint(oneEpoch.StartBlock, 10, 64)
-	EndBlock, _ := strconv.ParseUint(oneEpoch.EndBlock, 10, 64)
-	StartTime := time.Now()
-	EndTime := time.Unix(0, 0) //not accurate for current epoch
-	BlockGenerated, _ := strconv.Atoi(oneEpoch.BlockGenerated)
-	Status, _ := strconv.Atoi(oneEpoch.Status)
-
 	validators := make([]*tmTypes.Validator, len(oneEpoch.Validators))
 	for i, val := range oneEpoch.Validators {
 		// Make validator
@@ -149,14 +140,13 @@ func MakeOneEpoch(db dbm.DB, oneEpoch *tmTypes.OneEpochDoc, logger log.Logger) *
 	te := &Epoch{
 		db: db,
 
-		Number:         number,
-		RewardPerBlock: RewardPerBlock,
-		StartBlock:     StartBlock,
-		EndBlock:       EndBlock,
-		StartTime:      StartTime,
-		EndTime:        EndTime,
-		BlockGenerated: BlockGenerated,
-		Status:         Status,
+		Number:         oneEpoch.Number,
+		RewardPerBlock: oneEpoch.RewardPerBlock,
+		StartBlock:     oneEpoch.StartBlock,
+		EndBlock:       oneEpoch.EndBlock,
+		StartTime:      time.Now(),
+		EndTime:        time.Unix(0, 0), //not accurate for current epoch
+		Status:         oneEpoch.Status,
 		Validators:     tmTypes.NewValidatorSet(validators),
 
 		logger: logger,
@@ -359,8 +349,10 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB) (bo
 			currentEpochNumber := epoch.Number
 			for rewardAddress := range state.GetRewardSet() {
 				currentEpochReward := state.GetRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber)
-				state.SubRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
-				state.AddBalance(rewardAddress, currentEpochReward)
+				if currentEpochReward.Sign() == 1 {
+					state.SubRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
+					state.AddBalance(rewardAddress, currentEpochReward)
+				}
 
 				// Check Remaining Reward Balance
 				if state.GetTotalRewardBalance(rewardAddress).Sign() == 0 {
@@ -486,7 +478,25 @@ func (epoch *Epoch) EnterNewEpoch(newValidators *tmTypes.ValidatorSet) (*Epoch, 
 	}
 }
 
-func DryRunUpdateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet) error {
+// DryRunUpdateEpochValidatorSet Re-calculate the New Validator Set base on the current state db and vote set
+func DryRunUpdateEpochValidatorSet(state *state.StateDB, validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet) error {
+
+	for _, v := range validators.Validators {
+		vAddr := common.BytesToAddress(v.Address)
+
+		// Deposit Proxied + Proxied - Pending Refund
+		totalProxiedBalance := new(big.Int).Add(state.GetTotalProxiedBalance(vAddr), state.GetTotalDepositProxiedBalance(vAddr))
+		totalProxiedBalance.Sub(totalProxiedBalance, state.GetTotalPendingRefundBalance(vAddr))
+
+		// Voting Power = Delegated amount + Deposit amount
+		newVotingPower := new(big.Int).Add(totalProxiedBalance, state.GetDepositBalance(vAddr))
+		if newVotingPower.Sign() == 0 {
+			validators.Remove(v.Address)
+		} else {
+			v.VotingPower = newVotingPower
+		}
+	}
+
 	_, err := updateEpochValidatorSet(validators, voteSet)
 	return err
 }

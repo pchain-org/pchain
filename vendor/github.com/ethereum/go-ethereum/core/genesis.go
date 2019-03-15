@@ -78,12 +78,22 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 
 // GenesisAccount is an account in the state of the genesis block.
 type GenesisAccount struct {
-	Code       []byte                      `json:"code,omitempty"`
-	Storage    map[common.Hash]common.Hash `json:"storage,omitempty"`
-	Balance    *big.Int                    `json:"balance" gencodec:"required"`
-	Nonce      uint64                      `json:"nonce,omitempty"`
-	Amount     *big.Int                    `json:"amount,omitempty"`
-	PrivateKey []byte                      `json:"secretKey,omitempty"` // for tests
+	Code    []byte                      `json:"code,omitempty"`
+	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
+	Balance *big.Int                    `json:"balance" gencodec:"required"`
+	Nonce   uint64                      `json:"nonce,omitempty"`
+
+	// Stack
+	Amount *big.Int `json:"amount,omitempty"`
+	// Delegate
+	DelegateBalance *big.Int `json:"delegate,omitempty"`
+	// Proxied Balance
+	DepositProxiedDetail map[common.Address]*big.Int `json:"proxiedList,omitempty"`
+	// Candidate
+	Candidate  bool  `json:"candidate,omitempty"`
+	Commission uint8 `json:"commission,omitempty"`
+
+	PrivateKey []byte `json:"secretKey,omitempty"` // for tests
 }
 
 // field type overrides for gencodec
@@ -231,6 +241,24 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		statedb.AddBalance(addr, account.Balance)
 		// Deposit Balance for POS
 		statedb.AddDepositBalance(addr, account.Amount)
+
+		// Delegate Balance
+		if account.DelegateBalance != nil {
+			statedb.AddDelegateBalance(addr, account.DelegateBalance)
+		}
+
+		// Deposit Proxied Detail
+		if account.DepositProxiedDetail != nil {
+			for proxiedAddr, depositProxiedBalance := range account.DepositProxiedDetail {
+				statedb.AddDepositProxiedBalanceByUser(addr, proxiedAddr, depositProxiedBalance)
+			}
+		}
+
+		// Candidite
+		if account.Candidate {
+			statedb.ApplyForCandidate(addr, account.Commission)
+		}
+
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
@@ -382,7 +410,7 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 			common.BytesToAddress([]byte{6}): {Balance: big.NewInt(1)}, // ECAdd
 			common.BytesToAddress([]byte{7}): {Balance: big.NewInt(1)}, // ECScalarMul
 			common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
-			faucet: {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
+			faucet:                           {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
 		},
 	}
 }

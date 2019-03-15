@@ -40,12 +40,19 @@ func (g GenesisAccount) MarshalJSON() ([]byte, error) {
 
 func (g *GenesisAccount) UnmarshalJSON(input []byte) error {
 	type GenesisAccount struct {
-		Code       *hexutil.Bytes              `json:"code,omitempty"`
-		Storage    map[storageJSON]storageJSON `json:"storage,omitempty"`
-		Balance    *math.HexOrDecimal256       `json:"balance" gencodec:"required"`
-		Nonce      *math.HexOrDecimal64        `json:"nonce,omitempty"`
-		Amount     *math.HexOrDecimal256       `json:"amount,omitempty"`
-		PrivateKey *hexutil.Bytes              `json:"secretKey,omitempty"`
+		Code    *hexutil.Bytes              `json:"code,omitempty"`
+		Storage map[storageJSON]storageJSON `json:"storage,omitempty"`
+		Balance *math.HexOrDecimal256       `json:"balance" gencodec:"required"`
+		Nonce   *math.HexOrDecimal64        `json:"nonce,omitempty"`
+		Amount  *math.HexOrDecimal256       `json:"amount,omitempty"`
+
+		// Delegate
+		DelegateBalance      *math.HexOrDecimal256                    `json:"delegate,omitempty"`
+		DepositProxiedDetail map[common.Address]*math.HexOrDecimal256 `json:"proxiedList,omitempty"`
+		Candidate            bool                                     `json:"candidate,omitempty"`
+		Commission           uint8                                    `json:"commission,omitempty"`
+
+		PrivateKey *hexutil.Bytes `json:"secretKey,omitempty"`
 	}
 	var dec GenesisAccount
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -70,6 +77,18 @@ func (g *GenesisAccount) UnmarshalJSON(input []byte) error {
 	if dec.Amount != nil {
 		g.Amount = (*big.Int)(dec.Amount)
 	}
+	if dec.DelegateBalance != nil {
+		g.DelegateBalance = (*big.Int)(dec.DelegateBalance)
+	}
+	if dec.DepositProxiedDetail != nil {
+		g.DepositProxiedDetail = make(map[common.Address]*big.Int, len(dec.DepositProxiedDetail))
+		for k, v := range dec.DepositProxiedDetail {
+			g.DepositProxiedDetail[k] = (*big.Int)(v)
+		}
+	}
+	g.Candidate = dec.Candidate
+	g.Commission = dec.Commission
+
 	if dec.PrivateKey != nil {
 		g.PrivateKey = *dec.PrivateKey
 	}

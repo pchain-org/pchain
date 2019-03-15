@@ -24,8 +24,11 @@ import (
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"math/big"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -59,7 +62,20 @@ func (cch *CrossChainHelper) GetMainChainId() string {
 }
 
 // CanCreateChildChain check the condition before send the create child chain into the tx pool
-func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error {
+func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount, startupCost *big.Int, startBlock, endBlock *big.Int) error {
+
+	if chainId == "" || strings.Contains(chainId, ";") {
+		return errors.New("chainId is nil or empty, or contains ';', should be meaningful")
+	}
+
+	pass, _ := regexp.MatchString("^[a-z]+[a-z0-9_]*$", chainId)
+	if !pass {
+		return errors.New("chainId must be start with letter (a-z) and contains alphanumeric(lower case) or underscore, try use other name instead")
+	}
+
+	if utf8.RuneCountInString(chainId) > 30 {
+		return errors.New("max characters of chain id is 30, try use other name instead")
+	}
 
 	if chainId == MainChain || chainId == TestnetChain {
 		return errors.New("you can't create PChain as a child chain, try use other name instead")
@@ -79,13 +95,18 @@ func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId st
 
 	// Check the minimum validators
 	if minValidators < OFFICIAL_MINIMUM_VALIDATORS {
-		return fmt.Errorf("Validators amount is not meet the minimum official validator amount (%v)", OFFICIAL_MINIMUM_VALIDATORS)
+		return fmt.Errorf("Validators count is not meet the minimum official validator count (%v)", OFFICIAL_MINIMUM_VALIDATORS)
 	}
 
 	// Check the minimum deposit amount
 	officialMinimumDeposit := math.MustParseBig256(OFFICIAL_MINIMUM_DEPOSIT)
 	if minDepositAmount.Cmp(officialMinimumDeposit) == -1 {
 		return fmt.Errorf("Deposit amount is not meet the minimum official deposit amount (%v PI)", new(big.Int).Div(officialMinimumDeposit, big.NewInt(params.PI)))
+	}
+
+	// Check the startup cost
+	if startupCost.Cmp(officialMinimumDeposit) != 0 {
+		return fmt.Errorf("Startup cost is not meet the required amount (%v PI)", new(big.Int).Div(officialMinimumDeposit, big.NewInt(params.PI)))
 	}
 
 	// Check start/end block

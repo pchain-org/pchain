@@ -2,10 +2,10 @@ package consensus
 
 import (
 	consss "github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/log"
 	cmn "github.com/tendermint/go-common"
 	"time"
 )
@@ -68,7 +68,6 @@ func (cs *ConsensusState) Initialize() {
 
 	//initialize state
 	cs.Height = 0
-	cs.blockFromMiner = nil
 
 	//initialize round state
 	cs.proposer = nil
@@ -97,6 +96,12 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	height := state.TdmExtra.Height + 1
 	// Next desired block height
 	cs.Height = height
+
+	if cs.blockFromMiner != nil && cs.blockFromMiner.NumberU64() >= cs.Height {
+		log.Debugf("block %v has been received from miner, not set to nil", cs.blockFromMiner.NumberU64())
+	} else {
+		cs.blockFromMiner = nil
+	}
 
 	// RoundState fields
 	cs.updateRoundStep(0, RoundStepNewHeight)

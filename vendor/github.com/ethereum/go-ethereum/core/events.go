@@ -57,3 +57,9 @@ type ChainHeadEvent struct{ Block *types.Block }
 type CreateChildChainEvent struct {
 	ChainId string
 }
+
+// Start Mining Event
+type StartMiningEvent struct{}
+
+// Stop Mining Event
+type StopMiningEvent struct{}

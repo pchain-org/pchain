@@ -136,6 +136,7 @@ type EventDataMessage struct {
 
 // FinalCommittedEvent is posted when a proposal is committed
 type EventDataFinalCommitted struct {
+	BlockNumber uint64
 }
 
 func (_ EventDataNewBlock) AssertIsTMEventData()       {}

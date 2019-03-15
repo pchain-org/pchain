@@ -59,6 +59,14 @@ type ChainReader interface {
 	// CurrentBlock retrieves the current head block of the canonical chain. The
 	// block is retrieved from the blockchain's internal cache.
 	CurrentBlock() *types.Block
+
+	// State retrieves the current state of the canonical chain.
+	State() (*state.StateDB, error)
+}
+
+// ChainValidator execute and validate the block with the current latest block as parent.
+type ChainValidator interface {
+	ValidateBlock(block *types.Block) (*state.StateDB, types.Receipts, *types.PendingOps, error)
 }
 
 // Engine is an algorithm agnostic consensus engine.
@@ -100,7 +108,7 @@ type Engine interface {
 
 	// Seal generates a new block for the given input block with the local miner's
 	// seal place on top.
-	Seal(chain ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error)
+	Seal(chain ChainReader, block *types.Block, stop <-chan struct{}) (interface{}, error)
 
 	// CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 	// that a new block should have.
@@ -116,7 +124,7 @@ type Engine interface {
 // Handler should be implemented is the consensus needs to handle and send peer's message
 type Handler interface {
 	// NewChainHead handles a new head block comes
-	NewChainHead() error
+	NewChainHead(block *types.Block) error
 
 	// HandleMsg handles a message from peer
 	HandleMsg(chID uint64, src Peer, msgBytes []byte) (bool, error)
@@ -161,9 +169,20 @@ type Tendermint interface {
 
 	EngineStartStop
 
+	ShouldStart() bool
+
+	IsStarted() bool
+
+	// Normally Should Start flag will be set depends on the validator set
+	// Force Start only set the Should Start Flag to true, when node join the validator before epoch switch
+	ForceStart()
+
 	GetEpoch() *epoch.Epoch
 
 	SetEpoch(ep *epoch.Epoch)
 
 	PrivateValidator() common.Address
+
+	// VerifyHeader checks whether a header conforms to the consensus rules of a given engine.
+	VerifyHeaderBeforeConsensus(chain ChainReader, header *types.Header, seal bool) error
 }

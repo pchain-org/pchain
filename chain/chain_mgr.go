@@ -83,11 +83,10 @@ func (cm *ChainManager) LoadChains(childIds []string) error {
 	childChainIds := core.GetChildChainIds(cm.cch.chainInfoDB)
 	log.Infof("Before Load Child Chains, childChainIds is %v, len is %d", childChainIds, len(childChainIds))
 
-	readyToLoadChains := make(map[string]bool) // Key: Child Chain ID, Value: Enable Mining
+	readyToLoadChains := make(map[string]bool) // Key: Child Chain ID, Value: Enable Mining (deprecated)
 
 	// Check we are belong to the validator of Child Chain in DB first (Mining Mode)
 	for _, chainId := range childChainIds {
-		// TODO Check Validator Address in Tendermint
 		// Check Current Validator is Child Chain Validator
 		ci := core.GetChainInfo(cm.cch.chainInfoDB, chainId)
 		// Check if we are in this child chain
@@ -116,8 +115,8 @@ func (cm *ChainManager) LoadChains(childIds []string) error {
 	log.Infof("Number of Child Chain to be load - %v", len(readyToLoadChains))
 	log.Infof("Start to Load Child Chain - %v", readyToLoadChains)
 
-	for chainId, mining := range readyToLoadChains {
-		chain := LoadChildChain(cm.ctx, chainId, mining)
+	for chainId := range readyToLoadChains {
+		chain := LoadChildChain(cm.ctx, chainId)
 		if chain == nil {
 			log.Errorf("Load Child Chain - %s Failed.", chainId)
 			continue
@@ -224,9 +223,34 @@ func (cm *ChainManager) StartRPC() error {
 	if err != nil {
 		return err
 	} else {
-		rpc.Hookup(cm.mainChain.Id, cm.mainChain.RpcHandler)
-		for _, chain := range cm.childChains {
-			rpc.Hookup(chain.Id, chain.RpcHandler)
+		if rpc.IsHTTPRunning() {
+			if h, err := cm.mainChain.EthNode.GetHTTPHandler(); err == nil {
+				rpc.HookupHTTP(cm.mainChain.Id, h)
+			} else {
+				log.Errorf("Load Main Chain RPC HTTP handler failed: %v", err)
+			}
+			for _, chain := range cm.childChains {
+				if h, err := chain.EthNode.GetHTTPHandler(); err == nil {
+					rpc.HookupHTTP(chain.Id, h)
+				} else {
+					log.Errorf("Load Child Chain RPC HTTP handler failed: %v", err)
+				}
+			}
+		}
+
+		if rpc.IsWSRunning() {
+			if h, err := cm.mainChain.EthNode.GetWSHandler(); err == nil {
+				rpc.HookupWS(cm.mainChain.Id, h)
+			} else {
+				log.Errorf("Load Main Chain RPC WS handler failed: %v", err)
+			}
+			for _, chain := range cm.childChains {
+				if h, err := chain.EthNode.GetWSHandler(); err == nil {
+					rpc.HookupWS(chain.Id, h)
+				} else {
+					log.Errorf("Load Child Chain RPC WS handler failed: %v", err)
+				}
+			}
 		}
 	}
 
@@ -332,7 +356,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		return
 	}
 
-	chain := LoadChildChain(cm.ctx, chainId, true)
+	chain := LoadChildChain(cm.ctx, chainId)
 	if chain == nil {
 		log.Errorf("Child Chain %v load failed!", chainId)
 		return
@@ -377,7 +401,21 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	go cm.server.BroadcastNewChildChainMsg(chainId)
 
 	//hookup rpc
-	rpc.Hookup(chain.Id, chain.RpcHandler)
+	if rpc.IsHTTPRunning() {
+		if h, err := chain.EthNode.GetHTTPHandler(); err == nil {
+			rpc.HookupHTTP(chain.Id, h)
+		} else {
+			log.Errorf("Unable Hook up Child Chain (%v) RPC HTTP Handler: %v", chainId, err)
+		}
+	}
+	if rpc.IsWSRunning() {
+		if h, err := chain.EthNode.GetWSHandler(); err == nil {
+			rpc.HookupWS(chain.Id, h)
+		} else {
+			log.Errorf("Unable Hook up Child Chain (%v) RPC WS Handler: %v", chainId, err)
+		}
+	}
+
 }
 
 func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainInfo, ep *epoch.Epoch) {

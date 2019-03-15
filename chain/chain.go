@@ -10,7 +10,6 @@ import (
 	"github.com/pchain/version"
 	cfg "github.com/tendermint/go-config"
 	"gopkg.in/urfave/cli.v1"
-	"net/http"
 	"path/filepath"
 )
 
@@ -21,36 +20,26 @@ const (
 )
 
 type Chain struct {
-	Id         string
-	Config     cfg.Config
-	EthNode    *eth.Node
-	RpcHandler http.Handler
-	mining     bool
+	Id      string
+	Config  cfg.Config
+	EthNode *eth.Node
 }
 
 func LoadMainChain(ctx *cli.Context, chainId string) *Chain {
 
-	mining := ctx.GlobalBool(utils.MiningEnabledFlag.Name)
-	chain := &Chain{Id: chainId, mining: mining}
+	chain := &Chain{Id: chainId}
 	config := GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
 	//always start ethereum
 	log.Info("ethereum.MakeSystemNode")
-	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, GetCMInstance(ctx).cch, mining)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, GetCMInstance(ctx).cch)
 	chain.EthNode = stack
-
-	rpcHandler, err := stack.GetRPCHandler()
-	if err != nil {
-		log.Error("rpc_handler got failed, return")
-	}
-
-	chain.RpcHandler = rpcHandler
 
 	return chain
 }
 
-func LoadChildChain(ctx *cli.Context, chainId string, mining bool) *Chain {
+func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
 
 	log.Infof("now load child: %s", chainId)
 
@@ -61,23 +50,15 @@ func LoadChildChain(ctx *cli.Context, chainId string, mining bool) *Chain {
 	//	log.Errorf("directory %s not exist or with error %v", chainDir, err)
 	//	return nil
 	//}
-	chain := &Chain{Id: chainId, mining: mining}
+	chain := &Chain{Id: chainId}
 	config := GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
 	//always start ethereum
 	log.Infof("chainId: %s, ethereum.MakeSystemNode", chainId)
 	cch := GetCMInstance(ctx).cch
-	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, cch, mining)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, cch)
 	chain.EthNode = stack
-
-	rpcHandler, err := stack.GetRPCHandler()
-	if err != nil {
-		log.Info("rpc_handler got failed, return")
-		return nil
-	}
-
-	chain.RpcHandler = rpcHandler
 
 	return chain
 }
@@ -87,7 +68,7 @@ func StartChain(ctx *cli.Context, chain *Chain, startDone chan<- struct{}) error
 	log.Infof("Start Chain: %s", chain.Id)
 	go func() {
 		log.Info("StartChain()->utils.StartNode(stack)")
-		utils.StartNodeEx(ctx, chain.EthNode, chain.mining)
+		utils.StartNodeEx(ctx, chain.EthNode)
 
 		if startDone != nil {
 			startDone <- struct{}{}

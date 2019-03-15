@@ -114,7 +114,7 @@ func (bs *BaseService) OnStart() error { return nil }
 func (bs *BaseService) Stop() bool {
 	if atomic.CompareAndSwapUint32(&bs.stopped, 0, 1) {
 		if bs.logger != nil {
-			bs.logger.Info("Stopping ", bs.name, " ,impl:", bs.impl)
+			bs.logger.Infof("Stopping %v (%v)", bs.name, bs.impl)
 		}
 		bs.impl.OnStop()
 		close(bs.Quit)
@@ -124,7 +124,7 @@ func (bs *BaseService) Stop() bool {
 		return true
 	} else {
 		if bs.logger != nil {
-			bs.logger.Debug("Stopping ", bs.name, " (ignoring: already stopped) , impl:", bs.impl)
+			bs.logger.Debugf("Stopping %v (ignoring: already stopped) , impl: %v", bs.name, bs.impl)
 		}
 		return false
 	}

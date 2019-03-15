@@ -105,7 +105,7 @@ func New(ctx *node.ServiceContext, config *eth.Config, cch core.CrossChainHelper
 		peers:            peers,
 		reqDist:          newRequestDistributor(peers, quitSync),
 		accountManager:   ctx.AccountManager,
-		engine:           eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb, nil, cch, false),
+		engine:           eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb, nil, cch),
 		shutdownChan:     make(chan bool),
 		networkId:        config.NetworkId,
 		bloomRequests:    make(chan chan *bloombits.Retrieval),
@@ -137,7 +137,7 @@ func New(ctx *node.ServiceContext, config *eth.Config, cch core.CrossChainHelper
 	leth.ApiBackend = &LesApiBackend{leth, nil, nil, cch}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
-		gpoParams.Default = config.GasPrice
+		gpoParams.Default = config.MinerGasPrice
 	}
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 	return leth, nil

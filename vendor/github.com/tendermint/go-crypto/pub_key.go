@@ -434,7 +434,7 @@ func (pubKey BLSPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
 }
 
 func (pubKey BLSPubKey) KeyString() string {
-	return Fmt("%X", pubKey[:])
+	return Fmt("0x%X", pubKey[:])
 }
 
 func (pubKey BLSPubKey) MarshalJSON() ([]byte, error) {

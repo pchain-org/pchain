@@ -20,6 +20,7 @@ import (
 	crand "crypto/rand"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/state"
 	"math"
 	"math/big"
 	mrand "math/rand"
@@ -466,8 +467,13 @@ func (hc *HeaderChain) GetBlockByNumber(number uint64) *types.Block {
 	return nil
 }
 
-// CurrentBlock mplements consensus.ChainReader, and returns nil for every input as
+// CurrentBlock implements consensus.ChainReader, and returns nil for every input as
 ///a header chain does not have blocks available for retrieval.
 func (hc *HeaderChain) CurrentBlock() *types.Block {
 	return nil
+}
+
+// State implements consensus.ChainReader, and return nil for every input a
+func (hc *HeaderChain) State() (*state.StateDB, error) {
+	return nil, nil
 }

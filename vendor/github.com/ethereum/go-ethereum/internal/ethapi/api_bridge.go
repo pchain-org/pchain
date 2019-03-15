@@ -1,9 +1,9 @@
 package ethapi
 
 import (
+	"context"
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/syndtr/goleveldb/leveldb/errors"
-	"golang.org/x/net/context"
 )
 
 type InnerAPIBridge interface {

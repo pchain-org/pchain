@@ -9,32 +9,42 @@ import (
 
 type FunctionType struct {
 	id    int
-	cross bool
+	cross bool // Tx type, cross chain / non cross chain
+	main  bool // allow to be execute on main chain or not
+	child bool // allow to be execute on child chain or not
 }
 
 var (
 	// Cross Chain Function
-	CreateChildChain       = FunctionType{0, true}
-	JoinChildChain         = FunctionType{1, true}
-	DepositInMainChain     = FunctionType{2, true}
-	DepositInChildChain    = FunctionType{3, true}
-	WithdrawFromChildChain = FunctionType{4, true}
-	WithdrawFromMainChain  = FunctionType{5, true}
-	SaveDataToMainChain    = FunctionType{6, true}
-	SetBlockReward         = FunctionType{7, true}
+	CreateChildChain       = FunctionType{0, true, true, false}
+	JoinChildChain         = FunctionType{1, true, true, false}
+	DepositInMainChain     = FunctionType{2, true, true, false}
+	DepositInChildChain    = FunctionType{3, true, false, true}
+	WithdrawFromChildChain = FunctionType{4, true, false, true}
+	WithdrawFromMainChain  = FunctionType{5, true, true, false}
+	SaveDataToMainChain    = FunctionType{6, true, true, false}
+	SetBlockReward         = FunctionType{7, true, false, true}
 	// Non-Cross Chain Function
-	VoteNextEpoch   = FunctionType{10, false}
-	RevealVote      = FunctionType{11, false}
-	Delegate        = FunctionType{12, false}
-	CancelDelegate  = FunctionType{13, false}
-	Candidate       = FunctionType{14, false}
-	CancelCandidate = FunctionType{15, false}
+	VoteNextEpoch   = FunctionType{10, false, true, true}
+	RevealVote      = FunctionType{11, false, true, true}
+	Delegate        = FunctionType{12, false, true, true}
+	CancelDelegate  = FunctionType{13, false, true, true}
+	Candidate       = FunctionType{14, false, true, true}
+	CancelCandidate = FunctionType{15, false, true, true}
 	// Unknown
-	Unknown = FunctionType{-1, false}
+	Unknown = FunctionType{-1, false, false, false}
 )
 
 func (t FunctionType) IsCrossChainType() bool {
 	return t.cross
+}
+
+func (t FunctionType) AllowInMainChain() bool {
+	return t.main
+}
+
+func (t FunctionType) AllowInChildChain() bool {
+	return t.child
 }
 
 func (t FunctionType) RequiredGas() uint64 {
@@ -409,6 +419,10 @@ const jsonChainABI = `
 	}
 ]`
 
+// PChain Child Chain Token Incentive Address
+var ChildChainTokenIncentiveAddr = common.BytesToAddress([]byte{100})
+
+// PChain Internal Contract Address
 var ChainContractMagicAddr = common.BytesToAddress([]byte{101}) // don't conflict with go-ethereum/core/vm/contracts.go
 
 var ChainABI abi.ABI

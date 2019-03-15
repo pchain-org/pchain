@@ -153,17 +153,17 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.RPCListenAddrFlag,
 			utils.RPCPortFlag,
 			utils.RPCApiFlag,
-			/*
-				utils.WSEnabledFlag,
-				utils.WSListenAddrFlag,
-				utils.WSPortFlag,
-				utils.WSApiFlag,
-				utils.WSAllowedOriginsFlag,
-			*/
+
+			utils.WSEnabledFlag,
+			utils.WSListenAddrFlag,
+			utils.WSPortFlag,
+			utils.WSApiFlag,
+			utils.WSAllowedOriginsFlag,
+
 			utils.IPCDisabledFlag,
 			utils.IPCPathFlag,
 			utils.RPCCORSDomainFlag,
-			//utils.RPCVirtualHostsFlag,
+			utils.RPCVirtualHostsFlag,
 			//utils.JSpathFlag,
 			//utils.ExecFlag,
 			//utils.PreloadJSFlag,
@@ -189,11 +189,11 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "MINER",
 		Flags: []cli.Flag{
-			utils.MiningEnabledFlag,
 			utils.MinerThreadsFlag,
-			utils.EtherbaseFlag,
-			utils.TargetGasLimitFlag,
-			utils.GasPriceFlag,
+			utils.MinerGasPriceFlag,
+			utils.MinerGasTargetFlag,
+			utils.MinerGasLimitFlag,
+			utils.MinerEtherbaseFlag,
 			utils.ExtraDataFlag,
 		},
 	},

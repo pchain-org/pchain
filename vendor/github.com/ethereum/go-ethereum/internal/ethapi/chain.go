@@ -2,10 +2,12 @@ package ethapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -13,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
-	"github.com/pkg/errors"
 	"github.com/tendermint/go-crypto"
 	"math/big"
 	"strings"
@@ -36,10 +37,6 @@ func NewPublicChainAPI(b Backend) *PublicChainAPI {
 func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Address, chainId string,
 	minValidators *hexutil.Uint, minDepositAmount *hexutil.Big, startBlock, endBlock *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 
-	if chainId == "" || strings.Contains(chainId, ";") {
-		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
-	}
-
 	input, err := pabi.ChainABI.Pack(pabi.CreateChildChain.String(), chainId, uint16(*minValidators), (*big.Int)(minDepositAmount), (*big.Int)(startBlock), (*big.Int)(endBlock))
 	if err != nil {
 		return common.Hash{}, err
@@ -52,7 +49,7 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 		To:       &pabi.ChainContractMagicAddr,
 		Gas:      (*hexutil.Uint64)(&defaultGas),
 		GasPrice: gasPrice,
-		Value:    nil,
+		Value:    (*hexutil.Big)(math.MustParseBig256("100000000000000000000000")),
 		Input:    (*hexutil.Bytes)(&input),
 		Nonce:    nil,
 	}
@@ -98,10 +95,6 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 		return common.Hash{}, errors.New("chainId should not be " + params.MainnetChainConfig.PChainId + " or " + params.TestnetChainConfig.PChainId)
 	}
 
-	if s.b.ChainConfig().PChainId != params.MainnetChainConfig.PChainId && s.b.ChainConfig().PChainId != params.TestnetChainConfig.PChainId {
-		return common.Hash{}, errors.New("this api can only be called in main chain")
-	}
-
 	input, err := pabi.ChainABI.Pack(pabi.DepositInMainChain.String(), chainId)
 	if err != nil {
 		return common.Hash{}, err
@@ -125,9 +118,6 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 func (s *PublicChainAPI) DepositInChildChain(ctx context.Context, from common.Address, txHash common.Hash) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
-	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
-		return common.Hash{}, errors.New("this api can only be called in child chain")
-	}
 
 	input, err := pabi.ChainABI.Pack(pabi.DepositInChildChain.String(), chainId, txHash)
 	if err != nil {
@@ -151,10 +141,6 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 	amount *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 
 	chainId := s.b.ChainConfig().PChainId
-	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
-		return common.Hash{}, errors.New("this api can only be called in child chain")
-	}
-
 	input, err := pabi.ChainABI.Pack(pabi.WithdrawFromChildChain.String(), chainId)
 	if err != nil {
 		return common.Hash{}, err
@@ -272,12 +258,12 @@ func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
 	for _, val := range mainChainEpoch.Validators.Validators {
 		mainChainValidators = append(mainChainValidators, &ChainValidator{
 			Account:     common.BytesToAddress(val.Address),
-			VotingPower: val.VotingPower,
+			VotingPower: (*hexutil.Big)(val.VotingPower),
 		})
 	}
 	mainChainStatus := &ChainStatus{
 		ChainID:    mainChainId,
-		Number:     mainChainEpoch.Number,
+		Number:     hexutil.Uint64(mainChainEpoch.Number),
 		StartTime:  mainChainEpoch.StartTime,
 		Validators: mainChainValidators,
 	}
@@ -300,14 +286,14 @@ func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
 		for _, val := range epoch.Validators.Validators {
 			validators = append(validators, &ChainValidator{
 				Account:     common.BytesToAddress(val.Address),
-				VotingPower: val.VotingPower,
+				VotingPower: (*hexutil.Big)(val.VotingPower),
 			})
 		}
 
 		chain_status := &ChainStatus{
 			ChainID:    chainInfo.ChainId,
 			Owner:      chainInfo.Owner,
-			Number:     epoch.Number,
+			Number:     hexutil.Uint64(epoch.Number),
 			StartTime:  epoch.StartTime,
 			Validators: validators,
 		}
@@ -332,10 +318,6 @@ func (s *PublicChainAPI) SignAddress(from common.Address, consensusPrivateKey he
 
 func (s *PublicChainAPI) SetBlockReward(ctx context.Context, from common.Address, reward *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
 	chainId := s.b.ChainConfig().PChainId
-	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
-		return common.Hash{}, errors.New("this api can only be called in child chain")
-	}
-
 	input, err := pabi.ChainABI.Pack(pabi.SetBlockReward.String(), chainId, (*big.Int)(reward))
 	if err != nil {
 		return common.Hash{}, err
@@ -412,7 +394,7 @@ func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 		return err
 	}
 
-	if err := cch.CanCreateChildChain(from, args.ChainId, args.MinValidators, args.MinDepositAmount, args.StartBlock, args.EndBlock); err != nil {
+	if err := cch.CanCreateChildChain(from, args.ChainId, args.MinValidators, args.MinDepositAmount, tx.Value(), args.StartBlock, args.EndBlock); err != nil {
 		return err
 	}
 
@@ -433,9 +415,14 @@ func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 		return err
 	}
 
-	if err := cch.CanCreateChildChain(from, args.ChainId, args.MinValidators, args.MinDepositAmount, args.StartBlock, args.EndBlock); err != nil {
+	startupCost := tx.Value()
+	if err := cch.CanCreateChildChain(from, args.ChainId, args.MinValidators, args.MinDepositAmount, startupCost, args.StartBlock, args.EndBlock); err != nil {
 		return err
 	}
+
+	// Move startup cost from balance to chain balance, it will move to child chain's token pool (address 0x64)
+	state.SubBalance(from, startupCost)
+	state.AddChainBalance(from, startupCost)
 
 	op := types.CreateChildChainOp{
 		From:             from,
@@ -702,7 +689,9 @@ func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 	// Notice: there's no validation logic for tx3 here.
 
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
-	if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
+	if chainInfo == nil {
+		return errors.New("chain id not exist")
+	} else if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
 		return errors.New("no enough balance to withdraw")
 	}
 
@@ -828,14 +817,14 @@ func sbr_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 type ChainStatus struct {
 	ChainID    string            `json:"chain_id"`
 	Owner      common.Address    `json:"owner"`
-	Number     uint64            `json:"current_epoch"`
+	Number     hexutil.Uint64    `json:"current_epoch"`
 	StartTime  time.Time         `json:"epoch_start_time"`
 	Validators []*ChainValidator `json:"validators"`
 }
 
 type ChainValidator struct {
 	Account     common.Address `json:"address"`
-	VotingPower *big.Int       `json:"voting_power"`
+	VotingPower *hexutil.Big   `json:"voting_power"`
 }
 
 // Validation
