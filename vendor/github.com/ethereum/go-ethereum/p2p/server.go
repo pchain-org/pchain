@@ -1348,6 +1348,10 @@ func (srv *Server) sendValidatorNodeInfoMessages() {
 				nodeInfo.p.rw != nil {
 
 				Send(nodeInfo.p.rw, nodeInfo.action, nodeInfo.valNodeInfo)
+
+				log.Debugf("send node info (%v, %v) to %v",
+					nodeInfo.valNodeInfo.Validator.Address, nodeInfo.valNodeInfo.Node.ID,
+					nodeInfo.p.ID())
 			}
 
 		}
