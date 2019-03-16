@@ -1158,7 +1158,7 @@ func (srv *Server) validatorAdd(valNodeInfo P2PValidatorNodeInfo, peers []*Peer,
 	}
 
 	//broadcast this node info to peers
-	srv.broadcastRefreshValidatorNodeInfo(valNodeInfo, peers);
+	srv.broadcastRefreshValidatorNodeInfo(&valNodeInfo, peers);
 
 	return nil
 }
@@ -1206,7 +1206,7 @@ func (srv *Server) validatorRemove(valNodeInfo P2PValidatorNodeInfo, peers []*Pe
 	}
 
 	//broadcast this node info to peers
-	srv.broadcastRemoveValidatorNodeInfo(valNodeInfo, peers);
+	srv.broadcastRemoveValidatorNodeInfo(&valNodeInfo, peers);
 
 	return nil
 }
