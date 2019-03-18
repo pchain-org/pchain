@@ -1589,8 +1589,8 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, boo
 	cs.logger.Debugf("Received SignAggr %#v", signAggr)
 
 	// Does not apply
-	if signAggr.Height != cs.Height || signAggr.Round != cs.Round {
-		cs.logger.Debug("does not apply")
+	if signAggr.Height != cs.Height {
+		cs.logger.Debug("does not apply for this height")
 		return nil, false
 	}
 
@@ -1605,13 +1605,27 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, boo
 		return ErrInvalidSignatureAggr, false
 	}
 
+	if signAggr.Type == types.VoteTypePrevote ||
+		signAggr.Type == types.VoteTypePrecommit {
+
+		cs.VoteSignAggr.AddSignAggr(signAggr)
+	}  else {
+
+		cs.logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
+		return ErrInvalidSignatureAggr, false
+	}
+
+	if signAggr.Round != cs.Round {
+		cs.logger.Debug("does not apply for this round")
+		return nil, false
+	}
+
 	if signAggr.Type == types.VoteTypePrevote {
 		// How if the signagure aggregation is for another block
 		if cs.PrevoteMaj23SignAggr != nil {
 			return ErrDuplicateSignatureAggr, false
 		}
 
-		cs.VoteSignAggr.AddSignAggr(signAggr)
 		cs.PrevoteMaj23SignAggr = signAggr
 
 		if (cs.LockedBlock != nil) && (cs.LockedRound < signAggr.Round) {
@@ -1631,16 +1645,8 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, boo
 			return ErrDuplicateSignatureAggr, false
 		}
 
-		cs.logger.Debugf("signAggr:%+v", signAggr)
-		_, err := cs.VoteSignAggr.AddSignAggr(signAggr)
-		if err != nil {
-			panic(err)
-		}
 		cs.PrecommitMaj23SignAggr = signAggr
 		cs.logger.Debugf("setMaj23SignAggr:precommit aggr %#v", cs.PrecommitMaj23SignAggr)
-	} else {
-		cs.logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
-		return ErrInvalidSignatureAggr, false
 	}
 
 	if signAggr.Type == types.VoteTypePrevote {

@@ -582,7 +582,7 @@ OUTER_LOOP:
 		//	"prsHeight", prs.Height, "prsRound", prs.Round, "prsStep", prs.Step)
 
 		// If height matches, then send LastCommit, Prevotes, Precommits.
-		if rs.Height == prs.Height && prs.Round == rs.Round {
+		if rs.Height == prs.Height /*&& prs.Round == rs.Round */{
 
 			if prs.Step <= RoundStepPrevoteWait {
 				var prevoteSA *types.SignAggr = nil
