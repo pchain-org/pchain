@@ -192,7 +192,7 @@ type Server struct {
 
 	events        chan *PeerEvent
 
-	//nodeInfoLock  sync.Mutex // protects running
+	nodeInfoLock  sync.Mutex // protects running
 	nodeInfoList  []*NodeInfoToSend
 }
 
@@ -1272,6 +1272,28 @@ func (srv *Server) validatorAddPeer(peer *Peer) error {
 func (srv *Server) validatorDelPeer(nodeId discover.NodeID) error {
 
 	log.Debug("validatorDelPeer")
+
+	srv.nodeInfoLock.Lock()
+	defer srv.nodeInfoLock.Unlock()
+
+	tailIndex := 0
+	for i:=0; i<len(srv.nodeInfoList); i++ {
+
+		nodeInfo := srv.nodeInfoList[i]
+		if nodeInfo.valNodeInfo.Node.ID != nodeId {
+			if i != tailIndex {
+				srv.nodeInfoList[tailIndex] = nodeInfo
+			}
+			tailIndex ++
+		}
+	}
+
+	removedCount := len(srv.nodeInfoList) - 1 - tailIndex
+
+	srv.nodeInfoList = srv.nodeInfoList[:tailIndex]
+
+	log.Debug("removed %v node info to send to %v", removedCount, nodeId)
+
 	return nil
 }
 
@@ -1319,8 +1341,8 @@ func (srv *Server) broadcastRemoveValidatorNodeInfo(data interface{}, peers []*P
 
 func (srv *Server) addNodeInfoToSend(sendList []*NodeInfoToSend) {
 
-	//srv.nodeInfoLock.Lock()
-	//defer srv.nodeInfoLock.Unlock()
+	srv.nodeInfoLock.Lock()
+	defer srv.nodeInfoLock.Unlock()
 
 	srv.nodeInfoList = append(srv.nodeInfoList, sendList...)
 }
@@ -1331,21 +1353,22 @@ func (srv *Server) sendValidatorNodeInfoMessages() {
 
 	sleepDuration := 100 * time.Millisecond // Time to sleep before send next message
 
-	for {
+	for srv.running {
 
 		if len(srv.nodeInfoList) > 0 {
 
-			//srv.nodeInfoLock.Lock()
+			srv.nodeInfoLock.Lock()
 
 			nodeInfo := srv.nodeInfoList[0]
 			srv.nodeInfoList = srv.nodeInfoList[1:]
 
-			//defer srv.nodeInfoLock.Unlock()
+			srv.nodeInfoLock.Unlock()
 
 			if nodeInfo != nil &&
 				nodeInfo.valNodeInfo != nil &&
 				nodeInfo.p != nil &&
-				nodeInfo.p.rw != nil {
+				nodeInfo.p.rw != nil &&
+				nodeInfo.p.rw.fd != nil {
 
 				Send(nodeInfo.p.rw, nodeInfo.action, nodeInfo.valNodeInfo)
 
@@ -1353,7 +1376,6 @@ func (srv *Server) sendValidatorNodeInfoMessages() {
 					nodeInfo.valNodeInfo.Validator.Address, nodeInfo.valNodeInfo.Node.ID,
 					nodeInfo.p.ID())
 			}
-
 		}
 
 		time.Sleep(sleepDuration)
