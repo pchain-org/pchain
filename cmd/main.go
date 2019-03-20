@@ -103,7 +103,6 @@ func main() {
 		// Start system runtime metrics collection
 		go metrics.CollectProcessMetrics(3 * time.Second)
 
-		utils.SetupNetwork(ctx)
 		return nil
 	}
 
@@ -173,10 +172,11 @@ func newCliApp(version, usage string) *cli.App {
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
-		utils.EtherbaseFlag,
-		utils.GasPriceFlag,
 		utils.MinerThreadsFlag,
-		utils.TargetGasLimitFlag,
+		utils.MinerGasTargetFlag,
+		utils.MinerGasLimitFlag,
+		utils.MinerGasPriceFlag,
+		utils.MinerEtherbaseFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,

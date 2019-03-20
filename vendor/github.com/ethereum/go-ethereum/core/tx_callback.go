@@ -30,7 +30,7 @@ type CrossChainHelper interface {
 	GetMainChainId() string
 	GetChainInfoDB() dbm.DB
 
-	CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error
+	CanCreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount, startupCost *big.Int, startBlock, endBlock *big.Int) error
 	CreateChildChain(from common.Address, chainId string, minValidators uint16, minDepositAmount *big.Int, startBlock, endBlock *big.Int) error
 	ValidateJoinChildChain(from common.Address, pubkey []byte, chainId string, depositAmount *big.Int, signature []byte) error
 	JoinChildChain(from common.Address, pubkey crypto.PubKey, chainId string, depositAmount *big.Int) error

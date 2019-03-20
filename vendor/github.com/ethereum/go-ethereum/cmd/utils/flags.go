@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -321,24 +320,29 @@ var (
 		Usage: "Enable mining",
 	}
 	MinerThreadsFlag = cli.IntFlag{
-		Name:  "minerthreads",
+		Name:  "miner.threads",
 		Usage: "Number of CPU threads to use for mining",
-		Value: runtime.NumCPU(),
+		Value: 0,
 	}
-	TargetGasLimitFlag = cli.Uint64Flag{
-		Name:  "targetgaslimit",
-		Usage: "Target gas limit sets the artificial target gas floor for the blocks to mine",
-		Value: params.GenesisGasLimit,
+	MinerGasTargetFlag = cli.Uint64Flag{
+		Name:  "miner.gastarget",
+		Usage: "Target gas floor for mined blocks",
+		Value: eth.DefaultConfig.MinerGasFloor,
 	}
-	EtherbaseFlag = cli.StringFlag{
-		Name:  "etherbase",
-		Usage: "Public address for block mining rewards (default = first account created)",
+	MinerGasLimitFlag = cli.Uint64Flag{
+		Name:  "miner.gaslimit",
+		Usage: "Target gas ceiling for mined blocks",
+		Value: eth.DefaultConfig.MinerGasCeil,
+	}
+	MinerGasPriceFlag = BigFlag{
+		Name:  "miner.gasprice",
+		Usage: "Minimal gas price for mining a transactions",
+		Value: eth.DefaultConfig.MinerGasPrice,
+	}
+	MinerEtherbaseFlag = cli.StringFlag{
+		Name:  "miner.etherbase",
+		Usage: "Public address for block mining rewards (default = first account)",
 		Value: "0",
-	}
-	GasPriceFlag = BigFlag{
-		Name:  "gasprice",
-		Usage: "Minimal gas price to accept for mining a transactions",
-		Value: eth.DefaultConfig.GasPrice,
 	}
 	ExtraDataFlag = cli.StringFlag{
 		Name:  "extradata",
@@ -810,12 +814,21 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 // setEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
 func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
-	if ctx.GlobalIsSet(EtherbaseFlag.Name) {
-		account, err := MakeAddress(ks, ctx.GlobalString(EtherbaseFlag.Name))
-		if err != nil {
-			Fatalf("Option %q: %v", EtherbaseFlag.Name, err)
+	var etherbase string
+	if ctx.GlobalIsSet(MinerEtherbaseFlag.Name) {
+		etherbase = ctx.GlobalString(MinerEtherbaseFlag.Name)
+	}
+	// Convert the etherbase into an address and configure it
+	if etherbase != "" {
+		if ks != nil {
+			account, err := MakeAddress(ks, etherbase)
+			if err != nil {
+				Fatalf("Invalid miner etherbase: %v", err)
+			}
+			cfg.Etherbase = account.Address
+		} else {
+			Fatalf("No etherbase configured")
 		}
-		cfg.Etherbase = account.Address
 	}
 }
 
@@ -1104,17 +1117,20 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
 		cfg.TrieCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
-	if ctx.GlobalIsSet(MinerThreadsFlag.Name) {
-		cfg.MinerThreads = ctx.GlobalInt(MinerThreadsFlag.Name)
-	}
 	if ctx.GlobalIsSet(DocRootFlag.Name) {
 		cfg.DocRoot = ctx.GlobalString(DocRootFlag.Name)
 	}
 	if ctx.GlobalIsSet(ExtraDataFlag.Name) {
 		cfg.ExtraData = []byte(ctx.GlobalString(ExtraDataFlag.Name))
 	}
-	if ctx.GlobalIsSet(GasPriceFlag.Name) {
-		cfg.GasPrice = GlobalBig(ctx, GasPriceFlag.Name)
+	if ctx.GlobalIsSet(MinerGasTargetFlag.Name) {
+		cfg.MinerGasFloor = ctx.GlobalUint64(MinerGasTargetFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerGasLimitFlag.Name) {
+		cfg.MinerGasCeil = ctx.GlobalUint64(MinerGasLimitFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerGasPriceFlag.Name) {
+		cfg.MinerGasPrice = GlobalBig(ctx, MinerGasPriceFlag.Name)
 	}
 	if ctx.GlobalIsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
@@ -1154,8 +1170,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		log.Info("Using developer account", "address", developer.Address)
 
 		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), developer.Address)
-		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
-			cfg.GasPrice = big.NewInt(1)
+		if !ctx.GlobalIsSet(MinerGasPriceFlag.Name) {
+			cfg.MinerGasPrice = big.NewInt(1)
 		}
 	case ctx.GlobalBool(OttomanFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
@@ -1233,12 +1249,6 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 	}); err != nil {
 		Fatalf("Failed to register the Ethereum Stats service: %v", err)
 	}
-}
-
-// SetupNetwork configures the system for either the main net or some test network.
-func SetupNetwork(ctx *cli.Context) {
-	// TODO(fjl): move target gas limit into config
-	params.TargetGasLimit = ctx.GlobalUint64(TargetGasLimitFlag.Name)
 }
 
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.

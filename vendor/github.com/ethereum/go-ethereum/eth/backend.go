@@ -139,7 +139,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		shutdownChan:   make(chan bool),
 		stopDbUpgrade:  stopDbUpgrade,
 		networkId:      config.NetworkId,
-		gasPrice:       config.GasPrice,
+		gasPrice:       config.MinerGasPrice,
 		etherbase:      config.Etherbase,
 		solcPath:       config.SolcPath,
 		bloomRequests:  make(chan chan *bloombits.Retrieval),
@@ -184,13 +184,13 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, cch); err != nil {
 		return nil, err
 	}
-	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine, cch)
+	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine, config.MinerGasFloor, config.MinerGasCeil, cch)
 	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
 	eth.ApiBackend = &EthApiBackend{eth, nil, nil, cch}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
-		gpoParams.Default = config.GasPrice
+		gpoParams.Default = config.MinerGasPrice
 	}
 	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
 

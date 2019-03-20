@@ -419,6 +419,10 @@ const jsonChainABI = `
 	}
 ]`
 
+// PChain Child Chain Token Incentive Address
+var ChildChainTokenIncentiveAddr = common.BytesToAddress([]byte{100})
+
+// PChain Internal Contract Address
 var ChainContractMagicAddr = common.BytesToAddress([]byte{101}) // don't conflict with go-ethereum/core/vm/contracts.go
 
 var ChainABI abi.ABI

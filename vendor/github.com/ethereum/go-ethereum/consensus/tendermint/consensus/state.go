@@ -419,15 +419,25 @@ func (cs *ConsensusState) updateProposer() {
 
 		idx = curProposer
 
+		log.Debug("update proposer", "height", cs.Height, "round", cs.Round,
+			"lastProposer", lastProposer, "curProposer", curProposer, "idx", idx)
+
+		if cs.state.TdmExtra != nil &&
+			cs.state.TdmExtra.SeenCommit != nil &&
+			cs.state.TdmExtra.SeenCommit.BitArray != nil {
+			log.Debug("update proposer",
+				"cs.state.TdmExtra.SeenCommit.BitArray", cs.state.TdmExtra.SeenCommit.BitArray)
+		}
+
 		//if current proposer was also last vrf proposer, but not voted within last height
 		//just skip the proposer within this height
-		if lastProposer > 0 &&
+		if lastProposer >= 0 &&
 			curProposer == lastProposer &&
 			cs.state.TdmExtra != nil &&
 			cs.state.TdmExtra.SeenCommit != nil &&
 			cs.state.TdmExtra.SeenCommit.BitArray != nil &&
 			!cs.state.TdmExtra.SeenCommit.BitArray.GetIndex(uint64(curProposer)) {
-				idx = (idx + 1) % cs.Validators.Size()
+			idx = (idx + 1) % cs.Validators.Size()
 		}
 
 	} else {
@@ -452,7 +462,7 @@ func (cs *ConsensusState) updateProposer() {
 	log.Debug("update proposer", "height", cs.Height, "round", cs.Round, "idx", idx)
 }
 
-func (cs *ConsensusState) proposersByVRF() (lastProposer int, curProposer int){
+func (cs *ConsensusState) proposersByVRF() (lastProposer int, curProposer int) {
 
 	chainReader := cs.backend.ChainReader()
 	header := chainReader.CurrentHeader()
@@ -466,7 +476,7 @@ func (cs *ConsensusState) proposersByVRF() (lastProposer int, curProposer int){
 	}
 
 	if headerHeight > 0 {
-		lastHeader := chainReader.GetHeaderByNumber(headerHeight-1)
+		lastHeader := chainReader.GetHeaderByNumber(headerHeight - 1)
 		lastHeaderHash := lastHeader.Hash()
 		lastProposer = cs.proposerByVRF(lastHeaderHash, cs.Validators.Validators)
 		return lastProposer, curProposer
@@ -475,8 +485,7 @@ func (cs *ConsensusState) proposersByVRF() (lastProposer int, curProposer int){
 	return -1, -1
 }
 
-
-func (cs *ConsensusState) proposerByVRF(headerHash common.Hash, validators []*types.Validator) (proposer int){
+func (cs *ConsensusState) proposerByVRF(headerHash common.Hash, validators []*types.Validator) (proposer int) {
 
 	idx := -1
 
@@ -1570,7 +1579,7 @@ func (cs *ConsensusState) defaultSetProposal(proposal *types.Proposal) error {
 // Asynchronously triggers either enterPrevote (before we timeout of propose) or tryFinalizeCommit, once we have the full block.
 func (cs *ConsensusState) addProposalBlockPart(height uint64, round int, part *types.Part, verify bool) (added bool, err error) {
 
-	if cs.Height != height || cs.Round != round {
+	if cs.Height != height /*|| cs.Round != round */{
 		return false, nil
 	}
 
@@ -1611,8 +1620,8 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, boo
 	cs.logger.Debugf("Received SignAggr %#v", signAggr)
 
 	// Does not apply
-	if signAggr.Height != cs.Height || signAggr.Round != cs.Round {
-		cs.logger.Debug("does not apply")
+	if signAggr.Height != cs.Height {
+		cs.logger.Debug("does not apply for this height")
 		return nil, false
 	}
 
@@ -1627,13 +1636,27 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, boo
 		return ErrInvalidSignatureAggr, false
 	}
 
+	if signAggr.Type == types.VoteTypePrevote ||
+		signAggr.Type == types.VoteTypePrecommit {
+
+		cs.VoteSignAggr.AddSignAggr(signAggr)
+	}  else {
+
+		cs.logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
+		return ErrInvalidSignatureAggr, false
+	}
+
+	if signAggr.Round != cs.Round {
+		cs.logger.Debug("does not apply for this round")
+		return nil, false
+	}
+
 	if signAggr.Type == types.VoteTypePrevote {
 		// How if the signagure aggregation is for another block
 		if cs.PrevoteMaj23SignAggr != nil {
 			return ErrDuplicateSignatureAggr, false
 		}
 
-		cs.VoteSignAggr.AddSignAggr(signAggr)
 		cs.PrevoteMaj23SignAggr = signAggr
 
 		if (cs.LockedBlock != nil) && (cs.LockedRound < signAggr.Round) {
@@ -1653,16 +1676,8 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, boo
 			return ErrDuplicateSignatureAggr, false
 		}
 
-		cs.logger.Debugf("signAggr:%+v", signAggr)
-		_, err := cs.VoteSignAggr.AddSignAggr(signAggr)
-		if err != nil {
-			panic(err)
-		}
 		cs.PrecommitMaj23SignAggr = signAggr
 		cs.logger.Debugf("setMaj23SignAggr:precommit aggr %#v", cs.PrecommitMaj23SignAggr)
-	} else {
-		cs.logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
-		return ErrInvalidSignatureAggr, false
 	}
 
 	if signAggr.Type == types.VoteTypePrevote {
@@ -1702,7 +1717,7 @@ func (cs *ConsensusState) handleSignAggr(signAggr *types.SignAggr) error {
 	if signAggr == nil {
 		return fmt.Errorf("SignAggr is nil")
 	}
-	if signAggr.Height == cs.Height && signAggr.Round == cs.Round {
+	if signAggr.Height == cs.Height /*&& signAggr.Round == cs.Round*/ {
 		err, _ := cs.setMaj23SignAggr(signAggr)
 		return err
 	}
@@ -1806,48 +1821,52 @@ func (cs *ConsensusState) tryAddVote(vote *types.Vote, peerKey string) error {
 func (cs *ConsensusState) addVote(vote *types.Vote, peerKey string) (added bool, err error) {
 	cs.logger.Info("addVote", "voteHeight", vote.Height, "voteType", vote.Type, "csHeight", cs.Height)
 
-	if !cs.IsProposer() {
-		cs.logger.Warn("addVode should only happen if this node is proposer")
-		return
-	}
-
 	// A precommit for the previous height or previous round, just ignore
-	if vote.Height != cs.Height || int(vote.Round) != cs.Round {
+	if vote.Height != cs.Height /*|| int(vote.Round) != cs.Round*/ {
 		cs.logger.Warn("addVote, vote is for previous blocks or previous round, just ignore\n")
 		return
 	}
 
-	if vote.Type == types.VoteTypePrevote {
-		if cs.Votes.Prevotes(cs.Round).HasTwoThirdsMajority() {
-			return
+	hasPrevoteMaj23BeforeAdd := false
+	hasPrecommitMaj23BeforeAdd := false
+
+	if cs.IsProposer() && int(vote.Round) == cs.Round {
+
+		if vote.Type == types.VoteTypePrevote && cs.Votes.Prevotes(cs.Round).HasTwoThirdsMajority() {
+			hasPrevoteMaj23BeforeAdd = true
 		}
-	} else {
-		if cs.Votes.Precommits(cs.Round).HasTwoThirdsMajority() {
-			return
+
+		if vote.Type == types.VoteTypePrecommit && cs.Votes.Precommits(cs.Round).HasTwoThirdsMajority() {
+			hasPrecommitMaj23BeforeAdd = true
 		}
 	}
 
 	added, err = cs.Votes.AddVote(vote, peerKey)
 	if added {
-		if vote.Type == types.VoteTypePrevote {
-			// If 2/3+ votes received, send them to other validators
-			if cs.Votes.Prevotes(cs.Round).HasTwoThirdsMajority() {
-				cs.logger.Debug(Fmt("addVote: Got 2/3+ prevotes %+v\n", cs.Votes.Prevotes(cs.Round)))
-				// Send signature aggregation
-				cs.sendMaj23SignAggr(vote.Type)
-			}
-		} else if vote.Type == types.VoteTypePrecommit {
-			if cs.Votes.Precommits(cs.Round).HasTwoThirdsMajority() {
-				cs.logger.Debugf("addVote: Got 2/3+ precommits %+v", cs.Votes.Precommits(cs.Round))
-				// Send signature aggregation
-				cs.sendMaj23SignAggr(vote.Type)
+
+		types.FireEventVote(cs.evsw, types.EventDataVote{vote})
+
+		if cs.IsProposer() && int(vote.Round) == cs.Round {
+
+			if vote.Type == types.VoteTypePrevote {
+				// If 2/3+ votes received, send them to other validators
+				if !hasPrevoteMaj23BeforeAdd && cs.Votes.Prevotes(cs.Round).HasTwoThirdsMajority() {
+					cs.logger.Debug(Fmt("addVote: Got 2/3+ prevotes %+v\n", cs.Votes.Prevotes(cs.Round)))
+					// Send signature aggregation
+					cs.sendMaj23SignAggr(vote.Type)
+				}
+			} else if vote.Type == types.VoteTypePrecommit {
+				if !hasPrecommitMaj23BeforeAdd && cs.Votes.Precommits(cs.Round).HasTwoThirdsMajority() {
+					cs.logger.Debugf("addVote: Got 2/3+ precommits %+v", cs.Votes.Precommits(cs.Round))
+					// Send signature aggregation
+					cs.sendMaj23SignAggr(vote.Type)
+				}
 			}
 		}
 	}
 
 	return
 	/*
-		types.FireEventVote(cs.evsw, types.EventDataVote{vote})
 
 		height := cs.Height
 		switch vote.Type {
@@ -1959,6 +1978,7 @@ func (cs *ConsensusState) signAddVote(type_ byte, hash []byte, header types.Part
 	}
 	vote, err := cs.signVote(type_, hash, header)
 	if err == nil {
+		/*
 		if !cs.IsProposer() {
 			if cs.ProposerPeerKey != "" {
 				v2pMsg := types.EventDataVote2Proposer{vote, cs.ProposerPeerKey}
@@ -1967,8 +1987,9 @@ func (cs *ConsensusState) signAddVote(type_ byte, hash []byte, header types.Part
 				cs.logger.Warn("sign and vote, Proposer key is nil")
 			}
 		} else {
-			cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
-		}
+		*/
+		cs.sendInternalMessage(msgInfo{&VoteMessage{vote}, ""})
+		//}
 		cs.logger.Info("Signed and pushed vote", "height", cs.Height, "round", cs.Round, "vote", vote, "error", err)
 		cs.logger.Debugf("block is:%+v", vote.BlockID)
 		return vote
@@ -2005,10 +2026,10 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	var sigs []*tmdcrypto.Signature
 	var ss []byte
 
-	for index, vote := range votes {
+	for _, vote := range votes {
 		if vote != nil && maj23.Equals(vote.BlockID) {
 			ss = vote.SignBytes
-			signBitArray.SetIndex((uint64)(index), true)
+			signBitArray.SetIndex(vote.ValidatorIndex, true)
 			sigs = append(sigs, &(vote.Signature))
 		}
 	}

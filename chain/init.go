@@ -2,6 +2,7 @@ package chain
 
 import (
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/pchain/abi"
 	"os"
 	"path/filepath"
 
@@ -125,12 +126,12 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 		Config:     params.MainnetChainConfig,
 		Nonce:      0xdeadbeefdeadbeef,
 		Timestamp:  0x0,
-		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		ParentHash: common.Hash{},
 		ExtraData:  []byte("0x0"),
 		GasLimit:   0x8000000,
 		Difficulty: new(big.Int).SetUint64(0x400),
-		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
-		Coinbase:   (*validators[0]).Address,
+		Mixhash:    common.Hash{},
+		Coinbase:   common.Address{},
 		Alloc:      core.GenesisAlloc{},
 	}
 	for i, validator := range validators {
@@ -311,18 +312,19 @@ func createPriValidators(config cfg.Config, num int) []*types.PrivValidator {
 func checkAccount(coreGenesis core.Genesis) (common.Address, *big.Int, error) {
 
 	coinbase := coreGenesis.Coinbase
-	amount := big.NewInt(10)
+	log.Infof("checkAccount(), coinbase is %x", coinbase)
+
+	var act common.Address
+	amount := big.NewInt(-1)
 	balance := big.NewInt(-1)
 	found := false
-	log.Infof("checkAccount(), coinbase is %x", coinbase)
 	for address, account := range coreGenesis.Alloc {
 		log.Infof("checkAccount(), address is %x, balance is %v, amount is %v", address, account.Balance, account.Amount)
-		if coinbase == address {
-			balance = account.Balance
-			amount = account.Amount
-			found = true
-			break
-		}
+		balance = account.Balance
+		amount = account.Amount
+		act = address
+		found = true
+		break
 	}
 
 	if !found {
@@ -335,7 +337,7 @@ func checkAccount(coreGenesis core.Genesis) (common.Address, *big.Int, error) {
 		return common.Address{}, nil, errors.New("no enough balance")
 	}
 
-	return coinbase, amount, nil
+	return act, amount, nil
 }
 
 func initEthGenesisFromExistValidator(childChainID string, childConfig cfg.Config, validators []types.GenesisValidator) error {
@@ -344,12 +346,12 @@ func initEthGenesisFromExistValidator(childChainID string, childConfig cfg.Confi
 		Config:     params.NewChildChainConfig(childChainID),
 		Nonce:      0xdeadbeefdeadbeef,
 		Timestamp:  0x0,
-		ParentHash: common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+		ParentHash: common.Hash{},
 		ExtraData:  []byte("0x0"),
 		GasLimit:   0x8000000,
 		Difficulty: new(big.Int).SetUint64(0x400),
-		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
-		Coinbase:   validators[0].EthAccount,
+		Mixhash:    common.Hash{},
+		Coinbase:   common.Address{},
 		Alloc:      core.GenesisAlloc{},
 	}
 	for _, validator := range validators {
@@ -357,6 +359,12 @@ func initEthGenesisFromExistValidator(childChainID string, childConfig cfg.Confi
 			Balance: big.NewInt(0),
 			Amount:  validator.Amount,
 		}
+	}
+
+	// Add Child Chain Default Token
+	coreGenesis.Alloc[abi.ChildChainTokenIncentiveAddr] = core.GenesisAccount{
+		Balance: new(big.Int).Mul(big.NewInt(100000), big.NewInt(1e+18)),
+		Amount:  common.Big0,
 	}
 
 	contents, err := json.Marshal(coreGenesis)

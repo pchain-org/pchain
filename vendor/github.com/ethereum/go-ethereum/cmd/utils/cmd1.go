@@ -54,7 +54,7 @@ func StartNodeEx(ctx *cli.Context, stack *node.Node) error {
 			}
 		}
 		// Set the gas price to the limits from the CLI and start mining
-		ethereum.TxPool().SetGasPrice(GlobalBig(ctx, GasPriceFlag.Name))
+		ethereum.TxPool().SetGasPrice(GlobalBig(ctx, MinerGasPriceFlag.Name))
 		if err := ethereum.StartMining(true); err != nil {
 			Fatalf("Failed to start mining: %v", err)
 		}

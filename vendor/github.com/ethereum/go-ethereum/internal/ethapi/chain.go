@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -48,7 +49,7 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 		To:       &pabi.ChainContractMagicAddr,
 		Gas:      (*hexutil.Uint64)(&defaultGas),
 		GasPrice: gasPrice,
-		Value:    nil,
+		Value:    (*hexutil.Big)(math.MustParseBig256("100000000000000000000000")),
 		Input:    (*hexutil.Bytes)(&input),
 		Nonce:    nil,
 	}
@@ -393,7 +394,7 @@ func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 		return err
 	}
 
-	if err := cch.CanCreateChildChain(from, args.ChainId, args.MinValidators, args.MinDepositAmount, args.StartBlock, args.EndBlock); err != nil {
+	if err := cch.CanCreateChildChain(from, args.ChainId, args.MinValidators, args.MinDepositAmount, tx.Value(), args.StartBlock, args.EndBlock); err != nil {
 		return err
 	}
 
@@ -414,9 +415,14 @@ func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 		return err
 	}
 
-	if err := cch.CanCreateChildChain(from, args.ChainId, args.MinValidators, args.MinDepositAmount, args.StartBlock, args.EndBlock); err != nil {
+	startupCost := tx.Value()
+	if err := cch.CanCreateChildChain(from, args.ChainId, args.MinValidators, args.MinDepositAmount, startupCost, args.StartBlock, args.EndBlock); err != nil {
 		return err
 	}
+
+	// Move startup cost from balance to chain balance, it will move to child chain's token pool (address 0x64)
+	state.SubBalance(from, startupCost)
+	state.AddChainBalance(from, startupCost)
 
 	op := types.CreateChildChainOp{
 		From:             from,

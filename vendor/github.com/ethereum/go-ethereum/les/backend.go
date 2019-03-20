@@ -137,7 +137,7 @@ func New(ctx *node.ServiceContext, config *eth.Config, cch core.CrossChainHelper
 	leth.ApiBackend = &LesApiBackend{leth, nil, nil, cch}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
-		gpoParams.Default = config.GasPrice
+		gpoParams.Default = config.MinerGasPrice
 	}
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 	return leth, nil

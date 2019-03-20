@@ -272,7 +272,7 @@ func (commit *Commit) StringIndented(indent string) string {
 		indent, commit.BlockID,
 		indent, commit.Height,
 		indent, commit.Round,
-		indent, commit.Type,
+		indent, commit.Type(),
 		indent, commit.BitArray.String(),
 		indent, commit.hash)
 }
