@@ -1372,7 +1372,7 @@ func (srv *Server) sendValidatorNodeInfoMessages() {
 
 				Send(nodeInfo.p.rw, nodeInfo.action, nodeInfo.valNodeInfo)
 
-				log.Debugf("send node info (%v, %v) to %v",
+				log.Debugf("send node info (%x, %v) to %v",
 					nodeInfo.valNodeInfo.Validator.Address, nodeInfo.valNodeInfo.Node.ID,
 					nodeInfo.p.ID())
 			}

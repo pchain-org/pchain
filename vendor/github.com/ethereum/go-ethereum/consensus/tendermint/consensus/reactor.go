@@ -932,7 +932,11 @@ func (ps *PeerState) SetHasMaj23SignAggr(signAggr *types.SignAggr) {
 // Returns true if vote was sent.
 func (ps *PeerState) PickSendSignAggr(signAggr *types.SignAggr) (ok bool) {
 	msg := &Maj23SignAggrMessage{signAggr}
-	return ps.Peer.Send(DataChannel, struct{ ConsensusMessage }{msg}) == nil
+	if ps.Peer.Send(DataChannel, struct{ ConsensusMessage }{msg}) == nil {
+		ps.SetHasMaj23SignAggr(msg.Maj23SignAggr)
+		return true
+	}
+	return false
 }
 
 // PickVoteToSend sends vote to peer.
@@ -940,7 +944,10 @@ func (ps *PeerState) PickSendSignAggr(signAggr *types.SignAggr) (ok bool) {
 func (ps *PeerState) PickSendVote(votes types.VoteSetReader) (ok bool) {
 	if vote, ok := ps.PickVoteToSend(votes); ok {
 		msg := &VoteMessage{vote}
-		return ps.Peer.Send(VoteChannel, struct{ ConsensusMessage }{msg}) == nil
+		if ps.Peer.Send(VoteChannel, struct{ ConsensusMessage }{msg}) == nil {
+			ps.SetHasVote(vote)
+			return true
+		}
 	}
 	return false
 }
@@ -967,7 +974,6 @@ func (ps *PeerState) PickVoteToSend(votes types.VoteSetReader) (vote *types.Vote
 		return nil, false // Not something worth sending
 	}
 	if index, ok := votes.BitArray().Sub(psVotes).PickRandom(); ok {
-		ps.setHasVote(height, round, type_, int(index))
 		return votes.GetByIndex(int(index)), true
 	}
 	return nil, false
@@ -1082,8 +1088,7 @@ func (ps *PeerState) SetHasVote(vote *types.Vote) {
 }
 
 func (ps *PeerState) setHasVote(height uint64, round int, type_ byte, index int) {
-	ps.logger.Debug("setHasVote(LastCommit)", "lastCommit", ps.LastCommit, "index", index)
-
+	ps.logger.Debug("setHasVote()", "height", height, "round", round, "index", index)
 	// NOTE: some may be nil BitArrays -> no side effects.
 	ps.getVoteBitArray(height, round, type_).SetIndex(uint64(index), true)
 }

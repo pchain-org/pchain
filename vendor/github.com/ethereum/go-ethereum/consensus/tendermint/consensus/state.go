@@ -421,7 +421,7 @@ func (cs *ConsensusState) updateProposer() {
 
 		//if current proposer was also last vrf proposer, but not voted within last height
 		//just skip the proposer within this height
-		if lastProposer > 0 &&
+		if lastProposer >= 0 &&
 			curProposer == lastProposer &&
 			cs.state.TdmExtra != nil &&
 			cs.state.TdmExtra.SeenCommit != nil &&
@@ -1686,7 +1686,7 @@ func (cs *ConsensusState) handleSignAggr(signAggr *types.SignAggr) error {
 	if signAggr == nil {
 		return fmt.Errorf("SignAggr is nil")
 	}
-	if signAggr.Height == cs.Height && signAggr.Round == cs.Round {
+	if signAggr.Height == cs.Height /*&& signAggr.Round == cs.Round*/ {
 		err, _ := cs.setMaj23SignAggr(signAggr)
 		return err
 	}
@@ -1989,10 +1989,10 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	var sigs []*tmdcrypto.Signature
 	var ss []byte
 
-	for index, vote := range votes {
+	for _, vote := range votes {
 		if vote != nil && maj23.Equals(vote.BlockID) {
 			ss = vote.SignBytes
-			signBitArray.SetIndex((uint64)(index), true)
+			signBitArray.SetIndex(vote.ValidatorIndex, true)
 			sigs = append(sigs, &(vote.Signature))
 		}
 	}
