@@ -613,6 +613,7 @@ OUTER_LOOP:
 					}
 				}
 			}
+			
 			/*
 				// If there are prevotes to send...
 				if prs.Step <= RoundStepPrevote && prs.Round != -1 && prs.Round <= rs.Round {
