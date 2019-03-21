@@ -231,7 +231,7 @@ func (conR *ConsensusReactor) Receive(chID uint64, src consensus.Peer, msgBytes 
 			conR.logger.Warn(Fmt("Unknown message type %v", reflect.TypeOf(msg)))
 		}
 	/*
-	case VoteSetBitsChannel:
+		case VoteSetBitsChannel:
 			//if conR.fastSync {
 			//	log.Warn("Ignoring message received during fastSync", "msg", msg)
 			//	return
@@ -380,15 +380,15 @@ func (conR *ConsensusReactor) sendVote2Proposer(vote *types.Vote, proposerKey st
 // Broadcasts HasVoteMessage to peers that care.
 func (conR *ConsensusReactor) broadcastHasVoteMessage(vote *types.Vote) {
 	// only the proposer needs to broadcast HasVoteMessage
-	//if conR.conS.IsProposer() {
-	msg := &HasVoteMessage{
-		Height: vote.Height,
-		Round:  (int)(vote.Round),
-		Type:   vote.Type,
-		Index:  (int)(vote.ValidatorIndex),
+	if conR.conS.IsProposer() {
+		msg := &HasVoteMessage{
+			Height: vote.Height,
+			Round:  (int)(vote.Round),
+			Type:   vote.Type,
+			Index:  (int)(vote.ValidatorIndex),
+		}
+		conR.conS.backend.GetBroadcaster().BroadcastMessage(StateChannel, struct{ ConsensusMessage }{msg})
 	}
-	conR.conS.backend.GetBroadcaster().BroadcastMessage(StateChannel, struct{ ConsensusMessage }{msg})
-	//}
 }
 
 func makeRoundStepMessages(rs *RoundState) (nrsMsg *NewRoundStepMessage, csMsg *CommitStepMessage) {
@@ -572,14 +572,14 @@ OUTER_LOOP:
 		if conR.conS.privValidator == nil {
 			panic("conR.conS.privValidator is nil")
 		}
-		/*
+
 		if peer.GetKey() != conR.conS.ProposerPeerKey {
 			time.Sleep(peerGossipSleepDuration)
 			continue OUTER_LOOP
 		}
-		*/
-		conR.logger.Debug("gossipVotesRoutine", "peer.key", peer.GetKey(), "rsHeight", rs.Height, "rsRound", rs.Round,
-			"prsHeight", prs.Height, "prsRound", prs.Round, "prsStep", prs.Step)
+
+		//logger.Debug("gossipVotesRoutine", "rsHeight", rs.Height, "rsRound", rs.Round,
+		//	"prsHeight", prs.Height, "prsRound", prs.Round, "prsStep", prs.Step)
 
 		// If height matches, then send LastCommit, Prevotes, Precommits.
 		if rs.Height == prs.Height /*&& prs.Round == rs.Round */{
@@ -613,33 +613,33 @@ OUTER_LOOP:
 					}
 				}
 			}
-
-			// If there are prevotes to send...
-			if prs.Step <= RoundStepPrevoteWait && prs.Round != -1 /*&& prs.Round <= rs.Round*/ {
-				if ps.PickSendVote(rs.Votes.Prevotes(prs.Round)) {
-					conR.logger.Debugf("Picked rs.Prevotes(prs.Round:%v) to send", prs.Round)
-					continue OUTER_LOOP
-				}
-			}
-
-			// If there are precommits to send...
-			if prs.Step <= RoundStepPrecommitWait && prs.Round != -1 /*&& prs.Round <= rs.Round*/ {
-				if ps.PickSendVote(rs.Votes.Precommits(prs.Round)) {
-					conR.logger.Debugf("Picked rs.Precommits(prs.Round:%v) to send", prs.Round)
-					continue OUTER_LOOP
-				}
-			}
-
-			// If there are POLPrevotes to send...
-			if prs.ProposalPOLRound != -1 {
-				if polPrevotes := rs.Votes.Prevotes(prs.ProposalPOLRound); polPrevotes != nil {
-					if ps.PickSendVote(polPrevotes) {
-						conR.logger.Debugf("Picked rs.Prevotes(prs.ProposalPOLRound:%v) to send",
-							prs.ProposalPOLRound)
+			
+			/*
+				// If there are prevotes to send...
+				if prs.Step <= RoundStepPrevote && prs.Round != -1 && prs.Round <= rs.Round {
+					if ps.PickSendVote(rs.Votes.Prevotes(prs.Round)) {
+						conR.logger.Debug("Picked rs.Prevotes(prs.Round) to send")
 						continue OUTER_LOOP
 					}
 				}
-			}
+				// If there are precommits to send...
+				if prs.Step <= RoundStepPrecommit && prs.Round != -1 && prs.Round <= rs.Round {
+					if ps.PickSendVote(rs.Votes.Precommits(prs.Round)) {
+						conR.logger.Debug("Picked rs.Precommits(prs.Round) to send")
+						continue OUTER_LOOP
+					}
+				}
+
+				// If there are POLPrevotes to send...
+				if prs.ProposalPOLRound != -1 {
+					if polPrevotes := rs.Votes.Prevotes(prs.ProposalPOLRound); polPrevotes != nil {
+						if ps.PickSendVote(polPrevotes) {
+							conR.logger.Debug("Picked rs.Prevotes(prs.ProposalPOLRound) to send")
+							continue OUTER_LOOP
+						}
+					}
+				}
+			*/
 		}
 
 		if sleeping == 0 {
@@ -1090,7 +1090,6 @@ func (ps *PeerState) SetHasVote(vote *types.Vote) {
 
 func (ps *PeerState) setHasVote(height uint64, round int, type_ byte, index int) {
 	ps.logger.Debug("setHasVote()", "height", height, "round", round, "index", index)
-
 	// NOTE: some may be nil BitArrays -> no side effects.
 	ps.getVoteBitArray(height, round, type_).SetIndex(uint64(index), true)
 }
