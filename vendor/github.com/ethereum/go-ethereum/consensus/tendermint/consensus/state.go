@@ -875,8 +875,14 @@ func (cs *ConsensusState) enterNewRound(height uint64, round int) {
 	types.FireEventNewRound(cs.evsw, cs.RoundStateEvent())
 
 	// Immediately go to enterPropose.
-	if cs.IsProposer() && cs.blockFromMiner == nil {
-		cs.logger.Info("we are proposer, but blockFromMiner is nil, let's wait a second!!!")
+	if cs.IsProposer() && (cs.blockFromMiner == nil || cs.Height != cs.blockFromMiner.NumberU64()) {
+
+		if cs.blockFromMiner == nil {
+			cs.logger.Info("we are proposer, but blockFromMiner is nil , let's wait a second!!!")
+		} else {
+			cs.logger.Info("we are proposer, but height mismatch",
+				"cs.Height", cs.Height, "cs.blockFromMiner.NumberU64()", cs.blockFromMiner.NumberU64())
+		}
 		cs.scheduleTimeout(cs.timeoutParams.WaitForMinerBlock(), height, round, RoundStepWaitForMinerBlock)
 		return
 	}
@@ -1019,6 +1025,12 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 
 	//here we wait for ethereum block to propose
 	if cs.blockFromMiner != nil {
+
+		if cs.Height != cs.blockFromMiner.NumberU64() {
+			log.Warn("createProposalBlock(), height mismatch", "cs.Height", cs.Height,
+				"cs.blockFromMiner.NumberU64()", cs.blockFromMiner.NumberU64())
+			return nil, nil
+		}
 
 		ethBlock := cs.blockFromMiner
 		var commit = &types.Commit{}
