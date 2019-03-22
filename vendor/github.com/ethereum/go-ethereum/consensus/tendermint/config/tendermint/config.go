@@ -105,7 +105,7 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 	mapConfig.SetDefault("timeout_prevote_delta", 750)
 	mapConfig.SetDefault("timeout_precommit", 2000)
 	mapConfig.SetDefault("timeout_precommit_delta", 750)
-	mapConfig.SetDefault("timeout_commit", 3000)
+	mapConfig.SetDefault("timeout_commit", 1000)
 
 	// make progress asap (no `timeout_commit`) on full precommit votes
 	mapConfig.SetDefault("skip_timeout_commit", false)
