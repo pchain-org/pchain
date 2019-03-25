@@ -183,5 +183,11 @@ func (bs *ConsensusState) LoadTendermintExtra(height uint64) (*types.TendermintE
 		return nil, 0
 	}
 
+	blockHeight := ethBlock.NumberU64()
+	if tdmExtra.Height != blockHeight {
+		bs.logger.Warnf("extra.height:%v, block.Number %v, reset it", tdmExtra.Height, blockHeight)
+		tdmExtra.Height = blockHeight
+	}
+
 	return tdmExtra, tdmExtra.Height
 }
