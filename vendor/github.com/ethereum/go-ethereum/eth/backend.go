@@ -122,7 +122,10 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		return nil, err
 	}
 	stopDbUpgrade := upgradeDeduplicateData(chainDb)
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithDefault(chainDb, config.Genesis, isTestnet)
+
+	isMainChain := params.IsMainChain(ctx.ChainId())
+
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithDefault(chainDb, config.Genesis, isMainChain, isTestnet)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}

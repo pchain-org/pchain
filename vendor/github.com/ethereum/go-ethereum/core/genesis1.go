@@ -103,14 +103,14 @@ func SetupGenesisBlockEx(db ethdb.Database, genesis *Genesis) (*types.Block, err
 // error is a *params.ConfigCompatError and the new, unwritten config is returned.
 //
 // The returned chain configuration is never nil.
-func SetupGenesisBlockWithDefault(db ethdb.Database, genesis *Genesis, isTestnet bool) (*params.ChainConfig, common.Hash, error) {
+func SetupGenesisBlockWithDefault(db ethdb.Database, genesis *Genesis, isMainChain, isTestnet bool) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
 
 	// Just commit the new block if there is no stored genesis block.
 	stored := GetCanonicalHash(db, 0)
-	if (stored == common.Hash{}) {
+	if (stored == common.Hash{} && isMainChain) {
 		if genesis == nil {
 			log.Info("Writing default main-net genesis block")
 			if isTestnet {
@@ -138,9 +138,13 @@ func SetupGenesisBlockWithDefault(db ethdb.Database, genesis *Genesis, isTestnet
 	storedcfg, err := GetChainConfig(db, stored)
 	if err != nil {
 		if err == ErrChainConfigNotFound {
-			// This case happens if a genesis write was interrupted.
-			log.Warn("Found genesis block without chain config")
-			err = WriteChainConfig(db, stored, newcfg)
+			if isMainChain {
+				// This case happens if a genesis write was interrupted.
+				log.Warn("Found genesis block without chain config")
+				err = WriteChainConfig(db, stored, newcfg)
+			} else {
+				log.Error("Missing Child Chain Genesis, make sure init the Child Chain First")
+			}
 		}
 		return newcfg, stored, err
 	}

@@ -73,6 +73,11 @@ func (ctx *ServiceContext) NodeKey() *ecdsa.PrivateKey {
 	return ctx.config.NodeKey()
 }
 
+// ChainId returns current chain id from config
+func (ctx *ServiceContext) ChainId() string {
+	return ctx.config.ChainId
+}
+
 // ServiceConstructor is the function signature of the constructors needed to be
 // registered for service instantiation.
 type ServiceConstructor func(ctx *ServiceContext) (Service, error)
