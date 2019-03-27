@@ -164,7 +164,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		gp.AddGas(remainingGas)
 
 		*usedGas += gas
-		totalUsedMoney.Add(totalUsedMoney, gasValue)
+		totalUsedMoney.Add(totalUsedMoney, new(big.Int).Mul(new(big.Int).SetUint64(gas), tx.GasPrice()))
 		log.Infof("ApplyTransactionEx() 2, totalUsedMoney is %v\n", totalUsedMoney)
 
 		// Update the state with pending changes
