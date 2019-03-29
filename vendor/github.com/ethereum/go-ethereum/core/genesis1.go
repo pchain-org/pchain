@@ -320,8 +320,8 @@ var DefaultMainnetGenesisJSON = `{
 			"amount": "0x1101c205a3e5f3aa78e06"
 		},
 		"3abdb31086de7a75f93c9ee4b3f5626afcf8ab67": {
-			"balance": "0x3809e991493086a8ce84",
-			"amount": "0x0"
+			"balance": "0xb352eb6a83ce7bb5c81",
+			"amount": "0x2cd4badaa0f39eed7203"
 		},
 		"41e0a683ee564f73f1ca240d35e30a71a3848c14": {
 			"balance": "0x4009230878222d000000",
@@ -337,8 +337,8 @@ var DefaultMainnetGenesisJSON = `{
 			"delegate": "0xcda86ef7e930dedfe000"
 		},
 		"4cacc12227f6594c7b0d4b741cf751ddffeb86fb": {
-			"balance": "0x2b3b51a5f4b9a4502c00",
-			"amount": "0x0"
+			"balance": "0x8a576baca8b87433c00",
+			"amount": "0x2295daeb2a2e1d0cf000"
 		},
 		"4e8d522e7d95690bb44f7c589067cf06ba3b4e34": {
 			"balance": "0x1329cf6b3798180929e3",
@@ -364,8 +364,8 @@ var DefaultMainnetGenesisJSON = `{
 			"delegate": "0xa9745f6f422d9a7d4000"
 		},
 		"5a8e69a43e22f882de1b6467f0245bc06d498046": {
-			"balance": "0x5d48e40a0a1e5b0ad8000",
-			"amount": "0x0"
+			"balance": "0x12a82d9b9b9fabcef8000",
+			"amount": "0x4aa0b66e6e7eaf3be0000"
 		},
 		"614036008da1b1dac87ba923c6a883a1b80fb136": {
 			"balance": "0x261dd1ce2f2088800000",
@@ -577,8 +577,8 @@ var DefaultMainnetGenesisJSON = `{
 			"delegate": "0x10ab616b98d4330130000"
 		},
 		"c4483b02ce41185de5bd4fd25f72050d3109db88": {
-			"balance": "0x1c2fdf661c4ee9ae9384",
-			"amount": "0x70bf7d98713ba6ba4e0f"
+			"balance": "0x31f999a1f07b4f652384",
+			"amount": "0xc7e66687c1ed3d948e0f"
 		},
 		"c46f7498d76ea5d15173edf0e6a9ba59c68f666a": {
 			"balance": "0xa968163f0a57b4000000",
@@ -663,10 +663,6 @@ var DefaultMainnetGenesisJSON = `{
 			"balance": "0x2d318553c04f18907e13",
 			"amount": "0xb4c6154f013c6241f84b"
 		},
-		"ea271dda6fed2116e1a0dbc8d0e9bae00b16fa7a": {
-			"balance": "0x1c9a9016652fb1c25a6ba3d",
-			"amount": "0x0"
-		},
 		"ea80fd3fcc41441075fad44302548cd484a6c7af": {
 			"balance": "0x1e11d5de63c17cc00000",
 			"amount": "0x784757798f05f3000000",
@@ -676,6 +672,10 @@ var DefaultMainnetGenesisJSON = `{
 				"0x8cecac2453a8d0257407878ad4e8eee5870d5200": "0xbe8986e31ec8f22a8000"
 			},
 			"candidate": true
+		},
+		"ed0658b5b05b6fa365bed42746706f21c109447f": {
+			"balance": "0x1c93c10c327d63e2915ea3d",
+			"amount": "0x0"
 		},
 		"ef470c3a63343585651808b8187bba0e277bc3c8": {
 			"balance": "0x1ec0668d3c90c00946b0",
