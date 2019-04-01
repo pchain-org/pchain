@@ -74,8 +74,8 @@ var (
 
 	_ consensus.Engine = (*backend)(nil)
 
-	// TODO PChain Foundation Address
-	foundationAddress = common.HexToAddress("0x0000000000000000000000000000000000000000")
+	// PChain Child Foundation Address
+	foundationAddress = common.HexToAddress("0x991cf3cee2a55d06f9c7ba511bee3fad45a1bda7")
 	// Address for Child Chain Reward
 	childChainRewardAddress = common.BytesToAddress([]byte{100})
 )

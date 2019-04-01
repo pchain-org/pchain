@@ -259,7 +259,7 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 				Number:         0,
 				RewardPerBlock: rewardPerBlock,
 				StartBlock:     0,
-				EndBlock:       2592000,
+				EndBlock:       657000,
 				Status:         0,
 			},
 		}
