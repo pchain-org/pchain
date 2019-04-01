@@ -8,7 +8,7 @@ To get familiar with pchain, you could read about [Overview](https://github.com/
 
 ## Installation Instructions for Ubuntu(Official recommendation 16.04)
 
-Installing from PPA
+Installing from PPA, or [install from release](https://github.com/pchain-org/pchain/wiki/Install-pchain-from-release)
 ```
 sudo apt update
 sudo apt upgrade
