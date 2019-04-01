@@ -73,28 +73,21 @@ If you want to know more about our Command Line Options,please consult our
 
 ```
 $ pchain version
-//0.9.0-test2.4
+//1.0.2
 ```
 
 ### Full Node On The Pchain Main Network
 
-Pchain Main network will come soon.
-
-
-### Full Node On the Pchain Test Network 
-
 ```
-$ pchain --testnet
+$ pchain
 ```
-
 You can set your own data directory by '--datadir yourOwnDirectory'
-
 If you want to open RPC,just add the options '--rpc' and '--rpcapi "db,eth,net,web3,admin,tdm,miner,personal,chain,txpool" '. More details,please read [How To Interact With Pchain](https://github.com/pchain-org/pchain#how-to-interact-with-pchainrpc-or-ipc-console)
 
-you can add '&' at the end of command above,Pchain client will run in the background
+you can use 'nohup' and add '&' at the end of command above,Pchain client will run in the background
 
 ```
-$ pchain --testnet  &
+$ nohup pchain &
 ```
 
 | Platform | Default Datadir Directory |
@@ -103,21 +96,9 @@ $ pchain --testnet  &
 | Mac | ~/Library/Pchain|
 | Windows | %APPDATA%\Pchain|
 
-Specifying the `--testnet` flag however will reconfigure your pchain instance a bit:
-
- * Instead of using the default data directory , pchain will nest
-   itself one level deeper into a `testnet` subfolder (`<Default_Datadir>/testnet`). 
-
- * Instead of connecting the main pchain network, the client will connect to the test network,
-   which uses different P2P bootnodes, different network IDs and genesis states.
-
 ### How To Interact With Pchain(RPC OR IPC CONSOLE)
 
 Please Read The Wiki [How To Interact With Pchain](https://github.com/pchain-org/pchain/wiki/How-To-Interact-With-Pchain)
-
-### How To Get Free Testnet PI (Pchain Token)
-
-[Get Free Testnet PI](https://testnet.pchain.org/vfaucet.html)
 
 ### How To Become A Validator
 
