@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	cmn "github.com/tendermint/go-common"
 	"time"
+	"math/big"
 )
 
 // The +2/3 and other Precommit-votes for block at `height`.
@@ -85,6 +86,8 @@ func (cs *ConsensusState) Initialize() {
 	cs.PrecommitMaj23SignAggr = nil
 	cs.CommitRound = -1
 	cs.state = nil
+	cs.totalVotingPower = big.NewInt(0)
+	cs.powerPerBlockF = big.NewFloat(0.0)
 }
 
 // Updates ConsensusState and increments height to match thatRewardScheme of state.
@@ -123,6 +126,17 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	cs.VoteSignAggr = NewHeightVoteSignAggr(cs.chainConfig.PChainId, height, validators, cs.logger)
 
 	cs.state = state
+
+	cs.totalVotingPower = big.NewInt(0)
+	for _, validator := range cs.Validators.Validators {
+		cs.totalVotingPower = cs.totalVotingPower.Add(cs.totalVotingPower, validator.VotingPower)
+	}
+
+	blockCount := cs.state.Epoch.EndBlock - cs.state.Epoch.StartBlock + 1
+	cs.powerPerBlockF = big.NewFloat(0.0).SetInt(cs.totalVotingPower)
+	cs.powerPerBlockF = cs.powerPerBlockF.Quo(cs.powerPerBlockF, big.NewFloat(float64(blockCount)))
+	log.Debugf("proposerByVRF, totalVotingPower: %v, powerPerBlock: %v\n",
+		cs.totalVotingPower, cs.powerPerBlockF)
 
 	cs.newStep()
 }

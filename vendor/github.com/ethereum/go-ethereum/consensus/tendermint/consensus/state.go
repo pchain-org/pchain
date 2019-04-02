@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"math"
 	"reflect"
@@ -27,7 +26,6 @@ import (
 	cfg "github.com/tendermint/go-config"
 	//	"github.com/ethereum/go-ethereum/crypto"
 	"crypto/ecdsa"
-	"crypto/sha256"
 	//"encoding/binary"
 	"github.com/ethereum/go-ethereum/crypto"
 	tmdcrypto "github.com/tendermint/go-crypto"
@@ -291,6 +289,8 @@ type ConsensusState struct {
 	mtx sync.Mutex
 	RoundState
 	Epoch *ep.Epoch
+	totalVotingPower *big.Int
+	powerPerBlockF *big.Float
 	state *sm.State // State until height-1.
 
 	peerMsgQueue     chan msgInfo   // serializes msgs affecting state (proposals, block parts, votes)
@@ -454,55 +454,81 @@ func (cs *ConsensusState) updateProposer() {
 
 func (cs *ConsensusState) proposersByVRF() (lastProposer int, curProposer int) {
 
-	chainReader := cs.backend.ChainReader()
-	header := chainReader.CurrentHeader()
-	headerHash := header.Hash()
+	if cs.Height < cs.Epoch.StartBlock {
+		panic(Fmt("Invalid cs.height and epoch.startblock: %v",
+			cs.Height, cs.Epoch.StartBlock))
+	}
 
-	curProposer = cs.proposerByVRF(headerHash, cs.Validators.Validators)
+	relHeight := cs.Height - cs.Epoch.StartBlock
 
-	headerHeight := header.Number.Uint64()
-	if headerHeight == cs.Epoch.StartBlock {
+	curProposer = cs.proposerByVRF(relHeight, cs.Validators.Validators)
+
+	if relHeight == 0 {
 		return -1, curProposer
 	}
 
-	if headerHeight > 0 {
-		lastHeader := chainReader.GetHeaderByNumber(headerHeight - 1)
-		lastHeaderHash := lastHeader.Hash()
-		lastProposer = cs.proposerByVRF(lastHeaderHash, cs.Validators.Validators)
+	if relHeight > 0 {
+		lastProposer = cs.proposerByVRF(relHeight - 1, cs.Validators.Validators)
 		return lastProposer, curProposer
 	}
 
 	return -1, -1
 }
 
-func (cs *ConsensusState) proposerByVRF(headerHash common.Hash, validators []*types.Validator) (proposer int) {
+func (cs *ConsensusState) proposerByVRF(height uint64, validators []*types.Validator) (proposer int) {
+
+	primeArr := []uint64{2,3,7,13,31,61,127,251,509,1021,2039,4093,8191,
+		16381,32749,65521,131071,262139,524287,1048573,2097143,4194301,
+		8388593/*,16777213,33554393,67108859 -- this 3 numbers are not needed currently*/}
+
+	epBlockCount := cs.Epoch.EndBlock - cs.Epoch.StartBlock + 1
+	validatorSize := len(validators)
+
+	pickedStep := uint64(1)
+
+	log.Debug("proposerByVRF", "validatorSize", validatorSize,
+		"epBlockCount", epBlockCount)
+	if validatorSize > 1 {
+		tmpNum := epBlockCount
+		if validatorSize > 3 {
+			tmpNum = epBlockCount / uint64(validatorSize/3)
+		} else {
+			tmpNum = epBlockCount / uint64(validatorSize)
+		}
+		for i := len(primeArr) - 1; i >= 0; i-- {
+			prime := primeArr[i]
+			if tmpNum > prime && epBlockCount%prime != 0 {
+				pickedStep = prime
+				break
+			}
+		}
+	}
+
+	stepF := big.NewFloat(float64(pickedStep))
+	stepF = stepF.Mul(stepF, big.NewFloat(float64(height)))
+	stepF = stepF.Mul(stepF, cs.powerPerBlockF)
+	stepI := big.NewInt(0)
+	stepI,_ = stepF.Int(stepI)
+	stepI = stepI.Mod(stepI, cs.totalVotingPower)
+
+	log.Debug("proposerByVRF", "pickedStep", pickedStep,
+		"height", height, "stepF", stepF, "totalVotingPower", cs.totalVotingPower, "stepI", stepI)
 
 	idx := -1
-
-	var roundBytes = make([]byte, 8)
-	vrfBytes := append(roundBytes, headerHash[:]...)
-	hs := sha256.New()
-	hs.Write(vrfBytes)
-	hv := hs.Sum(nil)
-	hash := new(big.Int)
-	hash.SetBytes(hv[:])
-	//n := big.NewInt(int64(cs.Validators.Size()))
-	n := big.NewInt(0)
-	for _, validator := range validators {
-		n.Add(n, validator.VotingPower)
-	}
-	n.Mod(hash, n)
-
+	bigInt0 := big.NewInt(0)
 	for i, validator := range validators {
-		n.Sub(n, validator.VotingPower)
-		if n.Sign() == -1 {
+		stepI.Sub(stepI, validator.VotingPower)
+		if stepI.Cmp(bigInt0) <= 0 {
 			idx = i
 			break
 		}
 	}
 
+	log.Debug("proposerByVRF", "idx", idx)
+
 	return idx
 }
+
 
 // Sets our private validator account for signing votes.
 func (cs *ConsensusState) GetProposer() *types.Validator {
