@@ -69,7 +69,7 @@ If you want to build and run pchain under Windows(Not recommended), you could re
 If you want to know more about our Command Line Options,please consult our 
 [CLI Wiki page](https://github.com/pchain-org/pchain/wiki/Command-Line-Options)
 
-### Please Check Your Pchain Client Version (Latest:0.9.0-test2.4)
+### Please Check Your Pchain Client Version (Latest:1.0.2)
 
 ```
 $ pchain version
@@ -124,3 +124,5 @@ Please Read The Wiki [How To Delegate](https://github.com/pchain-org/pchain/wiki
 
 Please Read The Wiki [Operating A Private Network With A Single Validator](https://github.com/pchain-org/pchain/wiki/Operating-A-Private-Network-With-A-Single-Validator)
 
+### Run pchain testnet
+Please read this [guide](https://github.com/pchain-org/pchain/wiki/How-to-sync-and-run-pchain's-testnet)
