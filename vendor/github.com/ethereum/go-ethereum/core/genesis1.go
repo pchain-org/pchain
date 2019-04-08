@@ -755,7 +755,7 @@ var DefaultTestnetGenesisJSON = `{
         "gasLimit": "0x8000000",
         "difficulty": "0x400",
         "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "coinbase": "0xf84634254ea1189516e66d9b007760092d9b8922",
+        "coinbase": "0x0000000000000000000000000000000000000000",
         "alloc": {
                 "05f256d2d5d512c59ba09b56a4fb202e5c883268": {
                         "balance": "0xffd09bead87c0378d8e6400000000",
