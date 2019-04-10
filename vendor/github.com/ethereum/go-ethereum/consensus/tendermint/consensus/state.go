@@ -67,8 +67,8 @@ func (tp *TimeoutParams) WaitForMinerBlock() time.Duration {
 //In PDBFT, wait for this long for Proposer to send proposal
 //the more round, the more time to wait for proposer's proposal
 func (tp *TimeoutParams) Propose(round int) time.Duration {
-	if round >= 3 {
-		round = 2
+	if round >= 5 {
+		round = 4
 	}
 	return time.Duration(tp.Propose0+tp.ProposeDelta*round) * time.Millisecond
 }
@@ -76,21 +76,21 @@ func (tp *TimeoutParams) Propose(round int) time.Duration {
 //In PDBFT, wait for this long for Non-Proposer validator to vote prevote
 //the more round, the more time to wait for validator's prevote
 func (tp *TimeoutParams) Prevote(round int) time.Duration {
-	//if round is less than 3, we assume it is in network traffic jam,
+	//if round is less than 5, we assume it is in network traffic jam,
 	// we skip to another round to find another proposer who has better connection situation
-	//if round is equal to or great than 3, we assume some validators are after the newest round,
+	//if round is equal to or great than 5, we assume some validators are after the newest round,
 	//we extends time every round to wait for them to catch up
-	if round < 3 {
+	if round < 5 {
 		return time.Duration(tp.Prevote0+tp.PrevoteDelta*round) * time.Millisecond
 	} else {
-		return time.Duration(tp.Prevote0+tp.PrevoteDelta*int(math.Pow(2.0, float64(round-1)))) * time.Millisecond
+		return time.Duration(tp.Prevote0+tp.PrevoteDelta*int(math.Pow(2.0, float64(round-2)))) * time.Millisecond
 	}
 }
 
 //In PDBFT, wait for this long for Non-Proposer validator to vote precommit
 func (tp *TimeoutParams) Precommit(round int) time.Duration {
-	if round >= 3 {
-		round = 2
+	if round >= 5 {
+		round = 4
 	}
 	return time.Duration(tp.Precommit0+tp.PrecommitDelta*round) * time.Millisecond
 }
