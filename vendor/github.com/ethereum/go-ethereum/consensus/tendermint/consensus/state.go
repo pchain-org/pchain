@@ -67,6 +67,9 @@ func (tp *TimeoutParams) WaitForMinerBlock() time.Duration {
 //In PDBFT, wait for this long for Proposer to send proposal
 //the more round, the more time to wait for proposer's proposal
 func (tp *TimeoutParams) Propose(round int) time.Duration {
+	if round >= 3 {
+		round = 2
+	}
 	return time.Duration(tp.Propose0+tp.ProposeDelta*round) * time.Millisecond
 }
 
@@ -80,12 +83,15 @@ func (tp *TimeoutParams) Prevote(round int) time.Duration {
 	if round < 3 {
 		return time.Duration(tp.Prevote0+tp.PrevoteDelta*round) * time.Millisecond
 	} else {
-		return time.Duration(tp.Prevote0+tp.PrevoteDelta*int(math.Pow(2.0, float64(round)))) * time.Millisecond
+		return time.Duration(tp.Prevote0+tp.PrevoteDelta*int(math.Pow(2.0, float64(round-1)))) * time.Millisecond
 	}
 }
 
 //In PDBFT, wait for this long for Non-Proposer validator to vote precommit
 func (tp *TimeoutParams) Precommit(round int) time.Duration {
+	if round >= 3 {
+		round = 2
+	}
 	return time.Duration(tp.Precommit0+tp.PrecommitDelta*round) * time.Millisecond
 }
 
