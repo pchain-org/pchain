@@ -87,6 +87,7 @@ func (self *StateDB) RawDump() Dump {
 				Proxied:        data.ProxiedBalance.String(),
 				DepositProxied: data.DepositProxiedBalance.String(),
 				PendingRefund:  data.PendingRefundBalance.String(),
+				ProxiedDetail:  make(map[string]*DumpProxied),
 				Reward:         data.RewardBalance.String(),
 				RewardDetail:   make(map[string]string),
 
