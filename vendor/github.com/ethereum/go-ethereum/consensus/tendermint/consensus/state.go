@@ -881,7 +881,7 @@ func (cs *ConsensusState) enterNewRound(height uint64, round int) {
 		cs.Proposal = nil
 		cs.ProposalBlock = nil
 		cs.ProposalBlockParts = nil
-		cs.ProposerPeerKey = nil
+		cs.ProposerPeerKey = ""
 		cs.PrevoteMaj23SignAggr = nil
 		cs.PrecommitMaj23SignAggr = nil
 	}
