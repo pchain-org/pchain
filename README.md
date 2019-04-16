@@ -76,6 +76,10 @@ $ pchain version
 //1.0.2
 ```
 
+### Sync and run testnet
+If you wanna testing your smart contract, it's better to deploy it on testnet.
+You can follow [this guide](https://github.com/pchain-org/pchain/wiki/How-to-sync-and-run-pchain's-testnet) to run pchain's testnet.
+
 ### Full Node On The Pchain Main Network
 
 ```
