@@ -2,8 +2,8 @@ package core
 
 import (
 	"github.com/ethereum/go-ethereum/core/vm"
-	"math/big"
 	"github.com/ethereum/go-ethereum/log"
+	"math/big"
 )
 
 // ApplyMessage computes the new state by applying the given message
@@ -13,10 +13,9 @@ import (
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessageEx(evm *vm.EVM, msg Message, gp *GasPool) ([]byte,  uint64, *big.Int, bool, error) {
+func ApplyMessageEx(evm *vm.EVM, msg Message, gp *GasPool) ([]byte, uint64, *big.Int, bool, error) {
 	return NewStateTransition(evm, msg, gp).TransitionDbEx()
 }
-
 
 // TransitionDbEx will move the state by applying the message against the given environment.
 func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMoney *big.Int, failed bool, err error) {
@@ -79,7 +78,7 @@ func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMon
 	//log.Debugf("TransitionDbEx 4, coinbase is %x, balance is %v\n",
 	//	st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 
-	st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+	//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 	usedMoney = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
 
 	//log.Debugf("TransitionDbEx 5\n")
@@ -90,4 +89,3 @@ func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMon
 
 	return ret, st.gasUsed(), usedMoney, vmerr != nil, err
 }
-

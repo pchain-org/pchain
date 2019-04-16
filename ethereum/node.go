@@ -43,9 +43,11 @@ func MakeSystemNode(chainId, version string, ctx *cli.Context, cch core.CrossCha
 		utils.RegisterEthStatsService(stack, cfg.Ethstats.URL)
 	}
 
-	stack.GatherServices()
-
-	return stack
+	if err := stack.GatherServices(); err != nil {
+		return nil
+	} else {
+		return stack
+	}
 }
 
 // registerEthService adds an Ethereum client to the stack.

@@ -58,9 +58,12 @@ func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
 	log.Infof("chainId: %s, ethereum.MakeSystemNode", chainId)
 	cch := GetCMInstance(ctx).cch
 	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, cch)
-	chain.EthNode = stack
-
-	return chain
+	if stack == nil {
+		return nil
+	} else {
+		chain.EthNode = stack
+		return chain
+	}
 }
 
 func StartChain(ctx *cli.Context, chain *Chain, startDone chan<- struct{}) error {

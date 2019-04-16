@@ -296,6 +296,11 @@ func (c *ChainConfig) IsMainChain() bool {
 	return c.PChainId == MainnetChainConfig.PChainId || c.PChainId == TestnetChainConfig.PChainId
 }
 
+// Check provided chain id is on main chain or not
+func IsMainChain(chainId string) bool {
+	return chainId == MainnetChainConfig.PChainId || chainId == TestnetChainConfig.PChainId
+}
+
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
 //
 // The returned GasTable's fields shouldn't, under any circumstances, be changed.

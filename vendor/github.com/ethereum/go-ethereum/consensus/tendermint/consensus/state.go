@@ -67,18 +67,32 @@ func (tp *TimeoutParams) WaitForMinerBlock() time.Duration {
 //In PDBFT, wait for this long for Proposer to send proposal
 //the more round, the more time to wait for proposer's proposal
 func (tp *TimeoutParams) Propose(round int) time.Duration {
-	return time.Duration(tp.Propose0 /*+tp.ProposeDelta*round*/) * time.Millisecond
+	if round >= 5 {
+		round = 4
+	}
+	return time.Duration(tp.Propose0+tp.ProposeDelta*round) * time.Millisecond
 }
 
 //In PDBFT, wait for this long for Non-Proposer validator to vote prevote
 //the more round, the more time to wait for validator's prevote
 func (tp *TimeoutParams) Prevote(round int) time.Duration {
-	return time.Duration(tp.Prevote0+tp.PrevoteDelta*int(math.Pow(1.5, float64(round)))) * time.Millisecond
+	//if round is less than 5, we assume it is in network traffic jam,
+	// we skip to another round to find another proposer who has better connection situation
+	//if round is equal to or great than 5, we assume some validators are after the newest round,
+	//we extends time every round to wait for them to catch up
+	if round < 5 {
+		return time.Duration(tp.Prevote0+tp.PrevoteDelta*round) * time.Millisecond
+	} else {
+		return time.Duration(tp.Prevote0+tp.PrevoteDelta*int(math.Pow(2.0, float64(round-2)))) * time.Millisecond
+	}
 }
 
-//In PDBFT, wait for this long for validator to vote precommit
+//In PDBFT, wait for this long for Non-Proposer validator to vote precommit
 func (tp *TimeoutParams) Precommit(round int) time.Duration {
-	return time.Duration(tp.Precommit0 /*+tp.PrecommitDelta*round*/) * time.Millisecond
+	if round >= 5 {
+		round = 4
+	}
+	return time.Duration(tp.Precommit0+tp.PrecommitDelta*round) * time.Millisecond
 }
 
 // After receiving +2/3 precommits for a single block (a commit), wait this long for stragglers in the next height's RoundStepNewHeight
@@ -421,7 +435,7 @@ func (cs *ConsensusState) updateProposer() {
 
 		//if current proposer was also last vrf proposer, but not voted within last height
 		//just skip the proposer within this height
-		if lastProposer > 0 &&
+		if lastProposer >= 0 &&
 			curProposer == lastProposer &&
 			cs.state.TdmExtra != nil &&
 			cs.state.TdmExtra.SeenCommit != nil &&
@@ -867,6 +881,7 @@ func (cs *ConsensusState) enterNewRound(height uint64, round int) {
 		cs.Proposal = nil
 		cs.ProposalBlock = nil
 		cs.ProposalBlockParts = nil
+		cs.ProposerPeerKey = ""
 		cs.PrevoteMaj23SignAggr = nil
 		cs.PrecommitMaj23SignAggr = nil
 	}
@@ -875,8 +890,14 @@ func (cs *ConsensusState) enterNewRound(height uint64, round int) {
 	types.FireEventNewRound(cs.evsw, cs.RoundStateEvent())
 
 	// Immediately go to enterPropose.
-	if cs.IsProposer() && cs.blockFromMiner == nil {
-		cs.logger.Info("we are proposer, but blockFromMiner is nil, let's wait a second!!!")
+	if cs.IsProposer() && (cs.blockFromMiner == nil || cs.Height != cs.blockFromMiner.NumberU64()) {
+
+		if cs.blockFromMiner == nil {
+			cs.logger.Info("we are proposer, but blockFromMiner is nil , let's wait a second!!!")
+		} else {
+			cs.logger.Info("we are proposer, but height mismatch",
+				"cs.Height", cs.Height, "cs.blockFromMiner.NumberU64()", cs.blockFromMiner.NumberU64())
+		}
 		cs.scheduleTimeout(cs.timeoutParams.WaitForMinerBlock(), height, round, RoundStepWaitForMinerBlock)
 		return
 	}
@@ -1019,6 +1040,12 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 
 	//here we wait for ethereum block to propose
 	if cs.blockFromMiner != nil {
+
+		if cs.Height != cs.blockFromMiner.NumberU64() {
+			log.Warn("createProposalBlock(), height mismatch", "cs.Height", cs.Height,
+				"cs.blockFromMiner.NumberU64()", cs.blockFromMiner.NumberU64())
+			return nil, nil
+		}
 
 		ethBlock := cs.blockFromMiner
 		var commit = &types.Commit{}
@@ -1589,8 +1616,8 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, boo
 	cs.logger.Debugf("Received SignAggr %#v", signAggr)
 
 	// Does not apply
-	if signAggr.Height != cs.Height || signAggr.Round != cs.Round {
-		cs.logger.Debug("does not apply")
+	if signAggr.Height != cs.Height {
+		cs.logger.Debug("does not apply for this height")
 		return nil, false
 	}
 
@@ -1605,13 +1632,27 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, boo
 		return ErrInvalidSignatureAggr, false
 	}
 
+	if signAggr.Type == types.VoteTypePrevote ||
+		signAggr.Type == types.VoteTypePrecommit {
+
+		cs.VoteSignAggr.AddSignAggr(signAggr)
+	}  else {
+
+		cs.logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
+		return ErrInvalidSignatureAggr, false
+	}
+
+	if signAggr.Round != cs.Round {
+		cs.logger.Debug("does not apply for this round")
+		return nil, false
+	}
+
 	if signAggr.Type == types.VoteTypePrevote {
 		// How if the signagure aggregation is for another block
 		if cs.PrevoteMaj23SignAggr != nil {
 			return ErrDuplicateSignatureAggr, false
 		}
 
-		cs.VoteSignAggr.AddSignAggr(signAggr)
 		cs.PrevoteMaj23SignAggr = signAggr
 
 		if (cs.LockedBlock != nil) && (cs.LockedRound < signAggr.Round) {
@@ -1631,16 +1672,8 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, boo
 			return ErrDuplicateSignatureAggr, false
 		}
 
-		cs.logger.Debugf("signAggr:%+v", signAggr)
-		_, err := cs.VoteSignAggr.AddSignAggr(signAggr)
-		if err != nil {
-			panic(err)
-		}
 		cs.PrecommitMaj23SignAggr = signAggr
 		cs.logger.Debugf("setMaj23SignAggr:precommit aggr %#v", cs.PrecommitMaj23SignAggr)
-	} else {
-		cs.logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
-		return ErrInvalidSignatureAggr, false
 	}
 
 	if signAggr.Type == types.VoteTypePrevote {
@@ -1680,7 +1713,7 @@ func (cs *ConsensusState) handleSignAggr(signAggr *types.SignAggr) error {
 	if signAggr == nil {
 		return fmt.Errorf("SignAggr is nil")
 	}
-	if signAggr.Height == cs.Height && signAggr.Round == cs.Round {
+	if signAggr.Height == cs.Height /*&& signAggr.Round == cs.Round*/ {
 		err, _ := cs.setMaj23SignAggr(signAggr)
 		return err
 	}
@@ -1983,10 +2016,10 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	var sigs []*tmdcrypto.Signature
 	var ss []byte
 
-	for index, vote := range votes {
+	for _, vote := range votes {
 		if vote != nil && maj23.Equals(vote.BlockID) {
 			ss = vote.SignBytes
-			signBitArray.SetIndex((uint64)(index), true)
+			signBitArray.SetIndex(vote.ValidatorIndex, true)
 			sigs = append(sigs, &(vote.Signature))
 		}
 	}
