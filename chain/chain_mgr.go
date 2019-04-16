@@ -8,9 +8,9 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/pchain/p2p"
@@ -132,7 +132,7 @@ func (cm *ChainManager) InitCrossChainHelper() {
 	cm.cch.chainInfoDB = dbm.NewDB("chaininfo",
 		cm.mainChain.Config.GetString("db_backend"),
 		cm.ctx.GlobalString(utils.DataDirFlag.Name))
-	cm.cch.localTX3CacheDB, _ = ethdb.NewLDBDatabase(path.Join(cm.ctx.GlobalString(utils.DataDirFlag.Name), "tx3cache"), 0, 0)
+	cm.cch.localTX3CacheDB, _ = rawdb.NewLevelDBDatabase(path.Join(cm.ctx.GlobalString(utils.DataDirFlag.Name), "tx3cache"), 0, 0, "pchain/db/tx3/")
 
 	chainId := MainChain
 	if cm.ctx.GlobalBool(utils.TestnetFlag.Name) {

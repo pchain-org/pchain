@@ -341,23 +341,37 @@ func (self *worker) wait() {
 
 			if result.Work != nil {
 				block = result.Block
-
+				hash := block.Hash()
 				work := result.Work
-				// Update the block hash in all logs since it is now available and not when the
-				// receipt/log of individual transactions were created.
-				for _, r := range work.receipts {
-					for _, l := range r.Logs {
-						l.BlockHash = block.Hash()
+
+				for i, receipt := range work.receipts {
+					// add block location fields
+					receipt.BlockHash = hash
+					receipt.BlockNumber = block.Number()
+					receipt.TransactionIndex = uint(i)
+
+					// Update the block hash in all logs since it is now available and not when the
+					// receipt/log of individual transactions were created.
+					for _, l := range receipt.Logs {
+						l.BlockHash = hash
 					}
 				}
 				for _, log := range work.state.Logs() {
-					log.BlockHash = block.Hash()
+					log.BlockHash = hash
 				}
 				receipts = work.receipts
 				state = work.state
 				ops = work.ops
 			} else if result.Intermediate != nil {
 				block = result.Intermediate.Block
+
+				for i, receipt := range result.Intermediate.Receipts {
+					// add block location fields
+					receipt.BlockHash = block.Hash()
+					receipt.BlockNumber = block.Number()
+					receipt.TransactionIndex = uint(i)
+				}
+
 				receipts = result.Intermediate.Receipts
 				state = result.Intermediate.State
 				ops = result.Intermediate.Ops
@@ -462,8 +476,8 @@ func (self *worker) commitNewWork() {
 	parent := self.chain.CurrentBlock()
 
 	tstamp := tstart.Unix()
-	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
-		tstamp = parent.Time().Int64() + 1
+	if parent.Time() >= uint64(tstamp) {
+		tstamp = int64(parent.Time() + 1)
 	}
 	// this will ensure we're not going off too far in the future
 	if now := time.Now().Unix(); tstamp > now+1 {

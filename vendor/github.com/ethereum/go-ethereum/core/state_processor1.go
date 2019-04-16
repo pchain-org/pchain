@@ -78,6 +78,9 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		receipt.Logs = statedb.GetLogs(tx.Hash())
 		//log.Debugf("ApplyTransactionEx，new receipt with receipt.Logs %v\n", receipt.Logs)
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		receipt.BlockHash = statedb.BlockHash()
+		receipt.BlockNumber = header.Number
+		receipt.TransactionIndex = uint(statedb.TxIndex())
 		//log.Debugf("ApplyTransactionEx，new receipt with receipt.Bloom %v\n", receipt.Bloom)
 		//log.Debugf("ApplyTransactionEx 4\n")
 		return receipt, gas, err
@@ -181,6 +184,9 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		// Set the receipt logs and create a bloom for filtering
 		receipt.Logs = statedb.GetLogs(tx.Hash())
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		receipt.BlockHash = statedb.BlockHash()
+		receipt.BlockNumber = header.Number
+		receipt.TransactionIndex = uint(statedb.TxIndex())
 
 		statedb.SetNonce(msg.From(), statedb.GetNonce(msg.From())+1)
 		log.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)

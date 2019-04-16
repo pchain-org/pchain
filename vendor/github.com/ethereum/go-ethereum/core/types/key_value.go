@@ -105,6 +105,11 @@ func (kv *BSKeyValueSet) Put(key []byte, value []byte) error {
 	return nil
 }
 
+func (kv *BSKeyValueSet) Delete(key []byte) error {
+	panic("Not implemented")
+	return nil
+}
+
 func (kv *BSKeyValueSet) Get(key []byte) (value []byte, err error) {
 
 	for _, item := range kv.KVArray {

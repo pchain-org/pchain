@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -286,7 +287,7 @@ func (cch *CrossChainHelper) GetTxFromMainChain(txHash common.Hash) *types.Trans
 	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
 	chainDb := ethereum.ChainDb()
 
-	tx, _, _, _ := core.GetTransaction(chainDb, txHash)
+	tx, _, _, _ := rawdb.ReadTransaction(chainDb, txHash)
 	return tx
 }
 
@@ -521,7 +522,7 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 	for i, txIndex := range proofData.TxIndexs {
 		keybuf.Reset()
 		rlp.Encode(keybuf, uint(txIndex))
-		_, err, _ := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
+		_, _, err := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
 		if err != nil {
 			return err
 		}
@@ -566,7 +567,7 @@ func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transac
 	}
 	keybuf := new(bytes.Buffer)
 	rlp.Encode(keybuf, tx3ProofData.TxIndexs[0])
-	val, err, _ := trie.VerifyProof(header.TxHash, keybuf.Bytes(), tx3ProofData.TxProofs[0])
+	val, _, err := trie.VerifyProof(header.TxHash, keybuf.Bytes(), tx3ProofData.TxProofs[0])
 	if err != nil {
 		return err
 	}
@@ -599,23 +600,23 @@ func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transac
 
 // TX3LocalCache start
 func (cch *CrossChainHelper) GetTX3(chainId string, txHash common.Hash) *types.Transaction {
-	return core.GetTX3(cch.localTX3CacheDB, chainId, txHash)
+	return rawdb.GetTX3(cch.localTX3CacheDB, chainId, txHash)
 }
 
 func (cch *CrossChainHelper) DeleteTX3(chainId string, txHash common.Hash) {
-	core.DeleteTX3(cch.localTX3CacheDB, chainId, txHash)
+	rawdb.DeleteTX3(cch.localTX3CacheDB, chainId, txHash)
 }
 
 func (cch *CrossChainHelper) WriteTX3ProofData(proofData *types.TX3ProofData) error {
-	return core.WriteTX3ProofData(cch.localTX3CacheDB, proofData)
+	return rawdb.WriteTX3ProofData(cch.localTX3CacheDB, proofData)
 }
 
 func (cch *CrossChainHelper) GetTX3ProofData(chainId string, txHash common.Hash) *types.TX3ProofData {
-	return core.GetTX3ProofData(cch.localTX3CacheDB, chainId, txHash)
+	return rawdb.GetTX3ProofData(cch.localTX3CacheDB, chainId, txHash)
 }
 
 func (cch *CrossChainHelper) GetAllTX3ProofData() []*types.TX3ProofData {
-	return core.GetAllTX3ProofData(cch.localTX3CacheDB)
+	return rawdb.GetAllTX3ProofData(cch.localTX3CacheDB)
 }
 
 // TX3LocalCache end

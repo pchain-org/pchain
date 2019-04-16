@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -91,8 +90,6 @@ type StateDB struct {
 	journal        journal
 	validRevisions []revision
 	nextRevisionId int
-
-	lock sync.Mutex
 }
 
 // Create a new state from a given trie
@@ -224,6 +221,16 @@ func (self *StateDB) GetNonce(addr common.Address) uint64 {
 	}
 
 	return 0
+}
+
+// TxIndex returns the current transaction index set by Prepare.
+func (self *StateDB) TxIndex() int {
+	return self.txIndex
+}
+
+// BlockHash returns the current block hash set by Prepare.
+func (self *StateDB) BlockHash() common.Hash {
+	return self.bhash
 }
 
 func (self *StateDB) GetCode(addr common.Address) []byte {
@@ -509,20 +516,33 @@ func (self *StateDB) CreateAccount(addr common.Address) {
 	}
 }
 
-func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) {
+func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
 	so := db.getStateObject(addr)
 	if so == nil {
-		return
+		return nil
 	}
 	it := trie.NewIterator(so.getTrie(db.db).NodeIterator(nil))
+
 	for it.Next() {
 		key := common.BytesToHash(db.trie.GetKey(it.Key))
 		if value, dirty := so.dirtyStorage[key]; dirty {
-			cb(key, value)
+			if !cb(key, value) {
+				return nil
+			}
 			continue
 		}
-		cb(key, common.BytesToHash(it.Value))
+
+		if len(it.Value) > 0 {
+			_, content, _, err := rlp.Split(it.Value)
+			if err != nil {
+				return err
+			}
+			if !cb(key, common.BytesToHash(content)) {
+				return nil
+			}
+		}
 	}
+	return nil
 }
 
 func (db *StateDB) ForEachTX1(addr common.Address, cb func(tx1 common.Hash) bool) {
@@ -576,9 +596,6 @@ func (db *StateDB) ForEachProxied(addr common.Address, cb func(key common.Addres
 // Copy creates a deep, independent copy of the state.
 // Snapshots of the copied state cannot be applied to the copy.
 func (self *StateDB) Copy() *StateDB {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
 		db:                            self.db,
@@ -747,7 +764,7 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		case isDirty:
 			// Write any contract code associated with the state object
 			if stateObject.code != nil && stateObject.dirtyCode {
-				s.db.TrieDB().Insert(common.BytesToHash(stateObject.CodeHash()), stateObject.code)
+				s.db.TrieDB().InsertBlob(common.BytesToHash(stateObject.CodeHash()), stateObject.code)
 				stateObject.dirtyCode = false
 			}
 			// Write any storage changes in the state object to its storage trie.
@@ -821,6 +838,5 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		}
 		return nil
 	})
-	log.Debug("Trie cache stats after commit", "misses", trie.CacheMisses(), "unloads", trie.CacheUnloads())
 	return root, err
 }
