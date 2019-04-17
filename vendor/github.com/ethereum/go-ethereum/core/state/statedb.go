@@ -36,8 +36,8 @@ type revision struct {
 }
 
 var (
-	// emptyState is the known hash of an empty state trie entry.
-	emptyState = crypto.Keccak256Hash(nil)
+	// emptyRoot is the known root hash of an empty trie.
+	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 
 	// emptyCode is the known hash of the empty EVM bytecode.
 	emptyCode = crypto.Keccak256Hash(nil)
@@ -817,19 +817,19 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		if err := rlp.DecodeBytes(leaf, &account); err != nil {
 			return nil
 		}
-		if account.Root != emptyState {
+		if account.Root != emptyRoot {
 			s.db.TrieDB().Reference(account.Root, parent)
 		}
-		if account.TX1Root != emptyState {
+		if account.TX1Root != emptyRoot {
 			s.db.TrieDB().Reference(account.TX1Root, parent)
 		}
-		if account.TX3Root != emptyState {
+		if account.TX3Root != emptyRoot {
 			s.db.TrieDB().Reference(account.TX3Root, parent)
 		}
-		if account.ProxiedRoot != emptyState {
+		if account.ProxiedRoot != emptyRoot {
 			s.db.TrieDB().Reference(account.ProxiedRoot, parent)
 		}
-		if account.RewardRoot != emptyState {
+		if account.RewardRoot != emptyRoot {
 			s.db.TrieDB().Reference(account.RewardRoot, parent)
 		}
 		code := common.BytesToHash(account.CodeHash)
