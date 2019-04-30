@@ -145,6 +145,11 @@ func (sb *backend) Stop() error {
 	return nil
 }
 
+func (sb *backend) Close() error {
+	sb.core.epochDB.Close()
+	return nil
+}
+
 // Author retrieves the Ethereum address of the account that minted the given
 // block, which may be different from the header's coinbase if a consensus
 // engine is based on signatures.
