@@ -440,7 +440,7 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error
 				}
 			}
 
-			if ep.Number == 0 || ep.Number > ci.EpochNumber {
+			if ep.Number == 0 || ep.Number >= ci.EpochNumber {
 				ci.EpochNumber = ep.Number
 				ci.Epoch = ep
 				core.SaveChainInfo(cch.chainInfoDB, ci)
