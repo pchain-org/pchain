@@ -374,26 +374,29 @@ func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
 		}
 	}
 
-	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
-	if ci == nil {
-		return fmt.Errorf("chain info %s not found", chainId)
-	}
-	epoch := ci.GetEpochByBlockNumber(tdmExtra.Height)
-	if epoch == nil {
-		return fmt.Errorf("could not get epoch for block height %v", tdmExtra.Height)
-	}
-	valSet := epoch.Validators
-	if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
-		return errors.New("inconsistent validator set")
-	}
+	// Bypass the validator check for official child chain 0
+	if chainId != "child_0" {
+		ci := core.GetChainInfo(cch.chainInfoDB, chainId)
+		if ci == nil {
+			return fmt.Errorf("chain info %s not found", chainId)
+		}
+		epoch := ci.GetEpochByBlockNumber(tdmExtra.Height)
+		if epoch == nil {
+			return fmt.Errorf("could not get epoch for block height %v", tdmExtra.Height)
+		}
+		valSet := epoch.Validators
+		if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
+			return errors.New("inconsistent validator set")
+		}
 
-	seenCommit := tdmExtra.SeenCommit
-	if !bytes.Equal(tdmExtra.SeenCommitHash, seenCommit.Hash()) {
-		return errors.New("invalid committed seals")
-	}
+		seenCommit := tdmExtra.SeenCommit
+		if !bytes.Equal(tdmExtra.SeenCommitHash, seenCommit.Hash()) {
+			return errors.New("invalid committed seals")
+		}
 
-	if err = valSet.VerifyCommit(tdmExtra.ChainID, tdmExtra.Height, seenCommit); err != nil {
-		return err
+		if err = valSet.VerifyCommit(tdmExtra.ChainID, tdmExtra.Height, seenCommit); err != nil {
+			return err
+		}
 	}
 
 	log.Debug("VerifyChildChainProofData - end")
