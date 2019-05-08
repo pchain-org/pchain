@@ -264,7 +264,7 @@ func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
 	mainChainStatus := &ChainStatus{
 		ChainID:    mainChainId,
 		Number:     hexutil.Uint64(mainChainEpoch.Number),
-		StartTime:  mainChainEpoch.StartTime,
+		StartTime:  &mainChainEpoch.StartTime,
 		Validators: mainChainValidators,
 	}
 
@@ -281,21 +281,31 @@ func (s *PublicChainAPI) GetAllChains() []*ChainStatus {
 	for _, chainId := range chainIds {
 		chainInfo := core.GetChainInfo(chainInfoDB, chainId)
 
-		epoch := chainInfo.Epoch
-		validators := make([]*ChainValidator, 0, epoch.Validators.Size())
-		for _, val := range epoch.Validators.Validators {
-			validators = append(validators, &ChainValidator{
-				Account:     common.BytesToAddress(val.Address),
-				VotingPower: (*hexutil.Big)(val.VotingPower),
-			})
-		}
+		var chain_status *ChainStatus
 
-		chain_status := &ChainStatus{
-			ChainID:    chainInfo.ChainId,
-			Owner:      chainInfo.Owner,
-			Number:     hexutil.Uint64(epoch.Number),
-			StartTime:  epoch.StartTime,
-			Validators: validators,
+		epoch := chainInfo.Epoch
+		if epoch == nil {
+			chain_status = &ChainStatus{
+				ChainID: chainInfo.ChainId,
+				Owner:   chainInfo.Owner,
+				Message: "child chain not start",
+			}
+		} else {
+			validators := make([]*ChainValidator, 0, epoch.Validators.Size())
+			for _, val := range epoch.Validators.Validators {
+				validators = append(validators, &ChainValidator{
+					Account:     common.BytesToAddress(val.Address),
+					VotingPower: (*hexutil.Big)(val.VotingPower),
+				})
+			}
+
+			chain_status = &ChainStatus{
+				ChainID:    chainInfo.ChainId,
+				Owner:      chainInfo.Owner,
+				Number:     hexutil.Uint64(epoch.Number),
+				StartTime:  &epoch.StartTime,
+				Validators: validators,
+			}
 		}
 		result = append(result, chain_status)
 	}
@@ -817,9 +827,11 @@ func sbr_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 type ChainStatus struct {
 	ChainID    string            `json:"chain_id"`
 	Owner      common.Address    `json:"owner"`
-	Number     hexutil.Uint64    `json:"current_epoch"`
-	StartTime  time.Time         `json:"epoch_start_time"`
-	Validators []*ChainValidator `json:"validators"`
+	Number     hexutil.Uint64    `json:"current_epoch,omitempty"`
+	StartTime  *time.Time        `json:"epoch_start_time,omitempty"`
+	Validators []*ChainValidator `json:"validators,omitempty"`
+
+	Message string `json:"message,omitempty"`
 }
 
 type ChainValidator struct {
