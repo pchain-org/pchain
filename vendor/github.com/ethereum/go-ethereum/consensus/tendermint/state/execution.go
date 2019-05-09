@@ -81,9 +81,15 @@ func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 	if epochInBlock != nil {
 		if epochInBlock.Number == currentEpoch.Number+1 {
 			// Save the next epoch
+			if block.NumberU64() == currentEpoch.GetVoteStartHeight() {
+				// Propose next epoch
+				epochInBlock.SetEpochValidatorVoteSet(ep.NewEpochValidatorVoteSet())
+			} else if block.NumberU64() == currentEpoch.GetRevealVoteEndHeight()+2 {
+				// Finalize next epoch
+				// Validator set in next epoch will not finalize and send to mainchain
+			}
 			epochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
 			epochInBlock.SetRewardScheme(currentEpoch.GetRewardScheme())
-			epochInBlock.SetEpochValidatorVoteSet(ep.NewEpochValidatorVoteSet())
 			currentEpoch.SetNextEpoch(epochInBlock)
 			currentEpoch.Save()
 		} else if epochInBlock.Number == currentEpoch.Number {
@@ -107,8 +113,12 @@ func autoStartMining(bc *core.BlockChain, block *ethTypes.Block) {
 		// Re-Calculate the next epoch validators
 		nextEp := currentEpoch.GetNextEpoch()
 		state, _ := bc.State()
-		nextValidators := nextEp.Validators.Copy()
-		ep.DryRunUpdateEpochValidatorSet(state, nextValidators, nextEp.GetEpochValidatorVoteSet())
+		nextValidators := currentEpoch.Validators.Copy()
+		dryrunErr := ep.DryRunUpdateEpochValidatorSet(state, nextValidators, nextEp.GetEpochValidatorVoteSet())
+		if dryrunErr != nil {
+			panic("can not update the validator set base on the vote, error: " + dryrunErr.Error())
+		}
+		nextEp.Validators = nextValidators
 
 		if nextValidators.HasAddress(eng.PrivateValidator().Bytes()) && !eng.IsStarted() {
 			bc.PostChainEvents([]interface{}{core.StartMiningEvent{}}, nil)

@@ -121,6 +121,19 @@ func SaveChainInfo(db dbm.DB, ci *ChainInfo) error {
 	return nil
 }
 
+func SaveFutureEpoch(db dbm.DB, futureEpoch *ep.Epoch, chainId string) error {
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	if futureEpoch != nil {
+		err := saveEpoch(db, futureEpoch, chainId)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func loadCoreChainInfo(db dbm.DB, chainId string) *CoreChainInfo {
 
 	cci := CoreChainInfo{db: db}
@@ -179,6 +192,13 @@ func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
 			return epoch
 		}
 
+		// If blockNumber > epoch EndBlock, find future epoch
+		if blockNumber > epoch.EndBlock {
+			ep := loadEpoch(ci.db, epoch.Number+1, ci.ChainId)
+			return ep
+		}
+
+		// If blockNumber < epoch StartBlock, find history epoch
 		number := epoch.Number
 		for {
 			if number == 0 {

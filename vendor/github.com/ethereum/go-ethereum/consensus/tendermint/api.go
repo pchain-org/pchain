@@ -113,7 +113,7 @@ func (api *API) GetNextEpochValidators() ([]*tdmTypes.EpochValidator, error) {
 			return nil, err
 		}
 
-		nextValidators := nextEp.Validators.Copy()
+		nextValidators := ep.Validators.Copy()
 		err = epoch.DryRunUpdateEpochValidatorSet(state, nextValidators, nextEp.GetEpochValidatorVoteSet())
 		if err != nil {
 			return nil, err

@@ -304,7 +304,7 @@ type ConsensusState struct {
 
 	mtx sync.Mutex
 	RoundState
-	Epoch *ep.Epoch
+	Epoch *ep.Epoch // Current Epoch
 	state *sm.State // State until height-1.
 
 	peerMsgQueue     chan msgInfo   // serializes msgs affecting state (proposals, block parts, votes)
@@ -1051,13 +1051,19 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 		var commit = &types.Commit{}
 		var epochBytes []byte
 
-		// New Height equal to the first block in new Epoch
-		if cs.Height == cs.Epoch.StartBlock {
+		// After Reveal vote end height + 1, next epoch validator will be updated at end of block insert
+		// at height + 2, we should put the new epoch bytes into New Block
+		if cs.Height == cs.Epoch.GetRevealVoteEndHeight()+2 {
+			// Save the next epoch data into block and tell the main chain
+			nextEp := cs.Epoch.GetNextEpoch()
+			if nextEp == nil {
+				panic("missing next epoch after reveal vote")
+			}
+			epochBytes = nextEp.Bytes()
+		} else if cs.Height == cs.Epoch.StartBlock || cs.Height == 1 {
+			// We're save the epoch data into block so that it'll be sent to the main chain.
+			// When block height equal to first block of Chain or Epoch
 			epochBytes = cs.Epoch.Bytes()
-		} else if cs.Height == 1 {
-			// We're creating a proposal for the first block.
-			// always setup the epoch so that it'll be sent to the main chain.
-			epochBytes = cs.state.Epoch.Bytes()
 		} else {
 			shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
 			if shouldProposeEpoch {
@@ -1194,14 +1200,16 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	// Valdiate proposal block
 	proposedNextEpoch := ep.FromBytes(cs.ProposalBlock.TdmExtra.EpochBytes)
 	if proposedNextEpoch != nil && proposedNextEpoch.Number == cs.Epoch.Number+1 {
-		lastHeight := cs.backend.ChainReader().CurrentBlock().Number().Uint64()
-		lastBlockTime := time.Unix(cs.backend.ChainReader().CurrentBlock().Time().Int64(), 0)
-		err = cs.Epoch.ValidateNextEpoch(proposedNextEpoch, lastHeight, lastBlockTime)
-		if err != nil {
-			// ProposalBlock is invalid, prevote nil.
-			cs.logger.Warnf("enterPrevote: Proposal Next Epoch is invalid, error: %v", err)
-			cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
-			return
+		if cs.Epoch.ShouldProposeNextEpoch(cs.Height) {
+			lastHeight := cs.backend.ChainReader().CurrentBlock().Number().Uint64()
+			lastBlockTime := time.Unix(cs.backend.ChainReader().CurrentBlock().Time().Int64(), 0)
+			err = cs.Epoch.ValidateNextEpoch(proposedNextEpoch, lastHeight, lastBlockTime)
+			if err != nil {
+				// ProposalBlock is invalid, prevote nil.
+				cs.logger.Warnf("enterPrevote: Proposal Next Epoch is invalid, error: %v", err)
+				cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+				return
+			}
 		}
 	}
 
@@ -1636,7 +1644,7 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, boo
 		signAggr.Type == types.VoteTypePrecommit {
 
 		cs.VoteSignAggr.AddSignAggr(signAggr)
-	}  else {
+	} else {
 
 		cs.logger.Warn(Fmt("setMaj23SignAggr: invalid type %d for signAggr %#v\n", signAggr.Type, signAggr))
 		return ErrInvalidSignatureAggr, false

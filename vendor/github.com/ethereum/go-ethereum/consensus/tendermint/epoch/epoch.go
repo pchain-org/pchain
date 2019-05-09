@@ -635,7 +635,7 @@ func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
 		rs: epoch.rs,
 
 		Number:           epoch.Number,
-		RewardPerBlock:   epoch.RewardPerBlock,
+		RewardPerBlock:   new(big.Int).Set(epoch.RewardPerBlock),
 		StartBlock:       epoch.StartBlock,
 		EndBlock:         epoch.EndBlock,
 		StartTime:        epoch.StartTime,
