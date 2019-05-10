@@ -84,13 +84,16 @@ func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 			if block.NumberU64() == currentEpoch.GetVoteStartHeight() {
 				// Propose next epoch
 				epochInBlock.SetEpochValidatorVoteSet(ep.NewEpochValidatorVoteSet())
+				epochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
+				epochInBlock.SetRewardScheme(currentEpoch.GetRewardScheme())
+				currentEpoch.SetNextEpoch(epochInBlock)
 			} else if block.NumberU64() == currentEpoch.GetRevealVoteEndHeight()+2 {
 				// Finalize next epoch
 				// Validator set in next epoch will not finalize and send to mainchain
+				nextEp := currentEpoch.GetNextEpoch()
+				nextEp.Validators = epochInBlock.Validators
+				nextEp.Status = ep.EPOCH_VOTED_NOT_SAVED
 			}
-			epochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
-			epochInBlock.SetRewardScheme(currentEpoch.GetRewardScheme())
-			currentEpoch.SetNextEpoch(epochInBlock)
 			currentEpoch.Save()
 		} else if epochInBlock.Number == currentEpoch.Number {
 			// Update the current epoch Start Time from proposer
