@@ -258,7 +258,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 			config.Tendermint.Epoch = chainConfig.Tendermint.Epoch
 		}
 		config.Tendermint.ProposerPolicy = tendermint.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
-		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), db, cch)
+		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), cch)
 	}
 
 	// Otherwise assume proof-of-work
@@ -498,6 +498,8 @@ func (s *Ethereum) Stop() error {
 	}
 	s.txPool.Stop()
 	s.miner.Stop()
+	s.engine.Close()
+	s.miner.Close()
 	s.eventMux.Stop()
 
 	s.chainDb.Close()

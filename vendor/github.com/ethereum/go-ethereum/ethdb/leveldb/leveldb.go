@@ -136,7 +136,13 @@ func (db *Database) Close() error {
 		}
 		db.quitChan = nil
 	}
-	return db.db.Close()
+	err := db.db.Close()
+	if err == nil {
+		db.log.Info("Database closed")
+	} else {
+		db.log.Error("Failed to close database", "err", err)
+	}
+	return err
 }
 
 // Has retrieves if a key is present in the key-value store.

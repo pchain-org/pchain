@@ -57,6 +57,7 @@ type Miner struct {
 	mining   int32
 	eth      Backend
 	engine   consensus.Engine
+	exitCh   chan struct{}
 
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
@@ -70,6 +71,7 @@ func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine con
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
+		exitCh:   make(chan struct{}),
 		worker:   newWorker(config, engine, eth, mux, gasFloor, gasCeil, cch),
 		canStart: 1,
 		logger:   config.ChainLogger,
@@ -87,31 +89,38 @@ func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine con
 // and halt your mining operation for as long as the DOS continues.
 func (self *Miner) update() {
 	events := self.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
-out:
-	for ev := range events.Chan() {
-		switch ev.Data.(type) {
-		case downloader.StartEvent:
-			log.Debug("(self *Miner) update(); downloader.StartEvent received\n")
-			atomic.StoreInt32(&self.canStart, 0)
-			if self.Mining() {
-				self.Stop()
-				atomic.StoreInt32(&self.shouldStart, 1)
-				self.logger.Info("Mining aborted due to sync")
-			}
-		case downloader.DoneEvent, downloader.FailedEvent:
+	defer events.Unsubscribe()
 
-			log.Debug("(self *Miner) update(); downloader.DoneEvent, downloader.FailedEvent received\n")
-			shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
-
-			atomic.StoreInt32(&self.canStart, 1)
-			atomic.StoreInt32(&self.shouldStart, 0)
-			if shouldStart {
-				self.Start(self.coinbase)
+	for {
+		select {
+		case ev := <-events.Chan():
+			if ev == nil {
+				return
 			}
-			// unsubscribe. we're only interested in this event once
-			events.Unsubscribe()
-			// stop immediately and ignore all further pending events
-			break out
+			switch ev.Data.(type) {
+			case downloader.StartEvent:
+				self.logger.Debug("(self *Miner) update(); downloader.StartEvent received\n")
+				atomic.StoreInt32(&self.canStart, 0)
+				if self.Mining() {
+					self.Stop()
+					atomic.StoreInt32(&self.shouldStart, 1)
+					self.logger.Info("Mining aborted due to sync")
+				}
+			case downloader.DoneEvent, downloader.FailedEvent:
+
+				self.logger.Debug("(self *Miner) update(); downloader.DoneEvent, downloader.FailedEvent received\n")
+				shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
+
+				atomic.StoreInt32(&self.canStart, 1)
+				atomic.StoreInt32(&self.shouldStart, 0)
+				if shouldStart {
+					self.Start(self.coinbase)
+				}
+				// stop immediately and ignore all further pending events
+				return
+			}
+		case <-self.exitCh:
+			return
 		}
 	}
 }
@@ -131,6 +140,11 @@ func (self *Miner) Start(coinbase common.Address) {
 func (self *Miner) Stop() {
 	self.worker.stop()
 	atomic.StoreInt32(&self.shouldStart, 0)
+}
+
+func (self *Miner) Close() {
+	self.worker.close()
+	close(self.exitCh)
 }
 
 func (self *Miner) Register(agent Agent) {

@@ -1,11 +1,16 @@
 package main
 
 import (
+	"fmt"
+	"github.com/ethereum/go-ethereum/bridge"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pchain/chain"
 	"gopkg.in/urfave/cli.v1"
+	"os"
+	"os/signal"
 	"strings"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
+	"syscall"
 )
 
 func pchainCmd(ctx *cli.Context) error {
@@ -69,9 +74,28 @@ func pchainCmd(ctx *cli.Context) error {
 
 	chainMgr.StartInspectEvent()
 
-	chainMgr.WaitChainsStop()
+	go func() {
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+		defer signal.Stop(sigc)
+		<-sigc
+		log.Info("Got interrupt, shutting down...")
 
-	chainMgr.Stop()
+		chainMgr.StopChain()
+		chainMgr.WaitChainsStop()
+		chainMgr.Stop()
+
+		for i := 3; i > 0; i-- {
+			<-sigc
+			if i > 1 {
+				log.Info(fmt.Sprintf("Already shutting down, interrupt %d more times for panic.", i-1))
+			}
+		}
+		bridge.Debug_Exit() // ensure trace and CPU profile data is flushed.
+		bridge.Debug_LoadPanic("boom")
+	}()
+
+	chainMgr.Wait()
 
 	return nil
 }

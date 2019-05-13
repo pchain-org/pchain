@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -17,8 +16,7 @@ import (
 
 // New creates an Ethereum backend for Tendermint core engine.
 func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
-	privateKey *ecdsa.PrivateKey, db ethdb.Database,
-	cch core.CrossChainHelper) consensus.Tendermint {
+	privateKey *ecdsa.PrivateKey, cch core.CrossChainHelper) consensus.Tendermint {
 	// Allocate the snapshot caches and create the engine
 	//recents, _ := lru.NewARC(inmemorySnapshots)
 	//recentMessages, _ := lru.NewARC(inmemoryPeers)
@@ -34,7 +32,6 @@ func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 		//address:          crypto.PubkeyToAddress(privateKey.PublicKey),
 		//core:             node,
 		logger:    chainConfig.ChainLogger,
-		db:        db,
 		commitCh:  make(chan *ethTypes.Block, 1),
 		vcommitCh: make(chan *types.IntermediateBlockResult, 1),
 		//recents:          recents,
@@ -55,7 +52,6 @@ type backend struct {
 	address            common.Address
 	core               *Node
 	logger             log.Logger
-	db                 ethdb.Database
 	chain              consensus.ChainReader
 	currentBlock       func() *ethTypes.Block
 	hasBadBlock        func(hash common.Hash) bool

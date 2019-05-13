@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -496,6 +497,12 @@ func (self *Network) Shutdown() {
 		log.Debug(fmt.Sprintf("stopping node %s", node.ID().TerminalString()))
 		if err := node.Stop(); err != nil {
 			log.Warn(fmt.Sprintf("error stopping node %s", node.ID().TerminalString()), "err", err)
+		}
+		// If the node has the close method, call it.
+		if closer, ok := node.Node.(io.Closer); ok {
+			if err := closer.Close(); err != nil {
+				log.Warn("Can't close node", "id", node.ID(), "err", err)
+			}
 		}
 	}
 	close(self.quitc)
