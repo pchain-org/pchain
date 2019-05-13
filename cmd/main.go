@@ -190,6 +190,8 @@ func newCliApp(version, usage string) *cli.App {
 		//utils.OttomanFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
+		utils.PruneStateFlag,
+		utils.PruneBlockFlag,
 
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,

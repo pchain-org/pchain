@@ -133,6 +133,14 @@ var (
 		Name:  "testnet",
 		Usage: "test network",
 	}
+	PruneStateFlag = cli.BoolFlag{
+		Name:  "prunestate",
+		Usage: "prune state node",
+	}
+	PruneBlockFlag = cli.BoolFlag{
+		Name:  "pruneblock",
+		Usage: "prune block",
+	}
 	RinkebyFlag = cli.BoolFlag{
 		Name:  "rinkeby",
 		Usage: "Rinkeby network: pre-configured proof-of-authority test network",

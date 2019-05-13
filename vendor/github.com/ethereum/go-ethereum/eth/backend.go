@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	log2"log"
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
@@ -55,6 +56,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
+	"github.com/ethereum/go-ethereum/core/datareduction"
 )
 
 type LesServer interface {
@@ -120,6 +122,14 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	chainDb, err := ctx.OpenDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/")
 	if err != nil {
 		return nil, err
+	}
+	pruneDb, err := ctx.OpenDatabase("prunedata", 0, 0, "pchain/db/prune/")
+	if err != nil {
+		return nil, err
+	}
+
+	if cliCtx.GlobalBool("prunestate") {
+		StartScanAndPrune(chainDb, pruneDb, cliCtx.GlobalBool("pruneblock"))
 	}
 
 	isMainChain := params.IsMainChain(ctx.ChainId())
@@ -534,4 +544,50 @@ func (s *Ethereum) loopForMiningEvent() {
 			return
 		}
 	}
+}
+
+func StartScanAndPrune(pchaindb ethdb.Database, prunerawdb ethdb.Database, blockflag bool) (bool, error) {
+	//pchaindb := api.eth.ChainDb()
+	//prunerawdb := api.eth.PruneDb()
+
+	prune := datareduction.New(pchaindb, prunerawdb)
+
+	blockHash := rawdb.ReadHeadBlockHash(pchaindb)
+	log2.Printf("Last block hash %x \n", blockHash)
+
+	blockNumber := rawdb.ReadHeaderNumber(pchaindb, blockHash)
+	if blockNumber == nil {
+		return false, nil
+	}
+	log2.Printf("Last block Number %v \n", *blockNumber)
+
+	s := rawdb.ReadHeadScanNumber(prunerawdb)
+	var scanNumber uint64
+	if s != nil {
+		scanNumber = *s
+	}
+
+	p := rawdb.ReadHeadPruneNumber(prunerawdb)
+	var pruneNumber uint64
+	if p != nil {
+		pruneNumber = *p
+	}
+
+	log2.Printf("load last number scan %v, prune %v", scanNumber, pruneNumber)
+	go func() {
+		defer prunerawdb.Close()
+		lastScanNumber, lastPruneNumber := prune.ScanAndPrune(blockNumber, scanNumber, pruneNumber)
+		log2.Printf("after prune, last number scan %v, prune %v", lastScanNumber, lastPruneNumber)
+		if blockflag {
+			for i := uint64(1); i < lastPruneNumber; i ++ {
+				rawdb.DeleteBody(pchaindb, rawdb.ReadCanonicalHash(pchaindb, i), i)
+			}
+			log2.Printf("deleted block from 1 to %v", lastPruneNumber)
+		}
+		return
+	}()
+
+
+	return true, nil
+
 }

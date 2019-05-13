@@ -36,6 +36,8 @@ func NewDatabaseWithCache(db ethdb.Database, cache int) PruneDatabase {
 	}
 }
 
+
+
 type pruneDB struct {
 	db *trie.Database
 }
