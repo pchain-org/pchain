@@ -112,7 +112,7 @@ docker run -d --name pchain-node -v ~/pchain/.pchain:/.pchain \
 ```
 This will start pchain just as the above command does. It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports.
 
-Do not forget `--rpcaddr 0.0.0.0 --rpc --rpcapi=eth,web3,admin,tdm,miner,personal,chain,txpool,del`, if you want to access RPC from other containers and/or hosts. By default, pchain binds to the local interface and RPC endpoints is not accessible from the outside.
+Do not forget `--rpcaddr=0.0.0.0 --rpc --rpcapi=eth,web3,admin,tdm,miner,personal,chain,txpool,del`, if you want to access RPC from other containers and/or hosts. By default, pchain binds to the local interface and RPC endpoints is not accessible from the outside.
 
 ### How To Interact With Pchain(RPC OR IPC CONSOLE)
 
