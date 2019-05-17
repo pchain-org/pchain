@@ -133,14 +133,6 @@ var (
 		Name:  "testnet",
 		Usage: "test network",
 	}
-	PruneStateFlag = cli.BoolFlag{
-		Name:  "prunestate",
-		Usage: "prune state node",
-	}
-	PruneBlockFlag = cli.BoolFlag{
-		Name:  "pruneblock",
-		Usage: "prune block",
-	}
 	RinkebyFlag = cli.BoolFlag{
 		Name:  "rinkeby",
 		Usage: "Rinkeby network: pre-configured proof-of-authority test network",
@@ -553,6 +545,12 @@ var (
 		Name:  "shh.pow",
 		Usage: "Minimum POW accepted",
 		Value: whisper.DefaultMinimumPoW,
+	}
+
+	// Data Reduction Flag
+	PruneFlag = cli.BoolFlag{
+		Name:  "prune",
+		Usage: "Enable the Data Reduction feature, history state data will be pruned by default",
 	}
 
 	// Istanbul settings
@@ -1190,6 +1188,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 		cfg.Genesis = core.DefaultOttomanGenesisBlock()
 	}
+
+	// Data Reduction Config
+	cfg.PruneStateData = ctx.GlobalBool(PruneFlag.Name)
+	//cfg.PruneBlockData = ctx.GlobalBool(PruneBlockFlag.Name)
 }
 
 // SetDashboardConfig applies dashboard related command line flags to the config.

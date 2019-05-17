@@ -135,6 +135,10 @@ type Config struct {
 
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
+
+	// Data Reduction options
+	PruneStateData bool
+	PruneBlockData bool
 }
 
 type configMarshaling struct {

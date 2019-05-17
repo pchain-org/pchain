@@ -20,13 +20,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"math/big"
-	"runtime"
-	"sync"
-	"sync/atomic"
-	log2"log"
-
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -39,6 +32,8 @@ import (
 	tendermintBackend "github.com/ethereum/go-ethereum/consensus/tendermint"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/datareduction"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -56,7 +51,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
-	"github.com/ethereum/go-ethereum/core/datareduction"
+	"math/big"
+	"runtime"
+	"sync"
+	"sync/atomic"
 )
 
 type LesServer interface {
@@ -82,6 +80,7 @@ type Ethereum struct {
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
+	pruneDb ethdb.Database // Prune data database
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
@@ -123,13 +122,9 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	if err != nil {
 		return nil, err
 	}
-	pruneDb, err := ctx.OpenDatabase("prunedata", 0, 0, "pchain/db/prune/")
+	pruneDb, err := ctx.OpenDatabase("prunedata", config.DatabaseCache, config.DatabaseHandles, "pchain/db/prune/")
 	if err != nil {
 		return nil, err
-	}
-
-	if cliCtx.GlobalBool("prunestate") {
-		StartScanAndPrune(chainDb, pruneDb, cliCtx.GlobalBool("pruneblock"))
 	}
 
 	isMainChain := params.IsMainChain(ctx.ChainId())
@@ -144,6 +139,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	eth := &Ethereum{
 		config:         config,
 		chainDb:        chainDb,
+		pruneDb:        pruneDb,
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
@@ -484,6 +480,11 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	// Start the Auto Mining Loop
 	go s.loopForMiningEvent()
 
+	// Start the Data Reduction
+	if s.config.PruneStateData {
+		go s.StartScanAndPrune()
+	}
+
 	return nil
 }
 
@@ -503,6 +504,7 @@ func (s *Ethereum) Stop() error {
 	s.eventMux.Stop()
 
 	s.chainDb.Close()
+	s.pruneDb.Close()
 	close(s.shutdownChan)
 
 	return nil
@@ -548,48 +550,33 @@ func (s *Ethereum) loopForMiningEvent() {
 	}
 }
 
-func StartScanAndPrune(pchaindb ethdb.Database, prunerawdb ethdb.Database, blockflag bool) (bool, error) {
-	//pchaindb := api.eth.ChainDb()
-	//prunerawdb := api.eth.PruneDb()
+func (s *Ethereum) StartScanAndPrune() {
+	log.Debug("Data Reduction - Start")
+	blockNumber := s.blockchain.CurrentHeader().Number.Uint64()
+	log.Debugf("Data Reduction - Last block number %v", blockNumber)
 
-	prune := datareduction.New(pchaindb, prunerawdb)
-
-	blockHash := rawdb.ReadHeadBlockHash(pchaindb)
-	log2.Printf("Last block hash %x \n", blockHash)
-
-	blockNumber := rawdb.ReadHeaderNumber(pchaindb, blockHash)
-	if blockNumber == nil {
-		return false, nil
-	}
-	log2.Printf("Last block Number %v \n", *blockNumber)
-
-	s := rawdb.ReadHeadScanNumber(prunerawdb)
+	ps := rawdb.ReadHeadScanNumber(s.pruneDb)
 	var scanNumber uint64
-	if s != nil {
-		scanNumber = *s
+	if ps != nil {
+		scanNumber = *ps
 	}
 
-	p := rawdb.ReadHeadPruneNumber(prunerawdb)
+	pp := rawdb.ReadHeadPruneNumber(s.pruneDb)
 	var pruneNumber uint64
-	if p != nil {
-		pruneNumber = *p
+	if pp != nil {
+		pruneNumber = *pp
 	}
+	log.Debugf("Data Reduction - Last scan number %v, prune number %v", scanNumber, pruneNumber)
 
-	log2.Printf("load last number scan %v, prune %v", scanNumber, pruneNumber)
-	go func() {
-		defer prunerawdb.Close()
-		lastScanNumber, lastPruneNumber := prune.ScanAndPrune(blockNumber, scanNumber, pruneNumber)
-		log2.Printf("after prune, last number scan %v, prune %v", lastScanNumber, lastPruneNumber)
-		if blockflag {
-			for i := uint64(1); i < lastPruneNumber; i ++ {
-				rawdb.DeleteBody(pchaindb, rawdb.ReadCanonicalHash(pchaindb, i), i)
-			}
-			log2.Printf("deleted block from 1 to %v", lastPruneNumber)
+	pruneProcessor := datareduction.NewPruneProcessor(s.chainDb, s.pruneDb, s.blockchain)
+
+	lastScanNumber, lastPruneNumber := pruneProcessor.Process(blockNumber, scanNumber, pruneNumber)
+	log.Debugf("Data Reduction - After prune, last number scan %v, prune number %v", lastScanNumber, lastPruneNumber)
+	if s.config.PruneBlockData {
+		for i := uint64(1); i < lastPruneNumber; i++ {
+			rawdb.DeleteBody(s.chainDb, rawdb.ReadCanonicalHash(s.chainDb, i), i)
 		}
-		return
-	}()
-
-
-	return true, nil
-
+		log.Debugf("deleted block from 1 to %v", lastPruneNumber)
+	}
+	log.Debug("Data Reduction - Completed")
 }
