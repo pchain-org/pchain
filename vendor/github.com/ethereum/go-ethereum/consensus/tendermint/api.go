@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"math/big"
 )
 
 // API is a user facing RPC API of Tendermint
@@ -46,9 +47,14 @@ func (api *API) GetEpoch(num hexutil.Uint64) (*tdmTypes.EpochApi, error) {
 		}
 	}
 
+	// Epoch Reward per block on main chain is 80% of total reward
+	// Child chain do not use this value as reward
+	eightyPercent := new(big.Int).Mul(resultEpoch.RewardPerBlock, big.NewInt(8))
+	eightyPercent.Div(eightyPercent, big.NewInt(10))
+
 	return &tdmTypes.EpochApi{
 		Number:           hexutil.Uint64(resultEpoch.Number),
-		RewardPerBlock:   (*hexutil.Big)(resultEpoch.RewardPerBlock),
+		RewardPerBlock:   (*hexutil.Big)(eightyPercent),
 		StartBlock:       hexutil.Uint64(resultEpoch.StartBlock),
 		EndBlock:         hexutil.Uint64(resultEpoch.EndBlock),
 		StartTime:        resultEpoch.StartTime,
