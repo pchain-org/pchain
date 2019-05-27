@@ -242,8 +242,11 @@ func revealVoteValidation(from common.Address, tx *types.Transaction, state *sta
 
 	// Check Vote
 	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
-	vote, exist := voteSet.GetVoteByAddress(from)
+	if voteSet == nil {
+		return nil, errors.New(fmt.Sprintf("Can not found the vote for Address %x", from))
+	}
 
+	vote, exist := voteSet.GetVoteByAddress(from)
 	// Check Vote exist
 	if !exist {
 		return nil, errors.New(fmt.Sprintf("Can not found the vote for Address %x", from))

@@ -8,7 +8,10 @@ import (
 	"github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
 	"math/big"
+	"sync"
 )
+
+var voteRWMutex sync.RWMutex
 
 // Epoch Validator Vote Set
 // Store in the Level DB will be Key + EpochValidatorVoteSet
@@ -44,12 +47,18 @@ func NewEpochValidatorVoteSet() *EpochValidatorVoteSet {
 
 // GetVoteByAddress get the Vote from VoteSet by Address Hex Key
 func (voteSet *EpochValidatorVoteSet) GetVoteByAddress(address common.Address) (vote *EpochValidatorVote, exist bool) {
+	voteRWMutex.RLock()
+	defer voteRWMutex.RUnlock()
+
 	vote, exist = voteSet.votesByAddress[address]
 	return
 }
 
 // StoreVote insert or update the Vote into VoteSet by Address Hex Key
 func (voteSet *EpochValidatorVoteSet) StoreVote(vote *EpochValidatorVote) {
+	voteRWMutex.Lock()
+	defer voteRWMutex.Unlock()
+
 	_, exist := voteSet.votesByAddress[vote.Address]
 	if exist {
 		// Exist, update it
@@ -62,10 +71,16 @@ func (voteSet *EpochValidatorVoteSet) StoreVote(vote *EpochValidatorVote) {
 }
 
 func SaveEpochVoteSet(epochDB db.DB, epochNumber uint64, voteSet *EpochValidatorVoteSet) {
+	voteRWMutex.Lock()
+	defer voteRWMutex.Unlock()
+
 	epochDB.SetSync(calcEpochValidatorVoteKey(epochNumber), wire.BinaryBytes(*voteSet))
 }
 
 func LoadEpochVoteSet(epochDB db.DB, epochNumber uint64) *EpochValidatorVoteSet {
+	voteRWMutex.RLock()
+	defer voteRWMutex.RUnlock()
+
 	data := epochDB.Get(calcEpochValidatorVoteKey(epochNumber))
 	if len(data) == 0 {
 		return nil
