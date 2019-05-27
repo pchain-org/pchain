@@ -163,10 +163,6 @@ func (epoch *Epoch) GetEpochValidatorVoteSet() *EpochValidatorVoteSet {
 	return epoch.validatorVoteSet
 }
 
-func (epoch *Epoch) SetEpochValidatorVoteSet(voteSet *EpochValidatorVoteSet) {
-	epoch.validatorVoteSet = voteSet
-}
-
 func (epoch *Epoch) GetRewardScheme() *RewardScheme {
 	return epoch.rs
 }
@@ -189,10 +185,10 @@ func (epoch *Epoch) Save() {
 		epoch.db.SetSync(calcEpochKeyWithHeight(epoch.nextEpoch.Number), epoch.nextEpoch.Bytes())
 	}
 
-	if epoch.nextEpoch != nil && epoch.nextEpoch.validatorVoteSet != nil {
-		// Save the next epoch vote set
-		SaveEpochVoteSet(epoch.db, epoch.nextEpoch.Number, epoch.nextEpoch.validatorVoteSet)
-	}
+	//if epoch.nextEpoch != nil && epoch.nextEpoch.validatorVoteSet != nil {
+	//	// Save the next epoch vote set
+	//	SaveEpochVoteSet(epoch.db, epoch.nextEpoch.Number, epoch.nextEpoch.validatorVoteSet)
+	//}
 }
 
 func FromBytes(buf []byte) *Epoch {

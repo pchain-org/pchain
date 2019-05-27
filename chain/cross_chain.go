@@ -240,6 +240,10 @@ func (cch *CrossChainHelper) ProcessPostPendingData(newPendingIdxBytes []byte, d
 func (cch *CrossChainHelper) VoteNextEpoch(ep *epoch.Epoch, from common.Address, voteHash common.Hash, txHash common.Hash) error {
 
 	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
+	if voteSet == nil {
+		voteSet = epoch.NewEpochValidatorVoteSet()
+	}
+
 	vote, exist := voteSet.GetVoteByAddress(from)
 
 	if exist {

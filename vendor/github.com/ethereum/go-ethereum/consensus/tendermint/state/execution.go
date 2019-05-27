@@ -83,7 +83,7 @@ func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 			// Save the next epoch
 			if block.NumberU64() == currentEpoch.GetVoteStartHeight() {
 				// Propose next epoch
-				epochInBlock.SetEpochValidatorVoteSet(ep.NewEpochValidatorVoteSet())
+				//epochInBlock.SetEpochValidatorVoteSet(ep.NewEpochValidatorVoteSet())
 				epochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
 				epochInBlock.SetRewardScheme(currentEpoch.GetRewardScheme())
 				currentEpoch.SetNextEpoch(epochInBlock)
