@@ -167,8 +167,8 @@ func newCliApp(version, usage string) *cli.App {
 		//utils.LightKDFFlag,
 		utils.CacheFlag,
 		utils.CacheDatabaseFlag,
+		utils.CacheTrieFlag,
 		utils.CacheGCFlag,
-		utils.TrieCacheGenFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
@@ -190,6 +190,8 @@ func newCliApp(version, usage string) *cli.App {
 		//utils.OttomanFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
+		utils.PruneFlag,
+		//utils.PruneBlockFlag,
 
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,

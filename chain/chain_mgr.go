@@ -8,9 +8,9 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/pchain/p2p"
@@ -31,12 +31,14 @@ type ChainManager struct {
 	ctx *cli.Context
 
 	mainChain     *Chain
-	mainQuit      chan int
+	mainQuit      <-chan struct{}
 	mainStartDone chan struct{}
 
 	createChildChainLock sync.Mutex
 	childChains          map[string]*Chain
-	childQuits           map[string]chan int
+	childQuits           map[string]<-chan struct{}
+
+	stop chan struct{} // Channel wait for PCHAIN stop
 
 	server *p2p.PChainP2PServer
 	cch    *CrossChainHelper
@@ -49,8 +51,9 @@ func GetCMInstance(ctx *cli.Context) *ChainManager {
 
 	once.Do(func() {
 		chainMgr = &ChainManager{ctx: ctx}
+		chainMgr.stop = make(chan struct{})
 		chainMgr.childChains = make(map[string]*Chain)
-		chainMgr.childQuits = make(map[string]chan int)
+		chainMgr.childQuits = make(map[string]<-chan struct{})
 		chainMgr.cch = &CrossChainHelper{}
 	})
 	return chainMgr
@@ -132,7 +135,7 @@ func (cm *ChainManager) InitCrossChainHelper() {
 	cm.cch.chainInfoDB = dbm.NewDB("chaininfo",
 		cm.mainChain.Config.GetString("db_backend"),
 		cm.ctx.GlobalString(utils.DataDirFlag.Name))
-	cm.cch.localTX3CacheDB, _ = ethdb.NewLDBDatabase(path.Join(cm.ctx.GlobalString(utils.DataDirFlag.Name), "tx3cache"), 0, 0)
+	cm.cch.localTX3CacheDB, _ = rawdb.NewLevelDBDatabase(path.Join(cm.ctx.GlobalString(utils.DataDirFlag.Name), "tx3cache"), 0, 0, "pchain/db/tx3/")
 
 	chainId := MainChain
 	if cm.ctx.GlobalBool(utils.TestnetFlag.Name) {
@@ -168,7 +171,6 @@ func (cm *ChainManager) StartP2PServer() error {
 
 func (cm *ChainManager) StartMainChain() error {
 	// Start the Main Chain
-	cm.mainQuit = make(chan int)
 	cm.mainStartDone = make(chan struct{})
 
 	cm.mainChain.EthNode.SetP2PServer(cm.server.Server())
@@ -181,6 +183,7 @@ func (cm *ChainManager) StartMainChain() error {
 
 	// Wait for Main Chain Start Complete
 	<-cm.mainStartDone
+	cm.mainQuit = cm.mainChain.EthNode.StopChan()
 
 	return err
 }
@@ -189,9 +192,6 @@ func (cm *ChainManager) StartChains() error {
 
 	for _, chain := range cm.childChains {
 		// Start each Chain
-		quit := make(chan int)
-		cm.childQuits[chain.Id] = quit
-
 		srv := cm.server.Server()
 		childProtocols := chain.EthNode.GatherProtocols()
 		// Add Child Protocols to P2P Server Protocols
@@ -208,6 +208,8 @@ func (cm *ChainManager) StartChains() error {
 		startDone := make(chan struct{})
 		StartChain(cm.ctx, chain, startDone)
 		<-startDone
+
+		cm.childQuits[chain.Id] = chain.EthNode.StopChan()
 
 		// Tell other peers that we have added into a new child chain
 		cm.server.BroadcastNewChildChainMsg(chain.Id)
@@ -378,15 +380,14 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	}
 
 	// Start the new Child Chain, and it will start child chain reactors as well
-	quit := make(chan int)
-	cm.childQuits[chain.Id] = quit
-
 	startDone := make(chan struct{})
 	err = StartChain(cm.ctx, chain, startDone)
 	<-startDone
 	if err != nil {
 		return
 	}
+
+	cm.childQuits[chain.Id] = chain.EthNode.StopChan()
 
 	var childEthereum *eth.Ethereum
 	chain.EthNode.Service(&childEthereum)
@@ -437,8 +438,26 @@ func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool 
 	return childEpoch.Validators.HasAddress(localEtherbase[:])
 }
 
-func (cm *ChainManager) WaitChainsStop() {
+func (cm *ChainManager) StopChain() {
+	go func() {
+		mainChainError := cm.mainChain.EthNode.Close()
+		if mainChainError != nil {
+			log.Error("Error when closing main chain", "err", mainChainError)
+		} else {
+			log.Info("Main Chain Closed")
+		}
+	}()
+	for _, child := range cm.childChains {
+		go func() {
+			childChainError := child.EthNode.Close()
+			if childChainError != nil {
+				log.Error("Error when closing child chain", "child id", child.Id, "err", childChainError)
+			}
+		}()
+	}
+}
 
+func (cm *ChainManager) WaitChainsStop() {
 	<-cm.mainQuit
 	for _, quit := range cm.childQuits {
 		<-quit
@@ -448,6 +467,15 @@ func (cm *ChainManager) WaitChainsStop() {
 func (cm *ChainManager) Stop() {
 	rpc.StopRPC()
 	cm.server.Stop()
+	cm.cch.localTX3CacheDB.Close()
+	cm.cch.chainInfoDB.Close()
+
+	// Release the main routine
+	close(cm.stop)
+}
+
+func (cm *ChainManager) Wait() {
+	<-cm.stop
 }
 
 func (cm *ChainManager) getNodeValidator(ethNode *node.Node) (common.Address, bool) {

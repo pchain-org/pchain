@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pchain/abi"
 	"os"
@@ -8,16 +9,14 @@ import (
 
 	"gopkg.in/urfave/cli.v1"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/ethdb"
-
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/geth"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/pkg/errors"
 	cmn "github.com/tendermint/go-common"
@@ -159,7 +158,7 @@ func init_eth_blockchain(chainId string, ethGenesisPath string, ctx *cli.Context
 	dbPath := filepath.Join(utils.MakeDataDir(ctx), chainId, "geth/chaindata")
 	log.Infof("init_eth_blockchain 0 with dbPath: %s", dbPath)
 
-	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MakeDataDir(ctx), chainId, gethmain.ClientIdentifier, "chaindata"), 0, 0)
+	chainDb, err := rawdb.NewLevelDBDatabase(filepath.Join(utils.MakeDataDir(ctx), chainId, gethmain.ClientIdentifier, "chaindata"), 0, 0, "eth/db/chaindata/")
 	if err != nil {
 		utils.Fatalf("could not open database: %v", err)
 	}
