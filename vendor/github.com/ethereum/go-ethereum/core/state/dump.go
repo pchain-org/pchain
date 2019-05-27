@@ -34,10 +34,17 @@ type DumpAccount struct {
 	Proxied        string                  `json:"proxied_balance"`
 	DepositProxied string                  `json:"deposit_proxied_balance"`
 	PendingRefund  string                  `json:"pending_refund_balance"`
+	ProxiedRoot    string                  `json:"proxied_root"`
 	ProxiedDetail  map[string]*DumpProxied `json:"proxied_detail"`
 
 	Reward       string            `json:"reward_balance"`
+	RewardRoot   string            `json:"reward_root"`
 	RewardDetail map[string]string `json:"reward_detail"`
+
+	Tx1Root   string   `json:"tx1_root"`
+	Tx1Detail []string `json:"tx1_detail"`
+	Tx3Root   string   `json:"tx3_root"`
+	Tx3Detail []string `json:"tx3_detail"`
 
 	Nonce    uint64            `json:"nonce"`
 	Root     string            `json:"root"`
@@ -64,10 +71,10 @@ type Dump struct {
 
 func (self *StateDB) RawDump() Dump {
 	dump := Dump{
-		Root:           fmt.Sprintf("%x", self.trie.Hash()),
-		Accounts:       make(map[string]DumpAccount),
-		RewardAccounts: make([]string, 0),
-		RefundAccounts: make([]string, 0),
+		Root:     fmt.Sprintf("%x", self.trie.Hash()),
+		Accounts: make(map[string]DumpAccount),
+		//RewardAccounts: make([]string, 0),
+		//RefundAccounts: make([]string, 0),
 	}
 
 	it := trie.NewIterator(self.trie.NodeIterator(nil))
@@ -87,9 +94,14 @@ func (self *StateDB) RawDump() Dump {
 				Proxied:        data.ProxiedBalance.String(),
 				DepositProxied: data.DepositProxiedBalance.String(),
 				PendingRefund:  data.PendingRefundBalance.String(),
+				ProxiedRoot:    data.ProxiedRoot.String(),
 				ProxiedDetail:  make(map[string]*DumpProxied),
 				Reward:         data.RewardBalance.String(),
+				RewardRoot:     data.RewardRoot.String(),
 				RewardDetail:   make(map[string]string),
+
+				Tx1Root: data.TX1Root.String(),
+				Tx3Root: data.TX3Root.String(),
 
 				Nonce:    data.Nonce,
 				Root:     common.Bytes2Hex(data.Root[:]),
@@ -105,42 +117,58 @@ func (self *StateDB) RawDump() Dump {
 				account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
 			}
 
-			proxiedIt := trie.NewIterator(obj.getProxiedTrie(self.db).NodeIterator(nil))
-			for proxiedIt.Next() {
-				var apb accountProxiedBalance
-				rlp.DecodeBytes(proxiedIt.Value, &apb)
-				account.ProxiedDetail[common.Bytes2Hex(self.trie.GetKey(proxiedIt.Key))] = &DumpProxied{
-					Proxied:        apb.ProxiedBalance.String(),
-					DepositProxied: apb.DepositProxiedBalance.String(),
-					PendingRefund:  apb.PendingRefundBalance.String(),
+			tx1It := trie.NewIterator(obj.getTX1Trie(self.db).NodeIterator(nil))
+			for tx1It.Next() {
+				tx1hash := common.BytesToHash(self.trie.GetKey(tx1It.Key))
+				account.Tx1Detail = append(account.Tx1Detail, tx1hash.Hex())
+			}
+
+			tx3It := trie.NewIterator(obj.getTX3Trie(self.db).NodeIterator(nil))
+			for tx3It.Next() {
+				tx3hash := common.BytesToHash(self.trie.GetKey(tx3It.Key))
+				account.Tx3Detail = append(account.Tx1Detail, tx3hash.Hex())
+			}
+
+			if data.ProxiedRoot.String() != "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421" {
+				proxiedIt := trie.NewIterator(obj.getProxiedTrie(self.db).NodeIterator(nil))
+				for proxiedIt.Next() {
+					var apb accountProxiedBalance
+					rlp.DecodeBytes(proxiedIt.Value, &apb)
+					account.ProxiedDetail[common.Bytes2Hex(self.trie.GetKey(proxiedIt.Key))] = &DumpProxied{
+						Proxied:        apb.ProxiedBalance.String(),
+						DepositProxied: apb.DepositProxiedBalance.String(),
+						PendingRefund:  apb.PendingRefundBalance.String(),
+					}
 				}
 			}
 
-			rewardIt := trie.NewIterator(obj.getRewardTrie(self.db).NodeIterator(nil))
-			for rewardIt.Next() {
-				var key uint64
-				rlp.DecodeBytes(self.trie.GetKey(rewardIt.Key), &key)
-				var value big.Int
-				rlp.DecodeBytes(rewardIt.Value, &value)
-				account.RewardDetail[fmt.Sprintf("epoch_%d", key)] = value.String()
+			if data.RewardRoot.String() != "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421" {
+				rewardIt := trie.NewIterator(obj.getRewardTrie(self.db).NodeIterator(nil))
+				for rewardIt.Next() {
+					var key uint64
+					rlp.DecodeBytes(self.trie.GetKey(rewardIt.Key), &key)
+					var value big.Int
+					rlp.DecodeBytes(rewardIt.Value, &value)
+					account.RewardDetail[fmt.Sprintf("epoch_%d", key)] = value.String()
+				}
 			}
 
 			dump.Accounts[common.Bytes2Hex(addr)] = account
 		} else {
 			if bytes.Equal(addr, rewardSetKey) {
-				var data RewardSet
+				var data []common.Address
 				if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 					panic(err)
 				}
-				for rewardAddr := range data {
+				for _, rewardAddr := range data {
 					dump.RewardAccounts = append(dump.RewardAccounts, rewardAddr.Hex())
 				}
 			} else if bytes.Equal(addr, refundSetKey) {
-				var data DelegateRefundSet
+				var data []common.Address
 				if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 					panic(err)
 				}
-				for refundAddr := range data {
+				for _, refundAddr := range data {
 					dump.RefundAccounts = append(dump.RefundAccounts, refundAddr.Hex())
 				}
 			}
