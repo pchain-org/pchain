@@ -1202,7 +1202,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	if proposedNextEpoch != nil && proposedNextEpoch.Number == cs.Epoch.Number+1 {
 		if cs.Epoch.ShouldProposeNextEpoch(cs.Height) {
 			lastHeight := cs.backend.ChainReader().CurrentBlock().Number().Uint64()
-			lastBlockTime := time.Unix(cs.backend.ChainReader().CurrentBlock().Time().Int64(), 0)
+			lastBlockTime := time.Unix(int64(cs.backend.ChainReader().CurrentBlock().Time()), 0)
 			err = cs.Epoch.ValidateNextEpoch(proposedNextEpoch, lastHeight, lastBlockTime)
 			if err != nil {
 				// ProposalBlock is invalid, prevote nil.
