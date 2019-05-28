@@ -59,15 +59,20 @@ func (voteSet *EpochValidatorVoteSet) StoreVote(vote *EpochValidatorVote) {
 	voteRWMutex.Lock()
 	defer voteRWMutex.Unlock()
 
-	_, exist := voteSet.votesByAddress[vote.Address]
+	oldVote, exist := voteSet.votesByAddress[vote.Address]
 	if exist {
-		// Exist, update it
-		voteSet.votesByAddress[vote.Address] = vote
-	} else {
-		// Not Exist, insert it
-		voteSet.votesByAddress[vote.Address] = vote
-		voteSet.Votes = append(voteSet.Votes, vote)
+		// Exist, remove it
+		index := -1
+		for i:=0; i<len(voteSet.Votes); i++ {
+			if voteSet.Votes[i] == oldVote {
+				index = i
+				break
+			}
+		}
+		voteSet.Votes = append(voteSet.Votes[:index], voteSet.Votes[index+1:]...)
 	}
+	voteSet.votesByAddress[vote.Address] = vote
+	voteSet.Votes = append(voteSet.Votes, vote)
 }
 
 func SaveEpochVoteSet(epochDB db.DB, epochNumber uint64, voteSet *EpochValidatorVoteSet) {

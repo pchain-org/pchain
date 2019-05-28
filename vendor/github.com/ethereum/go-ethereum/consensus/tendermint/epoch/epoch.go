@@ -160,6 +160,10 @@ func (epoch *Epoch) GetDB() dbm.DB {
 }
 
 func (epoch *Epoch) GetEpochValidatorVoteSet() *EpochValidatorVoteSet {
+	//try reload validatorVoteSet
+	if epoch.validatorVoteSet == nil {
+		epoch.validatorVoteSet = LoadEpochVoteSet(epoch.db, epoch.Number)
+	}
 	return epoch.validatorVoteSet
 }
 
