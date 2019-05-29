@@ -306,7 +306,7 @@ func delegateValidation(from common.Address, tx *types.Transaction, state *state
 	// If Candidate is supernode, only allow to increase the stack(whitelist proxied list), not allow to create the new stack
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
-		ep = tdm.GetEpoch()
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 	}
 	if _, supernode := ep.Validators.GetByAddress(args.Candidate.Bytes()); supernode != nil && supernode.RemainingEpoch > 0 {
 		depositBalance := state.GetDepositProxiedBalanceByUser(args.Candidate, from)
@@ -338,7 +338,7 @@ func cancelDelegateValidation(from common.Address, tx *types.Transaction, state 
 	// Super node Candidate can't decrease balance
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
-		ep = tdm.GetEpoch()
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 	}
 	if _, supernode := ep.Validators.GetByAddress(args.Candidate.Bytes()); supernode != nil && supernode.RemainingEpoch > 0 {
 		return nil, core.ErrCannotCancelDelegate
@@ -399,7 +399,7 @@ func candidateValidation(from common.Address, tx *types.Transaction, state *stat
 	// Annual/SemiAnnual supernode can not become candidate
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
-		ep = tdm.GetEpoch()
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 	}
 	if _, supernode := ep.Validators.GetByAddress(from.Bytes()); supernode != nil && supernode.RemainingEpoch > 0 {
 		return nil, core.ErrCannotCandidate
@@ -417,7 +417,7 @@ func cancelCandidateValidation(from common.Address, tx *types.Transaction, state
 	// Super node can't cancel Candidate
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
-		ep = tdm.GetEpoch()
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 	}
 	if _, supernode := ep.Validators.GetByAddress(from.Bytes()); supernode != nil && supernode.RemainingEpoch > 0 {
 		return core.ErrCannotCancelCandidate
@@ -441,7 +441,7 @@ func derivedAddressFromTx(tx *types.Transaction) (from common.Address) {
 func checkEpochInNormalStage(bc *core.BlockChain) error {
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
-		ep = tdm.GetEpoch()
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 	}
 
 	if ep == nil {

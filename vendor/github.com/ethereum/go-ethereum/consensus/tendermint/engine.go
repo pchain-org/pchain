@@ -359,6 +359,12 @@ func (sb *backend) verifyCommittedSeals(chain consensus.ChainReader, header *typ
 		return errInconsistentValidatorSet
 	}
 
+	epoch = epoch.GetEpochByBlockNumber(header.Number.Uint64())
+	if epoch == nil || epoch.Validators == nil {
+		sb.logger.Errorf("verifyCommittedSeals error. Epoch %v", epoch)
+		return errInconsistentValidatorSet
+	}
+
 	valSet := epoch.Validators
 	if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
 		sb.logger.Errorf("verifyCommittedSeals error. Our Validator Set %x, tdmExtra Valdiator %x", valSet.Hash(), tdmExtra.ValidatorsHash)
@@ -459,11 +465,13 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		}
 	}
 
+	epoch := sb.GetEpoch().GetEpochByBlockNumber(header.Number.Uint64())
+
 	// Calculate the rewards
-	accumulateRewards(sb.chainConfig, state, header, sb.GetEpoch(), totalGasFee)
+	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
-	if ok, newValidators, _ := sb.core.consensusState.Epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state); ok {
+	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,

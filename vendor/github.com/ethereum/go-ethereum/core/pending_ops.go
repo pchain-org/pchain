@@ -28,9 +28,11 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 		return nil
 	case *types.VoteNextEpochOp:
 		ep := bc.engine.(consensus.Tendermint).GetEpoch()
+		ep = ep.GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 		return cch.VoteNextEpoch(ep, op.From, op.VoteHash, op.TxHash)
 	case *types.RevealVoteOp:
 		ep := bc.engine.(consensus.Tendermint).GetEpoch()
+		ep = ep.GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 		return cch.RevealVote(ep, op.From, op.Pubkey, op.Amount, op.Salt, op.TxHash)
 	case *types.SaveDataToMainChainOp:
 		return cch.SaveChildChainProofDataToMainChain(op.Data)

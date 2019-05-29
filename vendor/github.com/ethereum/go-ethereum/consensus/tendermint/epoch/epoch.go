@@ -325,6 +325,14 @@ func (epoch *Epoch) CheckInRevealVoteStage(height uint64) bool {
 }
 
 func (epoch *Epoch) GetNextEpoch() *Epoch {
+	if epoch.nextEpoch == nil {
+		epoch.nextEpoch = loadOneEpoch(epoch.db, epoch.Number+1, epoch.logger)
+		if epoch.nextEpoch != nil {
+			epoch.nextEpoch.rs = epoch.rs
+			// Set ValidatorVoteSet
+			epoch.nextEpoch.validatorVoteSet = LoadEpochVoteSet(epoch.db, epoch.Number+1)
+		}
+	}
 	return epoch.nextEpoch
 }
 
@@ -344,6 +352,7 @@ func (epoch *Epoch) GetPreviousEpoch() *Epoch {
 func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB) (bool, *tmTypes.ValidatorSet, error) {
 
 	if height == epoch.EndBlock {
+		epoch.nextEpoch = epoch.GetNextEpoch()
 		if epoch.nextEpoch != nil {
 			// Step 0: Give the Epoch Reward
 			currentEpochNumber := epoch.Number

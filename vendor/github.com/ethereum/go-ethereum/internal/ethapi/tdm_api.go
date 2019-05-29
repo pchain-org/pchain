@@ -288,7 +288,7 @@ func revealVoteValidation(from common.Address, tx *types.Transaction, state *sta
 func checkEpochInHashVoteStage(bc *core.BlockChain) error {
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
-		ep = tdm.GetEpoch()
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 	}
 
 	if ep == nil {
@@ -311,7 +311,7 @@ func checkEpochInHashVoteStage(bc *core.BlockChain) error {
 func checkEpochInRevealVoteStage(bc *core.BlockChain) (*epoch.Epoch, error) {
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
-		ep = tdm.GetEpoch()
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 	}
 
 	if ep == nil {
