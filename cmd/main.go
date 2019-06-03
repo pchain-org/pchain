@@ -72,6 +72,8 @@ func main() {
 		//gethmain.ConsoleCommand,
 		gethmain.AttachCommand,
 		//gethmain.JavascriptCommand,
+		gethmain.ImportPreimagesCommand,
+		gethmain.ExportPreimagesCommand,
 
 		//walletCommand,
 		accountCommand,
