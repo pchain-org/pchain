@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -53,9 +52,8 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Check whether the block's known, and if not, that it's linkable
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		//comment this for this case: block has been written, but not refresh the head
-		//return ErrKnownBlock
-		log.Infof("this block has been written, but head not refreshed. hash %x, number %v\n",
-			block.Hash(), block.NumberU64())
+		return ErrKnownBlock
+
 	}
 	// Header validity is known at this point, check the uncles and transactions
 	header := block.Header()

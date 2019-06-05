@@ -393,9 +393,12 @@ func (self *worker) resultLoop() {
 				continue
 			}
 
+			self.chain.MuLock()
+
 			stat, err := self.chain.WriteBlockWithState(block, receipts, state)
 			if err != nil {
 				self.logger.Error("Failed writing block to chain", "err", err)
+				self.chain.MuUnLock()
 				continue
 			}
 			// execute the pending ops.
@@ -419,6 +422,8 @@ func (self *worker) resultLoop() {
 			if stat == core.CanonStatTy {
 				events = append(events, core.ChainHeadEvent{Block: block})
 			}
+
+			self.chain.MuUnLock()
 
 			self.chain.PostChainEvents(events, logs)
 

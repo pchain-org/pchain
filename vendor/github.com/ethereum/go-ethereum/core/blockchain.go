@@ -942,10 +942,15 @@ func (bc *BlockChain) WriteBlockWithoutState(block *types.Block, td *big.Int) (e
 	return nil
 }
 
+func (bc *BlockChain) MuLock() {
+	bc.chainmu.Lock()
+}
+
+func (bc *BlockChain) MuUnLock() {
+	bc.chainmu.Unlock()
+}
 // WriteBlockWithState writes the block and all associated state to the database.
 func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
-	bc.chainmu.Lock()
-	defer bc.chainmu.Unlock()
 
 	return bc.writeBlockWithState(block, receipts, state)
 }
@@ -955,6 +960,14 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
+
+	//to avoid rewrite the block, just refresh the head
+	// Set new head.
+	if bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
+		bc.insert(block)
+		bc.futureBlocks.Remove(block.Hash())
+		return CanonStatTy, nil
+	}
 
 	// Calculate the total difficulty of the block
 	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
@@ -1178,9 +1191,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		// 	    from the canonical chain, which has not been verified.
 		// Skip all known blocks that are behind us
 		current := bc.CurrentBlock().NumberU64()
-		for block != nil && err == ErrKnownBlock && current >= block.NumberU64() {
-			stats.ignored++
-			block, err = it.next()
+		for block != nil && err == ErrKnownBlock {
+			if  current >= block.NumberU64() {
+				stats.ignored++
+				block, err = it.next()
+			} else {
+				log.Infof("this block has been written, but head not refreshed. hash %x, number %v\n",
+					block.Hash(), block.NumberU64())
+				//make it continue to refresh head
+				err = nil
+				break
+			}
 		}
 		// Falls through to the block import
 	}

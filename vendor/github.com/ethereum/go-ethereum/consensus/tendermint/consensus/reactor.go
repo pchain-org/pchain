@@ -112,7 +112,9 @@ func (conR *ConsensusReactor) RemovePeer(peer consensus.Peer, reason interface{}
 	if !ok {
 		conR.logger.Debug("Peer has no state", "peer", peer)
 	}
-	ps.Disconnect()
+	if ps != nil {
+		ps.Disconnect()
+	}
 }
 
 // Implements Reactor
