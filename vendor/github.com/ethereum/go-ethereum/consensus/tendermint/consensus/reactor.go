@@ -335,10 +335,10 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 		block := re.Proposal
 		conR.logger.Infof("registerEventCallbacks received block height: %d, conR.conS.Height: %d, conR.conS.Step: %v", block.NumberU64(), conR.conS.Height, conR.conS.Step)
 		//wait block in new height or new block has been inserted to start a new height
-		if block.NumberU64() == conR.conS.Height || block.NumberU64() == conR.conS.Height+1 {
+		if block.NumberU64() >= conR.conS.Height {
 
 			//meas a block has been inserted into blockchain, let's start a new height
-			if block.NumberU64() == conR.conS.Height+1 {
+			if block.NumberU64() >= conR.conS.Height+1 {
 				conR.conS.StartNewHeight()
 			}
 

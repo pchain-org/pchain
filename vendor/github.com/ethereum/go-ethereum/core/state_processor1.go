@@ -140,10 +140,12 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 		if applyCb := GetApplyCb(function); applyCb != nil {
 			if function.IsCrossChainType() {
-				cch.GetMutex().Lock()
-				defer cch.GetMutex().Unlock()
 				if fn, ok := applyCb.(CrossChainApplyCb); ok {
-					if err := fn(tx, statedb, ops, cch, mining); err != nil {
+					cch.GetMutex().Lock()
+					err := fn(tx, statedb, ops, cch, mining)
+					cch.GetMutex().Unlock()
+
+					if err != nil {
 						return nil, 0, err
 					}
 				} else {
