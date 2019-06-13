@@ -179,7 +179,9 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 
 	// Don't waste time checking blocks from the future
 	if header.Time.Cmp(big.NewInt(now().Unix())) > 0 {
-		return consensus.ErrFutureBlock
+		sb.logger.Warnf("date/time different between different nodes. block from future with time:%v, bigger than now:%v", header.Time.Uint64(), now().Unix())
+		//in pchain, avoid the time difference to tolerate time gap between nodes
+		//return consensus.ErrFutureBlock
 	}
 
 	// Ensure that the extra data format is satisfied
@@ -286,7 +288,9 @@ func (sb *backend) VerifyHeaderBeforeConsensus(chain consensus.ChainReader, head
 
 	// Don't waste time checking blocks from the future
 	if header.Time.Cmp(big.NewInt(now().Unix())) > 0 {
-		return consensus.ErrFutureBlock
+		sb.logger.Warnf("date/time different between different nodes. block from future with time:%v, bigger than now:%v", header.Time.Uint64(), now().Unix())
+		//in pchain, avoid the time difference to tolerate time gap between nodes
+		//return consensus.ErrFutureBlock
 	}
 
 	// Ensure that the coinbase is valid

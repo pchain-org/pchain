@@ -58,6 +58,9 @@ func (conR *ConsensusReactor) OnStart() error {
 	//log.Notice("ConsensusReactor ", "fastSync", conR.fastSync)
 	conR.BaseService.OnStart()
 
+	// if there were peers added before start, start routines for them
+	conR.startPeerRoutine()
+
 	// callbacks for broadcasting new steps and votes to peers
 	// upon their respective events (ie. uses evsw)
 	conR.registerEventCallbacks()
@@ -82,32 +85,45 @@ func (conR *ConsensusReactor) AddPeer(peer consensus.Peer) {
 
 	conR.logger.Debug("add peer ============================================================")
 
+	if _, ok := conR.peerStates.Load(peer.GetKey()); ok {
+		conR.logger.Infof("peer %v has been added, return", peer.GetKey())
+		return
+	}
+
+	peerKey := peer.GetKey()
+	if peerKey == "" {
+		conR.logger.Infof("peer key is empty")
+		return
+	}
+
 	// Create peerState for peer
 	peerState := NewPeerState(peer, conR.logger)
 	peer.SetPeerState(peerState)
 
-	// Begin routines for this peer.
-	go conR.gossipDataRoutine(peer, peerState)
-	go conR.gossipVotesRoutine(peer, peerState)
-	//go conR.queryMaj23Routine(peer, peerState)
+	conR.peerStates.Store(peerKey, peerState)
 
 	conR.logger.Debugf("peer is:%+v", peer)
 	conR.logger.Debugf("peer key is:%+v", peer.GetKey())
-	peerKey := peer.GetKey()
-	if peerKey != "" {
-		conR.peerStates.Store(peerKey, peerState)
-	}
+	conR.logger.Infof("peer %v added", peer.GetKey())
 
-	// Send our state to peer.
-	conR.sendNewRoundStepMessages(peer)
+	if conR.IsRunning() {
+		// Begin routines for this peer.
+		go conR.gossipDataRoutine(peer, peerState)
+		go conR.gossipVotesRoutine(peer, peerState)
+		//go conR.queryMaj23Routine(peer, peerState)
+
+		// Send our state to peer.
+		conR.sendNewRoundStepMessages(peer)
+	}
 }
 
 // Implements Reactor
 func (conR *ConsensusReactor) RemovePeer(peer consensus.Peer, reason interface{}) {
+	/*
 	if !conR.IsRunning() {
 		return
 	}
-
+	*/
 	ps, ok := peer.GetPeerState().(*PeerState)
 	if !ok {
 		conR.logger.Debug("Peer has no state", "peer", peer)
@@ -115,6 +131,23 @@ func (conR *ConsensusReactor) RemovePeer(peer consensus.Peer, reason interface{}
 	if ps != nil {
 		ps.Disconnect()
 	}
+	conR.peerStates.Delete(peer.GetKey())
+}
+
+func (conR *ConsensusReactor) startPeerRoutine() {
+
+	conR.peerStates.Range(func(_, val interface{}) bool{
+
+		peerState := val.(*PeerState)
+		peer := peerState.Peer
+		go conR.gossipDataRoutine(peer, peerState)
+		go conR.gossipVotesRoutine(peer, peerState)
+		//go conR.queryMaj23Routine(peer, peerState)
+
+		// Send our state to peer.
+		conR.sendNewRoundStepMessages(peer)
+		return true
+	})
 }
 
 // Implements Reactor
@@ -139,7 +172,7 @@ func (conR *ConsensusReactor) Receive(chID uint64, src consensus.Peer, msgBytes 
 
 	// Get peer states
 	ps, exist := src.GetPeerState().(*PeerState)
-	if !exist {
+	if !exist || ps == nil{
 		// in case of nil peer state, due to consensus reactor start in the middle of the running, re-add it into the reactor
 		conR.AddPeer(src)
 		ps = src.GetPeerState().(*PeerState)
@@ -302,10 +335,10 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 		block := re.Proposal
 		conR.logger.Infof("registerEventCallbacks received block height: %d, conR.conS.Height: %d, conR.conS.Step: %v", block.NumberU64(), conR.conS.Height, conR.conS.Step)
 		//wait block in new height or new block has been inserted to start a new height
-		if block.NumberU64() == conR.conS.Height || block.NumberU64() == conR.conS.Height+1 {
+		if block.NumberU64() >= conR.conS.Height {
 
 			//meas a block has been inserted into blockchain, let's start a new height
-			if block.NumberU64() == conR.conS.Height+1 {
+			if block.NumberU64() >= conR.conS.Height+1 {
 				conR.conS.StartNewHeight()
 			}
 
@@ -423,6 +456,7 @@ func (conR *ConsensusReactor) sendNewRoundStepMessages(peer consensus.Peer) {
 
 func (conR *ConsensusReactor) gossipDataRoutine(peer consensus.Peer, ps *PeerState) {
 	id := peer.GetKey()
+	conR.logger.Infof("gossipDataRoutine start for peer %v", id)
 OUTER_LOOP:
 	for {
 		// Manage disconnects from self or peer.
@@ -438,9 +472,10 @@ OUTER_LOOP:
 		}
 
 		if !conR.IsRunning() {
-			conR.logger.Infof("in gossipDataRoutine, Consensus reactor is not running")
-			time.Sleep(peerGossipSleepDuration)
-			continue OUTER_LOOP
+			conR.logger.Infof("Consensus reactor is not running, stopping gossipDataRoutine for peer %v", peer)
+			return
+			//time.Sleep(peerGossipSleepDuration)
+			//continue OUTER_LOOP
 		}
 
 		rs := conR.conS.GetRoundState()
@@ -555,9 +590,10 @@ OUTER_LOOP:
 		}
 
 		if !conR.IsRunning() {
-			conR.logger.Infof("in gossipVotesRoutine, Consensus reactor is not running")
-			time.Sleep(peerGossipSleepDuration)
-			continue OUTER_LOOP
+			conR.logger.Infof("Consensus reactor is not running, stopping gossipVotesRoutine for peer %v", peer)
+			return
+			//time.Sleep(peerGossipSleepDuration)
+			//continue OUTER_LOOP
 		}
 
 		rs := conR.conS.GetRoundState()
@@ -671,7 +707,7 @@ OUTER_LOOP:
 
 		ps1 := peer.GetPeerState().(*PeerState)
 		if !ps1.Connected {
-			conR.logger.Infof("Peer disconnected, stopping gossipDataRoutine for peer %v", peer)
+			conR.logger.Infof("Peer disconnected, stopping queryMaj23Routine for peer %v", peer)
 			return
 		}
 		/*

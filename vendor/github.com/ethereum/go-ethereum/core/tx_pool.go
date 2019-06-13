@@ -627,10 +627,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		log.Infof("validateTx Chain Function %v", function.String())
 		if validateCb := GetValidateCb(function); validateCb != nil {
 			if function.IsCrossChainType() {
-				pool.cch.GetMutex().Lock()
-				defer pool.cch.GetMutex().Unlock()
 				if fn, ok := validateCb.(CrossChainValidateCb); ok {
-					if err := fn(tx, pool.currentState, pool.cch); err != nil {
+					pool.cch.GetMutex().Lock()
+					err := fn(tx, pool.currentState, pool.cch)
+					pool.cch.GetMutex().Unlock()
+					if err != nil {
 						return err
 					}
 				} else {

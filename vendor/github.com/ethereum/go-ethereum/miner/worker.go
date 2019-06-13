@@ -500,11 +500,13 @@ func (self *worker) commitNewWork() {
 	if parent.Time() >= uint64(tstamp) {
 		tstamp = int64(parent.Time() + 1)
 	}
+
 	// this will ensure we're not going off too far in the future
 	if now := time.Now().Unix(); tstamp > now+1 {
 		wait := time.Duration(tstamp-now) * time.Second
-		self.logger.Info("Mining too far in the future", "wait", common.PrettyDuration(wait))
-		time.Sleep(wait)
+		self.logger.Info("Mining too far in the future", "suppose but not wait", common.PrettyDuration(wait))
+		//In pchain, there is no need to sleep to wait, commit work immediately
+		//time.Sleep(wait)
 	}
 
 	num := parent.Number()
