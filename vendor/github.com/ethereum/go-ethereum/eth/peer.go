@@ -54,7 +54,7 @@ type PeerInfo struct {
 }
 
 type peer struct {
-	id string
+	id                string
 	consensus_pub_key string
 
 	*p2p.Peer
@@ -246,6 +246,12 @@ func (p *peer) SendTX3ProofData(proofDatas []*types.TX3ProofData) error {
 	return p2p.Send(p.rw, TX3ProofDataMsg, proofDatas)
 }
 
+// SendPreimagesRLP sends a batch of sha3 preimages, corresponding to the
+// ones requested from an already RLP encoded format.
+func (p *peer) SendPreimagesRLP(preimages [][]byte) error {
+	return p2p.Send(p.rw, PreImagesMsg, preimages)
+}
+
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
 func (p *peer) RequestOneHeader(hash common.Hash) error {
@@ -285,6 +291,12 @@ func (p *peer) RequestNodeData(hashes []common.Hash) error {
 func (p *peer) RequestReceipts(hashes []common.Hash) error {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	return p2p.Send(p.rw, GetReceiptsMsg, hashes)
+}
+
+// RequestPreimages fetches a batch of sha3 preimage from a remote node.
+func (p *peer) RequestPreimages(hashes []common.Hash) error {
+	p.Log().Debug("Fetching batch of preimages", "count", len(hashes))
+	return p2p.Send(p.rw, GetPreImagesMsg, hashes)
 }
 
 // Handshake executes the eth protocol handshake, negotiating version number,

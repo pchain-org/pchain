@@ -18,9 +18,9 @@
 package consensus
 
 import (
-	"math/big"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"math/big"
 )
 
 // Constants to match up protocol versions and messages
@@ -57,6 +57,8 @@ type Broadcaster interface {
 	BroadcastBlock(block *types.Block, propagate bool)
 	// BroadcastMessage broadcast Message to P2P network
 	BroadcastMessage(msgcode uint64, data interface{})
+	// Find the Bad Preimages and send request to best peer for correction
+	TryFixBadPreimages()
 }
 
 // Peer defines the interface to communicate with peer

@@ -1264,6 +1264,8 @@ func (cs *ConsensusState) enterPrecommit(height uint64, round int) {
 	if !ok {
 		if cs.LockedBlock != nil {
 			cs.logger.Info("enterPrecommit: No +2/3 prevotes during enterPrecommit while we're locked. Precommitting nil")
+			// If our proposal block failed to pass the prevote, maybe some wired data (preimages key value) in our local level db, check and resync from other peer if broken
+			cs.backend.GetBroadcaster().TryFixBadPreimages()
 		} else {
 			cs.logger.Info("enterPrecommit: No +2/3 prevotes during enterPrecommit. Precommitting nil.")
 		}
