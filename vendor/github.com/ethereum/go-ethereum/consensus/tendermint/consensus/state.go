@@ -1019,6 +1019,11 @@ func (cs *ConsensusState) isProposalComplete() bool {
 	if cs.Proposal == nil || cs.ProposalBlock == nil {
 		return false
 	}
+
+	//actually here we can return true to replace the bunch of code commented below
+	return true
+
+	/*
 	// we have the proposal. if there's a POLRound,
 	// make sure we have the prevotes from it too
 	if cs.Proposal.POLRound < 0 {
@@ -1029,9 +1034,10 @@ func (cs *ConsensusState) isProposalComplete() bool {
 		if sa != nil {
 			return sa.HasTwoThirdsMajority(cs.Validators)
 		} else {
-			return false
+			return true
 		}
 	}
+	 */
 }
 
 // Create the next block to propose and return it.
