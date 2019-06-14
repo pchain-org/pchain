@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math"
 	"math/big"
 	"sync"
@@ -710,7 +711,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			p.MarkTransaction(tx.Hash())
 		}
 		pm.txpool.AddRemotes(txs)
-		
+
 	case msg.Code == TX3ProofDataMsg:
 		pm.logger.Info("TX3ProofDataMsg received")
 		var proofDatas []*types.TX3ProofData
@@ -731,6 +732,58 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			}
 		}
 
+	case msg.Code == GetPreImagesMsg:
+		pm.logger.Info("GetPreImagesMsg received")
+		// Decode the retrieval message
+		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
+		if _, err := msgStream.List(); err != nil {
+			return err
+		}
+		// Gather state data until the fetch or network limits is reached
+		var (
+			hash      common.Hash
+			bytes     int
+			preimages [][]byte
+		)
+
+		for bytes < softResponseLimit && len(preimages) < downloader.MaxReceiptFetch {
+			// Retrieve the hash of the next block
+			if err := msgStream.Decode(&hash); err == rlp.EOL {
+				break
+			} else if err != nil {
+
+				return errResp(ErrDecode, "msg %v: %v", msg, err)
+			}
+			// Retrieve the requested block's receipts, skipping if unknown to us
+			preimage := rawdb.ReadPreimage(pm.blockchain.StateCache().TrieDB().DiskDB(), hash)
+			// Double check the local preimage
+			if hash != crypto.Keccak256Hash(preimage) {
+				pm.logger.Error("Failed to pass the preimage double check. Request hash %x, Local Preimage %x", hash, preimage)
+				continue
+			}
+
+			preimages = append(preimages, preimage)
+			bytes += len(preimage)
+		}
+		return p.SendPreimagesRLP(preimages)
+
+	case msg.Code == PreImagesMsg:
+		pm.logger.Info("PreImagesMsg received")
+		var preimages [][]byte
+		if err := msg.Decode(&preimages); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
+		preimagesMap := make(map[common.Hash][]byte)
+		for _, preimage := range preimages {
+			pm.logger.Infof("PreImagesMsg received: %x", preimage)
+			preimagesMap[crypto.Keccak256Hash(preimage)] = common.CopyBytes(preimage)
+		}
+		if len(preimagesMap) > 0 {
+			db, _ := pm.blockchain.StateCache().TrieDB().DiskDB().(ethdb.Database)
+			rawdb.WritePreimages(db, preimagesMap)
+			pm.logger.Info("Preimages wrote into database")
+		}
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
@@ -804,6 +857,31 @@ func (pm *ProtocolManager) BroadcastMessage(msgcode uint64, data interface{}) {
 		recipients++
 	}
 	pm.logger.Trace("Broadcast p2p message", "code", msgcode, "recipients", recipients, "msg", data)
+}
+
+func (pm *ProtocolManager) TryFixBadPreimages() {
+	var hashes []common.Hash
+
+	// Iterate the entire sha3 preimages for checking
+	db, _ := pm.blockchain.StateCache().TrieDB().DiskDB().(ethdb.Database)
+	it := db.NewIteratorWithPrefix([]byte("secure-key-"))
+	for it.Next() {
+		keyHash := common.BytesToHash(it.Key())
+		valueHash := crypto.Keccak256Hash(it.Value())
+		if keyHash != valueHash {
+			// If value's hash doesn't match the key hash, add to list and send to other peer for correct
+			hashes = append(hashes, keyHash)
+		}
+	}
+	it.Release()
+
+	if len(hashes) > 0 {
+		pm.logger.Warnf("Found %d Bad Preimage(s)", len(hashes))
+		pm.logger.Warnf("Bad Preimages: %x", hashes)
+
+		pm.peers.BestPeer().RequestPreimages(hashes)
+	}
+
 }
 
 // Mined broadcast loop

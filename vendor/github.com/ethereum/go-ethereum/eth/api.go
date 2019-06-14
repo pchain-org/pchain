@@ -365,6 +365,14 @@ func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hex
 	return nil, errors.New("unknown preimage")
 }
 
+// RemotePreimage is a debug API function that start to sync the preimage for a sha3 hash from the best remote peer.
+func (api *PrivateDebugAPI) RemotePreimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+	peer := api.eth.protocolManager.peers.BestPeer()
+
+	hashes := make([]common.Hash, 0)
+	return nil, peer.RequestPreimages(append(hashes, hash))
+}
+
 // GetBadBLocks returns a list of the last 'bad blocks' that the client has seen on the network
 // and returns them as a JSON list of block-hashes
 func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]core.BadBlockArgs, error) {
