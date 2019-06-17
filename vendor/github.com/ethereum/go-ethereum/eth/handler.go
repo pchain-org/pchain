@@ -101,7 +101,8 @@ type ProtocolManager struct {
 
 	cch core.CrossChainHelper
 
-	logger log.Logger
+	logger         log.Logger
+	preimageLogger log.Logger
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
@@ -109,19 +110,20 @@ type ProtocolManager struct {
 func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkId uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, cch core.CrossChainHelper) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		networkId:   networkId,
-		eventMux:    mux,
-		txpool:      txpool,
-		blockchain:  blockchain,
-		chainconfig: config,
-		peers:       newPeerSet(),
-		newPeerCh:   make(chan *peer),
-		noMorePeers: make(chan struct{}),
-		txsyncCh:    make(chan *txsync),
-		quitSync:    make(chan struct{}),
-		engine:      engine,
-		cch:         cch,
-		logger:      config.ChainLogger,
+		networkId:      networkId,
+		eventMux:       mux,
+		txpool:         txpool,
+		blockchain:     blockchain,
+		chainconfig:    config,
+		peers:          newPeerSet(),
+		newPeerCh:      make(chan *peer),
+		noMorePeers:    make(chan struct{}),
+		txsyncCh:       make(chan *txsync),
+		quitSync:       make(chan struct{}),
+		engine:         engine,
+		cch:            cch,
+		logger:         config.ChainLogger,
+		preimageLogger: config.ChainLogger.New("module", "preimages"),
 	}
 
 	if handler, ok := manager.engine.(consensus.Handler); ok {
@@ -713,7 +715,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		pm.txpool.AddRemotes(txs)
 
 	case msg.Code == TX3ProofDataMsg:
-		pm.logger.Info("TX3ProofDataMsg received")
+		pm.logger.Debug("TX3ProofDataMsg received")
 		var proofDatas []*types.TX3ProofData
 		if err := msg.Decode(&proofDatas); err != nil {
 			pm.logger.Error("TX3ProofDataMsg decode error", "msg", msg, "error", err)
@@ -733,7 +735,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == GetPreImagesMsg:
-		pm.logger.Info("GetPreImagesMsg received")
+		pm.preimageLogger.Debug("GetPreImagesMsg received")
 		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
@@ -758,7 +760,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			preimage := rawdb.ReadPreimage(pm.blockchain.StateCache().TrieDB().DiskDB(), hash)
 			// Double check the local preimage
 			if hash != crypto.Keccak256Hash(preimage) {
-				pm.logger.Error("Failed to pass the preimage double check. Request hash %x, Local Preimage %x", hash, preimage)
+				pm.preimageLogger.Error("Failed to pass the preimage double check. Request hash %x, Local Preimage %x", hash, preimage)
 				continue
 			}
 
@@ -768,7 +770,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		return p.SendPreimagesRLP(preimages)
 
 	case msg.Code == PreImagesMsg:
-		pm.logger.Info("PreImagesMsg received")
+		pm.preimageLogger.Debug("PreImagesMsg received")
 		var preimages [][]byte
 		if err := msg.Decode(&preimages); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -776,13 +778,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		preimagesMap := make(map[common.Hash][]byte)
 		for _, preimage := range preimages {
-			pm.logger.Infof("PreImagesMsg received: %x", preimage)
+			pm.preimageLogger.Debugf("PreImagesMsg received: %x", preimage)
 			preimagesMap[crypto.Keccak256Hash(preimage)] = common.CopyBytes(preimage)
 		}
 		if len(preimagesMap) > 0 {
 			db, _ := pm.blockchain.StateCache().TrieDB().DiskDB().(ethdb.Database)
 			rawdb.WritePreimages(db, preimagesMap)
-			pm.logger.Info("Preimages wrote into database")
+			pm.preimageLogger.Info("PreImages wrote into database")
 		}
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
@@ -876,8 +878,8 @@ func (pm *ProtocolManager) TryFixBadPreimages() {
 	it.Release()
 
 	if len(hashes) > 0 {
-		pm.logger.Warnf("Found %d Bad Preimage(s)", len(hashes))
-		pm.logger.Warnf("Bad Preimages: %x", hashes)
+		pm.preimageLogger.Critf("Found %d Bad Preimage(s)", len(hashes))
+		pm.preimageLogger.Critf("Bad Preimages: %x", hashes)
 
 		pm.peers.BestPeer().RequestPreimages(hashes)
 	}
