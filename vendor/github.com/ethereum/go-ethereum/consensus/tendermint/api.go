@@ -73,7 +73,10 @@ func (api *API) GetNextEpochVote() (*tdmTypes.EpochVotesApi, error) {
 	ep := api.tendermint.core.consensusState.Epoch
 	if ep.GetNextEpoch() != nil {
 
-		votes := ep.GetNextEpoch().GetEpochValidatorVoteSet().Votes
+		var votes []*epoch.EpochValidatorVote
+		if ep.GetNextEpoch().GetEpochValidatorVoteSet() != nil {
+			votes = ep.GetNextEpoch().GetEpochValidatorVoteSet().Votes
+		}
 		votesApi := make([]*tdmTypes.EpochValidatorVoteApi, 0, len(votes))
 		for _, v := range votes {
 			var pkstring string
