@@ -373,6 +373,23 @@ func (api *PrivateDebugAPI) RemotePreimage(ctx context.Context, hash common.Hash
 	return nil, peer.RequestPreimages(append(hashes, hash))
 }
 
+// RemovePreimage is a debug API function that remove the preimage for a sha3 hash, if known.
+func (api *PrivateDebugAPI) RemovePreimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+	rawdb.DeletePreimage(api.eth.ChainDb(), hash)
+	return nil, nil
+}
+
+// Testing method
+func (api *PrivateDebugAPI) BrokenPreimage(ctx context.Context, hash common.Hash, preimage hexutil.Bytes) (hexutil.Bytes, error) {
+	// Broken the preimage
+	rawdb.WritePreimages(api.eth.ChainDb(), map[common.Hash][]byte{hash: preimage})
+	// try to read it from db
+	if read_preimage := rawdb.ReadPreimage(api.eth.ChainDb(), hash); read_preimage != nil {
+		return read_preimage, nil
+	}
+	return nil, errors.New("broken preimage failed")
+}
+
 // GetBadBLocks returns a list of the last 'bad blocks' that the client has seen on the network
 // and returns them as a JSON list of block-hashes
 func (api *PrivateDebugAPI) GetBadBlocks(ctx context.Context) ([]core.BadBlockArgs, error) {

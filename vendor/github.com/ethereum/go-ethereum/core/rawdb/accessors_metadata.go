@@ -96,3 +96,10 @@ func WritePreimages(db ethdb.Writer, preimages map[common.Hash][]byte) {
 	preimageCounter.Inc(int64(len(preimages)))
 	preimageHitCounter.Inc(int64(len(preimages)))
 }
+
+// DeletePreimage delete a single preimage of the provided hash. (Use carefully)
+func DeletePreimage(db ethdb.Writer, hash common.Hash) {
+	if err := db.Delete(preimageKey(hash)); err != nil {
+		log.Crit("Failed to delete trie preimage", "err", err)
+	}
+}
