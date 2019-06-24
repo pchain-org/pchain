@@ -59,7 +59,11 @@ type ChainInfo struct {
 	Epoch *ep.Epoch
 }
 
-const chainInfoKey = "CHAIN"
+const (
+	chainInfoKey  = "CHAIN"
+	ethGenesisKey = "ETH_GENESIS"
+	tdmGenesisKey = "TDM_GENESIS"
+)
 
 var allChainKey = []byte("AllChainID")
 
@@ -73,6 +77,14 @@ func calcCoreChainInfoKey(chainId string) []byte {
 
 func calcEpochKey(number uint64, chainId string) []byte {
 	return []byte(chainInfoKey + fmt.Sprintf("-%v-%s", number, chainId))
+}
+
+func calcETHGenesisKey(chainId string) []byte {
+	return []byte(ethGenesisKey + ":" + chainId)
+}
+
+func calcTDMGenesisKey(chainId string) []byte {
+	return []byte(tdmGenesisKey + ":" + chainId)
 }
 
 func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
@@ -273,6 +285,28 @@ func CheckChildChainRunning(db dbm.DB, chainId string) bool {
 	}
 
 	return false
+}
+
+// SaveChainGenesis save the genesis file for child chain
+func SaveChainGenesis(db dbm.DB, chainId string, ethGenesis, tdmGenesis []byte) {
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	// Save the eth genesis
+	db.SetSync(calcETHGenesisKey(chainId), ethGenesis)
+
+	// Save the tdm genesis
+	db.SetSync(calcTDMGenesisKey(chainId), tdmGenesis)
+}
+
+// LoadChainGenesis load the genesis file for child chain
+func LoadChainGenesis(db dbm.DB, chainId string) (ethGenesis, tdmGenesis []byte) {
+	mtx.RLock()
+	defer mtx.RUnlock()
+
+	ethGenesis = db.Get(calcETHGenesisKey(chainId))
+	tdmGenesis = db.Get(calcTDMGenesisKey(chainId))
+	return
 }
 
 // ---------------------

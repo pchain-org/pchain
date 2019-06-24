@@ -51,6 +51,13 @@ func main() {
 		},
 
 		{
+			Action:      chain.InitChildChainCmd,
+			Name:        "init_child_chain",
+			Usage:       "./pchain --datadir=.pchain --childChain=child_0,child_1,child_2 init_child_chain",
+			Description: "Initialize child chain genesis from chain info db",
+		},
+
+		{
 			Action:      GenerateNodeInfoCmd,
 			Name:        "gen_node_info",
 			Usage:       "gen_node_info number", //generate node info for 'number' nodes
