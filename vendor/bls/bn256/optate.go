@@ -1,5 +1,153 @@
 package bn256
 
+var (
+	LFA_B = &gfP2{}
+	LFA_D = &gfP2{}
+	LFA_H = &gfP2{}
+	LFA_I = &gfP2{}
+	LFA_E = &gfP2{}
+	LFA_J = &gfP2{}
+	LFA_L1 = &gfP2{}
+	LFA_V = &gfP2{}
+	LFA_t = &gfP2{}
+	LFA_t2 = &gfP2{}
+
+	LFD_A = &gfP2{}
+	LFD_B = &gfP2{}
+	LFD_C = &gfP2{}
+	LFD_D = &gfP2{}
+	LFD_E = &gfP2{}
+	LFD_G = &gfP2{}
+	LFD_t = &gfP2{}
+)
+
+func initLFA() {
+	LFA_B.SetZero()
+	LFA_D.SetZero()
+	LFA_H.SetZero()
+	LFA_I.SetZero()
+	LFA_E.SetZero()
+	LFA_J.SetZero()
+	LFA_L1.SetZero()
+	LFA_V.SetZero()
+	LFA_t.SetZero()
+	LFA_t2.SetZero()
+}
+
+func initLFD() {
+	LFD_A.SetZero()
+	LFD_B.SetZero()
+	LFD_C.SetZero()
+	LFD_D.SetZero()
+	LFD_E.SetZero()
+	LFD_G.SetZero()
+	LFD_t.SetZero()
+}
+
+func lineFunctionAdd_SaveMem(r, p *twistPoint, q *curvePoint, r2 *gfP2, a, b, c *gfP2, rOut *twistPoint) {
+
+	initLFA()
+	a.SetZero()
+	b.SetZero()
+	c.SetZero()
+	rOut.Set(&twistPoint{})
+
+	// See the mixed addition algorithm from "Faster Computation of the
+	// Tate Pairing", http://arxiv.org/pdf/0904.0854v3.pdf
+	B := LFA_B.Mul(&p.x, &r.t)
+
+	D := LFA_D.Add(&p.y, &r.z)
+	D.Square(D).Sub(D, r2).Sub(D, &r.t).Mul(D, &r.t)
+
+	H := LFA_H.Sub(B, &r.x)
+	I := LFA_I.Square(H)
+
+	E := LFA_E.Add(I, I)
+	E.Add(E, E)
+
+	J := LFA_J.Mul(H, E)
+
+	L1 := LFA_L1.Sub(D, &r.y)
+	L1.Sub(L1, &r.y)
+
+	V := LFA_V.Mul(&r.x, E)
+
+	rOut.x.Square(L1).Sub(&rOut.x, J).Sub(&rOut.x, V).Sub(&rOut.x, V)
+
+	rOut.z.Add(&r.z, H).Square(&rOut.z).Sub(&rOut.z, &r.t).Sub(&rOut.z, I)
+
+	t := LFA_t.Sub(V, &rOut.x)
+	t.Mul(t, L1)
+	t2 := LFA_t2.Mul(&r.y, J)
+	t2.Add(t2, t2)
+	rOut.y.Sub(t, t2)
+
+	rOut.t.Square(&rOut.z)
+
+	t.Add(&p.y, &rOut.z).Square(t).Sub(t, r2).Sub(t, &rOut.t)
+
+	t2.Mul(L1, &p.x)
+	t2.Add(t2, t2)
+	a = a.Sub(t2, t)
+
+	c = c.MulScalar(&rOut.z, &q.y)
+	c.Add(c, c)
+
+	b = b.Neg(L1)
+	b.MulScalar(b, &q.x).Add(b, b)
+
+	return
+}
+
+func lineFunctionDouble_SaveMem(r *twistPoint, q *curvePoint, a, b, c *gfP2, rOut *twistPoint) {
+
+	initLFD()
+	a.SetZero()
+	b.SetZero()
+	c.SetZero()
+	rOut.Set(&twistPoint{})
+
+	// See the doubling algorithm for a=0 from "Faster Computation of the
+	// Tate Pairing", http://arxiv.org/pdf/0904.0854v3.pdf
+	A := LFD_A.Square(&r.x)
+	B := LFD_B.Square(&r.y)
+	C := LFD_C.Square(B)
+
+	D := LFD_D.Add(&r.x, B)
+	D.Square(D).Sub(D, A).Sub(D, C).Add(D, D)
+
+	E := LFD_E.Add(A, A)
+	E.Add(E, A)
+
+	G := LFD_G.Square(E)
+
+	rOut.x.Sub(G, D).Sub(&rOut.x, D)
+
+	rOut.z.Add(&r.y, &r.z).Square(&rOut.z).Sub(&rOut.z, B).Sub(&rOut.z, &r.t)
+
+	rOut.y.Sub(D, &rOut.x).Mul(&rOut.y, E)
+	t := LFD_t.Add(C, C)
+	t.Add(t, t).Add(t, t)
+	rOut.y.Sub(&rOut.y, t)
+
+	rOut.t.Square(&rOut.z)
+
+	t.Mul(E, &r.t).Add(t, t)
+	b = b.Neg(t)
+	b.MulScalar(b, &q.x)
+
+	a = a.Add(&r.x, E)
+	a.Square(a).Sub(a, A).Sub(a, G)
+	t.Add(B, B).Add(t, t)
+	a.Sub(a, t)
+
+	c = c.Mul(&rOut.z, &r.t)
+	c.Add(c, c).MulScalar(c, &q.y)
+
+	return
+}
+
+
 func lineFunctionAdd(r, p *twistPoint, q *curvePoint, r2 *gfP2) (a, b, c *gfP2, rOut *twistPoint) {
 	// See the mixed addition algorithm from "Faster Computation of the
 	// Tate Pairing", http://arxiv.org/pdf/0904.0854v3.pdf
@@ -135,26 +283,34 @@ func miller(q *twistPoint, p *curvePoint) *gfP12 {
 
 	r2 := (&gfP2{}).Square(&aAffine.y)
 
+	a := &gfP2{}
+	b := &gfP2{}
+	c := &gfP2{}
+	newR  := &twistPoint{}
+
 	for i := len(sixuPlus2NAF) - 1; i > 0; i-- {
-		a, b, c, newR := lineFunctionDouble(r, bAffine)
+		//a, b, c, newR := lineFunctionDouble(r, bAffine)
+		lineFunctionDouble_SaveMem(r, bAffine, a, b, c, newR)
 		if i != len(sixuPlus2NAF)-1 {
 			ret.Square(ret)
 		}
 
 		mulLine(ret, a, b, c)
-		r = newR
+		r.Set(newR)
 
 		switch sixuPlus2NAF[i-1] {
 		case 1:
-			a, b, c, newR = lineFunctionAdd(r, aAffine, bAffine, r2)
+			//a, b, c, newR = lineFunctionAdd(r, aAffine, bAffine, r2)
+			lineFunctionAdd_SaveMem(r, aAffine, bAffine, r2, a, b, c, newR)
 		case -1:
-			a, b, c, newR = lineFunctionAdd(r, minusA, bAffine, r2)
+			//a, b, c, newR = lineFunctionAdd(r, minusA, bAffine, r2)
+			lineFunctionAdd_SaveMem(r, minusA, bAffine, r2, a, b, c, newR)
 		default:
 			continue
 		}
 
 		mulLine(ret, a, b, c)
-		r = newR
+		r.Set(newR)
 	}
 
 	// In order to calculate Q1 we have to convert q from the sextic twist
@@ -191,14 +347,16 @@ func miller(q *twistPoint, p *curvePoint) *gfP12 {
 	minusQ2.t.SetOne()
 
 	r2.Square(&q1.y)
-	a, b, c, newR := lineFunctionAdd(r, q1, bAffine, r2)
+	//a, b, c, newR := lineFunctionAdd(r, q1, bAffine, r2)
+	lineFunctionAdd_SaveMem(r, q1, bAffine, r2, a, b, c, newR)
 	mulLine(ret, a, b, c)
-	r = newR
+	r.Set(newR)
 
 	r2.Square(&minusQ2.y)
-	a, b, c, newR = lineFunctionAdd(r, minusQ2, bAffine, r2)
+	//a, b, c, newR = lineFunctionAdd(r, minusQ2, bAffine, r2)
+	lineFunctionAdd_SaveMem(r, minusQ2, bAffine, r2, a, b, c, newR)
 	mulLine(ret, a, b, c)
-	r = newR
+	r.Set(newR)
 
 	return ret
 }
