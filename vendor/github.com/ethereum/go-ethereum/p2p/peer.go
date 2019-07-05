@@ -52,8 +52,8 @@ const (
 	BroadcastNewChildChainMsg = 0x04
 	ConfirmNewChildChainMsg   = 0x05
 
-	RefreshValidatorNodeInfoMsg	= 0x06
-	RemoveValidatorNodeInfoMsg	= 0x07
+	RefreshValidatorNodeInfoMsg = 0x06
+	RemoveValidatorNodeInfoMsg  = 0x07
 )
 
 // protoHandshake is the RLP structure of the protocol handshake.
@@ -330,21 +330,21 @@ func (p *Peer) handle(msg Msg) error {
 		}
 		p.log.Debugf("validation node address: %x", valNodeInfo.Validator.Address)
 
-		if valNodeInfo.Original && p.Info().ID == valNodeInfo.Node.ID.String(){
+		if valNodeInfo.Original && p.Info().ID == valNodeInfo.Node.ID.String() {
 			valNodeInfo.Node.IP = p.RemoteAddr().(*net.TCPAddr).IP
 		}
 		valNodeInfo.Original = false
 
 		p.log.Debugf("validator node info: %v", valNodeInfo)
 
-		data, err:= rlp.EncodeToBytes(valNodeInfo)
+		data, err := rlp.EncodeToBytes(valNodeInfo)
 		if err != nil {
 			p.log.Debugf("encode error: %v", err)
 			return err
 		}
 		p.events.Send(&PeerEvent{
-			Type: PeerEventTypeRefreshValidator,
-			Peer: p.ID(),
+			Type:     PeerEventTypeRefreshValidator,
+			Peer:     p.ID(),
 			Protocol: string(data),
 		})
 
@@ -365,14 +365,14 @@ func (p *Peer) handle(msg Msg) error {
 		}
 		p.log.Debugf("validator node info: %v", valNodeInfo)
 
-		data, err:= rlp.EncodeToBytes(valNodeInfo)
+		data, err := rlp.EncodeToBytes(valNodeInfo)
 		if err != nil {
 			p.log.Debugf("encode error: %v", err)
 			return err
 		}
 		p.events.Send(&PeerEvent{
-			Type: PeerEventTypeRemoveValidator,
-			Peer: p.ID(),
+			Type:     PeerEventTypeRemoveValidator,
+			Peer:     p.ID(),
 			Protocol: string(data),
 		})
 
@@ -415,7 +415,17 @@ func (p *Peer) checkAndUpdateProtocol(chainId string) bool {
 		p.startChildChainProtocol(protoRW)
 		// Add the protoRW to peer
 		p.running[childProtocolName] = protoRW
-		p.rw.caps = append(p.rw.caps, protoRW.cap())
+
+		protoCap := protoRW.cap()
+		capExist := false
+		for _, cap := range p.rw.caps {
+			if cap.Name == protoCap.Name && cap.Version == protoCap.Version {
+				capExist = true
+			}
+		}
+		if !capExist {
+			p.rw.caps = append(p.rw.caps, protoCap)
+		}
 		return true
 	}
 
