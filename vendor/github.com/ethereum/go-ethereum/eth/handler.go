@@ -760,7 +760,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			preimage := rawdb.ReadPreimage(pm.blockchain.StateCache().TrieDB().DiskDB(), hash)
 			// Double check the local preimage
 			if hash != crypto.Keccak256Hash(preimage) {
-				pm.preimageLogger.Error("Failed to pass the preimage double check. Request hash %x, Local Preimage %x", hash, preimage)
+				pm.preimageLogger.Errorf("Failed to pass the preimage double check. Request hash %x, Local Preimage %x", hash, preimage)
 				continue
 			}
 
