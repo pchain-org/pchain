@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/datareduction"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -305,6 +306,12 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 func (api *PrivateAdminAPI) PruneStateData() (bool, error) {
 	go api.eth.StartScanAndPrune()
 	return true, nil
+}
+
+func (api *PrivateAdminAPI) LatestPruneState() (*datareduction.PruneStatus, error) {
+	status := datareduction.GetLatestStatus(api.eth.pruneDb)
+	status.LatestBlockNumber = api.eth.blockchain.CurrentHeader().Number.Uint64()
+	return status, nil
 }
 
 // PublicDebugAPI is the collection of Ethereum full node APIs exposed

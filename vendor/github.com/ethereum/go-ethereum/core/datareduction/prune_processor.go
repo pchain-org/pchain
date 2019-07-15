@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"log"
 	"sort"
+	"sync/atomic"
 )
 
 var (
@@ -21,6 +22,8 @@ var (
 	max_remain_trie uint64 = 10
 	// emptyRoot is the known root hash of an empty trie.
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+
+	pruning int32 // indicate pruning is running or not
 )
 
 type PruneProcessor struct {
@@ -33,9 +36,24 @@ type PruneProcessor struct {
 	pendingDeleteHashList []common.Hash // Temp List for batch delete the node
 }
 
+type PruneStatus struct {
+	Running           bool   `json:"is_running"`
+	LatestBlockNumber uint64 `json:"latest_block_number"`
+	LatestScanNumber  uint64 `json:"latest_scan_number"`
+	LatestPruneNumber uint64 `json:"latest_prune_number"`
+}
+
 type NodeCount map[common.Hash]uint64
 
 type processLeafTrie func(addrHash common.Hash, account *state.Account)
+
+func StartPruning() bool {
+	return atomic.CompareAndSwapInt32(&pruning, 0, 1)
+}
+
+func StopPruning() bool {
+	return atomic.CompareAndSwapInt32(&pruning, 1, 0)
+}
 
 func NewPruneProcessor(chaindb, prunedb ethdb.Database, bc *core.BlockChain) *PruneProcessor {
 	return &PruneProcessor{
@@ -350,4 +368,20 @@ func (nc NodeCount) String() string {
 		result += fmt.Sprintf("%v: %d \n", key.Hex(), nc[key])
 	}
 	return result
+}
+
+func GetLatestStatus(prunedb ethdb.Database) *PruneStatus {
+	var scanNo, pruneNo uint64
+	if ps := rawdb.ReadHeadScanNumber(prunedb); ps != nil {
+		scanNo = *ps
+	}
+	if pp := rawdb.ReadHeadPruneNumber(prunedb); pp != nil {
+		pruneNo = *pp
+	}
+
+	return &PruneStatus{
+		Running:           atomic.LoadInt32(&pruning) == 1,
+		LatestScanNumber:  scanNo,
+		LatestPruneNumber: pruneNo,
+	}
 }

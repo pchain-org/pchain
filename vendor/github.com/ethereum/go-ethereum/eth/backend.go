@@ -551,9 +551,16 @@ func (s *Ethereum) loopForMiningEvent() {
 }
 
 func (s *Ethereum) StartScanAndPrune() {
-	log.Debug("Data Reduction - Start")
+
+	if datareduction.StartPruning() {
+		log.Info("Data Reduction - Start")
+	} else {
+		log.Info("Data Reduction - Pruning is already running")
+		return
+	}
+
 	blockNumber := s.blockchain.CurrentHeader().Number.Uint64()
-	log.Debugf("Data Reduction - Last block number %v", blockNumber)
+	log.Infof("Data Reduction - Last block number %v", blockNumber)
 
 	ps := rawdb.ReadHeadScanNumber(s.pruneDb)
 	var scanNumber uint64
@@ -566,17 +573,19 @@ func (s *Ethereum) StartScanAndPrune() {
 	if pp != nil {
 		pruneNumber = *pp
 	}
-	log.Debugf("Data Reduction - Last scan number %v, prune number %v", scanNumber, pruneNumber)
+	log.Infof("Data Reduction - Last scan number %v, prune number %v", scanNumber, pruneNumber)
 
 	pruneProcessor := datareduction.NewPruneProcessor(s.chainDb, s.pruneDb, s.blockchain)
 
 	lastScanNumber, lastPruneNumber := pruneProcessor.Process(blockNumber, scanNumber, pruneNumber)
-	log.Debugf("Data Reduction - After prune, last number scan %v, prune number %v", lastScanNumber, lastPruneNumber)
+	log.Infof("Data Reduction - After prune, last number scan %v, prune number %v", lastScanNumber, lastPruneNumber)
 	if s.config.PruneBlockData {
 		for i := uint64(1); i < lastPruneNumber; i++ {
 			rawdb.DeleteBody(s.chainDb, rawdb.ReadCanonicalHash(s.chainDb, i), i)
 		}
-		log.Debugf("deleted block from 1 to %v", lastPruneNumber)
+		log.Infof("deleted block from 1 to %v", lastPruneNumber)
 	}
-	log.Debug("Data Reduction - Completed")
+	log.Info("Data Reduction - Completed")
+
+	datareduction.StopPruning()
 }
