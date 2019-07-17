@@ -17,12 +17,14 @@
 package eth
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math"
 	"math/big"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -862,6 +864,9 @@ func (pm *ProtocolManager) BroadcastMessage(msgcode uint64, data interface{}) {
 }
 
 func (pm *ProtocolManager) TryFixBadPreimages() {
+	// Record all preimages (Testing)
+	images := make(map[common.Hash][]byte)
+
 	var hashes []common.Hash
 
 	// Iterate the entire sha3 preimages for checking
@@ -874,6 +879,8 @@ func (pm *ProtocolManager) TryFixBadPreimages() {
 			// If value's hash doesn't match the key hash, add to list and send to other peer for correct
 			hashes = append(hashes, keyHash)
 		}
+		// Add to all preimages (Testing)
+		images[keyHash] = common.CopyBytes(it.Value())
 	}
 	it.Release()
 
@@ -881,6 +888,20 @@ func (pm *ProtocolManager) TryFixBadPreimages() {
 		pm.preimageLogger.Critf("Found %d Bad Preimage(s)", len(hashes))
 		pm.preimageLogger.Critf("Bad Preimages: %x", hashes)
 
+		// Print all preimages (Testing)
+		pm.preimageLogger.Crit("All Preimage(s)")
+		var list []common.Hash
+		for k := range images {
+			list = append(list, k)
+		}
+		sort.Slice(list, func(i, j int) bool {
+			return bytes.Compare(list[i][:], list[j][:]) == 1
+		})
+		for _, k := range list {
+			pm.preimageLogger.Crit(k.Hex(), common.Bytes2Hex(images[k]))
+		}
+
+		panic("Stop the system when found bad preimages, for testing purpose")
 		pm.peers.BestPeer().RequestPreimages(hashes)
 	}
 
