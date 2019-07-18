@@ -75,3 +75,7 @@ func GetLogger(chainID string) Logger {
 		return nil
 	}
 }
+
+func RangeLogger(f func(key, value interface{}) bool) {
+	loggerMap.Range(f)
+}
