@@ -329,7 +329,13 @@ func importPreimages(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack, cfg := makeConfigNode(ctx, "pchain")
+
+	chainName := ctx.Args().Get(1)
+	if chainName == "" {
+		chainName = "pchain"
+	}
+
+	stack, cfg := makeConfigNode(ctx, chainName)
 	utils.RegisterEthService(stack, &cfg.Eth)
 	defer stack.Close()
 
@@ -348,7 +354,13 @@ func exportPreimages(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack, cfg := makeConfigNode(ctx, "pchain")
+
+	chainName := ctx.Args().Get(1)
+	if chainName == "" {
+		chainName = "pchain"
+	}
+
+	stack, cfg := makeConfigNode(ctx, chainName)
 	utils.RegisterEthService(stack, &cfg.Eth)
 	defer stack.Close()
 
