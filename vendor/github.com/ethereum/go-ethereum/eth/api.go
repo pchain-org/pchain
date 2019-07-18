@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"io"
 	"math/big"
 	"os"
@@ -395,6 +396,26 @@ func (api *PrivateDebugAPI) BrokenPreimage(ctx context.Context, hash common.Hash
 		return read_preimage, nil
 	}
 	return nil, errors.New("broken preimage failed")
+}
+
+func (api *PrivateDebugAPI) FindBadPreimage(ctx context.Context) (interface{}, error) {
+
+	images := make(map[common.Hash]string)
+
+	// Iterate the entire sha3 preimages for checking
+	db := api.eth.ChainDb() //.blockchain.StateCache().TrieDB().DiskDB().(ethdb.Database)
+	it := db.NewIteratorWithPrefix([]byte("secure-key-"))
+	for it.Next() {
+		keyHash := common.BytesToHash(it.Key())
+		valueHash := crypto.Keccak256Hash(it.Value())
+		if keyHash != valueHash {
+			// Add bad preimages
+			images[keyHash] = common.Bytes2Hex(it.Value())
+		}
+	}
+	it.Release()
+
+	return images, nil
 }
 
 // GetBadBLocks returns a list of the last 'bad blocks' that the client has seen on the network
