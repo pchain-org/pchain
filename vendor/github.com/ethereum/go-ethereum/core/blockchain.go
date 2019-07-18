@@ -112,7 +112,6 @@ type BlockChain struct {
 
 	chainmu sync.RWMutex // blockchain insertion lock
 
-	checkpoint       int          // checkpoint counts towards the new checkpoint
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
@@ -494,7 +493,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 		bc.currentFastBlock.Store(block)
 	}
 
-	log.Info(fmt.Sprintf("(bc *BlockChain) insert block number %v, hash: %x", block.NumberU64(), block.Hash()))
+	bc.logger.Info(fmt.Sprintf("(bc *BlockChain) insert block number %v, hash: %x", block.NumberU64(), block.Hash()))
 	ibCbMap := GetInsertBlockCbMap()
 	for _, cb := range ibCbMap {
 		cb(bc, block)
@@ -656,7 +655,6 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 
 // ChainValidator execute and validate the block with the current latest block.
 func (bc *BlockChain) ValidateBlock(block *types.Block) (*state.StateDB, types.Receipts, *types.PendingOps, error) {
-	log.Info("ValidateBlock checkpoint 0")
 	// If the header is a banned one, straight out abort
 	if BadHashes[block.Hash()] {
 		return nil, nil, nil, ErrBlacklistedHash
@@ -949,6 +947,7 @@ func (bc *BlockChain) MuLock() {
 func (bc *BlockChain) MuUnLock() {
 	bc.chainmu.Unlock()
 }
+
 // WriteBlockWithState writes the block and all associated state to the database.
 func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
 
@@ -1192,7 +1191,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		// Skip all known blocks that are behind us
 		current := bc.CurrentBlock().NumberU64()
 		for block != nil && err == ErrKnownBlock {
-			if  current >= block.NumberU64() {
+			if current >= block.NumberU64() {
 				stats.ignored++
 				block, err = it.next()
 			} else {

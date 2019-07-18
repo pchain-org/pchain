@@ -209,8 +209,6 @@ type TxPool struct {
 
 	wg sync.WaitGroup // for shutdown sync
 
-	homestead bool
-
 	cch CrossChainHelper
 }
 
@@ -292,12 +290,8 @@ func (pool *TxPool) loop() {
 		case ev := <-pool.chainHeadCh:
 			if ev.Block != nil {
 				pool.mu.Lock()
-				if pool.chainconfig.IsHomestead(ev.Block.Number()) {
-					pool.homestead = true
-				}
 				pool.reset(head.Header(), ev.Block.Header())
 				head = ev.Block
-
 				pool.mu.Unlock()
 			}
 		// Be unsubscribed due to system stopped
@@ -565,22 +559,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if tx.Size() > 32*1024 {
 		return ErrOversizedData
 	}
-	// Make sure the transaction is signed properly
-	from, err := types.Sender(pool.signer, tx)
-	if err != nil {
-		return ErrInvalidSender
-	}
-	// Drop non-local transactions under our own minimal accepted gas price
-	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
-	log.Info("TxPool validateTx", "pool.gasPrice", pool.gasPrice.Uint64(), "tx.GasPrice", tx.GasPrice().Uint64())
-	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
-		return ErrUnderpriced
-	}
-	// Ensure the transaction adheres to nonce ordering
-	if pool.currentState.GetNonce(from) > tx.Nonce() {
-		return ErrNonceTooLow
-	}
-
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur if you create a transaction using the RPC.
 	if tx.Value().Sign() < 0 {
@@ -589,6 +567,20 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Ensure the transaction doesn't exceed the current block limit gas.
 	if pool.currentMaxGas < tx.Gas() {
 		return ErrGasLimit
+	}
+	// Make sure the transaction is signed properly
+	from, err := types.Sender(pool.signer, tx)
+	if err != nil {
+		return ErrInvalidSender
+	}
+	// Drop non-local transactions under our own minimal accepted gas price
+	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
+	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
+		return ErrUnderpriced
+	}
+	// Ensure the transaction adheres to nonce ordering
+	if pool.currentState.GetNonce(from) > tx.Nonce() {
+		return ErrNonceTooLow
 	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
@@ -602,7 +594,8 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	if !pabi.IsPChainContractAddr(tx.To()) {
-		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
+		// Ensure the transaction has more gas than the basic tx fee.
+		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true)
 		if err != nil {
 			return err
 		}
