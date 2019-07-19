@@ -8,9 +8,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	"log"
 	"sort"
 	"sync/atomic"
 )
@@ -45,7 +45,7 @@ type PruneStatus struct {
 
 type NodeCount map[common.Hash]uint64
 
-type processLeafTrie func(addrHash common.Hash, account *state.Account)
+type processLeafTrie func(addr common.Address, account state.Account)
 
 func StartPruning() bool {
 	return atomic.CompareAndSwapInt32(&pruning, 0, 1)
@@ -71,7 +71,8 @@ func (p *PruneProcessor) Process(blockNumber, scanNumber, pruneNumber uint64) (u
 
 	// Step 1. determine the scan height
 	scanOrNot, scanStart, scanEnd := calculateScan(scanNumber, blockNumber)
-	log.Println("Step 1.", scanOrNot, scanStart, scanEnd)
+
+	log.Infof("Data Reduction - scan ? %v , %d - %d", scanOrNot, scanStart, scanEnd)
 
 	if scanOrNot {
 		// Step 2. Read Latest Node Count
@@ -139,11 +140,10 @@ func (p *PruneProcessor) readLatestNodeCount(scanNumber, pruneNumber uint64) Nod
 	nodeCount := make(NodeCount)
 
 	lastHash := rawdb.ReadDataPruneTrieRootHash(p.db, scanNumber, pruneNumber)
-	log.Println("Last Hash: ", lastHash.Hex())
 	if (lastHash != common.Hash{}) {
 		lastPruneTrie, openErr := p.prunedb.OpenPruneTrie(lastHash)
 		if openErr != nil {
-			log.Println("Unable read the last Prune Trie. Error ", openErr)
+			log.Error("Data Reduction - Unable read the last Prune Trie.", "err", openErr)
 		} else {
 			it := trie.NewIterator(lastPruneTrie.NodeIterator(nil))
 			for it.Next() {
@@ -160,38 +160,48 @@ func (p *PruneProcessor) readLatestNodeCount(scanNumber, pruneNumber uint64) Nod
 func (p *PruneProcessor) countBlockChainTrie(root common.Hash, nodeCount NodeCount) {
 	t, openErr := p.bc.StateCache().OpenTrie(root)
 	if openErr != nil {
-		log.Println(openErr)
+		log.Error("Data Reduction - Error when open the Main Trie", "err", openErr, "stateroot", root)
 		return
 	}
 
-	countTrie(t, nodeCount, func(addrHash common.Hash, account *state.Account) {
+	countTrie(t, nodeCount, func(addr common.Address, account state.Account) {
 		if account.Root != emptyRoot {
-			if storageTrie, stErr := p.bc.StateCache().OpenStorageTrie(addrHash, account.Root); stErr == nil {
+			if storageTrie, stErr := p.bc.StateCache().OpenStorageTrie(common.Hash{}, account.Root); stErr == nil {
 				countTrie(storageTrie, nodeCount, nil)
+			} else {
+				log.Error("Data Reduction - Error when open the Storage Trie", "err", stErr, "storageroot", account.Root, "account", addr)
 			}
 		}
 
 		if account.TX1Root != emptyRoot {
-			if tx1Trie, tx1Err := p.bc.StateCache().OpenTX1Trie(addrHash, account.TX1Root); tx1Err == nil {
+			if tx1Trie, tx1Err := p.bc.StateCache().OpenTX1Trie(common.Hash{}, account.TX1Root); tx1Err == nil {
 				countTrie(tx1Trie, nodeCount, nil)
+			} else {
+				log.Error("Data Reduction - Error when open the TX1 Trie", "err", tx1Err, "tx1root", account.TX1Root, "account", addr)
 			}
 		}
 
 		if account.TX3Root != emptyRoot {
-			if tx3Trie, tx3Err := p.bc.StateCache().OpenTX3Trie(addrHash, account.TX3Root); tx3Err == nil {
+			if tx3Trie, tx3Err := p.bc.StateCache().OpenTX3Trie(common.Hash{}, account.TX3Root); tx3Err == nil {
 				countTrie(tx3Trie, nodeCount, nil)
+			} else {
+				log.Error("Data Reduction - Error when open the TX3 Trie", "err", tx3Err, "tx3root", account.TX3Root, "account", addr)
 			}
 		}
 
 		if account.ProxiedRoot != emptyRoot {
-			if proxiedTrie, proxiedErr := p.bc.StateCache().OpenProxiedTrie(addrHash, account.ProxiedRoot); proxiedErr == nil {
+			if proxiedTrie, proxiedErr := p.bc.StateCache().OpenProxiedTrie(common.Hash{}, account.ProxiedRoot); proxiedErr == nil {
 				countTrie(proxiedTrie, nodeCount, nil)
+			} else {
+				log.Error("Data Reduction - Error when open the Proxied Trie", "err", proxiedErr, "proxiedroot", account.ProxiedRoot, "account", addr)
 			}
 		}
 
 		if account.RewardRoot != emptyRoot {
-			if rewardTrie, rewardErr := p.bc.StateCache().OpenRewardTrie(addrHash, account.RewardRoot); rewardErr == nil {
+			if rewardTrie, rewardErr := p.bc.StateCache().OpenRewardTrie(common.Hash{}, account.RewardRoot); rewardErr == nil {
 				countTrie(rewardTrie, nodeCount, nil)
+			} else {
+				log.Error("Data Reduction - Error when open the Reward Trie", "err", rewardErr, "rewardroot", account.RewardRoot, "account", addr)
 			}
 		}
 
@@ -199,9 +209,8 @@ func (p *PruneProcessor) countBlockChainTrie(root common.Hash, nodeCount NodeCou
 }
 
 func countTrie(t state.Trie, nodeCount NodeCount, processLeaf processLeafTrie) {
-	it := t.NodeIterator(nil)
 	child := true
-	for i := 0; it.Next(child); i++ {
+	for it := t.NodeIterator(nil); it.Next(child); {
 		if !it.Leaf() {
 			nodeHash := it.Hash()
 			if _, exist := nodeCount[nodeHash]; exist {
@@ -216,12 +225,10 @@ func countTrie(t state.Trie, nodeCount NodeCount, processLeaf processLeafTrie) {
 			if processLeaf != nil {
 				addr := t.GetKey(it.LeafKey())
 				if len(addr) == 20 {
-					addrHash := common.BytesToHash(it.LeafKey())
-
 					var data state.Account
 					rlp.DecodeBytes(it.LeafBlob(), &data)
 
-					processLeaf(addrHash, &data)
+					processLeaf(common.BytesToAddress(addr), data)
 				}
 			}
 		}
@@ -229,7 +236,7 @@ func countTrie(t state.Trie, nodeCount NodeCount, processLeaf processLeafTrie) {
 }
 
 func (p *PruneProcessor) processScanData(latestScanNumber uint64, stateRoots []common.Hash, nodeCount NodeCount) uint64 {
-	log.Println("After Scan, Total Nodes: ", latestScanNumber, len(nodeCount))
+	log.Infof("Data Reduction - After Scan, Total Nodes: %d, %d", latestScanNumber, len(nodeCount))
 
 	// Prune State Data
 	p.pruneData(stateRoots[:len(stateRoots)-int(max_remain_trie)], nodeCount)
@@ -239,8 +246,8 @@ func (p *PruneProcessor) processScanData(latestScanNumber uint64, stateRoots []c
 	// Commit the new scaned/pruned node count to trie
 	p.commitDataPruneTrie(nodeCount, latestScanNumber, newPruneNumber)
 
-	log.Println("After Prune, Total Nodes: ", len(nodeCount))
-	log.Println("Scan/Prune Completed for trie", latestScanNumber, newPruneNumber)
+	log.Infof("Data Reduction - After Prune, Total Nodes: %d", len(nodeCount))
+	log.Infof("Data Reduction - Scan/Prune Completed for trie %d %d", latestScanNumber, newPruneNumber)
 	return newPruneNumber
 }
 
@@ -253,56 +260,66 @@ func (p *PruneProcessor) pruneData(stateRoots []common.Hash, nodeCount NodeCount
 	for _, hash := range p.pendingDeleteHashList {
 		batch.Delete(hash.Bytes())
 	}
-	writeErr := batch.Write()
-	log.Println(writeErr)
+	if writeErr := batch.Write(); writeErr != nil {
+		log.Error("Data Reduction - Error when write the deletion batch", "err", writeErr)
+	}
 	p.pendingDeleteHashList = nil
 }
 
 func (p *PruneProcessor) pruneBlockChainTrie(root common.Hash, nodeCount NodeCount) {
 	t, openErr := p.bc.StateCache().OpenTrie(root)
 	if openErr != nil {
-		log.Println(openErr)
+		log.Error("Data Reduction - Error when open the Main Trie", "err", openErr, "stateroot", root)
 		return
 	}
 
-	pruneTrie(t, nodeCount, &p.pendingDeleteHashList, func(addrHash common.Hash, account *state.Account) {
+	pruneTrie(t, nodeCount, p.pendingDeleteHashList, func(addr common.Address, account state.Account) {
 		if account.Root != emptyRoot {
-			if storageTrie, stErr := p.bc.StateCache().OpenStorageTrie(addrHash, account.Root); stErr == nil {
-				pruneTrie(storageTrie, nodeCount, &p.pendingDeleteHashList, nil)
+			if storageTrie, stErr := p.bc.StateCache().OpenStorageTrie(common.Hash{}, account.Root); stErr == nil {
+				pruneTrie(storageTrie, nodeCount, p.pendingDeleteHashList, nil)
+			} else {
+				log.Error("Data Reduction - Error when open the Storage Trie", "err", stErr, "storageroot", account.Root, "account", addr)
 			}
 		}
 
 		if account.TX1Root != emptyRoot {
-			if tx1Trie, tx1Err := p.bc.StateCache().OpenTX1Trie(addrHash, account.TX1Root); tx1Err == nil {
-				pruneTrie(tx1Trie, nodeCount, &p.pendingDeleteHashList, nil)
+			if tx1Trie, tx1Err := p.bc.StateCache().OpenTX1Trie(common.Hash{}, account.TX1Root); tx1Err == nil {
+				pruneTrie(tx1Trie, nodeCount, p.pendingDeleteHashList, nil)
+			} else {
+				log.Error("Data Reduction - Error when open the TX1 Trie", "err", tx1Err, "tx1root", account.TX1Root, "account", addr)
 			}
 		}
 
 		if account.TX3Root != emptyRoot {
-			if tx3Trie, tx3Err := p.bc.StateCache().OpenTX3Trie(addrHash, account.TX3Root); tx3Err == nil {
-				pruneTrie(tx3Trie, nodeCount, &p.pendingDeleteHashList, nil)
+			if tx3Trie, tx3Err := p.bc.StateCache().OpenTX3Trie(common.Hash{}, account.TX3Root); tx3Err == nil {
+				pruneTrie(tx3Trie, nodeCount, p.pendingDeleteHashList, nil)
+			} else {
+				log.Error("Data Reduction - Error when open the TX3 Trie", "err", tx3Err, "tx3root", account.TX3Root, "account", addr)
 			}
 		}
 
 		if account.ProxiedRoot != emptyRoot {
-			if proxiedTrie, proxiedErr := p.bc.StateCache().OpenProxiedTrie(addrHash, account.ProxiedRoot); proxiedErr == nil {
-				pruneTrie(proxiedTrie, nodeCount, &p.pendingDeleteHashList, nil)
+			if proxiedTrie, proxiedErr := p.bc.StateCache().OpenProxiedTrie(common.Hash{}, account.ProxiedRoot); proxiedErr == nil {
+				pruneTrie(proxiedTrie, nodeCount, p.pendingDeleteHashList, nil)
+			} else {
+				log.Error("Data Reduction - Error when open the Proxied Trie", "err", proxiedErr, "proxiedroot", account.ProxiedRoot, "account", addr)
 			}
 		}
 
 		if account.RewardRoot != emptyRoot {
-			if rewardTrie, rewardErr := p.bc.StateCache().OpenRewardTrie(addrHash, account.RewardRoot); rewardErr == nil {
-				pruneTrie(rewardTrie, nodeCount, &p.pendingDeleteHashList, nil)
+			if rewardTrie, rewardErr := p.bc.StateCache().OpenRewardTrie(common.Hash{}, account.RewardRoot); rewardErr == nil {
+				pruneTrie(rewardTrie, nodeCount, p.pendingDeleteHashList, nil)
+			} else {
+				log.Error("Data Reduction - Error when open the Reward Trie", "err", rewardErr, "rewardroot", account.RewardRoot, "account", addr)
 			}
 		}
 	})
 
 }
 
-func pruneTrie(t state.Trie, nodeCount NodeCount, pendingDeleteHashList *[]common.Hash, processLeaf processLeafTrie) {
-	it := t.NodeIterator(nil)
+func pruneTrie(t state.Trie, nodeCount NodeCount, pendingDeleteHashList []common.Hash, processLeaf processLeafTrie) {
 	child := true
-	for i := 0; it.Next(child); i++ {
+	for it := t.NodeIterator(nil); it.Next(child); {
 		if !it.Leaf() {
 			nodeHash := it.Hash()
 			if nodeCount[nodeHash] > 0 {
@@ -311,7 +328,7 @@ func pruneTrie(t state.Trie, nodeCount NodeCount, pendingDeleteHashList *[]commo
 
 			if nodeCount[nodeHash] == 0 {
 				child = true
-				*pendingDeleteHashList = append(*pendingDeleteHashList, nodeHash)
+				pendingDeleteHashList = append(pendingDeleteHashList, nodeHash)
 				delete(nodeCount, nodeHash)
 			} else {
 				child = false
@@ -321,12 +338,10 @@ func pruneTrie(t state.Trie, nodeCount NodeCount, pendingDeleteHashList *[]commo
 			if processLeaf != nil {
 				addr := t.GetKey(it.LeafKey())
 				if len(addr) == 20 {
-					addrHash := common.BytesToHash(it.LeafKey())
-
 					var data state.Account
 					rlp.DecodeBytes(it.LeafBlob(), &data)
 
-					processLeaf(addrHash, &data)
+					processLeaf(common.BytesToAddress(addr), data)
 				}
 			}
 		}
@@ -343,10 +358,10 @@ func (p *PruneProcessor) commitDataPruneTrie(nodeCount NodeCount, lastScanNumber
 		pruneTrie.TryUpdate(key[:], value)
 	}
 	pruneTrieRoot, commit_err := pruneTrie.Commit(nil)
-	log.Println("Commit Hash", pruneTrieRoot.Hex(), commit_err)
+	log.Info("Data Reduction - Commit Prune Trie", "hash", pruneTrieRoot.Hex(), "err", commit_err)
 	// Commit to Prune DB
 	db_commit_err := p.prunedb.TrieDB().Commit(pruneTrieRoot, true)
-	log.Println(db_commit_err)
+	log.Info("Data Reduction - Write to Prune DB", "err", db_commit_err)
 
 	// Write the Root Hash of Prune Trie
 	rawdb.WriteDataPruneTrieRootHash(p.db, pruneTrieRoot, lastScanNumber, lastPruneNumber)
