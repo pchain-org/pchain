@@ -256,14 +256,23 @@ func (p *PruneProcessor) pruneData(stateRoots []common.Hash, nodeCount NodeCount
 		p.pruneBlockChainTrie(root, nodeCount)
 	}
 
-	batch := p.chainDb.NewBatch()
-	for _, hash := range p.pendingDeleteHashList {
-		batch.Delete(hash.Bytes())
+	if len(p.pendingDeleteHashList) > 0 {
+		log.Infof("Data Reduction - %d hashes will be deleted from chaindb", len(p.pendingDeleteHashList))
+		batch := p.chainDb.NewBatch()
+		for _, hash := range p.pendingDeleteHashList {
+			if batchDeleteError := batch.Delete(hash.Bytes()); batchDeleteError != nil {
+				log.Error("Data Reduction - Error when delete the hash from chaindb", "err", batchDeleteError, "hash", hash)
+			}
+		}
+		if writeErr := batch.Write(); writeErr != nil {
+			log.Error("Data Reduction - Error when write the deletion batch", "err", writeErr)
+		} else {
+			log.Info("Data Reduction - write the deletion batch success")
+		}
+		p.pendingDeleteHashList = nil
+	} else {
+		log.Info("Data Reduction - no hashes will be deleted from chaindb")
 	}
-	if writeErr := batch.Write(); writeErr != nil {
-		log.Error("Data Reduction - Error when write the deletion batch", "err", writeErr)
-	}
-	p.pendingDeleteHashList = nil
 }
 
 func (p *PruneProcessor) pruneBlockChainTrie(root common.Hash, nodeCount NodeCount) {
@@ -273,10 +282,10 @@ func (p *PruneProcessor) pruneBlockChainTrie(root common.Hash, nodeCount NodeCou
 		return
 	}
 
-	pruneTrie(t, nodeCount, p.pendingDeleteHashList, func(addr common.Address, account state.Account) {
+	pruneTrie(t, nodeCount, &p.pendingDeleteHashList, func(addr common.Address, account state.Account) {
 		if account.Root != emptyRoot {
 			if storageTrie, stErr := p.bc.StateCache().OpenStorageTrie(common.Hash{}, account.Root); stErr == nil {
-				pruneTrie(storageTrie, nodeCount, p.pendingDeleteHashList, nil)
+				pruneTrie(storageTrie, nodeCount, &p.pendingDeleteHashList, nil)
 			} else {
 				log.Error("Data Reduction - Error when open the Storage Trie", "err", stErr, "storageroot", account.Root, "account", addr)
 			}
@@ -284,7 +293,7 @@ func (p *PruneProcessor) pruneBlockChainTrie(root common.Hash, nodeCount NodeCou
 
 		if account.TX1Root != emptyRoot {
 			if tx1Trie, tx1Err := p.bc.StateCache().OpenTX1Trie(common.Hash{}, account.TX1Root); tx1Err == nil {
-				pruneTrie(tx1Trie, nodeCount, p.pendingDeleteHashList, nil)
+				pruneTrie(tx1Trie, nodeCount, &p.pendingDeleteHashList, nil)
 			} else {
 				log.Error("Data Reduction - Error when open the TX1 Trie", "err", tx1Err, "tx1root", account.TX1Root, "account", addr)
 			}
@@ -292,7 +301,7 @@ func (p *PruneProcessor) pruneBlockChainTrie(root common.Hash, nodeCount NodeCou
 
 		if account.TX3Root != emptyRoot {
 			if tx3Trie, tx3Err := p.bc.StateCache().OpenTX3Trie(common.Hash{}, account.TX3Root); tx3Err == nil {
-				pruneTrie(tx3Trie, nodeCount, p.pendingDeleteHashList, nil)
+				pruneTrie(tx3Trie, nodeCount, &p.pendingDeleteHashList, nil)
 			} else {
 				log.Error("Data Reduction - Error when open the TX3 Trie", "err", tx3Err, "tx3root", account.TX3Root, "account", addr)
 			}
@@ -300,7 +309,7 @@ func (p *PruneProcessor) pruneBlockChainTrie(root common.Hash, nodeCount NodeCou
 
 		if account.ProxiedRoot != emptyRoot {
 			if proxiedTrie, proxiedErr := p.bc.StateCache().OpenProxiedTrie(common.Hash{}, account.ProxiedRoot); proxiedErr == nil {
-				pruneTrie(proxiedTrie, nodeCount, p.pendingDeleteHashList, nil)
+				pruneTrie(proxiedTrie, nodeCount, &p.pendingDeleteHashList, nil)
 			} else {
 				log.Error("Data Reduction - Error when open the Proxied Trie", "err", proxiedErr, "proxiedroot", account.ProxiedRoot, "account", addr)
 			}
@@ -308,7 +317,7 @@ func (p *PruneProcessor) pruneBlockChainTrie(root common.Hash, nodeCount NodeCou
 
 		if account.RewardRoot != emptyRoot {
 			if rewardTrie, rewardErr := p.bc.StateCache().OpenRewardTrie(common.Hash{}, account.RewardRoot); rewardErr == nil {
-				pruneTrie(rewardTrie, nodeCount, p.pendingDeleteHashList, nil)
+				pruneTrie(rewardTrie, nodeCount, &p.pendingDeleteHashList, nil)
 			} else {
 				log.Error("Data Reduction - Error when open the Reward Trie", "err", rewardErr, "rewardroot", account.RewardRoot, "account", addr)
 			}
@@ -317,7 +326,7 @@ func (p *PruneProcessor) pruneBlockChainTrie(root common.Hash, nodeCount NodeCou
 
 }
 
-func pruneTrie(t state.Trie, nodeCount NodeCount, pendingDeleteHashList []common.Hash, processLeaf processLeafTrie) {
+func pruneTrie(t state.Trie, nodeCount NodeCount, pendingDeleteHashList *[]common.Hash, processLeaf processLeafTrie) {
 	child := true
 	for it := t.NodeIterator(nil); it.Next(child); {
 		if !it.Leaf() {
@@ -328,7 +337,7 @@ func pruneTrie(t state.Trie, nodeCount NodeCount, pendingDeleteHashList []common
 
 			if nodeCount[nodeHash] == 0 {
 				child = true
-				pendingDeleteHashList = append(pendingDeleteHashList, nodeHash)
+				*pendingDeleteHashList = append(*pendingDeleteHashList, nodeHash)
 				delete(nodeCount, nodeHash)
 			} else {
 				child = false
