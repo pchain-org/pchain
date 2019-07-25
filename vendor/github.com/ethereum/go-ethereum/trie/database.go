@@ -452,8 +452,9 @@ func (db *Database) preimage(hash common.Hash) ([]byte, error) {
 // buffer. The caller must not hold onto the return value because it will become
 // invalid on the next call.
 func (db *Database) secureKey(key []byte) []byte {
-	buf := append(db.seckeybuf[:0], secureKeyPrefix...)
-	buf = append(buf, key...)
+	buf := append(secureKeyPrefix[:], key...)
+	//buf := append(db.seckeybuf[:0], secureKeyPrefix...)
+	//buf = append(buf, key...)
 	return buf
 }
 
