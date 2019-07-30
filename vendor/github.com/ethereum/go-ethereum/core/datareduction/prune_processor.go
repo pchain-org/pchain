@@ -92,7 +92,12 @@ func (p *PruneProcessor) Process(blockNumber, scanNumber, pruneNumber uint64) (u
 			header := p.bc.GetHeaderByNumber(i)
 
 			//log.Printf("Block: %v, Root %x", i, header.Root)
-			p.countBlockChainTrie(header.Root, nodeCount)
+			if skip := p.countBlockChainTrie(header.Root, nodeCount); skip {
+				newScanNumber++
+				newPruneNumber++
+				continue
+			}
+
 			stateRoots = append(stateRoots, header.Root)
 
 			// Prune Data Process
@@ -108,6 +113,9 @@ func (p *PruneProcessor) Process(blockNumber, scanNumber, pruneNumber uint64) (u
 		if len(nodeCount) > 0 {
 			newScanNumber = scanEnd
 			newPruneNumber = p.processScanData(newScanNumber, stateRoots, nodeCount)
+		} else if newScanNumber > scanNumber || newPruneNumber > pruneNumber {
+			// Update the last number if skip case happened
+			p.writeLastNumber(newScanNumber, newPruneNumber)
 		}
 	}
 	return newScanNumber, newPruneNumber
@@ -157,10 +165,15 @@ func (p *PruneProcessor) readLatestNodeCount(scanNumber, pruneNumber uint64) Nod
 	return nodeCount
 }
 
-func (p *PruneProcessor) countBlockChainTrie(root common.Hash, nodeCount NodeCount) {
+func (p *PruneProcessor) countBlockChainTrie(root common.Hash, nodeCount NodeCount) (skip bool) {
 	t, openErr := p.bc.StateCache().OpenTrie(root)
 	if openErr != nil {
-		log.Error("Data Reduction - Error when open the Main Trie", "err", openErr, "stateroot", root)
+		if _, ok := openErr.(*trie.MissingNodeError); ok {
+			// Missing Node Error means the root node of the trie has been removed earlier, so skip the trie and return
+			skip = true
+		} else {
+			log.Error("Data Reduction - Error when open the Main Trie", "err", openErr, "stateroot", root)
+		}
 		return
 	}
 
@@ -204,7 +217,6 @@ func (p *PruneProcessor) countBlockChainTrie(root common.Hash, nodeCount NodeCou
 				log.Error("Data Reduction - Error when open the Reward Trie", "err", rewardErr, "rewardroot", account.RewardRoot, "account", addr)
 			}
 		}
-
 	})
 }
 
@@ -374,6 +386,11 @@ func (p *PruneProcessor) commitDataPruneTrie(nodeCount NodeCount, lastScanNumber
 
 	// Write the Root Hash of Prune Trie
 	rawdb.WriteDataPruneTrieRootHash(p.db, pruneTrieRoot, lastScanNumber, lastPruneNumber)
+	// Write the last number
+	p.writeLastNumber(lastScanNumber, lastPruneNumber)
+}
+
+func (p *PruneProcessor) writeLastNumber(lastScanNumber, lastPruneNumber uint64) {
 	rawdb.WriteHeadScanNumber(p.db, lastScanNumber)
 	rawdb.WriteHeadPruneNumber(p.db, lastPruneNumber)
 }
