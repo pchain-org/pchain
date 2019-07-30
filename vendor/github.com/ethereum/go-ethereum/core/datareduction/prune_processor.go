@@ -66,8 +66,7 @@ func NewPruneProcessor(chaindb, prunedb ethdb.Database, bc *core.BlockChain) *Pr
 }
 
 func (p *PruneProcessor) Process(blockNumber, scanNumber, pruneNumber uint64) (uint64, uint64) {
-	newScanNumber := scanNumber
-	newPruneNumber := pruneNumber
+	newScanNumber, newPruneNumber := scanNumber, pruneNumber
 
 	// Step 1. determine the scan height
 	scanOrNot, scanStart, scanEnd := calculateScan(scanNumber, blockNumber)
@@ -79,21 +78,22 @@ func (p *PruneProcessor) Process(blockNumber, scanNumber, pruneNumber uint64) (u
 		nodeCount := p.readLatestNodeCount(scanNumber, pruneNumber)
 
 		var stateRoots []common.Hash
+		if pruneNumber > 0 {
+			// Add previous state root for prune
+			for i := pruneNumber + 1; i <= scanNumber; i++ {
+				header := p.bc.GetHeaderByNumber(i)
+				stateRoots = append(stateRoots, header.Root)
+			}
+		}
 
 		for i := scanStart; i <= scanEnd; i++ {
 
-			//PrintMemUsage()
-			//start := time.Now()
-
 			//TODO Cache the header
-
 			header := p.bc.GetHeaderByNumber(i)
 
 			//log.Printf("Block: %v, Root %x", i, header.Root)
 			p.countBlockChainTrie(header.Root, nodeCount)
 			stateRoots = append(stateRoots, header.Root)
-			//log.Println(nodeCount)
-			//PrintMemUsage()
 
 			// Prune Data Process
 			if len(nodeCount) > 0 && len(stateRoots) >= int(max_count_trie) {

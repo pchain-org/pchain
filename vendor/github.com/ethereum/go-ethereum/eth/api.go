@@ -304,8 +304,13 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 	return true, nil
 }
 
-func (api *PrivateAdminAPI) PruneStateData() (bool, error) {
-	go api.eth.StartScanAndPrune()
+func (api *PrivateAdminAPI) PruneStateData(height *hexutil.Uint64) (bool, error) {
+	var blockNumber uint64
+	if height != nil && *height > 0 {
+		blockNumber = uint64(*height)
+	}
+
+	go api.eth.StartScanAndPrune(blockNumber)
 	return true, nil
 }
 

@@ -482,7 +482,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 
 	// Start the Data Reduction
 	if s.config.PruneStateData {
-		go s.StartScanAndPrune()
+		go s.StartScanAndPrune(0)
 	}
 
 	return nil
@@ -550,7 +550,7 @@ func (s *Ethereum) loopForMiningEvent() {
 	}
 }
 
-func (s *Ethereum) StartScanAndPrune() {
+func (s *Ethereum) StartScanAndPrune(blockNumber uint64) {
 
 	if datareduction.StartPruning() {
 		log.Info("Data Reduction - Start")
@@ -559,8 +559,13 @@ func (s *Ethereum) StartScanAndPrune() {
 		return
 	}
 
-	blockNumber := s.blockchain.CurrentHeader().Number.Uint64()
-	log.Infof("Data Reduction - Last block number %v", blockNumber)
+	latestBlockNumber := s.blockchain.CurrentHeader().Number.Uint64()
+	if blockNumber == 0 || blockNumber >= latestBlockNumber {
+		blockNumber = latestBlockNumber
+		log.Infof("Data Reduction - Last block number %v", blockNumber)
+	} else {
+		log.Infof("Data Reduction - User defined Last block number %v", blockNumber)
+	}
 
 	ps := rawdb.ReadHeadScanNumber(s.pruneDb)
 	var scanNumber uint64
