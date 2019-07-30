@@ -218,6 +218,7 @@ func (p *PruneProcessor) countBlockChainTrie(root common.Hash, nodeCount NodeCou
 			}
 		}
 	})
+	return
 }
 
 func countTrie(t state.Trie, nodeCount NodeCount, processLeaf processLeafTrie) {
