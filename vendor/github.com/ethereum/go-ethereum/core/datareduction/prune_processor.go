@@ -93,8 +93,7 @@ func (p *PruneProcessor) Process(blockNumber, scanNumber, pruneNumber uint64) (u
 
 			//log.Printf("Block: %v, Root %x", i, header.Root)
 			if skip := p.countBlockChainTrie(header.Root, nodeCount); skip {
-				newScanNumber++
-				newPruneNumber++
+				newScanNumber, newPruneNumber = i, i
 				continue
 			}
 
