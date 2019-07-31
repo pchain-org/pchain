@@ -901,7 +901,7 @@ func (pm *ProtocolManager) TryFixBadPreimages() {
 			pm.preimageLogger.Crit(k.Hex(), common.Bytes2Hex(images[k]))
 		}
 
-		panic("Stop the system when found bad preimages, for testing purpose")
+		//panic("Stop the system when found bad preimages, for testing purpose")
 		pm.peers.BestPeer().RequestPreimages(hashes)
 	}
 
