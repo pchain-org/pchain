@@ -89,11 +89,10 @@ func (tp *TimeoutParams) Prevote(round int) time.Duration {
 
 //In PDBFT, wait for this long for Non-Proposer validator to vote precommit
 func (tp *TimeoutParams) Precommit(round int) time.Duration {
-	if round < 5 {
-		return time.Duration(tp.Precommit0+tp.PrecommitDelta*round) * time.Millisecond
-	} else {
-		return time.Duration(tp.Precommit0+tp.PrecommitDelta*int(math.Pow(1.5, float64(round-1)))) * time.Millisecond
+	if round >= 5 {
+		round = 4
 	}
+	return time.Duration(tp.Precommit0+tp.PrecommitDelta*round) * time.Millisecond
 }
 
 // After receiving +2/3 precommits for a single block (a commit), wait this long for stragglers in the next height's RoundStepNewHeight
