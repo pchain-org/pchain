@@ -30,10 +30,10 @@ import (
 	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	pabi "github.com/pchain/abi"
+	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -87,6 +87,9 @@ type Header struct {
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
 	MixDigest   common.Hash    `json:"mixHash"          gencodec:"required"`
 	Nonce       BlockNonce     `json:"nonce"            gencodec:"required"`
+
+	// For Child Chain only
+	MainChainNumber *big.Int `json:"mainNumber"           gencodec:"required"`
 }
 
 // field type overrides for gencodec
@@ -148,7 +151,7 @@ func (h *Header) Size() common.StorageSize {
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewKeccak256()
+	hw := sha3.NewLegacyKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h
@@ -325,7 +328,7 @@ func (b *Block) Number() *big.Int     { return new(big.Int).Set(b.header.Number)
 func (b *Block) GasLimit() uint64     { return b.header.GasLimit }
 func (b *Block) GasUsed() uint64      { return b.header.GasUsed }
 func (b *Block) Difficulty() *big.Int { return new(big.Int).Set(b.header.Difficulty) }
-func (b *Block) Time() *big.Int       { return new(big.Int).Set(b.header.Time) }
+func (b *Block) Time() uint64         { return b.header.Time.Uint64() }
 
 func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
 func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
@@ -467,14 +470,9 @@ func (self blockSorter) Less(i, j int) bool { return self.by(self.blocks[i], sel
 
 func Number(b1, b2 *Block) bool { return b1.header.Number.Cmp(b2.header.Number) < 0 }
 
-// ChildChainProofData represents a proof of tx/epoch from child chain to the main chain.
+// ChildChainProofData represents epoch from child chain to the main chain.
 type ChildChainProofData struct {
 	Header *Header
-
-	// Deprecated
-	TxIndexs []uint
-	// Deprecated
-	TxProofs []*BSKeyValueSet
 }
 
 // TX3ProofData represents proof of tx3 from child chain to the main chain.
@@ -488,38 +486,6 @@ type TX3ProofData struct {
 func NewChildChainProofData(block *Block) (*ChildChainProofData, error) {
 	ret := &ChildChainProofData{
 		Header: block.Header(),
-	}
-
-	txs := block.Transactions()
-	// build the Trie (see derive_sha.go)
-	keybuf := new(bytes.Buffer)
-	trie := new(trie.Trie)
-	for i := 0; i < txs.Len(); i++ {
-		keybuf.Reset()
-		rlp.Encode(keybuf, uint(i))
-		trie.Update(keybuf.Bytes(), txs.GetRlp(i))
-	}
-	// do the Merkle Proof for the specific tx
-	for i, tx := range txs {
-		if pabi.IsPChainContractAddr(tx.To()) {
-			data := tx.Data()
-			function, err := pabi.FunctionTypeFromId(data[:4])
-			if err != nil {
-				continue
-			}
-
-			if function == pabi.WithdrawFromChildChain {
-				kvSet := MakeBSKeyValueSet()
-				keybuf.Reset()
-				rlp.Encode(keybuf, uint(i))
-				if err := trie.Prove(keybuf.Bytes(), 0, kvSet); err != nil {
-					return nil, err
-				}
-
-				ret.TxIndexs = append(ret.TxIndexs, uint(i))
-				ret.TxProofs = append(ret.TxProofs, kvSet)
-			}
-		}
 	}
 
 	return ret, nil

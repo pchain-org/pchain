@@ -4,16 +4,15 @@ import (
 	"bytes"
 	"crypto/sha256"
 
+	"bls"
 	secp256k1 "github.com/btcsuite/btcd/btcec"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/tendermint/ed25519"
 	"github.com/tendermint/ed25519/extra25519"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
 	"golang.org/x/crypto/ripemd160"
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	"bls"
-	"os"
 )
 
 // PubKey is part of Account and Validator.
@@ -222,7 +221,7 @@ func (pubKey PubKeySecp256k1) Equals(other PubKey) bool {
 type EthereumPubKey []byte
 
 func (pubKey EthereumPubKey) Address() []byte {
-	cKey := ethcrypto.ToECDSAPub(pubKey[:])
+	cKey, _ := ethcrypto.UnmarshalPubkey(pubKey[:])
 	address := ethcrypto.PubkeyToAddress(*cKey)
 	return address[:]
 }
@@ -369,11 +368,11 @@ func (p *BLSPubKey) UnmarshalJSON(enc []byte) error {
 	return err
 }
 */
-type BLSPubKey []byte
+type BLSPubKey [128]byte
 
 func (pubKey BLSPubKey) getElement() *bls.PublicKey {
 	pb := &bls.PublicKey{}
-	err := pb.Unmarshal(pubKey)
+	err := pb.Unmarshal(pubKey[:])
 	if err != nil {
 		return nil
 	} else {
@@ -382,10 +381,10 @@ func (pubKey BLSPubKey) getElement() *bls.PublicKey {
 }
 
 func (pubKey BLSPubKey) Bytes() []byte {
-	return pubKey
+	return pubKey[:]
 }
 
-func BLSPubKeyAggregate(pks []*PubKey) BLSPubKey {
+func BLSPubKeyAggregate(pks []*PubKey) *BLSPubKey {
 	var _pks []*bls.PublicKey
 	for _, pk := range pks {
 		if _pk, ok := (*pk).(BLSPubKey); ok {
@@ -394,7 +393,10 @@ func BLSPubKeyAggregate(pks []*PubKey) BLSPubKey {
 			return nil
 		}
 	}
-	return  new(bls.PublicKey).AggregateArray(_pks).Marshal()
+
+	var pub BLSPubKey
+	copy(pub[:], new(bls.PublicKey).Aggregate(_pks...).Marshal())
+	return &pub
 }
 
 func (pubKey BLSPubKey) Address() []byte {
@@ -409,7 +411,7 @@ func (pubKey BLSPubKey) Address() []byte {
 
 func (pubKey BLSPubKey) Equals(other PubKey) bool {
 	if otherPk, ok := other.(BLSPubKey); ok {
-		return bytes.Equal(pubKey, otherPk)
+		return pubKey == otherPk
 	} else {
 		return false
 	}
@@ -418,24 +420,30 @@ func (pubKey BLSPubKey) Equals(other PubKey) bool {
 func (pubKey BLSPubKey) VerifyBytes(msg []byte, sig_ Signature) bool {
 	if otherSign, ok := sig_.(BLSSignature); ok {
 		sign := otherSign.getElement()
-		return bls.Verify(sign, msg, pubKey.getElement())
+		if sign == nil {
+			return false
+		}
+		pub := pubKey.getElement()
+		if pub == nil {
+			return false
+		}
+		return bls.Verify(sign, msg, pub)
 	} else {
-		os.Exit(0)
 		return false;
 	}
 }
 
 func (pubKey BLSPubKey) KeyString() string {
-	return Fmt("BlsPubKey{%X}", pubKey[:])
+	return Fmt("0x%X", pubKey[:])
 }
 
 func (pubKey BLSPubKey) MarshalJSON() ([]byte, error) {
-	return data.Encoder.Marshal(pubKey)
+	return data.Encoder.Marshal(pubKey[:])
 }
 
-func (p *BLSPubKey) UnmarshalJSON(enc []byte) error {
+func (pubKey *BLSPubKey) UnmarshalJSON(enc []byte) error {
 	var ref []byte
 	err := data.Encoder.Unmarshal(&ref, enc)
-	copy(*p, ref)
+	copy(pubKey[:], ref)
 	return err
 }

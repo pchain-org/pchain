@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 const (
@@ -101,6 +102,13 @@ type Config struct {
 	// allowed to connect, even above the peer limit.
 	TrustedNodes []*discover.Node
 
+	// Validators that this node acts as
+	LocalValidators []P2PValidator
+
+	// Validators set in all chains
+	// Should find nodes for all of them to support bls transport in PDBFT module
+	Validators map[P2PValidator]*P2PValidatorNodeInfo
+
 	// Connectivity can be restricted to certain IP networks.
 	// If this option is set to a non-nil value, only hosts which match one of the
 	// IP networks contained in the list are considered.
@@ -143,6 +151,12 @@ type Config struct {
 	Logger log.Logger `toml:",omitempty"`
 }
 
+type NodeInfoToSend struct {
+	valNodeInfo *P2PValidatorNodeInfo
+	action      uint64
+	p           *Peer
+}
+
 // Server manages all peer connections.
 type Server struct {
 	// Config fields may not be modified while the server is running.
@@ -175,6 +189,12 @@ type Server struct {
 	loopWG        sync.WaitGroup // loop, listenLoop
 	peerFeed      event.Feed
 	log           log.Logger
+
+	events    chan *PeerEvent
+	eventsSub event.Subscription
+
+	nodeInfoLock sync.Mutex // protects running
+	nodeInfoList []*NodeInfoToSend
 }
 
 type peerOpFunc func(map[discover.NodeID]*Peer)
@@ -340,16 +360,18 @@ func (srv *Server) makeSelf(listener net.Listener, ntab discoverTable) *discover
 // It blocks until all active connections have been closed.
 func (srv *Server) Stop() {
 	srv.lock.Lock()
-	defer srv.lock.Unlock()
 	if !srv.running {
+		srv.lock.Unlock()
 		return
 	}
+	srv.eventsSub.Unsubscribe()
 	srv.running = false
 	if srv.listener != nil {
 		// this unblocks listener Accept
 		srv.listener.Close()
 	}
 	close(srv.quit)
+	srv.lock.Unlock()
 	srv.loopWG.Wait()
 }
 
@@ -412,6 +434,10 @@ func (srv *Server) Start() (err error) {
 	srv.removestatic = make(chan *discover.Node)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
+	srv.events = make(chan *PeerEvent)
+	srv.eventsSub = srv.SubscribeEvents(srv.events)
+
+	srv.nodeInfoList = make([]*NodeInfoToSend, 0)
 
 	var (
 		conn      *net.UDPConn
@@ -503,6 +529,9 @@ func (srv *Server) Start() (err error) {
 	srv.loopWG.Add(1)
 	go srv.run(dialer)
 	srv.running = true
+
+	go srv.sendValidatorNodeInfoMessages()
+
 	return nil
 }
 
@@ -655,6 +684,8 @@ running:
 				if p.Inbound() {
 					inboundCount++
 				}
+
+				srv.validatorAddPeer(p)
 			}
 			// The dialer logic relies on the assumption that
 			// dial tasks complete after the peer has been added or
@@ -671,6 +702,47 @@ running:
 			delete(peers, pd.ID())
 			if pd.Inbound() {
 				inboundCount--
+			}
+			srv.validatorDelPeer(pd.ID())
+
+		case evt := <-srv.events:
+			log.Debugf("peer events received: %v", evt)
+			switch evt.Type {
+
+			case PeerEventTypeRefreshValidator:
+				var valNodeInfo P2PValidatorNodeInfo
+				if err := rlp.DecodeBytes([]byte(evt.Protocol), &valNodeInfo); err != nil {
+					log.Debugf("rlp decode valNodeInfo failed with %v", err)
+				}
+
+				peerArr := make([]*Peer, 0)
+				for _, p := range peers {
+					peerArr = append(peerArr, p)
+				}
+
+				if err := srv.validatorAdd(valNodeInfo, peerArr, dialstate); err != nil {
+					log.Debugf("add valNodeInfo to local failed with %v", err)
+				}
+
+				log.Debugf("Got refresh validation node infomation from validation %x", valNodeInfo.Validator.Address)
+
+			case PeerEventTypeRemoveValidator:
+				var valNodeInfo P2PValidatorNodeInfo
+				if err := rlp.DecodeBytes([]byte(evt.Protocol), &valNodeInfo); err != nil {
+					log.Debugf("rlp decode valNodeInfo failed with %v", err)
+				}
+
+				peerArr := make([]*Peer, 0)
+				for _, p := range peers {
+					peerArr = append(peerArr, p)
+				}
+
+				if err := srv.validatorRemove(valNodeInfo, peerArr, dialstate); err != nil {
+					log.Debugf("remove valNodeInfo from local failed with %v", err)
+				}
+
+				log.Debugf("Got remove validation node infomation from validation %x", valNodeInfo.Validator.Address)
+
 			}
 		}
 	}
@@ -983,5 +1055,330 @@ func (srv *Server) BroadcastMsg(msgCode uint64, data interface{}) {
 	peers := srv.Peers()
 	for _, p := range peers {
 		Send(p.rw, BroadcastNewChildChainMsg, data)
+	}
+}
+
+func (srv *Server) AddLocalValidator(chainId string, address common.Address) {
+
+	log.Debug("AddLocalValidator")
+
+	validator := P2PValidator{
+		ChainId: chainId,
+		Address: address,
+	}
+
+	for i := 0; i < len(srv.LocalValidators); i++ {
+		if validator == srv.LocalValidators[i] {
+			return
+		}
+	}
+
+	srv.LocalValidators = append(srv.LocalValidators, validator)
+
+	srv.broadcastRefreshValidatorNodeInfo(&P2PValidatorNodeInfo{
+		Node:      *srv.Self(),
+		TimeStamp: time.Now(),
+		Validator: validator,
+		Original:  true,
+	}, nil)
+}
+
+func (srv *Server) RemoveLocalValidator(chainId string, address common.Address) {
+
+	log.Debug("RemoveLocalValidator")
+
+	validator := P2PValidator{
+		ChainId: chainId,
+		Address: address,
+	}
+
+	idx := -1
+	for i := 0; i < len(srv.LocalValidators); i++ {
+		if validator == srv.LocalValidators[i] {
+			idx = i
+			break
+		}
+	}
+
+	if idx < 0 {
+		return
+	}
+
+	srv.LocalValidators = append(srv.LocalValidators[:idx], srv.LocalValidators[idx+1:]...)
+
+	srv.broadcastRemoveValidatorNodeInfo(&P2PValidatorNodeInfo{
+		Node:      *srv.Self(),
+		TimeStamp: time.Now(),
+		Validator: validator,
+		Original:  true,
+	}, nil)
+}
+
+func (srv *Server) validatorAdd(valNodeInfo P2PValidatorNodeInfo, peers []*Peer, dialstate dialer) error {
+
+	log.Debug("validatorAdd")
+
+	validator := valNodeInfo.Validator
+
+	//if the node info goes from this node, just skip
+	if srv.Self().ID == valNodeInfo.Node.ID {
+		return nil
+	}
+
+	//if the node does exist, we skip it; this could also avoid repeated propagate
+	if nodeInfo, ok := srv.Validators[validator]; ok {
+		con1 := valNodeInfo.Node.ID == nodeInfo.Node.ID
+		con2 := valNodeInfo.Node.IP.String() == nodeInfo.Node.IP.String()
+		log.Debugf("con1: %v, con2: %v", con1, con2)
+		if con1 && con2 /*not compare PORT*/ {
+			log.Debug("validator found, not add")
+			return nil
+		}
+	}
+
+	log.Debug("validator not found")
+	srv.Validators[validator] = &valNodeInfo
+	inSameChain := false
+	//if this validator is in the same chains which we join as validator, connect to it
+	for i := 0; i < len(srv.LocalValidators); i++ {
+		if validator.ChainId == srv.LocalValidators[i].ChainId {
+			inSameChain = true
+			break
+		}
+	}
+
+	notPeer := true
+	for _, p := range peers {
+		if p.ID() == valNodeInfo.Node.ID {
+			notPeer = false
+			break
+		}
+	}
+
+	if inSameChain && notPeer {
+		dialstate.addStatic(&valNodeInfo.Node)
+	}
+
+	//broadcast this node info to peers
+	//srv.broadcastRefreshValidatorNodeInfo(&valNodeInfo, peers)
+
+	return nil
+}
+
+func (srv *Server) validatorRemove(valNodeInfo P2PValidatorNodeInfo, peers []*Peer, dialstate dialer) error {
+
+	log.Debug("validatorRemove")
+
+	//if the node info goes from this node, just skip
+	if srv.Self().ID == valNodeInfo.Node.ID {
+		return nil
+	}
+
+	validator := valNodeInfo.Validator
+	//if the node does not exist, we skip it
+	// in some cases the msg may need send, but ignoring it does not matter
+	if _, ok := srv.Validators[validator]; !ok {
+		return nil
+	}
+
+	delete(srv.Validators, validator)
+
+	inSameChain := 0
+	//if this validator is in the same chains which we join as validator
+	for i := 0; i < len(srv.LocalValidators); i++ {
+		if validator.ChainId == srv.LocalValidators[i].ChainId {
+			inSameChain++
+		}
+	}
+
+	shouldRemove := false
+	//if there is only one validator in one chain connected with this peer, disconnect
+	if inSameChain == 1 {
+		for _, p := range peers {
+			if p.ID() == valNodeInfo.Node.ID {
+				//there peer is connected only for we are validator in one single chain, now can remove it
+				shouldRemove = true
+				break
+			}
+		}
+	}
+
+	if shouldRemove {
+		dialstate.removeStatic(&valNodeInfo.Node)
+	}
+
+	//broadcast this node info to peers
+	//srv.broadcastRemoveValidatorNodeInfo(&valNodeInfo, peers)
+
+	return nil
+}
+
+func (srv *Server) validatorAddPeer(peer *Peer) error {
+
+	log.Debug("validatorAddPeer")
+
+	sendList := make([]*NodeInfoToSend, 0)
+
+	var err error = nil
+	for _, validatorNodeInfo := range srv.Validators {
+
+		if peer.ID() == validatorNodeInfo.Node.ID {
+			//refresh the node's ip, and no need to send the info back to the peer itself
+			validatorNodeInfo.Node.IP = peer.RemoteAddr().(*net.TCPAddr).IP
+			continue
+		}
+
+		/*
+			err1 := Send(peer.rw, RefreshValidatorNodeInfoMsg, validatorNodeInfo)
+			if err == nil && err1 != nil {
+				err = err1
+			}
+		*/
+		sendList = append(sendList, &NodeInfoToSend{
+			valNodeInfo: validatorNodeInfo,
+			action:      RefreshValidatorNodeInfoMsg,
+			p:           peer,
+		})
+	}
+
+	node := *srv.Self()
+	for i := 0; i < len(srv.LocalValidators); i++ {
+		/*
+			err1 := Send(peer.rw, RefreshValidatorNodeInfoMsg, P2PValidatorNodeInfo{
+				Node: node,
+				TimeStamp: time.Now(),
+				Validator: srv.LocalValidators[i],
+				Original: true,
+			})
+			if err == nil && err1 != nil {
+				err = err1
+			}
+		*/
+		sendList = append(sendList, &NodeInfoToSend{
+			valNodeInfo: &P2PValidatorNodeInfo{
+				Node:      node,
+				TimeStamp: time.Now(),
+				Validator: srv.LocalValidators[i],
+				Original:  true,
+			},
+			action: RefreshValidatorNodeInfoMsg,
+			p:      peer,
+		})
+	}
+
+	srv.addNodeInfoToSend(sendList)
+
+	return err
+}
+
+func (srv *Server) validatorDelPeer(nodeId discover.NodeID) error {
+
+	log.Debug("validatorDelPeer")
+
+	srv.nodeInfoLock.Lock()
+	defer srv.nodeInfoLock.Unlock()
+
+	tailIndex := 0
+	for i := 0; i < len(srv.nodeInfoList); i++ {
+
+		nodeInfo := srv.nodeInfoList[i]
+		if nodeInfo.valNodeInfo.Node.ID != nodeId {
+			if i != tailIndex {
+				srv.nodeInfoList[tailIndex] = nodeInfo
+			}
+			tailIndex++
+		}
+	}
+
+	removedCount := len(srv.nodeInfoList) - 1 - tailIndex
+
+	srv.nodeInfoList = srv.nodeInfoList[:tailIndex]
+
+	log.Debug("removed %v node info to send to %v", removedCount, nodeId)
+
+	return nil
+}
+
+func (srv *Server) broadcastRefreshValidatorNodeInfo(data *P2PValidatorNodeInfo, peers []*Peer) {
+
+	log.Debug("broadcastRefreshValidatorNodeInfo")
+	if peers == nil {
+		peers = srv.Peers()
+	}
+
+	sendList := make([]*NodeInfoToSend, 0)
+	for _, p := range peers {
+
+		sendList = append(sendList, &NodeInfoToSend{
+			valNodeInfo: data,
+			action:      RefreshValidatorNodeInfoMsg,
+			p:           p,
+		})
+		//Send(p.rw, RefreshValidatorNodeInfoMsg, data)
+	}
+
+	srv.addNodeInfoToSend(sendList)
+}
+
+func (srv *Server) broadcastRemoveValidatorNodeInfo(data interface{}, peers []*Peer) {
+
+	log.Debug("broadcastRemoveValidatorNodeInfo")
+	if peers == nil {
+		peers = srv.Peers()
+	}
+
+	sendList := make([]*NodeInfoToSend, 0)
+	for _, p := range peers {
+
+		sendList = append(sendList, &NodeInfoToSend{
+			valNodeInfo: data.(*P2PValidatorNodeInfo),
+			action:      RemoveValidatorNodeInfoMsg,
+			p:           p,
+		})
+		//Send(p.rw, RemoveValidatorNodeInfoMsg, data)
+	}
+
+	srv.addNodeInfoToSend(sendList)
+}
+
+func (srv *Server) addNodeInfoToSend(sendList []*NodeInfoToSend) {
+
+	srv.nodeInfoLock.Lock()
+	defer srv.nodeInfoLock.Unlock()
+
+	srv.nodeInfoList = append(srv.nodeInfoList, sendList...)
+}
+
+//this function send validator information to otheres, every 100mimsecond send one
+//currently just handle the refresh action, not remove action
+func (srv *Server) sendValidatorNodeInfoMessages() {
+
+	sleepDuration := 100 * time.Millisecond // Time to sleep before send next message
+
+	for srv.running {
+
+		if len(srv.nodeInfoList) > 0 {
+			srv.nodeInfoLock.Lock()
+
+			nodeInfo := srv.nodeInfoList[0]
+			srv.nodeInfoList = srv.nodeInfoList[1:]
+
+			srv.nodeInfoLock.Unlock()
+
+			if nodeInfo != nil &&
+				nodeInfo.valNodeInfo != nil &&
+				nodeInfo.p != nil &&
+				nodeInfo.p.rw != nil &&
+				nodeInfo.p.rw.fd != nil {
+
+				Send(nodeInfo.p.rw, nodeInfo.action, nodeInfo.valNodeInfo)
+
+				log.Debugf("send node info (%x, %v) to %v",
+					nodeInfo.valNodeInfo.Validator.Address, nodeInfo.valNodeInfo.Node.ID,
+					nodeInfo.p.ID())
+			}
+		}
+
+		time.Sleep(sleepDuration)
 	}
 }

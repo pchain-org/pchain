@@ -2,11 +2,10 @@ package consensus
 
 import (
 	consss "github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
-
-	"fmt"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/log"
 	cmn "github.com/tendermint/go-common"
 	"time"
 )
@@ -69,15 +68,15 @@ func (cs *ConsensusState) Initialize() {
 
 	//initialize state
 	cs.Height = 0
-	cs.blockFromMiner = nil
 
 	//initialize round state
+	cs.proposer = nil
 	cs.ProposerPeerKey = ""
 	cs.Validators = nil
 	cs.Proposal = nil
 	cs.ProposalBlock = nil
 	cs.ProposalBlockParts = nil
-	cs.LockedRound = 0
+	cs.LockedRound = -1
 	cs.LockedBlock = nil
 	cs.LockedBlockParts = nil
 	cs.Votes = nil
@@ -85,7 +84,6 @@ func (cs *ConsensusState) Initialize() {
 	cs.PrevoteMaj23SignAggr = nil
 	cs.PrecommitMaj23SignAggr = nil
 	cs.CommitRound = -1
-	cs.LastCommit = nil
 	cs.state = nil
 }
 
@@ -93,29 +91,22 @@ func (cs *ConsensusState) Initialize() {
 // The round becomes 0 and cs.Step becomes RoundStepNewHeight.
 func (cs *ConsensusState) UpdateToState(state *sm.State) {
 
-	// Reset fields based on state.
-	_, validators, _ := state.GetValidators()
-	lastPrecommits := (*types.SignAggr)(nil)
-	if cs.CommitRound > -1 && cs.PrecommitMaj23SignAggr != nil {
-		lastPrecommits = cs.PrecommitMaj23SignAggr
-		fmt.Println("set lastcommit")
-	} else {
-		fmt.Println("nil")
-	}
-
-	fmt.Printf("commit round:+%v\n", cs.CommitRound)
-
-	fmt.Printf("lastPrecommit is:%+v\n", lastPrecommits)
-	fmt.Printf("lastPrecommit height:%+v\n", cs.Height)
-
 	cs.Initialize()
 
 	height := state.TdmExtra.Height + 1
 	// Next desired block height
 	cs.Height = height
 
+	if cs.blockFromMiner != nil && cs.blockFromMiner.NumberU64() >= cs.Height {
+		log.Debugf("block %v has been received from miner, not set to nil", cs.blockFromMiner.NumberU64())
+	} else {
+		cs.blockFromMiner = nil
+	}
+
 	// RoundState fields
 	cs.updateRoundStep(0, RoundStepNewHeight)
+	cs.StartTime = cs.timeoutParams.Commit(time.Now())
+	/*
 	if cs.CommitTime.IsZero() {
 		// "Now" makes it easier to sync up dev nodes.
 		// We add timeoutCommit to allow transactions
@@ -126,11 +117,13 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	} else {
 		cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
 	}
-
+	*/
+	
+	// Reset fields based on state.
+	_, validators, _ := state.GetValidators()
 	cs.Validators = validators
 	cs.Votes = NewHeightVoteSet(cs.chainConfig.PChainId, height, validators, cs.logger)
 	cs.VoteSignAggr = NewHeightVoteSignAggr(cs.chainConfig.PChainId, height, validators, cs.logger)
-	cs.LastCommit = lastPrecommits
 
 	cs.state = state
 
@@ -191,6 +184,12 @@ func (bs *ConsensusState) LoadTendermintExtra(height uint64) (*types.TendermintE
 	if err != nil {
 		bs.logger.Warnf("LoadTendermintExtra. error: %v", err)
 		return nil, 0
+	}
+
+	blockHeight := ethBlock.NumberU64()
+	if tdmExtra.Height != blockHeight {
+		bs.logger.Warnf("extra.height:%v, block.Number %v, reset it", tdmExtra.Height, blockHeight)
+		tdmExtra.Height = blockHeight
 	}
 
 	return tdmExtra, tdmExtra.Height

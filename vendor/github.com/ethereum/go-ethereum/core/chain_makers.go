@@ -202,7 +202,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 
 		if b.engine != nil {
-			block, _ := b.engine.Finalize(b.chainReader, b.header, statedb, b.txs, b.uncles, b.receipts, nil)
+			block, _ := b.engine.Finalize(b.chainReader, b.header, statedb, b.txs, nil, b.uncles, b.receipts, nil)
 			// Write state changes to db
 			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
 			if err != nil {
@@ -230,10 +230,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 
 func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.StateDB, engine consensus.Engine) *types.Header {
 	var time *big.Int
-	if parent.Time() == nil {
+	if parent.Time() == 0 {
 		time = big.NewInt(10)
 	} else {
-		time = new(big.Int).Add(parent.Time(), big.NewInt(10)) // block time is fixed at 10 seconds
+		time = new(big.Int).SetUint64(parent.Time() + 10) // block time is fixed at 10 seconds
 	}
 
 	return &types.Header{
@@ -246,36 +246,10 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 			Difficulty: parent.Difficulty(),
 			UncleHash:  parent.UncleHash(),
 		}),
-		GasLimit: CalcGasLimit(parent),
+		GasLimit: CalcGasLimit(parent, parent.GasLimit(), parent.GasLimit()),
 		Number:   new(big.Int).Add(parent.Number(), common.Big1),
 		Time:     time,
 	}
-}
-
-// newCanonical creates a chain database, and injects a deterministic canonical
-// chain. Depending on the full flag, if creates either a full block chain or a
-// header only chain.
-func newCanonical(engine consensus.Engine, n int, full bool) (ethdb.Database, *BlockChain, error) {
-	// Initialize a fresh chain with only a genesis block
-	gspec := new(Genesis)
-	db, _ := ethdb.NewMemDatabase()
-	genesis := gspec.MustCommit(db)
-
-	blockchain, _ := NewBlockChain(db, nil, params.AllEthashProtocolChanges, engine, vm.Config{}, nil)
-	// Create and inject the requested chain
-	if n == 0 {
-		return db, blockchain, nil
-	}
-	if full {
-		// Full block-chain requested
-		blocks := makeBlockChain(genesis, n, engine, db, canonicalSeed)
-		_, err := blockchain.InsertChain(blocks)
-		return db, blockchain, err
-	}
-	// Header-only chain requested
-	headers := makeHeaderChain(genesis.Header(), n, engine, db, canonicalSeed)
-	_, err := blockchain.InsertHeaderChain(headers, 1)
-	return db, blockchain, err
 }
 
 // makeHeaderChain creates a deterministic chain of headers rooted at parent.

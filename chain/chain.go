@@ -3,7 +3,6 @@ package chain
 import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/log"
 	eth "github.com/ethereum/go-ethereum/node"
@@ -11,46 +10,36 @@ import (
 	"github.com/pchain/version"
 	cfg "github.com/tendermint/go-config"
 	"gopkg.in/urfave/cli.v1"
-	"net/http"
 	"path/filepath"
 )
 
 const (
 	// Client identifier to advertise over the network
-	MainChain = "pchain"
+	MainChain    = "pchain"
+	TestnetChain = "testnet"
 )
 
 type Chain struct {
-	Id         string
-	Config     cfg.Config
-	EthNode    *eth.Node
-	RpcHandler http.Handler
-	mining     bool
+	Id      string
+	Config  cfg.Config
+	EthNode *eth.Node
 }
 
 func LoadMainChain(ctx *cli.Context, chainId string) *Chain {
 
-	mining := ctx.GlobalBool(utils.MiningEnabledFlag.Name)
-	chain := &Chain{Id: chainId, mining: mining}
+	chain := &Chain{Id: chainId}
 	config := GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
 	//always start ethereum
 	log.Info("ethereum.MakeSystemNode")
-	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, GetCMInstance(ctx).cch, mining)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, GetCMInstance(ctx).cch)
 	chain.EthNode = stack
-
-	rpcHandler, err := stack.GetRPCHandler()
-	if err != nil {
-		log.Error("rpc_handler got failed, return")
-	}
-
-	chain.RpcHandler = rpcHandler
 
 	return chain
 }
 
-func LoadChildChain(ctx *cli.Context, chainId string, mining bool) *Chain {
+func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
 
 	log.Infof("now load child: %s", chainId)
 
@@ -61,25 +50,20 @@ func LoadChildChain(ctx *cli.Context, chainId string, mining bool) *Chain {
 	//	log.Errorf("directory %s not exist or with error %v", chainDir, err)
 	//	return nil
 	//}
-	chain := &Chain{Id: chainId, mining: mining}
+	chain := &Chain{Id: chainId}
 	config := GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
 	//always start ethereum
 	log.Infof("chainId: %s, ethereum.MakeSystemNode", chainId)
 	cch := GetCMInstance(ctx).cch
-	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, cch, mining)
-	chain.EthNode = stack
-
-	rpcHandler, err := stack.GetRPCHandler()
-	if err != nil {
-		log.Info("rpc_handler got failed, return")
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, cch)
+	if stack == nil {
 		return nil
+	} else {
+		chain.EthNode = stack
+		return chain
 	}
-
-	chain.RpcHandler = rpcHandler
-
-	return chain
 }
 
 func StartChain(ctx *cli.Context, chain *Chain, startDone chan<- struct{}) error {
@@ -87,7 +71,7 @@ func StartChain(ctx *cli.Context, chain *Chain, startDone chan<- struct{}) error
 	log.Infof("Start Chain: %s", chain.Id)
 	go func() {
 		log.Info("StartChain()->utils.StartNode(stack)")
-		utils.StartNodeEx(ctx, chain.EthNode, chain.mining)
+		utils.StartNodeEx(ctx, chain.EthNode)
 
 		if startDone != nil {
 			startDone <- struct{}{}
@@ -102,12 +86,14 @@ func CreateChildChain(ctx *cli.Context, chainId string, validator tdmTypes.PrivV
 	// Get Tendermint config base on chain id
 	config := GetTendermintConfig(chainId, ctx)
 
-	// Save the KeyStore File
-	keystoreDir := config.GetString("keystore")
-	keyJsonFilePath := filepath.Join(keystoreDir, keystore.KeyFileName(common.BytesToAddress(validator.Address)))
-	saveKeyError := keystore.WriteKeyStore(keyJsonFilePath, keyJson)
-	if saveKeyError != nil {
-		return saveKeyError
+	// Save the KeyStore File (Optional)
+	if len(keyJson) > 0 {
+		keystoreDir := config.GetString("keystore")
+		keyJsonFilePath := filepath.Join(keystoreDir, keystore.KeyFileName(validator.Address))
+		saveKeyError := keystore.WriteKeyStore(keyJsonFilePath, keyJson)
+		if saveKeyError != nil {
+			return saveKeyError
+		}
 	}
 
 	// Save the Validator Json File

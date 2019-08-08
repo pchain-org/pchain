@@ -22,6 +22,8 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/consensus"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -104,12 +106,20 @@ out:
 
 func (self *CpuAgent) mine(work *Work, stop <-chan struct{}) {
 	if result, err := self.engine.Seal(self.chain, work.Block, stop); result != nil {
-		self.logger.Info("Successfully sealed new block", "number", result.Number(), "hash", result.Hash())
-		self.returnCh <- &Result{work, result}
+		switch result := result.(type) {
+		case *types.Block:
+			self.logger.Info("Successfully sealed new block", "number", result.Number(), "hash", result.Hash())
+			self.returnCh <- &Result{Work: work, Block: result}
+		case *tdmTypes.IntermediateBlockResult:
+			self.logger.Info("v Successfully sealed new block", "number", result.Block.Number(), "hash", result.Block.Hash())
+			self.returnCh <- &Result{Intermediate: result}
+		}
+
 	} else {
 		if err != nil {
 			self.logger.Warn("Block sealing failed", "err", err)
 		}
+		self.logger.Warn("Block sealing aborted")
 		self.returnCh <- nil
 	}
 }

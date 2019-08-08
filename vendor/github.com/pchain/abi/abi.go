@@ -7,21 +7,45 @@ import (
 	"strings"
 )
 
-type FunctionType int
+type FunctionType struct {
+	id    int
+	cross bool // Tx type, cross chain / non cross chain
+	main  bool // allow to be execute on main chain or not
+	child bool // allow to be execute on child chain or not
+}
 
-const (
-	CreateChildChain FunctionType = iota
-	JoinChildChain
-	DepositInMainChain
-	DepositInChildChain
-	WithdrawFromChildChain
-	WithdrawFromMainChain
-	SaveDataToMainChain
-	VoteNextEpoch
-	RevealVote
+var (
+	// Cross Chain Function
+	CreateChildChain       = FunctionType{0, true, true, false}
+	JoinChildChain         = FunctionType{1, true, true, false}
+	DepositInMainChain     = FunctionType{2, true, true, false}
+	DepositInChildChain    = FunctionType{3, true, false, true}
+	WithdrawFromChildChain = FunctionType{4, true, false, true}
+	WithdrawFromMainChain  = FunctionType{5, true, true, false}
+	SaveDataToMainChain    = FunctionType{6, true, true, false}
+	SetBlockReward         = FunctionType{7, true, false, true}
+	// Non-Cross Chain Function
+	VoteNextEpoch   = FunctionType{10, false, true, true}
+	RevealVote      = FunctionType{11, false, true, true}
+	Delegate        = FunctionType{12, false, true, true}
+	CancelDelegate  = FunctionType{13, false, true, true}
+	Candidate       = FunctionType{14, false, true, true}
+	CancelCandidate = FunctionType{15, false, true, true}
 	// Unknown
-	Unknown
+	Unknown = FunctionType{-1, false, false, false}
 )
+
+func (t FunctionType) IsCrossChainType() bool {
+	return t.cross
+}
+
+func (t FunctionType) AllowInMainChain() bool {
+	return t.main
+}
+
+func (t FunctionType) AllowInChildChain() bool {
+	return t.child
+}
 
 func (t FunctionType) RequiredGas() uint64 {
 	switch t {
@@ -42,6 +66,12 @@ func (t FunctionType) RequiredGas() uint64 {
 	case VoteNextEpoch:
 		return 21000
 	case RevealVote:
+		return 21000
+	case Delegate, CancelDelegate, Candidate:
+		return 21000
+	case CancelCandidate:
+		return 100000
+	case SetBlockReward:
 		return 21000
 	default:
 		return 0
@@ -68,6 +98,16 @@ func (t FunctionType) String() string {
 		return "VoteNextEpoch"
 	case RevealVote:
 		return "RevealVote"
+	case Delegate:
+		return "Delegate"
+	case CancelDelegate:
+		return "CancelDelegate"
+	case Candidate:
+		return "Candidate"
+	case CancelCandidate:
+		return "CancelCandidate"
+	case SetBlockReward:
+		return "SetBlockReward"
 	default:
 		return "UnKnown"
 	}
@@ -93,6 +133,16 @@ func StringToFunctionType(s string) FunctionType {
 		return VoteNextEpoch
 	case "RevealVote":
 		return RevealVote
+	case "Delegate":
+		return Delegate
+	case "CancelDelegate":
+		return CancelDelegate
+	case "Candidate":
+		return Candidate
+	case "CancelCandidate":
+		return CancelCandidate
+	case "SetBlockReward":
+		return SetBlockReward
 	default:
 		return Unknown
 	}
@@ -107,14 +157,13 @@ type CreateChildChainArgs struct {
 }
 
 type JoinChildChainArgs struct {
-	PubKey        string
-	ChainId       string
-	DepositAmount *big.Int
+	PubKey    []byte
+	ChainId   string
+	Signature []byte
 }
 
 type DepositInMainChainArgs struct {
 	ChainId string
-	Amount  *big.Int
 }
 
 type DepositInChildChainArgs struct {
@@ -124,7 +173,6 @@ type DepositInChildChainArgs struct {
 
 type WithdrawFromChildChainArgs struct {
 	ChainId string
-	Amount  *big.Int
 }
 
 type WithdrawFromMainChainArgs struct {
@@ -134,15 +182,32 @@ type WithdrawFromMainChainArgs struct {
 }
 
 type VoteNextEpochArgs struct {
-	ChainId  string
 	VoteHash common.Hash
 }
 
 type RevealVoteArgs struct {
+	PubKey    []byte
+	Amount    *big.Int
+	Salt      string
+	Signature []byte
+}
+
+type DelegateArgs struct {
+	Candidate common.Address
+}
+
+type CancelDelegateArgs struct {
+	Candidate common.Address
+	Amount    *big.Int
+}
+
+type CandidateArgs struct {
+	Commission uint8
+}
+
+type SetBlockRewardArgs struct {
 	ChainId string
-	PubKey  string
-	Amount  *big.Int
-	Salt    string
+	Reward  *big.Int
 }
 
 const jsonChainABI = `
@@ -181,15 +246,15 @@ const jsonChainABI = `
 		"inputs": [
 			{
 				"name": "pubKey",
-				"type": "string"
+				"type": "bytes"
 			},
 			{
 				"name": "chainId",
 				"type": "string"
 			},
 			{
-				"name": "depositAmount",
-				"type": "uint256"
+				"name": "signature",
+				"type": "bytes"
 			}
 		]
 	},
@@ -201,10 +266,6 @@ const jsonChainABI = `
 			{
 				"name": "chainId",
 				"type": "string"
-			},
-			{
-				"name": "amount",
-				"type": "uint256"
 			}
 		]
 	},
@@ -231,10 +292,6 @@ const jsonChainABI = `
 			{
 				"name": "chainId",
 				"type": "string"
-			},
-			{
-				"name": "amount",
-				"type": "uint256"
 			}
 		]
 	},
@@ -274,10 +331,6 @@ const jsonChainABI = `
 		"constant": false,
 		"inputs": [
 			{
-				"name": "chainId",
-				"type": "string"
-			},
-			{
 				"name": "voteHash",
 				"type": "bytes32"
 			}
@@ -289,12 +342,8 @@ const jsonChainABI = `
 		"constant": false,
 		"inputs": [
 			{
-				"name": "chainId",
-				"type": "string"
-			},
-			{
 				"name": "pubKey",
-				"type": "string"
+				"type": "bytes"
 			},
 			{
 				"name": "amount",
@@ -303,11 +352,77 @@ const jsonChainABI = `
 			{
 				"name": "salt",
 				"type": "string"
+			},
+			{
+				"name": "signature",
+				"type": "bytes"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "Delegate",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "candidate",
+				"type": "address"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "CancelDelegate",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "candidate",
+				"type": "address"
+			},
+			{
+				"name": "amount",
+				"type": "uint256"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "Candidate",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "commission",
+				"type": "uint8"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "CancelCandidate",
+		"constant": false,
+		"inputs": []
+	},
+	{
+		"type": "function",
+		"name": "SetBlockReward",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "chainId",
+				"type": "string"
+			},
+			{
+				"name": "reward",
+				"type": "uint256"
 			}
 		]
 	}
 ]`
 
+// PChain Child Chain Token Incentive Address
+var ChildChainTokenIncentiveAddr = common.BytesToAddress([]byte{100})
+
+// PChain Internal Contract Address
 var ChainContractMagicAddr = common.BytesToAddress([]byte{101}) // don't conflict with go-ethereum/core/vm/contracts.go
 
 var ChainABI abi.ABI

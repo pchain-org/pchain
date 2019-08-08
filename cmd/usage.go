@@ -24,8 +24,8 @@ import (
 
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/bridge"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -65,43 +65,43 @@ type flagGroup struct {
 // AppHelpFlagGroups is the application flags, grouped by functionality.
 var AppHelpFlagGroups = []flagGroup{
 	{
-		Name: "ETHEREUM",
+		Name: "PCHAIN",
 		Flags: []cli.Flag{
 			//configFileFlag,
 			utils.DataDirFlag,
 			utils.KeyStoreDirFlag,
 			utils.NoUSBFlag,
 			utils.NetworkIdFlag,
-			//utils.TestnetFlag,
+			utils.TestnetFlag,
 			//utils.RinkebyFlag,
 			//utils.OttomanFlag,
 			utils.SyncModeFlag,
 			utils.GCModeFlag,
 			utils.EthStatsURLFlag,
 			utils.IdentityFlag,
-			utils.LightServFlag,
-			utils.LightPeersFlag,
-			utils.LightKDFFlag,
+			//utils.LightServFlag,
+			//utils.LightPeersFlag,
+			//utils.LightKDFFlag,
 		},
 	},
 	/*
-	{Name: "DEVELOPER CHAIN",
-		Flags: []cli.Flag{
-			utils.DeveloperFlag,
-			utils.DeveloperPeriodFlag,
+		{Name: "DEVELOPER CHAIN",
+			Flags: []cli.Flag{
+				utils.DeveloperFlag,
+				utils.DeveloperPeriodFlag,
+			},
 		},
-	},
-	{
-		Name: "ETHASH",
-		Flags: []cli.Flag{
-			utils.EthashCacheDirFlag,
-			utils.EthashCachesInMemoryFlag,
-			utils.EthashCachesOnDiskFlag,
-			utils.EthashDatasetDirFlag,
-			utils.EthashDatasetsInMemoryFlag,
-			utils.EthashDatasetsOnDiskFlag,
+		{
+			Name: "ETHASH",
+			Flags: []cli.Flag{
+				utils.EthashCacheDirFlag,
+				utils.EthashCachesInMemoryFlag,
+				utils.EthashCachesOnDiskFlag,
+				utils.EthashDatasetDirFlag,
+				utils.EthashDatasetsInMemoryFlag,
+				utils.EthashDatasetsOnDiskFlag,
+			},
 		},
-	},
 	*/
 	//{
 	//	Name: "DASHBOARD",
@@ -133,18 +133,18 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.CacheFlag,
 			utils.CacheDatabaseFlag,
+			utils.CacheTrieFlag,
 			utils.CacheGCFlag,
-			utils.TrieCacheGenFlag,
 		},
 	},
 	/*
-	{
-		Name: "ACCOUNT",
-		Flags: []cli.Flag{
-			utils.UnlockedAccountFlag,
-			utils.PasswordFileFlag,
+		{
+			Name: "ACCOUNT",
+			Flags: []cli.Flag{
+				utils.UnlockedAccountFlag,
+				utils.PasswordFileFlag,
+			},
 		},
-	},
 	*/
 	{
 		Name: "API AND CONSOLE",
@@ -153,17 +153,17 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.RPCListenAddrFlag,
 			utils.RPCPortFlag,
 			utils.RPCApiFlag,
-			/*
+
 			utils.WSEnabledFlag,
 			utils.WSListenAddrFlag,
 			utils.WSPortFlag,
 			utils.WSApiFlag,
 			utils.WSAllowedOriginsFlag,
-			*/
+
 			utils.IPCDisabledFlag,
 			utils.IPCPathFlag,
 			utils.RPCCORSDomainFlag,
-			//utils.RPCVirtualHostsFlag,
+			utils.RPCVirtualHostsFlag,
 			//utils.JSpathFlag,
 			//utils.ExecFlag,
 			//utils.PreloadJSFlag,
@@ -189,11 +189,11 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "MINER",
 		Flags: []cli.Flag{
-			utils.MiningEnabledFlag,
 			utils.MinerThreadsFlag,
-			utils.EtherbaseFlag,
-			utils.TargetGasLimitFlag,
-			utils.GasPriceFlag,
+			utils.MinerGasPriceFlag,
+			utils.MinerGasTargetFlag,
+			utils.MinerGasLimitFlag,
+			utils.MinerEtherbaseFlag,
 			utils.ExtraDataFlag,
 		},
 	},
@@ -219,29 +219,29 @@ var AppHelpFlagGroups = []flagGroup{
 		}, bridge.DebugFlags...),
 	},
 	/*
-	{
-		Name:  "WHISPER (EXPERIMENTAL)",
-		Flags: gethmain.WhisperFlags,
-	},
-	{
-		Name: "DEPRECATED",
-		Flags: []cli.Flag{
-			utils.FastSyncFlag,
-			utils.LightModeFlag,
+		{
+			Name:  "WHISPER (EXPERIMENTAL)",
+			Flags: gethmain.WhisperFlags,
 		},
-	},
+		{
+			Name: "DEPRECATED",
+			Flags: []cli.Flag{
+				utils.FastSyncFlag,
+				utils.LightModeFlag,
+			},
+		},
 	*/
 	{
 		Name: "MISC",
 	},
 	/*
-	{
-		Name: "ISTANBUL",
-		Flags: []cli.Flag{
-			utils.IstanbulRequestTimeoutFlag,
-			utils.IstanbulBlockPeriodFlag,
+		{
+			Name: "ISTANBUL",
+			Flags: []cli.Flag{
+				utils.IstanbulRequestTimeoutFlag,
+				utils.IstanbulBlockPeriodFlag,
+			},
 		},
-	},
 	*/
 }
 

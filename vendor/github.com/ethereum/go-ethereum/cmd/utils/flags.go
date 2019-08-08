@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -36,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/dashboard"
@@ -128,12 +126,12 @@ var (
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
-		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten, 4=Rinkeby, 5=Ottoman)",
+		Usage: "Network identifier (integer, mainnet=1, testnet=2)",
 		Value: eth.DefaultConfig.NetworkId,
 	}
 	TestnetFlag = cli.BoolFlag{
 		Name:  "testnet",
-		Usage: "Ropsten network: pre-configured proof-of-work test network",
+		Usage: "test network",
 	}
 	RinkebyFlag = cli.BoolFlag{
 		Name:  "rinkeby",
@@ -178,7 +176,7 @@ var (
 	GCModeFlag = cli.StringFlag{
 		Name:  "gcmode",
 		Usage: `Blockchain garbage collection mode ("full", "archive")`,
-		Value: "full",
+		Value: "archive",
 	}
 	LightServFlag = cli.IntFlag{
 		Name:  "lightserv",
@@ -303,17 +301,17 @@ var (
 	CacheDatabaseFlag = cli.IntFlag{
 		Name:  "cache.database",
 		Usage: "Percentage of cache memory allowance to use for database io",
-		Value: 75,
+		Value: 50,
+	}
+	CacheTrieFlag = cli.IntFlag{
+		Name:  "cache.trie",
+		Usage: "Percentage of cache memory allowance to use for trie caching (default = 25% full mode, 50% archive mode)",
+		Value: 25,
 	}
 	CacheGCFlag = cli.IntFlag{
 		Name:  "cache.gc",
-		Usage: "Percentage of cache memory allowance to use for trie pruning",
+		Usage: "Percentage of cache memory allowance to use for trie pruning (default = 25% full mode, 0% archive mode)",
 		Value: 25,
-	}
-	TrieCacheGenFlag = cli.IntFlag{
-		Name:  "trie-cache-gens",
-		Usage: "Number of trie node generations to keep in memory",
-		Value: int(state.MaxTrieCacheGen),
 	}
 	// Miner settings
 	MiningEnabledFlag = cli.BoolFlag{
@@ -321,24 +319,29 @@ var (
 		Usage: "Enable mining",
 	}
 	MinerThreadsFlag = cli.IntFlag{
-		Name:  "minerthreads",
+		Name:  "miner.threads",
 		Usage: "Number of CPU threads to use for mining",
-		Value: runtime.NumCPU(),
+		Value: 0,
 	}
-	TargetGasLimitFlag = cli.Uint64Flag{
-		Name:  "targetgaslimit",
-		Usage: "Target gas limit sets the artificial target gas floor for the blocks to mine",
-		Value: params.GenesisGasLimit,
+	MinerGasTargetFlag = cli.Uint64Flag{
+		Name:  "miner.gastarget",
+		Usage: "Target gas floor for mined blocks",
+		Value: eth.DefaultConfig.MinerGasFloor,
 	}
-	EtherbaseFlag = cli.StringFlag{
-		Name:  "etherbase",
-		Usage: "Public address for block mining rewards (default = first account created)",
+	MinerGasLimitFlag = cli.Uint64Flag{
+		Name:  "miner.gaslimit",
+		Usage: "Target gas ceiling for mined blocks",
+		Value: eth.DefaultConfig.MinerGasCeil,
+	}
+	MinerGasPriceFlag = BigFlag{
+		Name:  "miner.gasprice",
+		Usage: "Minimal gas price for mining a transactions",
+		Value: eth.DefaultConfig.MinerGasPrice,
+	}
+	MinerEtherbaseFlag = cli.StringFlag{
+		Name:  "miner.etherbase",
+		Usage: "Public address for block mining rewards (default = first account)",
 		Value: "0",
-	}
-	GasPriceFlag = BigFlag{
-		Name:  "gasprice",
-		Usage: "Minimal gas price to accept for mining a transactions",
-		Value: eth.DefaultConfig.GasPrice,
 	}
 	ExtraDataFlag = cli.StringFlag{
 		Name:  "extradata",
@@ -462,7 +465,7 @@ var (
 	ListenPortFlag = cli.IntFlag{
 		Name:  "port",
 		Usage: "Network listening port",
-		Value: 30303,
+		Value: 30308,
 	}
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
@@ -544,6 +547,12 @@ var (
 		Value: whisper.DefaultMinimumPoW,
 	}
 
+	// Data Reduction Flag
+	PruneFlag = cli.BoolFlag{
+		Name:  "prune",
+		Usage: "Enable the Data Reduction feature, history state data will be pruned by default",
+	}
+
 	// Istanbul settings
 	IstanbulRequestTimeoutFlag = cli.Uint64Flag{
 		Name:  "istanbul.requesttimeout",
@@ -568,9 +577,11 @@ var (
 // the a subdirectory of the specified datadir will be used.
 func MakeDataDir(ctx *cli.Context) string {
 	if path := ctx.GlobalString(DataDirFlag.Name); path != "" {
-		if ctx.GlobalBool(TestnetFlag.Name) {
-			return filepath.Join(path, "testnet")
-		}
+		/*
+			if ctx.GlobalBool(TestnetFlag.Name) {
+				return filepath.Join(path, "testnet")
+			}
+		*/
 		if ctx.GlobalBool(RinkebyFlag.Name) {
 			return filepath.Join(path, "rinkeby")
 		}
@@ -707,7 +718,7 @@ func splitAndTrim(input string) []string {
 
 // setHTTP creates the HTTP RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
-func setHTTP(ctx *cli.Context, cfg *node.Config) {
+func SetHTTP(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalBool(RPCEnabledFlag.Name) && cfg.HTTPHost == "" {
 		cfg.HTTPHost = "127.0.0.1"
 		if ctx.GlobalIsSet(RPCListenAddrFlag.Name) {
@@ -731,7 +742,7 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 
 // setWS creates the WebSocket RPC listener interface string from the set
 // command line flags, returning empty if the HTTP endpoint is disabled.
-func setWS(ctx *cli.Context, cfg *node.Config) {
+func SetWS(ctx *cli.Context, cfg *node.Config) {
 	if ctx.GlobalBool(WSEnabledFlag.Name) && cfg.WSHost == "" {
 		cfg.WSHost = "127.0.0.1"
 		if ctx.GlobalIsSet(WSListenAddrFlag.Name) {
@@ -808,12 +819,21 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 // setEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
 func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
-	if ctx.GlobalIsSet(EtherbaseFlag.Name) {
-		account, err := MakeAddress(ks, ctx.GlobalString(EtherbaseFlag.Name))
-		if err != nil {
-			Fatalf("Option %q: %v", EtherbaseFlag.Name, err)
+	var etherbase string
+	if ctx.GlobalIsSet(MinerEtherbaseFlag.Name) {
+		etherbase = ctx.GlobalString(MinerEtherbaseFlag.Name)
+	}
+	// Convert the etherbase into an address and configure it
+	if etherbase != "" {
+		if ks != nil {
+			account, err := MakeAddress(ks, etherbase)
+			if err != nil {
+				Fatalf("Invalid miner etherbase: %v", err)
+			}
+			cfg.Etherbase = account.Address
+		} else {
+			Fatalf("No etherbase configured")
 		}
-		cfg.Etherbase = account.Address
 	}
 }
 
@@ -906,15 +926,16 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	SetP2PConfig(ctx, &cfg.P2P)
 	setIPC(ctx, cfg)
-	setHTTP(ctx, cfg)
-	setWS(ctx, cfg)
+	SetHTTP(ctx, cfg)
+	SetWS(ctx, cfg)
 	setNodeUserIdent(ctx, cfg)
 
 	switch {
 	case ctx.GlobalIsSet(DataDirFlag.Name):
-		//cfg.DataDir = ctx.GlobalString(DataDirFlag.Name)
-		cfg.GeneralDataDir = MakeDataDir(ctx)
-		cfg.DataDir = filepath.Join(MakeDataDir(ctx), cfg.ChainId)
+		cfg.GeneralDataDir = ctx.GlobalString(DataDirFlag.Name)
+		cfg.DataDir = filepath.Join(cfg.GeneralDataDir, cfg.ChainId)
+	case !ctx.GlobalIsSet(DataDirFlag.Name):
+		cfg.DataDir = filepath.Join(cfg.GeneralDataDir, cfg.ChainId)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
 	case ctx.GlobalBool(TestnetFlag.Name):
@@ -1099,11 +1120,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	}
 	cfg.NoPruning = ctx.GlobalString(GCModeFlag.Name) == "archive"
 
-	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
-		cfg.TrieCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
+	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheTrieFlag.Name) {
+		cfg.TrieCleanCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheTrieFlag.Name) / 100
 	}
-	if ctx.GlobalIsSet(MinerThreadsFlag.Name) {
-		cfg.MinerThreads = ctx.GlobalInt(MinerThreadsFlag.Name)
+	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
+		cfg.TrieDirtyCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
 	if ctx.GlobalIsSet(DocRootFlag.Name) {
 		cfg.DocRoot = ctx.GlobalString(DocRootFlag.Name)
@@ -1111,8 +1132,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(ExtraDataFlag.Name) {
 		cfg.ExtraData = []byte(ctx.GlobalString(ExtraDataFlag.Name))
 	}
-	if ctx.GlobalIsSet(GasPriceFlag.Name) {
-		cfg.GasPrice = GlobalBig(ctx, GasPriceFlag.Name)
+	if ctx.GlobalIsSet(MinerGasTargetFlag.Name) {
+		cfg.MinerGasFloor = ctx.GlobalUint64(MinerGasTargetFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerGasLimitFlag.Name) {
+		cfg.MinerGasCeil = ctx.GlobalUint64(MinerGasLimitFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerGasPriceFlag.Name) {
+		cfg.MinerGasPrice = GlobalBig(ctx, MinerGasPriceFlag.Name)
 	}
 	if ctx.GlobalIsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
@@ -1123,9 +1150,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	switch {
 	case ctx.GlobalBool(TestnetFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 3
+			cfg.NetworkId = 2
 		}
-		cfg.Genesis = core.DefaultTestnetGenesisBlock()
+		//
+		//cfg.Genesis = core.DefaultTestnetGenesisBlock()
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
@@ -1151,8 +1179,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		log.Info("Using developer account", "address", developer.Address)
 
 		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), developer.Address)
-		if !ctx.GlobalIsSet(GasPriceFlag.Name) {
-			cfg.GasPrice = big.NewInt(1)
+		if !ctx.GlobalIsSet(MinerGasPriceFlag.Name) {
+			cfg.MinerGasPrice = big.NewInt(1)
 		}
 	case ctx.GlobalBool(OttomanFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
@@ -1160,10 +1188,10 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 		cfg.Genesis = core.DefaultOttomanGenesisBlock()
 	}
-	// TODO(fjl): move trie cache generations into config
-	if gen := ctx.GlobalInt(TrieCacheGenFlag.Name); gen > 0 {
-		state.MaxTrieCacheGen = uint16(gen)
-	}
+
+	// Data Reduction Config
+	cfg.PruneStateData = ctx.GlobalBool(PruneFlag.Name)
+	//cfg.PruneBlockData = ctx.GlobalBool(PruneBlockFlag.Name)
 }
 
 // SetDashboardConfig applies dashboard related command line flags to the config.
@@ -1232,12 +1260,6 @@ func RegisterEthStatsService(stack *node.Node, url string) {
 	}
 }
 
-// SetupNetwork configures the system for either the main net or some test network.
-func SetupNetwork(ctx *cli.Context) {
-	// TODO(fjl): move target gas limit into config
-	params.TargetGasLimit = ctx.GlobalUint64(TargetGasLimitFlag.Name)
-}
-
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
 func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	var (
@@ -1248,7 +1270,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	if ctx.GlobalBool(LightModeFlag.Name) {
 		name = "lightchaindata"
 	}
-	chainDb, err := stack.OpenDatabase(name, cache, handles)
+	chainDb, err := stack.OpenDatabase(name, cache, handles, "")
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
@@ -1258,8 +1280,10 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	var genesis *core.Genesis
 	switch {
-	case ctx.GlobalBool(TestnetFlag.Name):
-		genesis = core.DefaultTestnetGenesisBlock()
+	/*
+		case ctx.GlobalBool(TestnetFlag.Name):
+			genesis = core.DefaultTestnetGenesisBlock()
+	*/
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
@@ -1274,7 +1298,6 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
 	var err error
 	chainDb = MakeChainDatabase(ctx, stack)
-
 	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
 	if err != nil {
 		Fatalf("%v", err)
@@ -1299,12 +1322,17 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
 	cache := &core.CacheConfig{
-		Disabled:      ctx.GlobalString(GCModeFlag.Name) == "archive",
-		TrieNodeLimit: eth.DefaultConfig.TrieCache,
-		TrieTimeLimit: eth.DefaultConfig.TrieTimeout,
+		TrieCleanLimit: eth.DefaultConfig.TrieCleanCache,
+
+		TrieDirtyLimit:    eth.DefaultConfig.TrieDirtyCache,
+		TrieDirtyDisabled: ctx.GlobalString(GCModeFlag.Name) == "archive",
+		TrieTimeLimit:     eth.DefaultConfig.TrieTimeout,
+	}
+	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheTrieFlag.Name) {
+		cache.TrieCleanLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheTrieFlag.Name) / 100
 	}
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
-		cache.TrieNodeLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
+		cache.TrieDirtyLimit = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
 	vmcfg := vm.Config{EnablePreimageRecording: ctx.GlobalBool(VMEnableDebugFlag.Name)}
 	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil)
@@ -1348,7 +1376,9 @@ func MigrateFlags(action func(ctx *cli.Context) error) func(*cli.Context) error 
 	return func(ctx *cli.Context) error {
 		for _, name := range ctx.FlagNames() {
 			if ctx.IsSet(name) {
-				ctx.GlobalSet(name, ctx.String(name))
+				if !ctx.GlobalIsSet(name) {
+					ctx.GlobalSet(name, ctx.String(name))
+				}
 			}
 		}
 		return action(ctx)

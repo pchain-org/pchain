@@ -20,8 +20,6 @@ import (
 func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, ops *types.PendingOps,
 	header *types.Header, tx *types.Transaction, usedGas *uint64, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper, mining bool) (*types.Receipt, uint64, error) {
 
-	fmt.Printf("ApplyTransactionEx 0\n")
-
 	signer := types.MakeSigner(config, header.Number)
 	msg, err := tx.AsMessage(signer)
 	if err != nil {
@@ -29,7 +27,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 	}
 
 	// Not allow contract creation on PChain Main Chain
-	if config.PChainId == "pchain" && tx.To() == nil {
+	if config.IsMainChain() && tx.To() == nil {
 		return nil, 0, ErrNoContractOnMainChain
 	}
 
@@ -80,6 +78,9 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		receipt.Logs = statedb.GetLogs(tx.Hash())
 		//log.Debugf("ApplyTransactionEx，new receipt with receipt.Logs %v\n", receipt.Logs)
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		receipt.BlockHash = statedb.BlockHash()
+		receipt.BlockNumber = header.Number
+		receipt.TransactionIndex = uint(statedb.TxIndex())
 		//log.Debugf("ApplyTransactionEx，new receipt with receipt.Bloom %v\n", receipt.Bloom)
 		//log.Debugf("ApplyTransactionEx 4\n")
 		return receipt, gas, err
@@ -93,6 +94,13 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 			return nil, 0, err
 		}
 		log.Infof("ApplyTransactionEx() 0, Chain Function is %v\n", function.String())
+
+		// check Function main/child flag
+		if config.IsMainChain() && !function.AllowInMainChain() {
+			return nil, 0, ErrNotAllowedInMainChain
+		} else if !config.IsMainChain() && !function.AllowInChildChain() {
+			return nil, 0, ErrNotAllowedInChildChain
+		}
 
 		from := msg.From()
 		// Make sure this transaction's nonce is correct
@@ -111,7 +119,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		gasLimit := tx.Gas()
 		gasValue := new(big.Int).Mul(new(big.Int).SetUint64(gasLimit), tx.GasPrice())
 		if statedb.GetBalance(from).Cmp(gasValue) < 0 {
-			return nil, 0, fmt.Errorf("insufficient PAI for gas (%x). Req %v, has %v", from.Bytes()[:4], gasValue, statedb.GetBalance(from))
+			return nil, 0, fmt.Errorf("insufficient PI for gas (%x). Req %v, has %v", from.Bytes()[:4], gasValue, statedb.GetBalance(from))
 		}
 		if err := gp.SubGas(gasLimit); err != nil {
 			return nil, 0, err
@@ -124,11 +132,33 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		if gasLimit < gas {
 			return nil, 0, vm.ErrOutOfGas
 		}
+
+		// Check Tx Amount
+		if statedb.GetBalance(from).Cmp(tx.Value()) == -1 {
+			return nil, 0, fmt.Errorf("insufficient PI for tx amount (%x). Req %v, has %v", from.Bytes()[:4], tx.Value(), statedb.GetBalance(from))
+		}
+
 		if applyCb := GetApplyCb(function); applyCb != nil {
-			cch.GetMutex().Lock()
-			defer cch.GetMutex().Unlock()
-			if err := applyCb(tx, statedb, ops, cch, mining); err != nil {
-				return nil, 0, err
+			if function.IsCrossChainType() {
+				if fn, ok := applyCb.(CrossChainApplyCb); ok {
+					cch.GetMutex().Lock()
+					err := fn(tx, statedb, ops, cch, mining)
+					cch.GetMutex().Unlock()
+
+					if err != nil {
+						return nil, 0, err
+					}
+				} else {
+					panic("callback func is wrong, this should not happened, please check the code")
+				}
+			} else {
+				if fn, ok := applyCb.(NonCrossChainApplyCb); ok {
+					if err := fn(tx, statedb, bc, ops); err != nil {
+						return nil, 0, err
+					}
+				} else {
+					panic("callback func is wrong, this should not happened, please check the code")
+				}
 			}
 		}
 
@@ -139,7 +169,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		gp.AddGas(remainingGas)
 
 		*usedGas += gas
-		totalUsedMoney.Add(totalUsedMoney, gasValue)
+		totalUsedMoney.Add(totalUsedMoney, new(big.Int).Mul(new(big.Int).SetUint64(gas), tx.GasPrice()))
 		log.Infof("ApplyTransactionEx() 2, totalUsedMoney is %v\n", totalUsedMoney)
 
 		// Update the state with pending changes
@@ -156,6 +186,9 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		// Set the receipt logs and create a bloom for filtering
 		receipt.Logs = statedb.GetLogs(tx.Hash())
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		receipt.BlockHash = statedb.BlockHash()
+		receipt.BlockNumber = header.Number
+		receipt.TransactionIndex = uint(statedb.TxIndex())
 
 		statedb.SetNonce(msg.From(), statedb.GetNonce(msg.From())+1)
 		log.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)

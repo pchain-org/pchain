@@ -31,11 +31,11 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/istanbul/validator"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	lru "github.com/hashicorp/golang-lru"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -381,7 +381,7 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 // Note, the block header and state database might be updated to reflect any
 // consensus rules that happen at finalization (e.g. block rewards).
 func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
+	totalGasFee *big.Int, uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
 	// No block rewards in Istanbul, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = nilUncleHash
@@ -392,7 +392,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 // Seal generates a new block for the given input block with the local miner's
 // seal place on top.
-func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error) {
+func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (interface{}, error) {
 	// update the block header timestamp and signature and propose the block to core engine
 	header := block.Header()
 	number := header.Number.Uint64()
@@ -526,6 +526,10 @@ func (sb *backend) Stop() error {
 	return nil
 }
 
+func (sb *backend) Close() error {
+	return nil
+}
+
 // snapshot retrieves the authorization snapshot at a given point in time.
 func (sb *backend) snapshot(chain consensus.ChainReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	// Search for a snapshot in memory or on disk for checkpoints
@@ -612,7 +616,7 @@ func (sb *backend) snapshot(chain consensus.ChainReader, number uint64, hash com
 // panics. This is done to avoid accidentally using both forms (signature present
 // or not), which could be abused to produce different hashes for the same header.
 func sigHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewKeccak256()
+	hasher := sha3.NewLegacyKeccak256()
 
 	// Clean seal is required for calculating proposer seal.
 	rlp.Encode(hasher, types.IstanbulFilteredHeader(header, false))

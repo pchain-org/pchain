@@ -20,8 +20,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
-	"fmt"
-
+	
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
@@ -261,25 +260,16 @@ func (st *StateTransition) refundGas() {
 	}
 	st.gas += refund
 
-	fmt.Printf("refundGas 0\n")
-
 	// Return ETH for remaining gas, exchanged at the original rate.
 	sender := st.from()
 
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
 
-	fmt.Printf("refundGas 1, sender is %x, remaining is %v\n", sender.Address(), remaining)
-
 	st.state.AddBalance(sender.Address(), remaining)
-
-	fmt.Printf("refundGas 2, remaining is %vn", remaining)
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.
 	st.gp.AddGas(st.gas)
-
-	fmt.Printf("refundGas 3\n")
-
 }
 
 // gasUsed returns the amount of gas used up by the state transition.

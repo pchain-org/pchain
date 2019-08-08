@@ -28,9 +28,11 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 		return nil
 	case *types.VoteNextEpochOp:
 		ep := bc.engine.(consensus.Tendermint).GetEpoch()
+		ep = ep.GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 		return cch.VoteNextEpoch(ep, op.From, op.VoteHash, op.TxHash)
 	case *types.RevealVoteOp:
 		ep := bc.engine.(consensus.Tendermint).GetEpoch()
+		ep = ep.GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 		return cch.RevealVote(ep, op.From, op.Pubkey, op.Amount, op.Salt, op.TxHash)
 	case *types.SaveDataToMainChainOp:
 		return cch.SaveChildChainProofDataToMainChain(op.Data)
@@ -38,7 +40,12 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 		eng := bc.engine.(consensus.Tendermint)
 		nextEp, err := eng.GetEpoch().EnterNewEpoch(op.NewValidators)
 		if err == nil {
+			// Stop the Engine if we are not in the new validators
+			if !op.NewValidators.HasAddress(eng.PrivateValidator().Bytes()) && eng.IsStarted() {
+				bc.PostChainEvents([]interface{}{StopMiningEvent{}}, nil)
+			}
 			eng.SetEpoch(nextEp)
+			cch.ChangeValidators(op.ChainId) //must after eng.SetEpoch(nextEp), it uses epoch just set
 		}
 		return err
 	default:

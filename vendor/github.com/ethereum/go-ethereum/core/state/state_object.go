@@ -77,15 +77,24 @@ type stateObject struct {
 	trie Trie // storage trie, which becomes non-nil on first access
 	code Code // contract bytecode, which gets set when code is loaded
 
-	cachedStorage Storage // Storage entry cache to avoid duplicate reads
+	originStorage Storage // Storage cache of original entries to dedup rewrites
 	dirtyStorage  Storage // Storage entries that need to be flushed to disk
 
-	// Write caches.
+	// Cross Chain TX trie
 	tx1Trie Trie // tx1 trie, which become non-nil on first access
 	tx3Trie Trie // tx3 trie, which become non-nil on first access
 
 	dirtyTX1 map[common.Hash]struct{} // tx1 entries that need to be flushed to disk
 	dirtyTX3 map[common.Hash]struct{} // tx3 entries that need to be flushed to disk
+
+	// Delegate Trie
+	proxiedTrie   Trie    // proxied trie, store the proxied balance from other user
+	originProxied Proxied // cache data of proxied trie
+	dirtyProxied  Proxied // dirty data of proxied trie, need to be flushed to disk later
+
+	rewardTrie   Trie   // Reward Trie, store the pending reward balance for this account
+	originReward Reward // cache data of Reward trie
+	dirtyReward  Reward // dirty data of Reward trie, need to be flushed to disk later
 
 	// Cache flags.
 	// When an object is marked suicided it will be delete from the trie
@@ -99,7 +108,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash)
+	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash) && s.data.DepositBalance.Sign() == 0 && len(s.data.ChildChainDepositBalance) == 0 && s.data.ChainBalance.Sign() == 0 && s.data.DelegateBalance.Sign() == 0 && s.data.ProxiedBalance.Sign() == 0 && s.data.DepositProxiedBalance.Sign() == 0 && s.data.PendingRefundBalance.Sign() == 0
 }
 
 // Account is the Ethereum consensus representation of accounts.
@@ -114,6 +123,21 @@ type Account struct {
 	TX1Root                  common.Hash                 // merkle root of the TX1 trie
 	TX3Root                  common.Hash                 // merkle root of the TX3 trie
 	CodeHash                 []byte
+
+	// Delegation
+	DelegateBalance       *big.Int    // the accumulative balance which this account delegate the Balance to other user
+	ProxiedBalance        *big.Int    // the accumulative balance which other user delegate to this account (this balance can be revoked, can be deposit for validator)
+	DepositProxiedBalance *big.Int    // the deposit proxied balance for validator which come from ProxiedBalance (this balance can not be revoked)
+	PendingRefundBalance  *big.Int    // the accumulative balance which other user try to cancel their delegate balance (this balance will be refund to user's address after epoch end)
+	ProxiedRoot           common.Hash // merkle root of the Proxied trie
+	// Candidate
+	Candidate  bool  // flag for Account, true indicate the account has been applied for the Delegation Candidate
+	Commission uint8 // commission percentage of Delegation Candidate (0-100)
+
+	// Reward
+	RewardBalance *big.Int    // the accumulative reward balance for this account
+	RewardRoot    common.Hash // merkle root of the Reward trie
+
 }
 
 // newObject creates a state object.
@@ -127,6 +151,24 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 	if data.ChainBalance == nil {
 		data.ChainBalance = new(big.Int)
 	}
+	// init delegate balance
+	if data.DelegateBalance == nil {
+		data.DelegateBalance = new(big.Int)
+	}
+	if data.ProxiedBalance == nil {
+		data.ProxiedBalance = new(big.Int)
+	}
+	if data.DepositProxiedBalance == nil {
+		data.DepositProxiedBalance = new(big.Int)
+	}
+	if data.PendingRefundBalance == nil {
+		data.PendingRefundBalance = new(big.Int)
+	}
+	// init reward balance
+	if data.RewardBalance == nil {
+		data.RewardBalance = new(big.Int)
+	}
+
 	if data.CodeHash == nil {
 		data.CodeHash = emptyCodeHash
 	}
@@ -135,10 +177,14 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 		address:       address,
 		addrHash:      crypto.Keccak256Hash(address[:]),
 		data:          data,
-		cachedStorage: make(Storage),
+		originStorage: make(Storage),
 		dirtyStorage:  make(Storage),
 		dirtyTX1:      make(map[common.Hash]struct{}),
 		dirtyTX3:      make(map[common.Hash]struct{}),
+		originProxied: make(Proxied),
+		dirtyProxied:  make(Proxied),
+		originReward:  make(Reward),
+		dirtyReward:   make(Reward),
 		onDirty:       onDirty,
 	}
 }
@@ -376,11 +422,18 @@ func (c *stateObject) getTrie(db Database) Trie {
 
 // GetState returns a value in account storage.
 func (self *stateObject) GetState(db Database, key common.Hash) common.Hash {
-	value, exists := self.cachedStorage[key]
-	if exists {
+	// If we have a dirty value for this state entry, return it
+	value, dirty := self.dirtyStorage[key]
+	if dirty {
 		return value
 	}
-	// Load from DB in case it is missing.
+
+	// If we have the original value cached, return that
+	value, cached := self.originStorage[key]
+	if cached {
+		return value
+	}
+	// Otherwise load the value from the database
 	enc, err := self.getTrie(db).TryGet(key[:])
 	if err != nil {
 		self.setError(err)
@@ -393,9 +446,7 @@ func (self *stateObject) GetState(db Database, key common.Hash) common.Hash {
 		}
 		value.SetBytes(content)
 	}
-	if (value != common.Hash{}) {
-		self.cachedStorage[key] = value
-	}
+	self.originStorage[key] = value
 	return value
 }
 
@@ -410,7 +461,6 @@ func (self *stateObject) SetState(db Database, key, value common.Hash) {
 }
 
 func (self *stateObject) setState(key, value common.Hash) {
-	self.cachedStorage[key] = value
 	self.dirtyStorage[key] = value
 
 	if self.onDirty != nil {
@@ -424,6 +474,13 @@ func (self *stateObject) updateTrie(db Database) Trie {
 	tr := self.getTrie(db)
 	for key, value := range self.dirtyStorage {
 		delete(self.dirtyStorage, key)
+
+		// Skip noop changes, persist actual changes
+		if value == self.originStorage[key] {
+			continue
+		}
+		self.originStorage[key] = value
+
 		if (value == common.Hash{}) {
 			self.setError(tr.TryDelete(key[:]))
 			continue
@@ -509,9 +566,15 @@ func (self *stateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)
 	if self.tx3Trie != nil {
 		stateObject.tx3Trie = db.db.CopyTrie(self.tx3Trie)
 	}
+	if self.proxiedTrie != nil {
+		stateObject.proxiedTrie = db.db.CopyTrie(self.proxiedTrie)
+	}
+	if self.rewardTrie != nil {
+		stateObject.rewardTrie = db.db.CopyTrie(self.rewardTrie)
+	}
 	stateObject.code = self.code
 	stateObject.dirtyStorage = self.dirtyStorage.Copy()
-	stateObject.cachedStorage = self.dirtyStorage.Copy()
+	stateObject.originStorage = self.originStorage.Copy()
 	stateObject.suicided = self.suicided
 	stateObject.dirtyCode = self.dirtyCode
 	stateObject.deleted = self.deleted
@@ -523,6 +586,10 @@ func (self *stateObject) deepCopy(db *StateDB, onDirty func(addr common.Address)
 	for tx3 := range self.dirtyTX3 {
 		stateObject.dirtyTX3[tx3] = struct{}{}
 	}
+	stateObject.dirtyProxied = self.dirtyProxied.Copy()
+	stateObject.originProxied = self.originProxied.Copy()
+	stateObject.dirtyReward = self.dirtyReward.Copy()
+	stateObject.originReward = self.originReward.Copy()
 	return stateObject
 }
 

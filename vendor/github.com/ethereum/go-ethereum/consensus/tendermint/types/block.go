@@ -7,7 +7,9 @@ import (
 	"io"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
@@ -17,10 +19,20 @@ import (
 
 const MaxBlockSize = 22020096 // 21MB TODO make it configurable
 
+// IntermediateBlockResult represents intermediate block execute result.
+type IntermediateBlockResult struct {
+	Block *types.Block
+	// followed by block execute result
+	State    *state.StateDB
+	Receipts types.Receipts
+	Ops      *types.PendingOps
+}
+
 type TdmBlock struct {
-	Block        *types.Block          `json:"block"`
-	TdmExtra     *TendermintExtra      `json:"tdmexdata"`
-	TX3ProofData []*types.TX3ProofData `json:"tx3proofdata"`
+	Block              *types.Block             `json:"block"`
+	TdmExtra           *TendermintExtra         `json:"tdmexdata"`
+	TX3ProofData       []*types.TX3ProofData    `json:"tx3proofdata"`
+	IntermediateResult *IntermediateBlockResult `json:"-"`
 }
 
 func MakeBlock(height uint64, chainID string, commit *Commit,
@@ -103,18 +115,15 @@ func (b *TdmBlock) ToBytes() []byte {
 
 	bs, err := rlp.EncodeToBytes(b.Block)
 	if err != nil {
-		fmt.Printf("TdmBlock.toBytes error\n")
+		log.Warnf("TdmBlock.toBytes error\n")
 	}
-	//fmt.Printf("TdmBlock.toBytes 1 with blockbyte: %v\n", blockByte)
 	bb := &TmpBlock{
 		BlockData:    bs,
 		TdmExtra:     b.TdmExtra,
 		TX3ProofData: b.TX3ProofData,
 	}
-	//fmt.Printf("TdmBlock.toBytes 1 with tdmblock: %v\n", bb)
 
 	ret := wire.BinaryBytes(bb)
-	//fmt.Printf("TdmBlock.toBytes 1 with ret:%v\n", ret)
 	return ret
 }
 
@@ -132,14 +141,14 @@ func (b *TdmBlock) FromBytes(reader io.Reader) (*TdmBlock, error) {
 	var err error
 	bb := wire.ReadBinary(&TmpBlock{}, reader, MaxBlockSize, &n, &err).(*TmpBlock)
 	if err != nil {
-		fmt.Printf("TdmBlock.FromBytes 0 error: %v\n", err)
+		log.Warnf("TdmBlock.FromBytes 0 error: %v\n", err)
 		return nil, err
 	}
 
 	var block types.Block
 	err = rlp.DecodeBytes(bb.BlockData, &block)
 	if err != nil {
-		fmt.Printf("TdmBlock.FromBytes 1 error: %v\n", err)
+		log.Warnf("TdmBlock.FromBytes 1 error: %v\n", err)
 		return nil, err
 	}
 
@@ -263,7 +272,7 @@ func (commit *Commit) StringIndented(indent string) string {
 		indent, commit.BlockID,
 		indent, commit.Height,
 		indent, commit.Round,
-		indent, commit.Type,
+		indent, commit.Type(),
 		indent, commit.BitArray.String(),
 		indent, commit.hash)
 }

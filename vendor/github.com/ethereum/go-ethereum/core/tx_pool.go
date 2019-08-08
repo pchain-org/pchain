@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
@@ -33,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	pabi "github.com/pchain/abi"
-	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 const (
@@ -209,8 +209,6 @@ type TxPool struct {
 
 	wg sync.WaitGroup // for shutdown sync
 
-	homestead bool
-
 	cch CrossChainHelper
 }
 
@@ -292,12 +290,8 @@ func (pool *TxPool) loop() {
 		case ev := <-pool.chainHeadCh:
 			if ev.Block != nil {
 				pool.mu.Lock()
-				if pool.chainconfig.IsHomestead(ev.Block.Number()) {
-					pool.homestead = true
-				}
 				pool.reset(head.Header(), ev.Block.Header())
 				head = ev.Block
-
 				pool.mu.Unlock()
 			}
 		// Be unsubscribed due to system stopped
@@ -565,22 +559,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if tx.Size() > 32*1024 {
 		return ErrOversizedData
 	}
-	// Make sure the transaction is signed properly
-	from, err := types.Sender(pool.signer, tx)
-	if err != nil {
-		return ErrInvalidSender
-	}
-	// Drop non-local transactions under our own minimal accepted gas price
-	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
-	log.Info("TxPool validateTx", "pool.gasPrice", pool.gasPrice.Uint64(), "tx.GasPrice", tx.GasPrice().Uint64())
-	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
-		return ErrUnderpriced
-	}
-	// Ensure the transaction adheres to nonce ordering
-	if pool.currentState.GetNonce(from) > tx.Nonce() {
-		return ErrNonceTooLow
-	}
-
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur if you create a transaction using the RPC.
 	if tx.Value().Sign() < 0 {
@@ -590,6 +568,20 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentMaxGas < tx.Gas() {
 		return ErrGasLimit
 	}
+	// Make sure the transaction is signed properly
+	from, err := types.Sender(pool.signer, tx)
+	if err != nil {
+		return ErrInvalidSender
+	}
+	// Drop non-local transactions under our own minimal accepted gas price
+	local = local || pool.locals.contains(from) // account may be local even if the transaction arrived from the network
+	if !local && pool.gasPrice.Cmp(tx.GasPrice()) > 0 {
+		return ErrUnderpriced
+	}
+	// Ensure the transaction adheres to nonce ordering
+	if pool.currentState.GetNonce(from) > tx.Nonce() {
+		return ErrNonceTooLow
+	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
@@ -597,12 +589,13 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	// Not allow contract creation on PChain Main Chain
-	if pool.chainconfig.PChainId == "pchain" && tx.To() == nil {
+	if pool.chainconfig.IsMainChain() && tx.To() == nil {
 		return ErrNoContractOnMainChain
 	}
 
 	if !pabi.IsPChainContractAddr(tx.To()) {
-		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
+		// Ensure the transaction has more gas than the basic tx fee.
+		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true)
 		if err != nil {
 			return err
 		}
@@ -616,12 +609,35 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if err != nil {
 			return err
 		}
-		log.Info("validateTx Chain Function", function.String())
+
+		// check Function main/child flag
+		if pool.chainconfig.IsMainChain() && !function.AllowInMainChain() {
+			return ErrNotAllowedInMainChain
+		} else if !pool.chainconfig.IsMainChain() && !function.AllowInChildChain() {
+			return ErrNotAllowedInChildChain
+		}
+
+		log.Infof("validateTx Chain Function %v", function.String())
 		if validateCb := GetValidateCb(function); validateCb != nil {
-			pool.cch.GetMutex().Lock()
-			defer pool.cch.GetMutex().Unlock()
-			if err := validateCb(tx, pool.currentState, pool.cch); err != nil {
-				return err
+			if function.IsCrossChainType() {
+				if fn, ok := validateCb.(CrossChainValidateCb); ok {
+					pool.cch.GetMutex().Lock()
+					err := fn(tx, pool.currentState, pool.cch)
+					pool.cch.GetMutex().Unlock()
+					if err != nil {
+						return err
+					}
+				} else {
+					panic("callback func is wrong, this should not happened, please check the code")
+				}
+			} else {
+				if fn, ok := validateCb.(NonCrossChainValidateCb); ok {
+					if err := fn(tx, pool.currentState, pool.chain.(*BlockChain)); err != nil {
+						return err
+					}
+				} else {
+					panic("callback func is wrong, this should not happened, please check the code")
+				}
 			}
 		}
 	}
@@ -1011,11 +1027,11 @@ func (pool *TxPool) promoteExecutables(accounts []common.Address) {
 	if pending > pool.config.GlobalSlots {
 		pendingBeforeCap := pending
 		// Assemble a spam order to penalize large transactors first
-		spammers := prque.New()
+		spammers := prque.New(nil)
 		for addr, list := range pool.pending {
 			// Only evict transactions from high rollers
 			if !pool.locals.contains(addr) && uint64(list.Len()) > pool.config.AccountSlots {
-				spammers.Push(addr, float32(list.Len()))
+				spammers.Push(addr, int64(list.Len()))
 			}
 		}
 		// Gradually drop transactions from offenders

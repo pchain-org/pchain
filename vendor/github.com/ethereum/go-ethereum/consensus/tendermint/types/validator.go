@@ -16,14 +16,15 @@ import (
 // Volatile state for each Validator
 // TODO: make non-volatile identity
 type Validator struct {
-	Address     []byte        `json:"address"`
-	PubKey      crypto.PubKey `json:"pub_key"`
-	VotingPower *big.Int      `json:"voting_power"`
+	Address        []byte        `json:"address"`
+	PubKey         crypto.PubKey `json:"pub_key"`
+	VotingPower    *big.Int      `json:"voting_power"`
+	RemainingEpoch uint64        `json:"remain_epoch"`
 }
 
-func NewValidator(pubKey crypto.PubKey, votingPower *big.Int) *Validator {
+func NewValidator(address []byte, pubKey crypto.PubKey, votingPower *big.Int) *Validator {
 	return &Validator{
-		Address:     pubKey.Address(),
+		Address:     address,
 		PubKey:      pubKey,
 		VotingPower: votingPower,
 	}
@@ -48,10 +49,11 @@ func (v *Validator) String() string {
 	if v == nil {
 		return "nil-Validator"
 	}
-	return fmt.Sprintf("Validator{ADD:%X PK:%X VP:%v}",
+	return fmt.Sprintf("Validator{ADD:%X PK:%X VP:%v EP:%d}",
 		v.Address,
 		v.PubKey,
-		v.VotingPower)
+		v.VotingPower,
+		v.RemainingEpoch)
 }
 
 func (v *Validator) Hash() []byte {
@@ -81,11 +83,13 @@ func (vc validatorCodec) Compare(o1 interface{}, o2 interface{}) int {
 
 type RefundValidatorAmount struct {
 	Address common.Address
-	Amount  *big.Int
+	Amount  *big.Int // Amount will be nil when Voteout is true
+	Voteout bool     // Voteout means refund all the amount (self deposit + delegate)
 }
 
 // SwitchEpoch op
 type SwitchEpochOp struct {
+	ChainId string
 	NewValidators *ValidatorSet
 }
 
@@ -98,20 +102,5 @@ func (op *SwitchEpochOp) Conflict(op1 ethTypes.PendingOp) bool {
 }
 
 func (op *SwitchEpochOp) String() string {
-	return fmt.Sprintf("SwitchEpochOp - New Validators: %v", op.NewValidators)
-}
-
-//--------------------------------------------------------------------------------
-// For testing...
-
-func RandValidator(randPower bool, minPower int64) (*Validator, *PrivValidator) {
-	privVal := GenPrivValidator("")
-	_, tempFilePath := Tempfile("priv_validator_")
-	privVal.SetFile(tempFilePath)
-	votePower := minPower
-	if randPower {
-		votePower += int64(RandUint32())
-	}
-	val := NewValidator(privVal.PubKey, big.NewInt(votePower))
-	return val, privVal
+	return fmt.Sprintf("SwitchEpochOp - ChainId:%v, New Validators: %v", op.ChainId, op.NewValidators)
 }

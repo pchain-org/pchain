@@ -4,68 +4,163 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/tendermint/go-rpc/server"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
 	"net"
 	"net/http"
-	"strconv"
+	"strings"
 )
 
-var listeners map[string]net.Listener
-var muxes map[string]*http.ServeMux
+var (
+	httpListener       net.Listener
+	httpMux            *http.ServeMux
+	httpHandlerMapping map[string]*rpc.Server
 
-func Hookup(chainId string, handler http.Handler) error {
-
-	log.Infof("Hookup RPC for (chainId, rpc Handler): (%v, %v)", chainId, handler)
-	for _, mux := range muxes {
-		if handler != nil {
-			mux.Handle("/"+chainId, handler)
-		} else {
-			mux.Handle("/"+chainId, defaultHandler())
-		}
-	}
-
-	return nil
-}
+	wsListener       net.Listener
+	wsMux            *http.ServeMux
+	wsOrigins        []string
+	wsHandlerMapping map[string]*rpc.Server
+)
 
 func StartRPC(ctx *cli.Context) error {
 
-	host := utils.MakeHTTPRpcHost(ctx)
-	port := ctx.GlobalInt(utils.RPCPortFlag.Name)
+	// Use Default Config
+	rpcConfig := node.DefaultConfig
 
-	addrArr := []string{"tcp://" + host + ":" + strconv.Itoa(port)}
+	// Setup the config from context
+	utils.SetHTTP(ctx, &rpcConfig)
+	utils.SetWS(ctx, &rpcConfig)
+	wsOrigins = rpcConfig.WSOrigins
 
-	// we may expose the rpc over both a unix and tcp socket
-	listeners = make(map[string]net.Listener)
-	muxes = make(map[string]*http.ServeMux)
-
-	for _, addr := range addrArr {
-
-		mux := http.NewServeMux()
-		listener, err := rpcserver.StartHTTPServer(addr, mux)
-		if err != nil {
-			return err
-		}
-
-		listeners[addr] = listener
-		muxes[addr] = mux
+	httperr := startHTTP(rpcConfig.HTTPEndpoint(), rpcConfig.HTTPCors, rpcConfig.HTTPVirtualHosts, rpcConfig.HTTPTimeouts)
+	if httperr != nil {
+		return httperr
 	}
+
+	wserr := startWS(rpcConfig.WSEndpoint())
+	if wserr != nil {
+		return wserr
+	}
+
 	return nil
 }
 
 func StopRPC() {
-	for _, l := range listeners {
-		log.Info("Closing rpc listener", "listener", l)
-		if err := l.Close(); err != nil {
-			log.Error("Error closing listener", "listener", l, "error", err)
+	// Stop HTTP Listener
+	if httpListener != nil {
+		httpAddr := httpListener.Addr().String()
+		httpListener.Close()
+		httpListener = nil
+		log.Info("HTTP endpoint closed", "url", fmt.Sprintf("http://%s", httpAddr))
+	}
+	if httpMux != nil {
+		for _, httpHandler := range httpHandlerMapping {
+			httpHandler.Stop()
+		}
+	}
+
+	// Stop WS Listener
+	if wsListener != nil {
+		wsAddr := wsListener.Addr().String()
+		wsListener.Close()
+		wsListener = nil
+		log.Info("WebSocket endpoint closed", "url", fmt.Sprintf("ws://%s", wsAddr))
+	}
+	if wsMux != nil {
+		for _, wsHandler := range wsHandlerMapping {
+			wsHandler.Stop()
 		}
 	}
 }
 
-func defaultHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func IsHTTPRunning() bool {
+	return httpListener != nil && httpMux != nil
+}
 
-		w.WriteHeader(http.StatusNotImplemented)
-		w.Write([]byte(fmt.Sprintf("blank output for not existed chain\n")))
-	})
+func IsWSRunning() bool {
+	return wsListener != nil && wsMux != nil
+}
+
+func HookupHTTP(chainId string, httpHandler *rpc.Server) error {
+	if httpMux != nil {
+		log.Infof("Hookup HTTP for (chainId, http Handler): (%v, %v)", chainId, httpHandler)
+		if httpHandler != nil {
+			httpMux.Handle("/"+chainId, httpHandler)
+			httpHandlerMapping[chainId] = httpHandler
+		}
+	}
+	return nil
+}
+
+func HookupWS(chainId string, wsHandler *rpc.Server) error {
+	if wsMux != nil {
+		log.Infof("Hookup WS for (chainId, ws Handler): (%v, %v)", chainId, wsHandler)
+		if wsHandler != nil {
+			wsMux.Handle("/"+chainId, wsHandler.WebsocketHandler(wsOrigins))
+			wsHandlerMapping[chainId] = wsHandler
+		}
+	}
+	return nil
+}
+
+func startHTTP(endpoint string, cors []string, vhosts []string, timeouts rpc.HTTPTimeouts) error {
+	// Short circuit if the HTTP endpoint isn't being exposed
+	if endpoint == "" {
+		return nil
+	}
+
+	var err error
+	httpListener, httpMux, err = startPChainHTTPEndpoint(endpoint, cors, vhosts, timeouts)
+	if err != nil {
+		return err
+	}
+	httpHandlerMapping = make(map[string]*rpc.Server)
+
+	log.Info("HTTP endpoint opened", "url", fmt.Sprintf("http://%s", endpoint), "cors", strings.Join(cors, ","), "vhosts", strings.Join(vhosts, ","))
+	return nil
+}
+
+func startPChainHTTPEndpoint(endpoint string, cors []string, vhosts []string, timeouts rpc.HTTPTimeouts) (net.Listener, *http.ServeMux, error) {
+	var (
+		listener net.Listener
+		err      error
+	)
+	if listener, err = net.Listen("tcp", endpoint); err != nil {
+		return nil, nil, err
+	}
+	mux := http.NewServeMux()
+	go rpc.NewHTTPServer(cors, vhosts, timeouts, mux).Serve(listener)
+	return listener, mux, err
+}
+
+func startWS(endpoint string) error {
+	// Short circuit if the WS endpoint isn't being exposed
+	if endpoint == "" {
+		return nil
+	}
+
+	var err error
+	wsListener, wsMux, err = startPChainWSEndpoint(endpoint)
+	if err != nil {
+		return err
+	}
+	wsHandlerMapping = make(map[string]*rpc.Server)
+
+	log.Info("WebSocket endpoint opened", "url", fmt.Sprintf("ws://%s", wsListener.Addr()))
+	return nil
+}
+
+func startPChainWSEndpoint(endpoint string) (net.Listener, *http.ServeMux, error) {
+	var (
+		listener net.Listener
+		err      error
+	)
+	if listener, err = net.Listen("tcp", endpoint); err != nil {
+		return nil, nil, err
+	}
+	mux := http.NewServeMux()
+	wsServer := &http.Server{Handler: mux}
+	go wsServer.Serve(listener)
+	return listener, mux, err
 }

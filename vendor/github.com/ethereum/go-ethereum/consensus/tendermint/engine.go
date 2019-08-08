@@ -2,15 +2,16 @@ package tendermint
 
 import (
 	"bytes"
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru"
-	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/tendermint/go-wire"
 	"math/big"
 	"time"
@@ -58,6 +59,11 @@ var (
 	errEmptyCommittedSeals = errors.New("zero committed seals")
 	// errMismatchTxhashes is returned if the TxHash in header is mismatch.
 	errMismatchTxhashes = errors.New("mismatch transactions hashes")
+
+	// errInvalidMainChainNumber is returned when child chain block doesn't contain the valid main chain height
+	errInvalidMainChainNumber = errors.New("invalid Main Chain Height")
+	// errMainChainNotCatchup is returned if child chain wait more than 300 seconds for main chain to catch up
+	errMainChainNotCatchup = errors.New("unable proceed the block due to main chain not catch up by waiting for more than 300 seconds, please catch up the main chain first")
 )
 
 var (
@@ -67,6 +73,11 @@ var (
 	recentAddresses, _ = lru.NewARC(inmemoryAddresses)
 
 	_ consensus.Engine = (*backend)(nil)
+
+	// PChain Child Foundation Address
+	foundationAddress = common.HexToAddress("0x991cf3cee2a55d06f9c7ba511bee3fad45a1bda7")
+	// Address for Child Chain Reward
+	childChainRewardAddress = common.BytesToAddress([]byte{100})
 )
 
 // APIs returns the RPC APIs this consensus engine provides.
@@ -96,6 +107,10 @@ func (sb *backend) Start(chain consensus.ChainReader, currentBlock func() *types
 		close(sb.commitCh)
 	}
 	sb.commitCh = make(chan *types.Block, 1)
+	if sb.vcommitCh != nil {
+		close(sb.vcommitCh)
+	}
+	sb.vcommitCh = make(chan *tdmTypes.IntermediateBlockResult, 1)
 
 	sb.chain = chain
 	sb.currentBlock = currentBlock
@@ -130,15 +145,16 @@ func (sb *backend) Stop() error {
 	return nil
 }
 
+func (sb *backend) Close() error {
+	sb.core.epochDB.Close()
+	return nil
+}
+
 // Author retrieves the Ethereum address of the account that minted the given
 // block, which may be different from the header's coinbase if a consensus
 // engine is based on signatures.
 func (sb *backend) Author(header *types.Header) (common.Address, error) {
-
-	sb.logger.Info("Tendermint (backend) Author, add logic here")
-
-	return common.HexToAddress("0x136c0e42f4e1b4efd930d2d88a3f3aa4996b6e2e"), nil
-	//return common.Address{}, nil
+	return header.Coinbase, nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules of a
@@ -163,7 +179,9 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 
 	// Don't waste time checking blocks from the future
 	if header.Time.Cmp(big.NewInt(now().Unix())) > 0 {
-		return consensus.ErrFutureBlock
+		sb.logger.Warnf("date/time different between different nodes. block from future with time:%v, bigger than now:%v", header.Time.Uint64(), now().Unix())
+		//in pchain, avoid the time difference to tolerate time gap between nodes
+		//return consensus.ErrFutureBlock
 	}
 
 	// Ensure that the extra data format is satisfied
@@ -188,7 +206,51 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		return errInvalidDifficulty
 	}
 
-	return sb.verifyCascadingFields(chain, header, parents)
+	// In case of Epoch switch, we have to wait for the Epoch switched first, then verify the following fields
+	if header.Number.Uint64() > sb.GetEpoch().EndBlock {
+		for {
+			duration := 2 * time.Second
+			sb.logger.Infof("Tendermint (backend) VerifyHeader, Epoch Switch, wait for %v then try again", duration)
+			time.Sleep(duration)
+
+			if header.Number.Uint64() <= sb.GetEpoch().EndBlock {
+				break
+			}
+		}
+	}
+
+	if fieldError := sb.verifyCascadingFields(chain, header, parents); fieldError != nil {
+		return fieldError
+	}
+
+	// Check the MainChainNumber if on Child Chain
+	if !sb.chainConfig.IsMainChain() {
+		if header.MainChainNumber == nil {
+			return errInvalidMainChainNumber
+		}
+
+		tried := 0
+		for {
+			// Check our main chain has already run ahead
+			ourMainChainHeight := sb.core.cch.GetHeightFromMainChain()
+			if ourMainChainHeight.Cmp(header.MainChainNumber) >= 0 {
+				break
+			}
+
+			if tried == 10 {
+				sb.logger.Warnf("Tendermint (backend) VerifyHeader, Main Chain Number mismatch, after retried %d times", tried)
+				return errMainChainNotCatchup
+			}
+
+			// Sleep for a while and check again
+			duration := 30 * time.Second
+			tried++
+			sb.logger.Infof("Tendermint (backend) VerifyHeader, Main Chain Number mismatch, wait for %v then try again (count %d)", duration, tried)
+			time.Sleep(duration)
+		}
+	}
+
+	return nil
 }
 
 // verifyCascadingFields verifies all the header fields that are not standalone,
@@ -212,27 +274,43 @@ func (sb *backend) verifyCascadingFields(chain consensus.ChainReader, header *ty
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	/*
-		if parent.Time.Uint64()+sb.config.BlockPeriod > header.Time.Uint64() {
-			return errInvalidTimestamp
-		}
-		// Verify validators in extraData. Validators in snapshot and extraData should be the same.
-		snap, err := sb.snapshot(chain, number-1, header.ParentHash, parents)
-		if err != nil {
-			return err
-		}
-
-		validators := make([]byte, len(snap.validators())*common.AddressLength)
-		for i, validator := range snap.validators() {
-			copy(validators[i*common.AddressLength:], validator[:])
-		}
-	*/
-	if err := sb.verifySigner(chain, header, parents); err != nil {
-		return err
-	}
 
 	err := sb.verifyCommittedSeals(chain, header, parents)
 	return err
+}
+
+func (sb *backend) VerifyHeaderBeforeConsensus(chain consensus.ChainReader, header *types.Header, seal bool) error {
+	sb.logger.Info("Tendermint (backend) VerifyHeaderBeforeConsensus, add logic here")
+
+	if header.Number == nil {
+		return errUnknownBlock
+	}
+
+	// Don't waste time checking blocks from the future
+	if header.Time.Cmp(big.NewInt(now().Unix())) > 0 {
+		sb.logger.Warnf("date/time different between different nodes. block from future with time:%v, bigger than now:%v", header.Time.Uint64(), now().Unix())
+		//in pchain, avoid the time difference to tolerate time gap between nodes
+		//return consensus.ErrFutureBlock
+	}
+
+	// Ensure that the coinbase is valid
+	if header.Nonce != (types.TendermintEmptyNonce) && !bytes.Equal(header.Nonce[:], types.TendermintNonce) {
+		return errInvalidNonce
+	}
+	// Ensure that the mix digest is zero as we don't have fork protection currently
+	if header.MixDigest != types.TendermintDigest {
+		return errInvalidMixDigest
+	}
+	// Ensure that the block doesn't contain any uncles which are meaningless in Istanbul
+	if header.UncleHash != types.TendermintNilUncleHash {
+		return errInvalidUncleHash
+	}
+	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
+	if header.Difficulty == nil || header.Difficulty.Cmp(types.TendermintDefaultDifficulty) != 0 {
+		return errInvalidDifficulty
+	}
+
+	return nil
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers
@@ -247,7 +325,6 @@ func (sb *backend) VerifyHeaders(chain consensus.ChainReader, headers []*types.H
 
 	go func() {
 		for i, header := range headers {
-			//err := sb.verifyHeader(chain, header, headers[:i])
 			err := sb.verifyHeader(chain, header, headers[:i])
 			select {
 			case <-abort:
@@ -270,15 +347,6 @@ func (sb *backend) VerifyUncles(chain consensus.ChainReader, block *types.Block)
 	return nil
 }
 
-// verifySigner checks whether the signer is in parent's validator set
-func (sb *backend) verifySigner(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
-
-	sb.logger.Info("Tendermint (backend) verifySigner, add logic here")
-
-	//no need to verify signer here, the proposer has been verified when reaching consensus
-	return nil
-}
-
 // verifyCommittedSeals checks whether every committed seal is signed by one of the parent's validators
 func (sb *backend) verifyCommittedSeals(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
 
@@ -290,6 +358,12 @@ func (sb *backend) verifyCommittedSeals(chain consensus.ChainReader, header *typ
 	}
 
 	epoch := sb.core.consensusState.Epoch
+	if epoch == nil || epoch.Validators == nil {
+		sb.logger.Errorf("verifyCommittedSeals error. Epoch %v", epoch)
+		return errInconsistentValidatorSet
+	}
+
+	epoch = epoch.GetEpochByBlockNumber(header.Number.Uint64())
 	if epoch == nil || epoch.Validators == nil {
 		sb.logger.Errorf("verifyCommittedSeals error. Epoch %v", epoch)
 		return errInconsistentValidatorSet
@@ -329,16 +403,13 @@ func (sb *backend) VerifySeal(chain consensus.ChainReader, header *types.Header)
 		return errInvalidDifficulty
 	}
 
-	return sb.verifySigner(chain, header, nil)
+	return nil
 }
 
 // Prepare initializes the consensus fields of a block header according to the
 // rules of a particular engine. The changes are executed inline.
 func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) error {
 
-	sb.logger.Info("Tendermint (backend) Prepare, add logic here")
-
-	header.Coinbase = common.Address{}
 	header.Nonce = types.TendermintEmptyNonce
 	header.MixDigest = types.TendermintDigest
 
@@ -351,38 +422,6 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	// use the same difficulty for all blocks
 	header.Difficulty = types.TendermintDefaultDifficulty
 
-	/*
-		// Assemble the voting snapshot
-		snap, err := sb.snapshot(chain, number-1, header.ParentHash, nil)
-		if err != nil {
-			return err
-		}
-
-		// get valid candidate list
-		sb.candidatesLock.RLock()
-		var addresses []common.Address
-		var authorizes []bool
-		for address, authorize := range sb.candidates {
-			if snap.checkVote(address, authorize) {
-				addresses = append(addresses, address)
-				authorizes = append(authorizes, authorize)
-			}
-		}
-		sb.candidatesLock.RUnlock()
-
-
-		// pick one of the candidates randomly
-		if len(addresses) > 0 {
-			index := rand.Intn(len(addresses))
-			// add validator voting in coinbase
-			header.Coinbase = addresses[index]
-			if authorizes[index] {
-				copy(header.Nonce[:], nonceAuthVote)
-			} else {
-				copy(header.Nonce[:], nonceDropVote)
-			}
-		}
-	*/
 	// add validators in snapshot to extraData's validators section
 	extra, err := prepareExtra(header, nil)
 	if err != nil {
@@ -396,6 +435,11 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	header.Time = big.NewInt(time.Now().Unix())
 	//}
 
+	// Add Main Chain Height if running on Child Chain
+	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId && sb.chainConfig.PChainId != params.TestnetChainConfig.PChainId {
+		header.MainChainNumber = sb.core.cch.GetHeightFromMainChain()
+	}
+
 	return nil
 }
 
@@ -405,12 +449,12 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 // Note, the block header and state database might be updated to reflect any
 // consensus rules that happen at finalization (e.g. block rewards).
 func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
+	totalGasFee *big.Int, uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
 
-	sb.logger.Infof("Tendermint (backend) Finalize, receipts are: %v", receipts)
+	sb.logger.Debugf("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
 	// Check if any Child Chain need to be launch and Update their account balance accordingly
-	if chain.Config().PChainId == "pchain" {
+	if sb.chainConfig.PChainId == params.MainnetChainConfig.PChainId || sb.chainConfig.PChainId == params.TestnetChainConfig.PChainId {
 		// Check the Child Chain Start
 		readyId, updateBytes, removedId := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
 		if len(readyId) > 0 || updateBytes != nil || len(removedId) > 0 {
@@ -425,22 +469,19 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		}
 	}
 
-	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
-	if ok, newValidators, refunds, _ := sb.core.consensusState.Epoch.ShouldEnterNewEpoch(header.Number.Uint64()); ok {
-		// Create a new Change Epoch Op. (Epoch Op should be the last one to be execute)
-		for _, r := range refunds {
-			state.SubDepositBalance(r.Address, r.Amount)
-			state.AddBalance(r.Address, r.Amount)
-		}
+	epoch := sb.GetEpoch().GetEpochByBlockNumber(header.Number.Uint64())
 
+	// Calculate the rewards
+	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee)
+
+	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
+	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
+			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
 		})
 
 	}
-
-	// Calculate the rewards, and drop the uncles
-	// TODO: we need consider reward here
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
@@ -451,23 +492,13 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 // Seal generates a new block for the given input block with the local miner's
 // seal place on top.
-func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error) {
+func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (interface{}, error) {
 
 	sb.logger.Info("Tendermint (backend) Seal, add logic here")
 
 	// update the block header timestamp and signature and propose the block to core engine
 	header := block.Header()
 	number := header.Number.Uint64()
-	/*
-		// Bail out if we're unauthorized to sign a block
-		snap, err := sb.snapshot(chain, number-1, header.ParentHash, nil)
-		if err != nil {
-			return nil, err
-		}
-		if _, v := snap.ValSet.GetByAddress(sb.address); v == nil {
-			return nil, errUnauthorized
-		}
-	*/
 	parent := chain.GetHeader(header.ParentHash, number-1)
 	if parent == nil {
 		return nil, consensus.ErrUnknownAncestor
@@ -504,19 +535,33 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 		case result, ok := <-sb.commitCh:
 
 			if ok {
-				sb.logger.Infof("Tendermint (backend) Seal, got result with block.Hash: %x, result.Hash: %x", block.Hash(), result.Hash())
+				sb.logger.Debugf("Tendermint (backend) Seal, got result with block.Hash: %x, result.Hash: %x", block.Hash(), result.Hash())
 				// if the block hash and the hash from channel are the same,
 				// return the result. Otherwise, keep waiting the next hash.
 				if block.Hash() == result.Hash() {
 					return result, nil
 				}
-				sb.logger.Info("Tendermint (backend) Seal, hash are different")
+				sb.logger.Debug("Tendermint (backend) Seal, hash are different")
 			} else {
-				sb.logger.Info("Tendermint (backend) Seal, has been restart, just return")
+				sb.logger.Debug("Tendermint (backend) Seal, has been restart, just return")
+				return nil, nil
+			}
+
+		case iresult, ok := <-sb.vcommitCh:
+
+			if ok {
+				sb.logger.Debugf("Tendermint (backend) Seal, v got result with block.Hash: %x, result.Hash: %x", block.Hash(), iresult.Block.Hash())
+				if block.Hash() != iresult.Block.Hash() {
+					return iresult, nil
+				}
+				sb.logger.Debug("Tendermint (backend) Seal, v hash are the same")
+			} else {
+				sb.logger.Debug("Tendermint (backend) Seal, v has been restart, just return")
 				return nil, nil
 			}
 
 		case <-stop:
+			sb.logger.Debug("Tendermint (backend) Seal, stop")
 			return nil, nil
 		}
 	}
@@ -533,7 +578,7 @@ func (sb *backend) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 }
 
 // Commit implements istanbul.Backend.Commit
-func (sb *backend) Commit(proposal *tdmTypes.TdmBlock, seals [][]byte) error {
+func (sb *backend) Commit(proposal *tdmTypes.TdmBlock, seals [][]byte, isProposer func() bool) error {
 	// Check if the proposal is a valid block
 	block := proposal.Block
 
@@ -546,8 +591,8 @@ func (sb *backend) Commit(proposal *tdmTypes.TdmBlock, seals [][]byte) error {
 	// update block's header
 	block = block.WithSeal(h)
 
-	sb.logger.Infof("Tendermint (backend) Commit, hash: %x, number: %v", block.Hash(), block.Number().Int64())
-	sb.logger.Infof("Tendermint (backend) Commit, block: %s", block.String())
+	sb.logger.Debugf("Tendermint (backend) Commit, hash: %x, number: %v", block.Hash(), block.Number().Int64())
+	sb.logger.Debugf("Tendermint (backend) Commit, block: %s", block.String())
 
 	// - if the proposed and committed blocks are the same, send the proposed hash
 	//   to commit channel, which is being watched inside the engine.Seal() function.
@@ -555,22 +600,46 @@ func (sb *backend) Commit(proposal *tdmTypes.TdmBlock, seals [][]byte) error {
 	// -- if success, the ChainHeadEvent event will be broadcasted, try to build
 	//    the next block and the previous Seal() will be stopped.
 	// -- otherwise, a error will be returned and a round change event will be fired.
-	if sb.proposedBlockHash == block.Hash() {
+	if isProposer() && (sb.proposedBlockHash == block.Hash()) { // for proposer
 		// feed block hash to Seal() and wait the Seal() result
+		sb.logger.Debugf("Tendermint (backend) Commit, proposer | feed to Seal: %x", block.Hash())
 		sb.commitCh <- block
 		return nil
+	} else { // for other validators
+		if proposal.IntermediateResult != nil {
+			sb.logger.Debugf("Tendermint (backend) Commit, validator | feed to Seal: %x", block.Hash())
+			proposal.IntermediateResult.Block = block
+			sb.vcommitCh <- proposal.IntermediateResult
+		} else {
+			sb.logger.Debugf("Tendermint (backend) Commit, validator | fetcher enqueue: %x", block.Hash())
+			if sb.broadcaster != nil {
+				sb.broadcaster.Enqueue(fetcherID, block)
+			}
+		}
+		return nil
 	}
-	sb.logger.Infof("Tendermint (backend) Commit, sb.broadcaster is %v", sb.broadcaster)
-	if sb.broadcaster != nil {
-		sb.broadcaster.Enqueue(fetcherID, block)
-	}
-	return nil
 }
 
 // Stop implements consensus.Istanbul.Stop
 func (sb *backend) ChainReader() consensus.ChainReader {
 
 	return sb.chain
+}
+
+func (sb *backend) ShouldStart() bool {
+	return sb.shouldStart
+}
+
+func (sb *backend) IsStarted() bool {
+	sb.coreMu.RLock()
+	start := sb.coreStarted
+	sb.coreMu.RUnlock()
+
+	return start
+}
+
+func (sb *backend) ForceStart() {
+	sb.shouldStart = true
 }
 
 // GetEpoch Get Epoch from Tendermint Engine
@@ -583,10 +652,18 @@ func (sb *backend) SetEpoch(ep *epoch.Epoch) {
 	sb.core.consensusState.Epoch = ep
 }
 
+// Return the private validator address of consensus
+func (sb *backend) PrivateValidator() common.Address {
+	if sb.core.privValidator != nil {
+		return sb.core.privValidator.Address
+	}
+	return common.Address{}
+}
+
 // update timestamp and signature of the block based on its number of transactions
 func (sb *backend) updateBlock(parent *types.Header, block *types.Block) (*types.Block, error) {
 
-	sb.logger.Info("Tendermint (backend) updateBlock, add logic here")
+	sb.logger.Debug("Tendermint (backend) updateBlock, add logic here")
 
 	header := block.Header()
 	/*
@@ -605,29 +682,6 @@ func (sb *backend) updateBlock(parent *types.Header, block *types.Block) (*types
 	return block.WithSeal(header), nil
 }
 
-// FIXME: Need to update this for Istanbul
-// sigHash returns the hash which is used as input for the Istanbul
-// signing. It is the hash of the entire header apart from the 65 byte signature
-// contained at the end of the extra data.
-//
-// Note, the method requires the extra data to be at least 65 bytes, otherwise it
-// panics. This is done to avoid accidentally using both forms (signature present
-// or not), which could be abused to produce different hashes for the same header.
-func sigHash(header *types.Header) (hash common.Hash) {
-
-	//logger.Info("Tendermint (backend) sigHash, add logic here")
-
-	return common.Hash{}
-}
-
-// ecrecover extracts the Ethereum account address from a signed header.
-func ecrecover(header *types.Header) (common.Address, error) {
-
-	//logger.Info("Tendermint (backend) ecrecover, add logic here")
-
-	return common.Address{}, nil
-}
-
 // prepareExtra returns a extra-data of the given header and validators
 func prepareExtra(header *types.Header, vals []common.Address) ([]byte, error) {
 
@@ -642,25 +696,6 @@ func prepareExtra(header *types.Header, vals []common.Address) ([]byte, error) {
 func writeSeal(h *types.Header, seal []byte) error {
 
 	//logger.Info("Tendermint (backend) writeSeal, add logic here")
-
-	/*
-		if len(seal)%types.IstanbulExtraSeal != 0 {
-			return errInvalidSignature
-		}
-
-		tdmExtra, err := tdmTypes.ExtractTendermintExtra(h)
-		if err != nil {
-			fmt.Printf("Tendermint: (sb *backend) writeSeal, 0\n")
-			return err
-		}
-
-		//tdmExtra.Seal = seal
-		payload, err := rlp.EncodeToBytes(&tdmExtra)
-		if err != nil {
-			fmt.Printf("Tendermint: (sb *backend) writeSeal, 1 with err %v\n", err)
-			return err
-		}
-	*/
 	payload := types.MagicExtra
 	h.Extra = payload
 	return nil
@@ -670,29 +705,126 @@ func writeSeal(h *types.Header, seal []byte) error {
 func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) error {
 
 	//logger.Info("Tendermint (backend) writeCommittedSeals, add logic here")
-
-	/*
-		if len(committedSeals) == 0 {
-			return errInvalidCommittedSeals
-		}
-
-		for _, seal := range committedSeals {
-			if len(seal) != types.IstanbulExtraSeal {
-				return errInvalidCommittedSeals
-			}
-		}
-
-		tdmExtra, err := types.ExtractTendermintExtra(h)
-		if err != nil {
-			return err
-		}
-	*/
-	payload := wire.BinaryBytes(*tdmExtra)
-	//payload, err := rlp.EncodeToBytes(tdmExtra)
-	//if err != nil {
-	//	return err
-	//}
-
-	h.Extra = payload
+	h.Extra = wire.BinaryBytes(*tdmExtra)
 	return nil
+}
+
+// AccumulateRewards credits the coinbase of the given block with the mining reward.
+// Main Chain:
+// The total reward consists of the 80% of static block reward of the Epoch and total tx gas fee.
+// Child Chain:
+// The total reward consists of the static block reward of Owner setup and total tx gas fee.
+//
+// If the coinbase is Candidate, divide the rewards by weight
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch, totalGasFee *big.Int) {
+	// Total Reward = Block Reward + Total Gas Fee
+	var coinbaseReward *big.Int
+	if config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId {
+		// Main Chain
+
+		// Coinbase Reward   = 80% of Total Reward
+		// Foundation Reward = 20% of Total Reward
+		rewardPerBlock := ep.RewardPerBlock
+		if rewardPerBlock != nil && rewardPerBlock.Sign() == 1 {
+			// 80% Coinbase Reward
+			coinbaseReward = new(big.Int).Mul(rewardPerBlock, big.NewInt(8))
+			coinbaseReward.Quo(coinbaseReward, big.NewInt(10))
+			// 20% go to PChain Foundation (For official Child Chain running cost)
+			foundationReward := new(big.Int).Sub(rewardPerBlock, coinbaseReward)
+			state.AddBalance(foundationAddress, foundationReward)
+
+			coinbaseReward.Add(coinbaseReward, totalGasFee)
+		} else {
+			coinbaseReward = totalGasFee
+		}
+	} else {
+		// Child Chain
+		rewardPerBlock := state.GetChildChainRewardPerBlock()
+		if rewardPerBlock != nil && rewardPerBlock.Sign() == 1 {
+			childChainRewardBalance := state.GetBalance(childChainRewardAddress)
+			if childChainRewardBalance.Cmp(rewardPerBlock) == -1 {
+				rewardPerBlock = childChainRewardBalance
+			}
+			// sub balance from childChainRewardAddress, reward per blocks
+			state.SubBalance(childChainRewardAddress, rewardPerBlock)
+
+			coinbaseReward = new(big.Int).Add(rewardPerBlock, totalGasFee)
+		} else {
+			coinbaseReward = totalGasFee
+		}
+	}
+
+	// Coinbase Reward   = Self Reward + Delegate Reward (if Deposit Proxied Balance > 0)
+	//
+	// IF commission > 0
+	// Self Reward       = Self Reward + Commission Reward
+	// Commission Reward = Delegate Reward * Commission / 100
+
+	// Deposit Part
+	selfDeposit := state.GetDepositBalance(header.Coinbase)
+	totalProxiedDeposit := state.GetTotalDepositProxiedBalance(header.Coinbase)
+	totalDeposit := new(big.Int).Add(selfDeposit, totalProxiedDeposit)
+
+	var selfReward, delegateReward *big.Int
+	if totalProxiedDeposit.Sign() == 0 {
+		selfReward = coinbaseReward
+	} else {
+		selfReward = new(big.Int)
+		selfPercent := new(big.Float).Quo(new(big.Float).SetInt(selfDeposit), new(big.Float).SetInt(totalDeposit))
+		new(big.Float).Mul(new(big.Float).SetInt(coinbaseReward), selfPercent).Int(selfReward)
+
+		delegateReward = new(big.Int).Sub(coinbaseReward, selfReward)
+		commission := state.GetCommission(header.Coinbase)
+		if commission > 0 {
+			commissionReward := new(big.Int).Mul(delegateReward, big.NewInt(int64(commission)))
+			commissionReward.Quo(commissionReward, big.NewInt(100))
+			// Add the commission to self reward
+			selfReward.Add(selfReward, commissionReward)
+			// Sub the commission from delegate reward
+			delegateReward.Sub(delegateReward, commissionReward)
+		}
+	}
+
+	// Move the self reward to Reward Trie
+	divideRewardByEpoch(state, header.Coinbase, ep.Number, selfReward)
+
+	// Calculate the Delegate Reward
+	if delegateReward != nil && delegateReward.Sign() > 0 {
+		totalIndividualReward := big.NewInt(0)
+		// Split the reward based on Weight stack
+		state.ForEachProxied(header.Coinbase, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
+			if depositProxiedBalance.Sign() == 1 {
+				// deposit * delegateReward / total deposit
+				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
+				divideRewardByEpoch(state, key, ep.Number, individualReward)
+				totalIndividualReward.Add(totalIndividualReward, individualReward)
+			}
+			return true
+		})
+		// Recheck the Total Individual Reward, Float the difference
+		cmp := delegateReward.Cmp(totalIndividualReward)
+		if cmp == 1 {
+			// if delegate reward > actual given reward, give remaining reward to Candidate
+			diff := new(big.Int).Sub(delegateReward, totalIndividualReward)
+			state.AddRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
+		} else if cmp == -1 {
+			// if delegate reward < actual given reward, subtract the diff from Candidate
+			diff := new(big.Int).Sub(totalIndividualReward, delegateReward)
+			state.SubRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
+		}
+	}
+}
+
+func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64, reward *big.Int) {
+	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
+	lastEpochReward := new(big.Int).Set(reward)
+	for i := epochNumber; i < epochNumber+12; i++ {
+		if i == epochNumber+11 {
+			state.AddRewardBalanceByEpochNumber(addr, i, lastEpochReward)
+		} else {
+			state.AddRewardBalanceByEpochNumber(addr, i, epochReward)
+			lastEpochReward.Sub(lastEpochReward, epochReward)
+		}
+	}
+	state.MarkAddressReward(addr)
 }

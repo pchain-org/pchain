@@ -129,6 +129,7 @@ type Logger interface {
 	Infof(format string, args ...interface{})
 	Warnf(format string, args ...interface{})
 	Errorf(format string, args ...interface{})
+	Critf(msg string, ctx ...interface{})
 }
 
 type logger struct {
@@ -205,6 +206,10 @@ func (l *logger) Warnf(format string, args ...interface{}) {
 
 func (l *logger) Errorf(format string, args ...interface{}) {
 	l.write(fmt.Sprintf(format, args...), LvlError, nil, skipLevel)
+}
+
+func (l *logger) Critf(format string, args ...interface{}) {
+	l.write(fmt.Sprintf(format, args...), LvlCrit, nil, skipLevel)
 }
 
 func (l *logger) GetHandler() Handler {

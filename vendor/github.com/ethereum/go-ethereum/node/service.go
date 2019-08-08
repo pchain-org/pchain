@@ -18,6 +18,7 @@ package node
 
 import (
 	"crypto/ecdsa"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -40,11 +41,11 @@ type ServiceContext struct {
 // OpenDatabase opens an existing database with the given name (or creates one
 // if no previous can be found) from within the node's data directory. If the
 // node is an ephemeral one, a memory database is returned.
-func (ctx *ServiceContext) OpenDatabase(name string, cache int, handles int) (ethdb.Database, error) {
+func (ctx *ServiceContext) OpenDatabase(name string, cache int, handles int, namespace string) (ethdb.Database, error) {
 	if ctx.config.DataDir == "" {
-		return ethdb.NewMemDatabase()
+		return rawdb.NewMemoryDatabase(), nil
 	}
-	db, err := ethdb.NewLDBDatabase(ctx.config.ResolvePath(name), cache, handles)
+	db, err := rawdb.NewLevelDBDatabase(ctx.config.ResolvePath(name), cache, handles, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -71,6 +72,11 @@ func (ctx *ServiceContext) Service(service interface{}) error {
 // NodeKey returns node key from config
 func (ctx *ServiceContext) NodeKey() *ecdsa.PrivateKey {
 	return ctx.config.NodeKey()
+}
+
+// ChainId returns current chain id from config
+func (ctx *ServiceContext) ChainId() string {
+	return ctx.config.ChainId
 }
 
 // ServiceConstructor is the function signature of the constructors needed to be

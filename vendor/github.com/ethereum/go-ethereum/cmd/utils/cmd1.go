@@ -1,12 +1,9 @@
 package utils
 
 import (
-	"fmt"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/log"
-	"os"
-	"os/signal"
-	//"strings"
-	"github.com/ethereum/go-ethereum/internal/debug"
+
 	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
 	//"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -19,6 +16,18 @@ import (
 func StartNodeEx(ctx *cli.Context, stack *node.Node, mining bool) error {
 
 	StartNode1(stack)
+
+	// Mine or not?
+	mining := false
+	var ethereum *eth.Ethereum
+	if err := stack.Service(&ethereum); err == nil {
+		if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
+			mining = tdm.ShouldStart()
+			if mining {
+				stack.GetLogger().Info("PDBFT Consensus Engine will be start shortly")
+			}
+		}
+	}
 
 	// Start auxiliary services if enabled
 	if mining || ctx.GlobalBool(DeveloperFlag.Name) {
@@ -41,7 +50,7 @@ func StartNodeEx(ctx *cli.Context, stack *node.Node, mining bool) error {
 			}
 		}
 		// Set the gas price to the limits from the CLI and start mining
-		ethereum.TxPool().SetGasPrice(GlobalBig(ctx, GasPriceFlag.Name))
+		ethereum.TxPool().SetGasPrice(GlobalBig(ctx, MinerGasPriceFlag.Name))
 		if err := ethereum.StartMining(true); err != nil {
 			Fatalf("Failed to start mining: %v", err)
 		}
@@ -52,30 +61,27 @@ func StartNodeEx(ctx *cli.Context, stack *node.Node, mining bool) error {
 
 func StartNode1(stack *node.Node) {
 
-	fmt.Println("StartNode->stack.Start()")
+	log.Debug("StartNode->stack.Start()")
 	if err := stack.Start1(); err != nil {
 		Fatalf("Error starting protocol stack: %v", err)
 	}
 
-	fmt.Println("pow recover 3")
-	go func() {
-		sigc := make(chan os.Signal, 1)
-		signal.Notify(sigc, os.Interrupt)
-		defer signal.Stop(sigc)
-		<-sigc
-		log.Info("Got interrupt, shutting down...")
-		go stack.Stop()
-		for i := 3; i > 0; i-- {
-			<-sigc
-			if i > 1 {
-				log.Info(fmt.Sprintf("Already shutting down, interrupt %d more times for panic.", i-1))
-			}
-		}
-		fmt.Println("pow recover 4")
-		debug.Exit() // ensure trace and CPU profile data is flushed.
-		debug.LoudPanic("boom")
-	}()
-	fmt.Println("pow recover 5")
+	//go func() {
+	//	sigc := make(chan os.Signal, 1)
+	//	signal.Notify(sigc, os.Interrupt)
+	//	defer signal.Stop(sigc)
+	//	<-sigc
+	//	log.Info("Got interrupt, shutting down...")
+	//	go stack.Stop()
+	//	for i := 3; i > 0; i-- {
+	//		<-sigc
+	//		if i > 1 {
+	//			log.Info(fmt.Sprintf("Already shutting down, interrupt %d more times for panic.", i-1))
+	//		}
+	//	}
+	//	debug.Exit() // ensure trace and CPU profile data is flushed.
+	//	debug.LoudPanic("boom")
+	//}()
 }
 
 /*

@@ -63,6 +63,7 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 
 func init() {
 	core.RegisterInsertBlockCb("UpdateLocalEpoch", updateLocalEpoch)
+	core.RegisterInsertBlockCb("AutoStartMining", autoStartMining)
 }
 
 func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
@@ -80,10 +81,19 @@ func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 	if epochInBlock != nil {
 		if epochInBlock.Number == currentEpoch.Number+1 {
 			// Save the next epoch
-			epochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
-			epochInBlock.SetRewardScheme(currentEpoch.GetRewardScheme())
-			epochInBlock.SetEpochValidatorVoteSet(ep.NewEpochValidatorVoteSet())
-			currentEpoch.SetNextEpoch(epochInBlock)
+			if block.NumberU64() == currentEpoch.GetVoteStartHeight() {
+				// Propose next epoch
+				//epochInBlock.SetEpochValidatorVoteSet(ep.NewEpochValidatorVoteSet())
+				epochInBlock.Status = ep.EPOCH_VOTED_NOT_SAVED
+				epochInBlock.SetRewardScheme(currentEpoch.GetRewardScheme())
+				currentEpoch.SetNextEpoch(epochInBlock)
+			} else if block.NumberU64() == currentEpoch.GetRevealVoteEndHeight()+2 {
+				// Finalize next epoch
+				// Validator set in next epoch will not finalize and send to mainchain
+				nextEp := currentEpoch.GetNextEpoch()
+				nextEp.Validators = epochInBlock.Validators
+				nextEp.Status = ep.EPOCH_VOTED_NOT_SAVED
+			}
 			currentEpoch.Save()
 		} else if epochInBlock.Number == currentEpoch.Number {
 			// Update the current epoch Start Time from proposer
@@ -94,6 +104,27 @@ func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 			if currentEpoch.Number > 0 {
 				ep.UpdateEpochEndTime(currentEpoch.GetDB(), currentEpoch.Number-1, epochInBlock.StartTime)
 			}
+		}
+	}
+}
+
+func autoStartMining(bc *core.BlockChain, block *ethTypes.Block) {
+	eng := bc.Engine().(consensus.Tendermint)
+	currentEpoch := eng.GetEpoch()
+	// After Reveal Vote End stage, we should able to calculate the new validator
+	if block.NumberU64() == currentEpoch.GetRevealVoteEndHeight()+1 {
+		// Re-Calculate the next epoch validators
+		nextEp := currentEpoch.GetNextEpoch()
+		state, _ := bc.State()
+		nextValidators := currentEpoch.Validators.Copy()
+		dryrunErr := ep.DryRunUpdateEpochValidatorSet(state, nextValidators, nextEp.GetEpochValidatorVoteSet())
+		if dryrunErr != nil {
+			panic("can not update the validator set base on the vote, error: " + dryrunErr.Error())
+		}
+		nextEp.Validators = nextValidators
+
+		if nextValidators.HasAddress(eng.PrivateValidator().Bytes()) && !eng.IsStarted() {
+			bc.PostChainEvents([]interface{}{core.StartMiningEvent{}}, nil)
 		}
 	}
 }

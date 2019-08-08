@@ -3,7 +3,6 @@ package state
 import (
 	"bytes"
 	"github.com/ethereum/go-ethereum/log"
-	"io/ioutil"
 	"time"
 
 	. "github.com/tendermint/go-common"
@@ -151,21 +150,6 @@ func (s *State) GetValidators() (*types.ValidatorSet, *types.ValidatorSet, error
 //-----------------------------------------------------------------------------
 // Genesis
 
-// MakeGenesisStateFromFile reads and unmarshals state from the given file.
-//
-// Used during replay and in tests.
-func MakeGenesisStateFromFile( /*db dbm.DB, */ genDocFile string) *State {
-	genDocJSON, err := ioutil.ReadFile(genDocFile)
-	if err != nil {
-		Exit(Fmt("Couldn't read GenesisDoc file: %v", err))
-	}
-	genDoc, err := types.GenesisDocFromJSON(genDocJSON)
-	if err != nil {
-		Exit(Fmt("Error reading GenesisDoc: %v", err))
-	}
-	return MakeGenesisState( /*db, */ genDoc.ChainID, nil)
-}
-
 // MakeGenesisState creates state from types.GenesisDoc.
 //
 // Used in tests.
@@ -209,37 +193,4 @@ func MakeGenesisState( /*db dbm.DB,  genDoc *types.GenesisDoc,*/ chainID string,
 		//TxIndexer:       &null.TxIndex{}, // we do not need indexer during replay and in tests
 		logger: logger,
 	}
-}
-
-func MakeGenesisValidatorsFromFile(genDocFile string) *types.ValidatorSet {
-
-	genDocJSON, err := ioutil.ReadFile(genDocFile)
-	if err != nil {
-		Exit(Fmt("MakeGenesisValidatorsFromFile(), Couldn't read GenesisDoc file: %v", err))
-	}
-
-	genDoc, err := types.GenesisDocFromJSON(genDocJSON)
-	if err != nil {
-		Exit(Fmt("MakeGenesisValidatorsFromFile(), Error reading GenesisDoc: %v", err))
-	}
-
-	if len(genDoc.CurrentEpoch.Validators) == 0 {
-		Exit(Fmt("MakeGenesisValidatorsFromFile(), The genesis file has no validators"))
-	}
-
-	// Make validators slice
-	validators := make([]*types.Validator, len(genDoc.CurrentEpoch.Validators))
-	for i, val := range genDoc.CurrentEpoch.Validators {
-		pubKey := val.PubKey
-		address := pubKey.Address()
-
-		// Make validator
-		validators[i] = &types.Validator{
-			Address:     address,
-			PubKey:      pubKey,
-			VotingPower: val.Amount,
-		}
-	}
-
-	return types.NewValidatorSet(validators)
 }

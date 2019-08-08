@@ -131,8 +131,8 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.CacheFlag,
 			utils.CacheDatabaseFlag,
+			utils.CacheTrieFlag,
 			utils.CacheGCFlag,
-			utils.TrieCacheGenFlag,
 		},
 	},
 	{
@@ -185,9 +185,10 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.MiningEnabledFlag,
 			utils.MinerThreadsFlag,
-			utils.EtherbaseFlag,
-			utils.TargetGasLimitFlag,
-			utils.GasPriceFlag,
+			utils.MinerGasPriceFlag,
+			utils.MinerGasTargetFlag,
+			utils.MinerGasLimitFlag,
+			utils.MinerEtherbaseFlag,
 			utils.ExtraDataFlag,
 		},
 	},

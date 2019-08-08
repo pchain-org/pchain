@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/pchain/chain"
 	"github.com/pchain/version"
 	"gopkg.in/urfave/cli.v1"
@@ -50,16 +51,36 @@ func main() {
 		},
 
 		{
-			Action:      chain.GenerateNodeInfoCmd,
+			Action:      chain.InitChildChainCmd,
+			Name:        "init_child_chain",
+			Usage:       "./pchain --datadir=.pchain --childChain=child_0,child_1,child_2 init_child_chain",
+			Description: "Initialize child chain genesis from chain info db",
+		},
+
+		{
+			Action:      GenerateNodeInfoCmd,
 			Name:        "gen_node_info",
 			Usage:       "gen_node_info number", //generate node info for 'number' nodes
 			Description: "Generate node info for static-nodes.json",
+		},
+
+		{
+			//Action: GeneratePrivateValidatorCmd,
+			Action: utils.MigrateFlags(GeneratePrivateValidatorCmd),
+			Name:   "gen_priv_validator",
+			Usage:  "gen_priv_validator address", //generate priv_validator.json for address
+			Flags: []cli.Flag{
+				utils.DataDirFlag,
+			},
+			Description: "Generate priv_validator.json for address",
 		},
 
 		// See consolecmd.go:
 		//gethmain.ConsoleCommand,
 		gethmain.AttachCommand,
 		//gethmain.JavascriptCommand,
+		gethmain.ImportPreimagesCommand,
+		gethmain.ExportPreimagesCommand,
 
 		//walletCommand,
 		accountCommand,
@@ -76,7 +97,11 @@ func main() {
 		log.NewLogger("", commonLogDir, ctx.GlobalInt(verbosityFlag.Name), ctx.GlobalBool(debugFlag.Name), ctx.GlobalString(vmoduleFlag.Name), ctx.GlobalString(backtraceAtFlag.Name))
 
 		// Tendermint Config
-		chain.Config = chain.GetTendermintConfig(chain.MainChain, ctx)
+		chainId := params.MainnetChainConfig.PChainId
+		if ctx.GlobalBool(utils.TestnetFlag.Name) {
+			chainId = params.TestnetChainConfig.PChainId
+		}
+		chain.Config = chain.GetTendermintConfig(chainId, ctx)
 
 		runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -87,7 +112,6 @@ func main() {
 		// Start system runtime metrics collection
 		go metrics.CollectProcessMetrics(3 * time.Second)
 
-		utils.SetupNetwork(ctx)
 		return nil
 	}
 
@@ -122,16 +146,16 @@ func newCliApp(version, usage string) *cli.App {
 		utils.KeyStoreDirFlag,
 		utils.NoUSBFlag,
 		/*
-		utils.DashboardEnabledFlag,
-		utils.DashboardAddrFlag,
-		utils.DashboardPortFlag,
-		utils.DashboardRefreshFlag,
-		utils.EthashCacheDirFlag,
-		utils.EthashCachesInMemoryFlag,
-		utils.EthashCachesOnDiskFlag,
-		utils.EthashDatasetDirFlag,
-		utils.EthashDatasetsInMemoryFlag,
-		utils.EthashDatasetsOnDiskFlag,
+			utils.DashboardEnabledFlag,
+			utils.DashboardAddrFlag,
+			utils.DashboardPortFlag,
+			utils.DashboardRefreshFlag,
+			utils.EthashCacheDirFlag,
+			utils.EthashCachesInMemoryFlag,
+			utils.EthashCachesOnDiskFlag,
+			utils.EthashDatasetDirFlag,
+			utils.EthashDatasetsInMemoryFlag,
+			utils.EthashDatasetsOnDiskFlag,
 		*/
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
@@ -147,21 +171,21 @@ func newCliApp(version, usage string) *cli.App {
 		//utils.LightModeFlag,
 		utils.SyncModeFlag,
 		utils.GCModeFlag,
-		utils.LightServFlag,
-		utils.LightPeersFlag,
-		utils.LightKDFFlag,
+		//utils.LightServFlag,
+		//utils.LightPeersFlag,
+		//utils.LightKDFFlag,
 		utils.CacheFlag,
 		utils.CacheDatabaseFlag,
+		utils.CacheTrieFlag,
 		utils.CacheGCFlag,
-		utils.TrieCacheGenFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
-		utils.EtherbaseFlag,
-		utils.GasPriceFlag,
 		utils.MinerThreadsFlag,
-		utils.MiningEnabledFlag,
-		utils.TargetGasLimitFlag,
+		utils.MinerGasTargetFlag,
+		utils.MinerGasLimitFlag,
+		utils.MinerGasPriceFlag,
+		utils.MinerEtherbaseFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,
@@ -170,13 +194,14 @@ func newCliApp(version, usage string) *cli.App {
 		utils.NodeKeyHexFlag,
 		//utils.DeveloperFlag,
 		//utils.DeveloperPeriodFlag,
-		//utils.TestnetFlag,
+		utils.TestnetFlag,
 		//utils.RinkebyFlag,
 		//utils.OttomanFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
-		utils.RPCCORSDomainFlag,
-		//utils.RPCVirtualHostsFlag,
+		utils.PruneFlag,
+		//utils.PruneBlockFlag,
+
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
 		utils.FakePoWFlag,
@@ -187,17 +212,20 @@ func newCliApp(version, usage string) *cli.App {
 		//gethmain.ConfigFileFlag,
 		//utils.IstanbulRequestTimeoutFlag,
 		//utils.IstanbulBlockPeriodFlag,
+		// RPC HTTP Flag
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
 		utils.RPCApiFlag,
-		/*
+		utils.RPCCORSDomainFlag,
+		utils.RPCVirtualHostsFlag,
+		// RPC WS Flag
 		utils.WSEnabledFlag,
 		utils.WSListenAddrFlag,
 		utils.WSPortFlag,
 		utils.WSApiFlag,
 		utils.WSAllowedOriginsFlag,
-		*/
+
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
 
@@ -212,14 +240,14 @@ func newCliApp(version, usage string) *cli.App {
 		ChildChainFlag,
 
 		/*
-		//Tendermint flags
-		MonikerFlag,
-		NodeLaddrFlag,
-		SeedsFlag,
-		FastSyncFlag,
-		SkipUpnpFlag,
-		RpcLaddrFlag,
-		AddrFlag,
+			//Tendermint flags
+			MonikerFlag,
+			NodeLaddrFlag,
+			SeedsFlag,
+			FastSyncFlag,
+			SkipUpnpFlag,
+			RpcLaddrFlag,
+			AddrFlag,
 		*/
 	}
 	app.Flags = append(app.Flags, DebugFlags...)

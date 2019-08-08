@@ -18,7 +18,13 @@ package params
 
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the main Ethereum network.
-var MainnetBootnodes []string
+var MainnetBootnodes = []string{
+
+	"enode://48fdd07c1610845a73ac4fc16a6b1c6a633f5599e431dfdaf36bcafdaf93b11de07cdc40da964092fe7962a0f1df2c0f20a2c7632eb65a4103b1fbf16f4c0a59@13.234.151.146:30308", // ID
+	"enode://5d867a49995ce5939324ce110d9e21c5396ca919002ea2063735ea164fc3401cb5ffb74b976406807929c8e179bf00fe9b3df4f3d680691bcc463a115735741d@13.53.189.137:30308",  // SE
+	"enode://aef60512c52fe3e6ec0a1adb3b5f851a6114edde84ee63512ab31c81abf63eaeafc57912dc9bae429e4e6e498dfd70b2d9945b3f01eabc9491b6afb485bd24f2@35.165.181.32:30308",  // US-WEST
+
+}
 
 //var MainnetBootnodes = []string{
 //	// Ethereum Foundation Go Bootnodes
@@ -32,6 +38,11 @@ var MainnetBootnodes []string
 //	"enode://979b7fa28feeb35a4741660a16076f1943202cb72b6af70d327f053e248bab9ba81760f39d0701ef1d8f89cc1fbd2cacba0710a12cd5314d5e0c9021aa3637f9@5.1.83.226:30303", // DE
 //}
 
+var TestnetBootnodes = []string{
+	"enode://4537ff7d59e71b0e205cbc53011ec93a41519e5ac45df0188f1291b28e213a2598c545e49bc2ba79c94acae54ef219816ebd1f7c9e14971ba89e705fc646a58c@54.189.122.88:30308",
+}
+
+/*
 // TestnetBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Ropsten test network.
 var TestnetBootnodes = []string{
@@ -40,6 +51,7 @@ var TestnetBootnodes = []string{
 	"enode://6332792c4a00e3e4ee0926ed89e0d27ef985424d97b6a45bf0f23e51f0dcb5e66b875777506458aea7af6f9e4ffb69f43f3778ee73c81ed9d34c51c4b16b0b0f@52.232.243.152:30303", // Parity
 	"enode://94c15d1b9e2fe7ce56e458b9a3b672ef11894ddedd0c6f247e0f1d3487f52b66208fb4aeb8179fce6e3a749ea93ed147c37976d67af557508d199d9594c35f09@192.81.208.223:30303", // @gpip
 }
+*/
 
 // RinkebyBootnodes are the enode URLs of the P2P bootstrap nodes running on the
 // Rinkeby test network.

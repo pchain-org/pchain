@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -43,7 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/params"
-	rpc "github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type LightEthereum struct {
@@ -84,7 +85,7 @@ type LightEthereum struct {
 }
 
 func New(ctx *node.ServiceContext, config *eth.Config, cch core.CrossChainHelper, logger log.Logger) (*LightEthereum, error) {
-	chainDb, err := eth.CreateDB(ctx, config, "lightchaindata")
+	chainDb, err := ctx.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/")
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +106,7 @@ func New(ctx *node.ServiceContext, config *eth.Config, cch core.CrossChainHelper
 		peers:            peers,
 		reqDist:          newRequestDistributor(peers, quitSync),
 		accountManager:   ctx.AccountManager,
-		engine:           eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb, nil, cch, logger, false),
+		engine:           eth.CreateConsensusEngine(ctx, config, chainConfig, chainDb, nil, cch),
 		shutdownChan:     make(chan bool),
 		networkId:        config.NetworkId,
 		bloomRequests:    make(chan chan *bloombits.Retrieval),
@@ -127,7 +128,7 @@ func New(ctx *node.ServiceContext, config *eth.Config, cch core.CrossChainHelper
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
 		leth.blockchain.SetHead(compat.RewindTo)
-		core.WriteChainConfig(chainDb, genesisHash, chainConfig)
+		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 
 	leth.txPool = light.NewTxPool(leth.chainConfig, leth.blockchain, leth.relay)
@@ -137,7 +138,7 @@ func New(ctx *node.ServiceContext, config *eth.Config, cch core.CrossChainHelper
 	leth.ApiBackend = &LesApiBackend{leth, nil, nil, cch}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
-		gpoParams.Default = config.GasPrice
+		gpoParams.Default = config.MinerGasPrice
 	}
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 	return leth, nil

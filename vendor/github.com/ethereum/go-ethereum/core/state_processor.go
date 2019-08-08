@@ -17,7 +17,6 @@
 package core
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
@@ -25,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 )
@@ -70,14 +70,14 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
+	totalUsedMoney := big.NewInt(0)
 	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
 		//receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
-		totalUsedMoney := big.NewInt(0)
 		receipt, _, err := ApplyTransactionEx(p.config, p.bc, nil, gp, statedb, ops, header, tx,
 			usedGas, totalUsedMoney, cfg, p.cch, false)
-		fmt.Printf("(p *StateProcessor) Process()，after ApplyTransactionEx, receipt is %v\n", receipt)
+		log.Debugf("(p *StateProcessor) Process()，after ApplyTransactionEx, receipt is %v\n", receipt)
 		if err != nil {
 			return nil, nil, 0, nil, err
 		}
@@ -85,7 +85,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	_, err := p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts, ops)
+	_, err := p.engine.Finalize(p.bc, header, statedb, block.Transactions(), totalUsedMoney, block.Uncles(), receipts, ops)
 	if err != nil {
 		return nil, nil, 0, nil, err
 	}

@@ -1,11 +1,9 @@
 package node
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
-	"net/http"
 	"reflect"
 )
 
@@ -104,12 +102,7 @@ func (n *Node) GatherProtocols() []p2p.Protocol {
 	return protocols
 }
 
-func (n *Node) GetRPCHandler() (http.Handler, error) {
-
-	apis := n.apis()
-	for _, service := range n.services {
-		apis = append(apis, service.APIs()...)
-	}
+func (n *Node) GetHTTPHandler() (*rpc.Server, error) {
 
 	// Generate the whitelist based on the allowed modules
 	whitelist := make(map[string]bool)
@@ -119,7 +112,7 @@ func (n *Node) GetRPCHandler() (http.Handler, error) {
 
 	// Register all the APIs exposed by the services
 	handler := rpc.NewServer()
-	for _, api := range apis {
+	for _, api := range n.rpcAPIs {
 		if whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
 			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
 				return nil, err
@@ -128,36 +121,56 @@ func (n *Node) GetRPCHandler() (http.Handler, error) {
 		}
 	}
 
-	//emmark
-	fmt.Println("(n *Node) startHTTP()->before rpc.NewCorsHandler(cors, handler)")
-
 	// All listeners booted successfully
 	n.httpEndpoint = ""
 	n.httpListener = nil
 	n.httpHandler = nil
 
-	n.rpcAPIs = apis
+	return handler, nil
+}
 
-	return rpc.NewCorsHandler(handler, n.config.HTTPCors), nil
+func (n *Node) GetWSHandler() (*rpc.Server, error) {
+	// Generate the whitelist based on the allowed modules
+	whitelist := make(map[string]bool)
+	for _, module := range n.config.WSModules {
+		whitelist[module] = true
+	}
+	// Register all the APIs exposed by the services
+	handler := rpc.NewServer()
+	for _, api := range n.rpcAPIs {
+		if n.config.WSExposeAll || whitelist[api.Namespace] || (len(whitelist) == 0 && api.Public) {
+			if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
+				return nil, err
+			}
+			log.Debug("WebSocket registered", "service", api.Service, "namespace", api.Namespace)
+		}
+	}
+
+	// All listeners booted successfully
+	n.wsEndpoint = ""
+	n.wsListener = nil
+	n.wsHandler = nil
+
+	return handler, nil
 }
 
 func (n *Node) startRPC1(services map[reflect.Type]Service) error {
+	// Gather all the possible APIs to surface
+	apis := n.apis()
+	for _, service := range services {
+		apis = append(apis, service.APIs()...)
+	}
 
 	// Start the various API endpoints, terminating all in case of errors
-	if err := n.startInProc(n.rpcAPIs); err != nil {
+	if err := n.startInProc(apis); err != nil {
 		return err
 	}
-	if err := n.startIPC(n.rpcAPIs); err != nil {
+	if err := n.startIPC(apis); err != nil {
 		n.stopInProc()
 		return err
 	}
-	if err := n.startWS(n.wsEndpoint, n.rpcAPIs, n.config.WSModules, n.config.WSOrigins, n.config.WSExposeAll); err != nil {
-		n.stopHTTP()
-		n.stopIPC()
-		n.stopInProc()
-		return err
-	}
-
+	// All API endpoints started successfully
+	n.rpcAPIs = apis
 	return nil
 }
 

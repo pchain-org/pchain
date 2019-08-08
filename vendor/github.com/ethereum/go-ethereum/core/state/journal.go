@@ -60,6 +60,27 @@ type (
 		account *common.Address
 		prev    *big.Int
 	}
+	delegateBalanceChange struct {
+		account *common.Address
+		prev    *big.Int
+	}
+	proxiedBalanceChange struct {
+		account *common.Address
+		prev    *big.Int
+	}
+	depositProxiedBalanceChange struct {
+		account *common.Address
+		prev    *big.Int
+	}
+	pendingRefundBalanceChange struct {
+		account *common.Address
+		prev    *big.Int
+	}
+	rewardBalanceChange struct {
+		account *common.Address
+		prev    *big.Int
+	}
+
 	nonceChange struct {
 		account *common.Address
 		prev    uint64
@@ -76,6 +97,26 @@ type (
 		account *common.Address
 		txHash  common.Hash
 	}
+	accountProxiedBalanceChange struct {
+		account  *common.Address
+		key      common.Address
+		prevalue *accountProxiedBalance
+	}
+	epochRewardBalanceChange struct {
+		account  *common.Address
+		key      uint64
+		prevalue *big.Int
+	}
+
+	candidateChange struct {
+		account *common.Address
+		prev    bool
+	}
+	commissionChange struct {
+		account *common.Address
+		prev    uint8
+	}
+
 	codeChange struct {
 		account            *common.Address
 		prevcode, prevhash []byte
@@ -159,6 +200,26 @@ func (ch chainBalanceChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setChainBalance(ch.prev)
 }
 
+func (ch delegateBalanceChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setDelegateBalance(ch.prev)
+}
+
+func (ch proxiedBalanceChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setProxiedBalance(ch.prev)
+}
+
+func (ch depositProxiedBalanceChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setDepositProxiedBalance(ch.prev)
+}
+
+func (ch pendingRefundBalanceChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setPendingRefundBalance(ch.prev)
+}
+
+func (ch rewardBalanceChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setRewardBalance(ch.prev)
+}
+
 func (ch nonceChange) undo(s *StateDB) {
 	s.getStateObject(*ch.account).setNonce(ch.prev)
 }
@@ -177,6 +238,22 @@ func (ch addTX1Change) undo(s *StateDB) {
 
 func (ch addTX3Change) undo(s *StateDB) {
 	s.getStateObject(*ch.account).removeTX3(ch.txHash)
+}
+
+func (ch accountProxiedBalanceChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setAccountProxiedBalance(ch.key, ch.prevalue)
+}
+
+func (ch epochRewardBalanceChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setEpochRewardBalance(ch.key, ch.prevalue)
+}
+
+func (ch candidateChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setCandidate(ch.prev)
+}
+
+func (ch commissionChange) undo(s *StateDB) {
+	s.getStateObject(*ch.account).setCommission(ch.prev)
 }
 
 func (ch refundChange) undo(s *StateDB) {

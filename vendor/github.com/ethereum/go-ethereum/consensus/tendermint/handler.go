@@ -21,7 +21,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/log"
-	"time"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 var (
@@ -35,8 +36,8 @@ func (sb *backend) Protocol() consensus.Protocol {
 	sb.logger.Info("Tendermint (backend) Protocol, add logic here")
 
 	var protocolName string
-	if sb.chainConfig.PChainId == "pchain" {
-		protocolName = sb.chainConfig.PChainId
+	if sb.chainConfig.PChainId == params.MainnetChainConfig.PChainId || sb.chainConfig.PChainId == params.TestnetChainConfig.PChainId {
+		protocolName = "pchain" //we also use "pchain" if the net is "testnet"
 	} else {
 		protocolName = "pchain_" + sb.chainConfig.PChainId
 	}
@@ -71,13 +72,13 @@ func (sb *backend) GetBroadcaster() consensus.Broadcaster {
 	return sb.broadcaster
 }
 
-func (sb *backend) NewChainHead() error {
+func (sb *backend) NewChainHead(block *types.Block) error {
 	sb.coreMu.RLock()
 	defer sb.coreMu.RUnlock()
 	if !sb.coreStarted {
 		return ErrStoppedEngine
 	}
-	go tdmTypes.FireEventFinalCommitted(sb.core.EventSwitch(), tdmTypes.EventDataFinalCommitted{})
+	go tdmTypes.FireEventFinalCommitted(sb.core.EventSwitch(), tdmTypes.EventDataFinalCommitted{block.NumberU64()})
 	return nil
 }
 
@@ -86,10 +87,16 @@ func (sb *backend) GetLogger() log.Logger {
 }
 
 func (sb *backend) AddPeer(src consensus.Peer) {
+
+	sb.core.consensusReactor.AddPeer(src)
+	sb.logger.Debug("Peer successful added into Consensus Reactor")
+
+	/*
 	if !sb.shouldStart {
 		sb.logger.Debug("Consensus Engine (Tendermint) does not plan to start")
 		return
 	}
+
 
 	for i := 0; i < 10; i++ {
 		sb.coreMu.RLock()
@@ -106,6 +113,7 @@ func (sb *backend) AddPeer(src consensus.Peer) {
 	}
 
 	sb.logger.Error("Wait for 10 sec, Consensus Engine (Tendermint) still not start, unable to add the peer to Engine")
+	*/
 }
 
 func (sb *backend) RemovePeer(src consensus.Peer) {

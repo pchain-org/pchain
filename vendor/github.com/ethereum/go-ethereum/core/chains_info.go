@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
@@ -58,13 +59,17 @@ type ChainInfo struct {
 	Epoch *ep.Epoch
 }
 
-const chainInfoKey = "CHAIN"
+const (
+	chainInfoKey  = "CHAIN"
+	ethGenesisKey = "ETH_GENESIS"
+	tdmGenesisKey = "TDM_GENESIS"
+)
 
 var allChainKey = []byte("AllChainID")
 
 const specialSep = ";"
 
-var mtx sync.Mutex
+var mtx sync.RWMutex
 
 func calcCoreChainInfoKey(chainId string) []byte {
 	return []byte(chainInfoKey + ":" + chainId)
@@ -74,7 +79,17 @@ func calcEpochKey(number uint64, chainId string) []byte {
 	return []byte(chainInfoKey + fmt.Sprintf("-%v-%s", number, chainId))
 }
 
+func calcETHGenesisKey(chainId string) []byte {
+	return []byte(ethGenesisKey + ":" + chainId)
+}
+
+func calcTDMGenesisKey(chainId string) []byte {
+	return []byte(tdmGenesisKey + ":" + chainId)
+}
+
 func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
+	mtx.RLock()
+	defer mtx.RUnlock()
 
 	cci := loadCoreChainInfo(db, chainId)
 	if cci == nil {
@@ -90,16 +105,16 @@ func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
 		ci.Epoch = epoch
 	}
 
-	fmt.Printf("LoadChainInfo(), chainInfo is: %v\n", ci)
+	log.Debugf("LoadChainInfo(), chainInfo is: %v\n", ci)
 
 	return ci
 }
 
 func SaveChainInfo(db dbm.DB, ci *ChainInfo) error {
-
 	mtx.Lock()
 	defer mtx.Unlock()
-	fmt.Printf("ChainInfo Save(), info is: (%v)\n", ci)
+
+	log.Debugf("ChainInfo Save(), info is: (%v)\n", ci)
 
 	err := saveCoreChainInfo(db, &ci.CoreChainInfo)
 	if err != nil {
@@ -113,8 +128,21 @@ func SaveChainInfo(db dbm.DB, ci *ChainInfo) error {
 		}
 	}
 
-	SaveId(db, ci.ChainId)
+	saveId(db, ci.ChainId)
 
+	return nil
+}
+
+func SaveFutureEpoch(db dbm.DB, futureEpoch *ep.Epoch, chainId string) error {
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	if futureEpoch != nil {
+		err := saveEpoch(db, futureEpoch, chainId)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -129,7 +157,7 @@ func loadCoreChainInfo(db dbm.DB, chainId string) *CoreChainInfo {
 		wire.ReadBinaryPtr(&cci, r, 0, n, err)
 		if *err != nil {
 			// DATA HAS BEEN CORRUPTED OR THE SPEC HAS CHANGED
-			fmt.Printf("LoadChainInfo: Data has been corrupted or its spec has changed: %v\n", *err)
+			log.Debugf("LoadChainInfo: Data has been corrupted or its spec has changed: %v\n", *err)
 			os.Exit(1)
 		}
 	}
@@ -151,10 +179,6 @@ func (cci *CoreChainInfo) TotalDeposit() *big.Int {
 }
 
 func loadEpoch(db dbm.DB, number uint64, chainId string) *ep.Epoch {
-
-	mtx.Lock()
-	defer mtx.Unlock()
-
 	epochBytes := db.Get(calcEpochKey(number, chainId))
 	return ep.FromBytes(epochBytes)
 }
@@ -166,15 +190,27 @@ func saveEpoch(db dbm.DB, epoch *ep.Epoch, chainId string) error {
 }
 
 func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
+	mtx.RLock()
+	defer mtx.RUnlock()
 
 	if blockNumber < 0 {
 		return ci.Epoch
 	} else {
 		epoch := ci.Epoch
+		if epoch == nil {
+			return nil
+		}
 		if blockNumber >= epoch.StartBlock && blockNumber <= epoch.EndBlock {
 			return epoch
 		}
 
+		// If blockNumber > epoch EndBlock, find future epoch
+		if blockNumber > epoch.EndBlock {
+			ep := loadEpoch(ci.db, epoch.Number+1, ci.ChainId)
+			return ep
+		}
+
+		// If blockNumber < epoch StartBlock, find history epoch
 		number := epoch.Number
 		for {
 			if number == 0 {
@@ -195,13 +231,13 @@ func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
 	return nil
 }
 
-func SaveId(db dbm.DB, chainId string) {
+func saveId(db dbm.DB, chainId string) {
 
 	buf := db.Get(allChainKey)
 
 	if len(buf) == 0 {
 		db.SetSync(allChainKey, []byte(chainId))
-		fmt.Printf("ChainInfo SaveId(), chainId is: %s\n", chainId)
+		log.Debugf("ChainInfo SaveId(), chainId is: %s\n", chainId)
 	} else {
 
 		strIdArr := strings.Split(string(buf), specialSep)
@@ -219,16 +255,18 @@ func SaveId(db dbm.DB, chainId string) {
 			strIds := strings.Join(strIdArr, specialSep)
 			db.SetSync(allChainKey, []byte(strIds))
 
-			fmt.Printf("ChainInfo SaveId(), strIds is: %s\n", strIds)
+			log.Debugf("ChainInfo SaveId(), strIds is: %s\n", strIds)
 		}
 	}
 }
 
 func GetChildChainIds(db dbm.DB) []string {
+	mtx.RLock()
+	defer mtx.RUnlock()
 
 	buf := db.Get(allChainKey)
 
-	fmt.Printf("GetChildChainIds 0, buf is %v, len is %d\n", buf, len(buf))
+	log.Debugf("GetChildChainIds 0, buf is %v, len is %d\n", buf, len(buf))
 
 	if len(buf) == 0 {
 		return []string{}
@@ -247,6 +285,28 @@ func CheckChildChainRunning(db dbm.DB, chainId string) bool {
 	}
 
 	return false
+}
+
+// SaveChainGenesis save the genesis file for child chain
+func SaveChainGenesis(db dbm.DB, chainId string, ethGenesis, tdmGenesis []byte) {
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	// Save the eth genesis
+	db.SetSync(calcETHGenesisKey(chainId), ethGenesis)
+
+	// Save the tdm genesis
+	db.SetSync(calcTDMGenesisKey(chainId), tdmGenesis)
+}
+
+// LoadChainGenesis load the genesis file for child chain
+func LoadChainGenesis(db dbm.DB, chainId string) (ethGenesis, tdmGenesis []byte) {
+	mtx.RLock()
+	defer mtx.RUnlock()
+
+	ethGenesis = db.Get(calcETHGenesisKey(chainId))
+	tdmGenesis = db.Get(calcTDMGenesisKey(chainId))
+	return
 }
 
 // ---------------------
@@ -364,6 +424,7 @@ func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) 
 				for _, jv := range cci.JoinedValidators {
 					// Deposit will move to the Child Chain Account
 					stateDB.SubChildChainDepositBalance(jv.Address, v.ChainID, jv.DepositAmount)
+					stateDB.AddChainBalance(cci.Owner, jv.DepositAmount)
 				}
 				// Append the Chain ID to Ready Launch List
 				readyForLaunch = append(readyForLaunch, v.ChainID)

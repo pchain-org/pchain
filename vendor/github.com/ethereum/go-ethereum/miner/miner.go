@@ -57,6 +57,7 @@ type Miner struct {
 	mining   int32
 	eth      Backend
 	engine   consensus.Engine
+	exitCh   chan struct{}
 
 	canStart    int32 // can start indicates whether we can start the mining operation
 	shouldStart int32 // should start indicates whether we should start after sync
@@ -65,17 +66,18 @@ type Miner struct {
 	cch    core.CrossChainHelper
 }
 
-func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, cch core.CrossChainHelper, logger log.Logger) *Miner {
+func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, gasFloor, gasCeil uint64, cch core.CrossChainHelper) *Miner {
 	miner := &Miner{
 		eth:      eth,
 		mux:      mux,
 		engine:   engine,
-		worker:   newWorker(config, engine, common.Address{}, eth, mux, cch, logger),
+		exitCh:   make(chan struct{}),
+		worker:   newWorker(config, engine, eth, mux, gasFloor, gasCeil, cch),
 		canStart: 1,
-		logger:   logger,
+		logger:   config.ChainLogger,
 		cch:      cch,
 	}
-	miner.Register(NewCpuAgent(eth.BlockChain(), engine, logger))
+	miner.Register(NewCpuAgent(eth.BlockChain(), engine, config.ChainLogger))
 	go miner.update()
 
 	return miner
@@ -87,31 +89,38 @@ func New(eth Backend, config *params.ChainConfig, mux *event.TypeMux, engine con
 // and halt your mining operation for as long as the DOS continues.
 func (self *Miner) update() {
 	events := self.mux.Subscribe(downloader.StartEvent{}, downloader.DoneEvent{}, downloader.FailedEvent{})
-out:
-	for ev := range events.Chan() {
-		switch ev.Data.(type) {
-		case downloader.StartEvent:
-			fmt.Printf("(self *Miner) update(); downloader.StartEvent received\n")
-			atomic.StoreInt32(&self.canStart, 0)
-			if self.Mining() {
-				self.Stop()
-				atomic.StoreInt32(&self.shouldStart, 1)
-				self.logger.Info("Mining aborted due to sync")
-			}
-		case downloader.DoneEvent, downloader.FailedEvent:
+	defer events.Unsubscribe()
 
-			fmt.Printf("(self *Miner) update(); downloader.DoneEvent, downloader.FailedEvent received\n")
-			shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
-
-			atomic.StoreInt32(&self.canStart, 1)
-			atomic.StoreInt32(&self.shouldStart, 0)
-			if shouldStart {
-				self.Start(self.coinbase)
+	for {
+		select {
+		case ev := <-events.Chan():
+			if ev == nil {
+				return
 			}
-			// unsubscribe. we're only interested in this event once
-			events.Unsubscribe()
-			// stop immediately and ignore all further pending events
-			break out
+			switch ev.Data.(type) {
+			case downloader.StartEvent:
+				self.logger.Debug("(self *Miner) update(); downloader.StartEvent received\n")
+				atomic.StoreInt32(&self.canStart, 0)
+				if self.Mining() {
+					self.Stop()
+					atomic.StoreInt32(&self.shouldStart, 1)
+					self.logger.Info("Mining aborted due to sync")
+				}
+			case downloader.DoneEvent, downloader.FailedEvent:
+
+				self.logger.Debug("(self *Miner) update(); downloader.DoneEvent, downloader.FailedEvent received\n")
+				shouldStart := atomic.LoadInt32(&self.shouldStart) == 1
+
+				atomic.StoreInt32(&self.canStart, 1)
+				atomic.StoreInt32(&self.shouldStart, 0)
+				if shouldStart {
+					self.Start(self.coinbase)
+				}
+				// stop immediately and ignore all further pending events
+				return
+			}
+		case <-self.exitCh:
+			return
 		}
 	}
 }
@@ -124,17 +133,18 @@ func (self *Miner) Start(coinbase common.Address) {
 		self.logger.Info("Network syncing, will start miner afterwards")
 		return
 	}
-	atomic.StoreInt32(&self.mining, 1)
-
-	self.logger.Info("Starting mining operation")
 	self.worker.start()
 	self.worker.commitNewWork()
 }
 
 func (self *Miner) Stop() {
 	self.worker.stop()
-	atomic.StoreInt32(&self.mining, 0)
 	atomic.StoreInt32(&self.shouldStart, 0)
+}
+
+func (self *Miner) Close() {
+	self.worker.close()
+	close(self.exitCh)
 }
 
 func (self *Miner) Register(agent Agent) {
@@ -149,7 +159,7 @@ func (self *Miner) Unregister(agent Agent) {
 }
 
 func (self *Miner) Mining() bool {
-	return atomic.LoadInt32(&self.mining) > 0
+	return self.worker.isRunning()
 }
 
 func (self *Miner) HashRate() (tot int64) {

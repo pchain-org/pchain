@@ -50,6 +50,9 @@ const (
 
 	// Protocol messages belonging to pchain
 	TX3ProofDataMsg = 0x18
+
+	GetPreImagesMsg = 0x19
+	PreImagesMsg    = 0x1a
 )
 
 type errCode int

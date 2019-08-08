@@ -3,14 +3,14 @@ package crypto
 import (
 	"bytes"
 
+	"bls"
 	secp256k1 "github.com/btcsuite/btcd/btcec"
+	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/tendermint/ed25519"
 	"github.com/tendermint/ed25519/extra25519"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
-	ethcrypto "github.com/ethereum/go-ethereum/crypto"
-	"bls"
 )
 
 // PrivKey is part of PrivAccount and state.PrivValidator.
@@ -365,14 +365,14 @@ func (privKey *BLSPrivKey) UnmarshalJSON(enc []byte) error {
 	return err
 }*/
 
-type BLSPrivKey []byte
+type BLSPrivKey [32]byte
 func (privKey BLSPrivKey) Bytes() []byte {
-	return privKey
+	return privKey[:]
 }
 
 func (privKey BLSPrivKey) getElement() *bls.PrivateKey {
 	sk := &bls.PrivateKey{}
-	err := sk.Unmarshal(privKey)
+	err := sk.Unmarshal(privKey[:])
 	if err != nil {
 		return nil
 	} else {
@@ -381,31 +381,33 @@ func (privKey BLSPrivKey) getElement() *bls.PrivateKey {
 }
 
 func (privKey BLSPrivKey) PubKey() PubKey {
-	pub := privKey.getElement().Public()
-	return BLSPubKey(pub.Marshal())
+	pubKey := privKey.getElement().Public()
+	var pub BLSPubKey
+	copy(pub[:], pubKey.Marshal())
+	return pub
 }
 
 func (privKey BLSPrivKey) Sign(msg []byte) Signature {
 	sk := privKey.getElement()
-	sign := bls.Sign(sk, msg)
+	sign := bls.Sign(msg, sk)
 	return BLSSignature(sign.Marshal())
 }
 
 func (privKey BLSPrivKey) Equals(other PrivKey) bool {
-	if otherSk,ok := other.(BLSPrivKey); ok {
-		return bytes.Equal(privKey, otherSk)
+	if otherSk, ok := other.(BLSPrivKey); ok {
+		return privKey == otherSk
 	} else {
 		return false
 	}
 }
 
 func (privKey BLSPrivKey) MarshalJSON() ([]byte, error) {
-	return data.Encoder.Marshal(privKey)
+	return data.Encoder.Marshal(privKey[:])
 }
 
 func (privKey *BLSPrivKey) UnmarshalJSON(enc []byte) error {
 	var ref []byte
 	err := data.Encoder.Unmarshal(&ref, enc)
-	copy(*privKey, ref)
+	copy(privKey[:], ref)
 	return err
 }

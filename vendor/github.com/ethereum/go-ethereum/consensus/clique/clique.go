@@ -33,13 +33,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	lru "github.com/hashicorp/golang-lru"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -144,7 +144,7 @@ type SignerFn func(accounts.Account, []byte) ([]byte, error)
 // panics. This is done to avoid accidentally using both forms (signature present
 // or not), which could be abused to produce different hashes for the same header.
 func sigHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewKeccak256()
+	hasher := sha3.NewLegacyKeccak256()
 
 	rlp.Encode(hasher, []interface{}{
 		header.ParentHash,
@@ -569,7 +569,7 @@ func (c *Clique) Prepare(chain consensus.ChainReader, header *types.Header) erro
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given, and returns the final block.
-func (c *Clique) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
+func (c *Clique) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, totalGasFee *big.Int, uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.CalcUncleHash(nil)
@@ -590,7 +590,7 @@ func (c *Clique) Authorize(signer common.Address, signFn SignerFn) {
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
-func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error) {
+func (c *Clique) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (interface{}, error) {
 	header := block.Header()
 
 	// Sealing the genesis block is not supported
@@ -671,6 +671,11 @@ func CalcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
 		return new(big.Int).Set(diffInTurn)
 	}
 	return new(big.Int).Set(diffNoTurn)
+}
+
+// Close implements consensus.Engine. It's a noop for clique as there are no background threads.
+func (c *Clique) Close() error {
+	return nil
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC API to allow

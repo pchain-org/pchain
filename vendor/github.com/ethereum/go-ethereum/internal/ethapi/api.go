@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -42,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const (
@@ -61,8 +61,9 @@ func NewPublicEthereumAPI(b Backend) *PublicEthereumAPI {
 }
 
 // GasPrice returns a suggestion for a gas price.
-func (s *PublicEthereumAPI) GasPrice(ctx context.Context) (*big.Int, error) {
-	return s.b.SuggestPrice(ctx)
+func (s *PublicEthereumAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
+	price, err := s.b.SuggestPrice(ctx)
+	return (*hexutil.Big)(price), err
 }
 
 // ProtocolVersion returns the current Ethereum protocol version this node supports
@@ -447,7 +448,7 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr c
 // addr = ecrecover(hash, signature)
 //
 // Note, the signature must conform to the secp256k1 curve R, S and V values, where
-// the V value must be be 27 or 28 for legacy reasons.
+// the V value must be 27 or 28 for legacy reasons.
 //
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
 func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error) {
@@ -459,13 +460,11 @@ func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Byt
 	}
 	sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
 
-	rpk, err := crypto.Ecrecover(signHash(data), sig)
+	rpk, err := crypto.SigToPub(signHash(data), sig)
 	if err != nil {
 		return common.Address{}, err
 	}
-	pubKey := crypto.ToECDSAPub(rpk)
-	recoveredAddr := crypto.PubkeyToAddress(*pubKey)
-	return recoveredAddr, nil
+	return crypto.PubkeyToAddress(*rpk), nil
 }
 
 // SignAndSendTransaction was renamed to SendTransaction. This method is deprecated
@@ -486,21 +485,78 @@ func NewPublicBlockChainAPI(b Backend) *PublicBlockChainAPI {
 }
 
 // BlockNumber returns the block number of the chain head.
-func (s *PublicBlockChainAPI) BlockNumber() *big.Int {
+func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
 	header, _ := s.b.HeaderByNumber(context.Background(), rpc.LatestBlockNumber) // latest header should always be available
-	return header.Number
+	return hexutil.Uint64(header.Number.Uint64())
 }
 
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
-func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*big.Int, error) {
+func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*hexutil.Big, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
 		return nil, err
 	}
-	b := state.GetBalance(address)
-	return b, state.Error()
+	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
+}
+
+// GetFullBalance returns the amount of wei for the given address in the state of the
+// given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
+// block numbers are also allowed.
+func (s *PublicBlockChainAPI) GetFullBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber, fullDetail bool) (map[string]interface{}, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	fields := map[string]interface{}{
+		"balance":                     (*hexutil.Big)(state.GetBalance(address)),
+		"total_depositBalance":        (*hexutil.Big)(state.GetDepositBalance(address)),
+		"total_delegateBalance":       (*hexutil.Big)(state.GetDelegateBalance(address)),
+		"total_proxiedBalance":        (*hexutil.Big)(state.GetTotalProxiedBalance(address)),
+		"total_depositProxiedBalance": (*hexutil.Big)(state.GetTotalDepositProxiedBalance(address)),
+		"total_pendingRefundBalance":  (*hexutil.Big)(state.GetTotalPendingRefundBalance(address)),
+		"total_rewardBalance":         (*hexutil.Big)(state.GetTotalRewardBalance(address)),
+	}
+
+	if fullDetail {
+		proxied_detail := make(map[common.Address]struct {
+			ProxiedBalance        *hexutil.Big
+			DepositProxiedBalance *hexutil.Big
+			PendingRefundBalance  *hexutil.Big
+		})
+		state.ForEachProxied(address, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
+			proxied_detail[key] = struct {
+				ProxiedBalance        *hexutil.Big
+				DepositProxiedBalance *hexutil.Big
+				PendingRefundBalance  *hexutil.Big
+			}{
+				ProxiedBalance:        (*hexutil.Big)(proxiedBalance),
+				DepositProxiedBalance: (*hexutil.Big)(depositProxiedBalance),
+				PendingRefundBalance:  (*hexutil.Big)(pendingRefundBalance),
+			}
+			return true
+		})
+
+		fields["proxied_detail"] = proxied_detail
+
+		reward_detail := make(map[EpochLabel]*hexutil.Big)
+		state.ForEachReward(address, func(key uint64, rewardBalance *big.Int) bool {
+			reward_detail[EpochLabel(key)] = (*hexutil.Big)(rewardBalance)
+			return true
+		})
+
+		fields["reward_detail"] = reward_detail
+	}
+	return fields, state.Error()
+}
+
+type EpochLabel uint64
+
+func (e EpochLabel) MarshalText() ([]byte, error) {
+	output := fmt.Sprintf("epoch_%d", e)
+	return []byte(output), nil
 }
 
 // GetBlockByNumber returns the requested block. When blockNr is -1 the chain head is returned. When fullTx is true all
@@ -798,6 +854,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlock(b *types.Block, inclTx bool, fullTx
 	head := b.Header() // copies the header once
 	fields := map[string]interface{}{
 		"number":           (*hexutil.Big)(head.Number),
+		"mainchainNumber":  (*hexutil.Big)(head.MainChainNumber),
 		"hash":             b.Hash(),
 		"parentHash":       head.ParentHash,
 		"nonce":            head.Nonce,
@@ -1006,7 +1063,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 // GetTransactionByHash returns the transaction for the given hash
 func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) *RPCTransaction {
 	// Try to return an already finalized transaction
-	if tx, blockHash, blockNumber, index := core.GetTransaction(s.b.ChainDb(), hash); tx != nil {
+	if tx, blockHash, blockNumber, index := rawdb.ReadTransaction(s.b.ChainDb(), hash); tx != nil {
 		return newRPCTransaction(tx, blockHash, blockNumber, index)
 	}
 	// No finalized transaction, try to retrieve it from the pool
@@ -1022,7 +1079,7 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 	var tx *types.Transaction
 
 	// Retrieve a finalized transaction, or a pooled otherwise
-	if tx, _, _, _ = core.GetTransaction(s.b.ChainDb(), hash); tx == nil {
+	if tx, _, _, _ = rawdb.ReadTransaction(s.b.ChainDb(), hash); tx == nil {
 		if tx = s.b.GetPoolTransaction(hash); tx == nil {
 			// Transaction not found anywhere, abort
 			return nil, nil
@@ -1034,7 +1091,7 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
-	tx, blockHash, blockNumber, index := core.GetTransaction(s.b.ChainDb(), hash)
+	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(s.b.ChainDb(), hash)
 	if tx == nil {
 		return nil, nil
 	}
@@ -1459,16 +1516,9 @@ func (api *PrivateDebugAPI) ChaindbProperty(property string) (string, error) {
 }
 
 func (api *PrivateDebugAPI) ChaindbCompact() error {
-	ldb, ok := api.b.ChainDb().(interface {
-		LDB() *leveldb.DB
-	})
-	if !ok {
-		return fmt.Errorf("chaindbCompact does not work for memory databases")
-	}
 	for b := byte(0); b < 255; b++ {
 		log.Info("Compacting chain database", "range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1))
-		err := ldb.LDB().CompactRange(util.Range{Start: []byte{b}, Limit: []byte{b + 1}})
-		if err != nil {
+		if err := api.b.ChainDb().Compact([]byte{b}, []byte{b + 1}); err != nil {
 			log.Error("Database compaction failed", "err", err)
 			return err
 		}

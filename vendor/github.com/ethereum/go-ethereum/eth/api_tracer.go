@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -134,7 +135,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 
 	// Ensure we have a valid starting state before doing any work
 	origin := start.NumberU64()
-	database := state.NewDatabase(api.eth.ChainDb())
+	database := state.NewDatabaseWithCache(api.eth.ChainDb(), 16) // Chain tracing will probably start at genesis
 
 	if number := start.NumberU64(); number > 0 {
 		start = api.eth.blockchain.GetBlock(start.ParentHash(), start.NumberU64()-1)
@@ -250,7 +251,8 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 			// Print progress logs if long enough time elapsed
 			if time.Since(logged) > 8*time.Second {
 				if number > origin {
-					log.Info("Tracing chain segment", "start", origin, "end", end.NumberU64(), "current", number, "transactions", traced, "elapsed", time.Since(begin), "memory", database.TrieDB().Size())
+					nodes, imgs := database.TrieDB().Size()
+					log.Info("Tracing chain segment", "start", origin, "end", end.NumberU64(), "current", number, "transactions", traced, "elapsed", time.Since(begin), "memory", nodes+imgs)
 				} else {
 					log.Info("Preparing state for chain trace", "block", number, "start", origin, "elapsed", time.Since(begin))
 				}
@@ -295,7 +297,9 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				database.TrieDB().Reference(root, common.Hash{})
 			}
 			// Dereference all past tries we ourselves are done working with
-			database.TrieDB().Dereference(proot, common.Hash{})
+			if proot != (common.Hash{}) {
+				database.TrieDB().Dereference(proot)
+			}
 			proot = root
 		}
 	}()
@@ -316,7 +320,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 			done[uint64(result.Block)] = result
 
 			// Dereference any paret tries held in memory by this task
-			database.TrieDB().Dereference(res.rootref, common.Hash{})
+			database.TrieDB().Dereference(res.rootref)
 
 			// Stream completed traces to the user, aborting on the first error
 			for result, ok := done[next]; ok; result, ok = done[next] {
@@ -474,7 +478,7 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 	}
 	// Otherwise try to reexec blocks until we find a state or reach our limit
 	origin := block.NumberU64()
-	database := state.NewDatabase(api.eth.ChainDb())
+	database := state.NewDatabaseWithCache(api.eth.ChainDb(), 16)
 
 	for i := uint64(0); i < reexec; i++ {
 		block = api.eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
@@ -522,10 +526,13 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 			return nil, err
 		}
 		database.TrieDB().Reference(root, common.Hash{})
-		database.TrieDB().Dereference(proot, common.Hash{})
+		if proot != (common.Hash{}) {
+			database.TrieDB().Dereference(proot)
+		}
 		proot = root
 	}
-	log.Info("Historical state regenerated", "block", block.NumberU64(), "elapsed", time.Since(start), "size", database.TrieDB().Size())
+	nodes, imgs := database.TrieDB().Size()
+	log.Info("Historical state regenerated", "block", block.NumberU64(), "elapsed", time.Since(start), "nodes", nodes, "preimages", imgs)
 	return statedb, nil
 }
 
@@ -533,7 +540,7 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 // and returns them as a JSON object.
 func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
 	// Retrieve the transaction and assemble its EVM context
-	tx, blockHash, _, index := core.GetTransaction(api.eth.ChainDb(), hash)
+	tx, blockHash, _, index := rawdb.ReadTransaction(api.eth.ChainDb(), hash)
 	if tx == nil {
 		return nil, fmt.Errorf("transaction %x not found", hash)
 	}

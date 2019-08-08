@@ -20,6 +20,7 @@ package consensus
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"math/big"
 )
 
 // Constants to match up protocol versions and messages
@@ -56,12 +57,16 @@ type Broadcaster interface {
 	BroadcastBlock(block *types.Block, propagate bool)
 	// BroadcastMessage broadcast Message to P2P network
 	BroadcastMessage(msgcode uint64, data interface{})
+	// Find the Bad Preimages and send request to best peer for correction
+	TryFixBadPreimages()
 }
 
 // Peer defines the interface to communicate with peer
 type Peer interface {
 	// Send sends the message to this peer
 	Send(msgcode uint64, data interface{}) error
+	//Send block to this peer
+	SendNewBlock(block *types.Block, td *big.Int) error
 	// GetPeerState return the Peer State during consensus
 	GetPeerState() PeerState
 	// GetKey return the short Public Key of peer
@@ -74,4 +79,5 @@ type Peer interface {
 
 type PeerState interface {
 	GetHeight() uint64
+	Disconnect()
 }

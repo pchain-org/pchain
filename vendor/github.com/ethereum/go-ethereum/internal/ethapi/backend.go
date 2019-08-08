@@ -100,6 +100,11 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Service:   txapi,
 			Public:    true,
 		}, {
+			Namespace: "pi",
+			Version:   "1.0",
+			Service:   txapi,
+			Public:    true,
+		}, {
 			Namespace: "txpool",
 			Version:   "1.0",
 			Service:   NewPublicTxPoolAPI(apiBackend),
@@ -132,6 +137,11 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 			Namespace: "tdm",
 			Version:   "1.0",
 			Service:   NewPublicTdmAPI(apiBackend),
+			Public:    true,
+		}, {
+			Namespace: "del",
+			Version:   "1.0",
+			Service:   NewPublicDelegateAPI(apiBackend),
 			Public:    true,
 		},
 	}

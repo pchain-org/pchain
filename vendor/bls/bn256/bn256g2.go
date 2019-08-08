@@ -2,6 +2,7 @@ package bn256
 
 import (
 	"errors"
+	"math/big"
 )
 
 // G2 is an abstract cyclic group. The zero value is suitable for use as the
@@ -40,8 +41,9 @@ func (e *G2) IsZero() bool {
 	return e.p.IsInfinity()
 }
 
-// ScalarBaseMult sets e to g*k and then returns e.
-func (e *G2) ScalarBaseMult(k *Scalar) *G2 {
+// ScalarBaseMult sets e to g*k where g is the generator of the group and then
+// returns out.
+func (e *G2) ScalarBaseMult(k *big.Int) *G2 {
 	if e.p == nil {
 		e.p = &twistPoint{}
 	}
@@ -50,7 +52,7 @@ func (e *G2) ScalarBaseMult(k *Scalar) *G2 {
 }
 
 // ScalarMult sets e to a*k and then returns e.
-func (e *G2) ScalarMult(a *G2, k *Scalar) *G2 {
+func (e *G2) ScalarMult(a *G2, k *big.Int) *G2 {
 	if e.p == nil {
 		e.p = &twistPoint{}
 	}
@@ -119,12 +121,12 @@ func (e *G2) Unmarshal(m []byte) error {
 	// Each value is a 256-bit number.
 	const numBytes = 256 / 8
 
-	if e.p == nil {
-		e.p = &twistPoint{}
+	if len(m) != 4*numBytes {
+		return errors.New("bn256.G2: incorrect data length")
 	}
 
-	if len(m) != 4*numBytes {
-		return errors.New("bn256.G2: not enough data")
+	if e.p == nil {
+		e.p = &twistPoint{}
 	}
 
 	e.p.x.x.Unmarshal(m)

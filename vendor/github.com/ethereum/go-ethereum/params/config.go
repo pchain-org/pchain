@@ -18,6 +18,7 @@ package params
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math"
 	"math/big"
 
@@ -26,8 +27,8 @@ import (
 )
 
 var (
-	MainnetGenesisHash = common.HexToHash("0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3") // Mainnet genesis hash to enforce below configs on
-	TestnetGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d") // Testnet genesis hash to enforce below configs on
+	MainnetGenesisHash = common.HexToHash("0x5b0937e8c6189a45637f0eeb5d2c62b3794e08b695d1f3e339122c80ff7404e3") // Mainnet genesis hash to enforce below configs on
+	TestnetGenesisHash = common.HexToHash("0x5b0937e8c6189a45637f0eeb5d2c62b3794e08b695d1f3e339122c80ff7404e3") // Testnet genesis hash to enforce below configs on
 )
 
 var (
@@ -50,10 +51,10 @@ var (
 		},
 	}
 
-	// TestnetChainConfig contains the chain parameters to run a node on the Ropsten test network.
+	// TestnetChainConfig contains the chain parameters to run a node on the test network.
 	TestnetChainConfig = &ChainConfig{
-		PChainId:            "",
-		ChainId:             big.NewInt(3),
+		PChainId:            "testnet",
+		ChainId:             big.NewInt(2),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -63,7 +64,10 @@ var (
 		EIP158Block:         big.NewInt(10),
 		ByzantiumBlock:      big.NewInt(1700000),
 		ConstantinopleBlock: nil,
-		Ethash:              new(EthashConfig),
+		Tendermint: &TendermintConfig{
+			Epoch:          30000,
+			ProposerPolicy: 0,
+		},
 	}
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
@@ -109,16 +113,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -156,6 +160,8 @@ type ChainConfig struct {
 	Clique     *CliqueConfig     `json:"clique,omitempty"`
 	Istanbul   *IstanbulConfig   `json:"istanbul,omitempty"`
 	Tendermint *TendermintConfig `json:"tendermint,omitempty"`
+
+	ChainLogger log.Logger `json:"-"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -283,6 +289,16 @@ func (c *ChainConfig) IsByzantium(num *big.Int) bool {
 
 func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
+}
+
+// Check whether is on main chain or not
+func (c *ChainConfig) IsMainChain() bool {
+	return c.PChainId == MainnetChainConfig.PChainId || c.PChainId == TestnetChainConfig.PChainId
+}
+
+// Check provided chain id is on main chain or not
+func IsMainChain(chainId string) bool {
+	return chainId == MainnetChainConfig.PChainId || chainId == TestnetChainConfig.PChainId
 }
 
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).

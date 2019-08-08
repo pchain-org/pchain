@@ -24,13 +24,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 const (
 	DefaultHTTPHost = "localhost" // Default host interface for the HTTP RPC server
-	DefaultHTTPPort = 8545        // Default TCP port for the HTTP RPC server
+	DefaultHTTPPort = 6969        // Default TCP port for the HTTP RPC server
 	DefaultWSHost   = "localhost" // Default host interface for the websocket RPC server
-	DefaultWSPort   = 8546        // Default TCP port for the websocket RPC server
+	DefaultWSPort   = 6970        // Default TCP port for the websocket RPC server
 )
 
 // DefaultConfig contains reasonable default settings.
@@ -40,11 +41,12 @@ var DefaultConfig = Config{
 	HTTPPort:         DefaultHTTPPort,
 	HTTPModules:      []string{"net", "web3"},
 	HTTPVirtualHosts: []string{"localhost"},
+	HTTPTimeouts:     rpc.DefaultHTTPTimeouts,
 	WSPort:           DefaultWSPort,
 	WSModules:        []string{"net", "web3"},
 	P2P: p2p.Config{
-		ListenAddr: ":30303",
-		MaxPeers:   25,
+		ListenAddr: ":30308",
+		MaxPeers:   200,
 		NAT:        nat.Any(),
 	},
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -78,13 +79,22 @@ func (ga *GenesisAlloc) UnmarshalJSON(data []byte) error {
 
 // GenesisAccount is an account in the state of the genesis block.
 type GenesisAccount struct {
-	Code       []byte                      `json:"code,omitempty"`
-	Storage    map[common.Hash]common.Hash `json:"storage,omitempty"`
-	Balance    *big.Int                    `json:"balance" gencodec:"required"`
-	Nonce      uint64                      `json:"nonce,omitempty"`
-	Amount     *big.Int                    `json:"amount,omitempty"`
-	PrivateKey []byte                      `json:"secretKey,omitempty"` // for tests
-	ConsensusPubKey string					`json:"consensus_pub_key, omitempty"`
+	Code    []byte                      `json:"code,omitempty"`
+	Storage map[common.Hash]common.Hash `json:"storage,omitempty"`
+	Balance *big.Int                    `json:"balance" gencodec:"required"`
+	Nonce   uint64                      `json:"nonce,omitempty"`
+
+	// Stack
+	Amount *big.Int `json:"amount,omitempty"`
+	// Delegate
+	DelegateBalance *big.Int `json:"delegate,omitempty"`
+	// Proxied Balance
+	DepositProxiedDetail map[common.Address]*big.Int `json:"proxiedList,omitempty"`
+	// Candidate
+	Candidate  bool  `json:"candidate,omitempty"`
+	Commission uint8 `json:"commission,omitempty"`
+
+	PrivateKey []byte `json:"secretKey,omitempty"` // for tests
 }
 
 // field type overrides for gencodec
@@ -119,7 +129,6 @@ func (h *storageJSON) UnmarshalText(text []byte) error {
 	}
 	offset := len(h) - len(text)/2 // pad on the left
 	if _, err := hex.Decode(h[offset:], text); err != nil {
-		fmt.Println(err)
 		return fmt.Errorf("invalid hex storage key/value %q", text)
 	}
 	return nil
@@ -158,7 +167,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 	}
 
 	// Just commit the new block if there is no stored genesis block.
-	stored := GetCanonicalHash(db, 0)
+	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
 		if genesis == nil {
 			log.Info("Writing default main-net genesis block")
@@ -180,14 +189,11 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 
 	// Get the existing chain configuration.
 	newcfg := genesis.configOrDefault(stored)
-	storedcfg, err := GetChainConfig(db, stored)
-	if err != nil {
-		if err == ErrChainConfigNotFound {
-			// This case happens if a genesis write was interrupted.
-			log.Warn("Found genesis block without chain config")
-			err = WriteChainConfig(db, stored, newcfg)
-		}
-		return newcfg, stored, err
+	storedcfg := rawdb.ReadChainConfig(db, stored)
+	if storedcfg == nil {
+		log.Warn("Found genesis block without chain config")
+		rawdb.WriteChainConfig(db, stored, newcfg)
+		return newcfg, stored, nil
 	}
 	// Special case: don't change the existing config of a non-mainnet chain if no new
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
@@ -198,15 +204,16 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
-	height := GetBlockNumber(db, GetHeadHeaderHash(db))
-	if height == missingNumber {
+	height := rawdb.ReadHeaderNumber(db, rawdb.ReadHeadHeaderHash(db))
+	if height == nil {
 		return newcfg, stored, fmt.Errorf("missing block number for head header hash")
 	}
-	compatErr := storedcfg.CheckCompatible(newcfg, height)
-	if compatErr != nil && height != 0 && compatErr.RewindTo != 0 {
+	compatErr := storedcfg.CheckCompatible(newcfg, *height)
+	if compatErr != nil && *height != 0 && compatErr.RewindTo != 0 {
 		return newcfg, stored, compatErr
 	}
-	return newcfg, stored, WriteChainConfig(db, stored, newcfg)
+	rawdb.WriteChainConfig(db, stored, newcfg)
+	return newcfg, stored, nil
 }
 
 func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
@@ -226,13 +233,31 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 // to the given database (or discards it if nil).
 func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if db == nil {
-		db, _ = ethdb.NewMemDatabase()
+		db = rawdb.NewMemoryDatabase()
 	}
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 	for addr, account := range g.Alloc {
 		statedb.AddBalance(addr, account.Balance)
 		// Deposit Balance for POS
 		statedb.AddDepositBalance(addr, account.Amount)
+
+		// Delegate Balance
+		if account.DelegateBalance != nil {
+			statedb.AddDelegateBalance(addr, account.DelegateBalance)
+		}
+
+		// Deposit Proxied Detail
+		if account.DepositProxiedDetail != nil {
+			for proxiedAddr, depositProxiedBalance := range account.DepositProxiedDetail {
+				statedb.AddDepositProxiedBalanceByUser(addr, proxiedAddr, depositProxiedBalance)
+			}
+		}
+
+		// Candidite
+		if account.Candidate {
+			statedb.ApplyForCandidate(addr, account.Commission)
+		}
+
 		statedb.SetCode(addr, account.Code)
 		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
@@ -272,29 +297,19 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	if block.Number().Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
 	}
-	if err := WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty); err != nil {
-		return nil, err
-	}
-	if err := WriteBlock(db, block); err != nil {
-		return nil, err
-	}
-	if err := WriteBlockReceipts(db, block.Hash(), block.NumberU64(), nil); err != nil {
-		return nil, err
-	}
-	if err := WriteCanonicalHash(db, block.Hash(), block.NumberU64()); err != nil {
-		return nil, err
-	}
-	if err := WriteHeadBlockHash(db, block.Hash()); err != nil {
-		return nil, err
-	}
-	if err := WriteHeadHeaderHash(db, block.Hash()); err != nil {
-		return nil, err
-	}
+	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty)
+	rawdb.WriteBlock(db, block)
+	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
+	rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())
+	rawdb.WriteHeadBlockHash(db, block.Hash())
+	rawdb.WriteHeadHeaderHash(db, block.Hash())
+
 	config := g.Config
 	if config == nil {
 		config = params.AllEthashProtocolChanges
 	}
-	return block, WriteChainConfig(db, block.Hash(), config)
+	rawdb.WriteChainConfig(db, block.Hash(), config)
+	return block, nil
 }
 
 // MustCommit writes the genesis block and state to db, panicking on error.
@@ -384,7 +399,7 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 			common.BytesToAddress([]byte{6}): {Balance: big.NewInt(1)}, // ECAdd
 			common.BytesToAddress([]byte{7}): {Balance: big.NewInt(1)}, // ECScalarMul
 			common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
-			faucet: {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
+			faucet:                           {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
 		},
 	}
 }

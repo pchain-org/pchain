@@ -19,7 +19,9 @@ package eth
 import (
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"io"
 	"math/big"
 	"os"
@@ -28,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/datareduction"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -300,6 +304,22 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 	return true, nil
 }
 
+func (api *PrivateAdminAPI) PruneStateData(height *hexutil.Uint64) (bool, error) {
+	var blockNumber uint64
+	if height != nil && *height > 0 {
+		blockNumber = uint64(*height)
+	}
+
+	go api.eth.StartScanAndPrune(blockNumber)
+	return true, nil
+}
+
+func (api *PrivateAdminAPI) LatestPruneState() (*datareduction.PruneStatus, error) {
+	status := datareduction.GetLatestStatus(api.eth.pruneDb)
+	status.LatestBlockNumber = api.eth.blockchain.CurrentHeader().Number.Uint64()
+	return status, nil
+}
+
 // PublicDebugAPI is the collection of Ethereum full node APIs exposed
 // over the public debugging endpoint.
 type PublicDebugAPI struct {
@@ -352,8 +372,55 @@ func NewPrivateDebugAPI(config *params.ChainConfig, eth *Ethereum) *PrivateDebug
 
 // Preimage is a debug API function that returns the preimage for a sha3 hash, if known.
 func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
-	db := core.PreimageTable(api.eth.ChainDb())
-	return db.Get(hash.Bytes())
+	if preimage := rawdb.ReadPreimage(api.eth.ChainDb(), hash); preimage != nil {
+		return preimage, nil
+	}
+	return nil, errors.New("unknown preimage")
+}
+
+// RemotePreimage is a debug API function that start to sync the preimage for a sha3 hash from the best remote peer.
+func (api *PrivateDebugAPI) RemotePreimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+	peer := api.eth.protocolManager.peers.BestPeer()
+
+	hashes := make([]common.Hash, 0)
+	return nil, peer.RequestPreimages(append(hashes, hash))
+}
+
+// RemovePreimage is a debug API function that remove the preimage for a sha3 hash, if known.
+func (api *PrivateDebugAPI) RemovePreimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+	rawdb.DeletePreimage(api.eth.ChainDb(), hash)
+	return nil, nil
+}
+
+// Testing method
+func (api *PrivateDebugAPI) BrokenPreimage(ctx context.Context, hash common.Hash, preimage hexutil.Bytes) (hexutil.Bytes, error) {
+	// Broken the preimage
+	rawdb.WritePreimages(api.eth.ChainDb(), map[common.Hash][]byte{hash: preimage})
+	// try to read it from db
+	if read_preimage := rawdb.ReadPreimage(api.eth.ChainDb(), hash); read_preimage != nil {
+		return read_preimage, nil
+	}
+	return nil, errors.New("broken preimage failed")
+}
+
+func (api *PrivateDebugAPI) FindBadPreimage(ctx context.Context) (interface{}, error) {
+
+	images := make(map[common.Hash]string)
+
+	// Iterate the entire sha3 preimages for checking
+	db := api.eth.ChainDb() //.blockchain.StateCache().TrieDB().DiskDB().(ethdb.Database)
+	it := db.NewIteratorWithPrefix([]byte("secure-key-"))
+	for it.Next() {
+		keyHash := common.BytesToHash(it.Key())
+		valueHash := crypto.Keccak256Hash(it.Value())
+		if keyHash != valueHash {
+			// Add bad preimages
+			images[keyHash] = common.Bytes2Hex(it.Value())
+		}
+	}
+	it.Release()
+
+	return images, nil
 }
 
 // GetBadBLocks returns a list of the last 'bad blocks' that the client has seen on the network
@@ -470,12 +537,13 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	if startBlock.Number().Uint64() >= endBlock.Number().Uint64() {
 		return nil, fmt.Errorf("start block height (%d) must be less than end block height (%d)", startBlock.Number().Uint64(), endBlock.Number().Uint64())
 	}
+	triedb := api.eth.BlockChain().StateCache().TrieDB()
 
-	oldTrie, err := trie.NewSecure(startBlock.Root(), trie.NewDatabase(api.eth.chainDb), 0)
+	oldTrie, err := trie.NewSecure(startBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}
-	newTrie, err := trie.NewSecure(endBlock.Root(), trie.NewDatabase(api.eth.chainDb), 0)
+	newTrie, err := trie.NewSecure(endBlock.Root(), triedb)
 	if err != nil {
 		return nil, err
 	}

@@ -38,4 +38,55 @@ var (
 
 	// ErrInvalidTx4 is returned if the tx4 has been checked during execution
 	ErrInvalidTx4 = errors.New("invalid Tx4")
+
+	// Delegation Error
+	// ErrCancelSelfDelegate is returned if the cancel delegate apply to the self address
+	ErrCancelSelfDelegate = errors.New("can not cancel self delegation")
+
+	// ErrCannotDelegate is returned if the request address does not have deposit balance in Annual/SemiAnnual Supernode
+	ErrCannotDelegate = errors.New("Annual/SemiAnnual Supernode candidate not accept new delegator")
+
+	// ErrCannotCancelDelegate is returned if the request address belongs to Annual/SemiAnnual Supernode
+	ErrCannotCancelDelegate = errors.New("Annual/SemiAnnual Supernode candidate can not cancel delegation")
+
+	// ErrDelegateAmount is returned if the delegate amount less than 0
+	ErrDelegateAmount = errors.New("delegation amount must be greater or equal to 1000 PI")
+
+	// ErrInsufficientProxiedBalance is returned if the cancellation amount of executing a transaction
+	// is higher than the proxied balance of the user's account.
+	ErrInsufficientProxiedBalance = errors.New("cancel amount greater than your Proxied Balance")
+
+	// ErrAlreadyCandidate is returned if the request address has become candidate already
+	ErrAlreadyCandidate = errors.New("address become candidate already")
+
+	// ErrCannotCandidate is returned if the request address belongs to Annual/SemiAnnual Supernode
+	ErrCannotCandidate = errors.New("Annual/SemiAnnual Supernode can not become candidate")
+
+	// ErrCannotCancelCandidate is returned if the request address belongs to Annual/SemiAnnual Supernode
+	ErrCannotCancelCandidate = errors.New("Annual/SemiAnnual Supernode can not cancel candidate")
+
+	// ErrNotCandidate is returned if the request address is not a candidate
+	ErrNotCandidate = errors.New("address not candidate")
+
+	// ErrMinimumSecurityDeposit is returned if the request security deposit less than the minimum value
+	ErrMinimumSecurityDeposit = errors.New("security deposit not meet the minimum value")
+
+	// ErrCommission is returned if the request Commission value not between 0 and 100
+	ErrCommission = errors.New("commission percentage (between 0 and 100) out of range")
+
+	// Vote Error
+	// ErrVoteAmountTooLow is returned if the vote amount less than proxied delegation amount
+	ErrVoteAmountTooLow = errors.New("vote amount too low")
+
+	// ErrVoteAmountTooHight is returned if the vote amount greater than proxied amount + self amount
+	ErrVoteAmountTooHight = errors.New("vote amount too high")
+
+	// ErrNotOwner is returned if the Address not owner
+	ErrNotOwner = errors.New("address not owner")
+
+	// ErrNotAllowedInMainChain is returned if the transaction with main flag = false be sent to main chain
+	ErrNotAllowedInMainChain = errors.New("transaction not allowed in main chain")
+
+	// ErrNotAllowedInChildChain is returned if the transaction with child flag = false be sent to child chain
+	ErrNotAllowedInChildChain = errors.New("transaction not allowed in child chain")
 )
