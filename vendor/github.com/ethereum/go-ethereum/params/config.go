@@ -17,6 +17,7 @@
 package params
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"math"
@@ -43,8 +44,10 @@ var (
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
 		//ByzantiumBlock:      big.NewInt(4370000),
-		ByzantiumBlock:      big.NewInt(0), //let's start from 1 block
-		ConstantinopleBlock: nil,
+		ByzantiumBlock:             big.NewInt(0), //let's start from 1 block
+		ConstantinopleBlock:        nil,
+		Child0HashTimeLockBlock:    big.NewInt(0),
+		Child0HashTimeLockContract: common.HexToAddress("0xfefca16182123ac9db544beca6ab7cef1172e1b4"),
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -53,17 +56,19 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the test network.
 	TestnetChainConfig = &ChainConfig{
-		PChainId:            "testnet",
-		ChainId:             big.NewInt(2),
-		HomesteadBlock:      big.NewInt(0),
-		DAOForkBlock:        nil,
-		DAOForkSupport:      true,
-		EIP150Block:         big.NewInt(0),
-		EIP150Hash:          common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-		EIP155Block:         big.NewInt(10),
-		EIP158Block:         big.NewInt(10),
-		ByzantiumBlock:      big.NewInt(1700000),
-		ConstantinopleBlock: nil,
+		PChainId:                   "testnet",
+		ChainId:                    big.NewInt(2),
+		HomesteadBlock:             big.NewInt(0),
+		DAOForkBlock:               nil,
+		DAOForkSupport:             true,
+		EIP150Block:                big.NewInt(0),
+		EIP150Hash:                 common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+		EIP155Block:                big.NewInt(10),
+		EIP158Block:                big.NewInt(10),
+		ByzantiumBlock:             big.NewInt(1700000),
+		ConstantinopleBlock:        nil,
+		Child0HashTimeLockBlock:    big.NewInt(9038300),
+		Child0HashTimeLockContract: common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -113,16 +118,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, common.Address{}, nil, common.Address{}, new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, common.Address{}, nil, common.Address{}, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, common.Address{}, nil, common.Address{}, new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -154,6 +159,13 @@ type ChainConfig struct {
 
 	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
+
+	HashTimeLockBlock    *big.Int       `json:"htlcBlock,omitempty"` // Hash Time Lock Contract Block (nil = no fork, 0 = already on htlc, call withdraw on htlc will have 0 gas)
+	HashTimeLockContract common.Address `json:"htlc,omitempty"`      // Hash Time Lock Contract Address
+
+	// For default setup propose
+	Child0HashTimeLockBlock    *big.Int
+	Child0HashTimeLockContract common.Address
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
@@ -289,6 +301,10 @@ func (c *ChainConfig) IsByzantium(num *big.Int) bool {
 
 func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
+}
+
+func (c *ChainConfig) IsHashTimeLockWithdraw(num *big.Int, contractAddress *common.Address, withdraw []byte) bool {
+	return isForked(c.HashTimeLockBlock, num) && c.HashTimeLockContract == *contractAddress && len(withdraw) > 4 && bytes.Equal(withdraw[:4], common.Hex2Bytes("63615149"))
 }
 
 // Check whether is on main chain or not

@@ -594,13 +594,15 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	if !pabi.IsPChainContractAddr(tx.To()) {
-		// Ensure the transaction has more gas than the basic tx fee.
-		intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true)
-		if err != nil {
-			return err
-		}
-		if tx.Gas() < intrGas {
-			return ErrIntrinsicGas
+		if tx.To() == nil || !pool.chainconfig.IsHashTimeLockWithdraw(pool.chain.CurrentBlock().Number(), tx.To(), tx.Data()) {
+			// Ensure the transaction has more gas than the basic tx fee.
+			intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, true)
+			if err != nil {
+				return err
+			}
+			if tx.Gas() < intrGas {
+				return ErrIntrinsicGas
+			}
 		}
 	} else {
 		// the first 4 bytes is the function identifier
