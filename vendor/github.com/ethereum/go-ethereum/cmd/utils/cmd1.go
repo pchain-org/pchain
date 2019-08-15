@@ -13,7 +13,7 @@ import (
 	//"github.com/ethereum/go-ethereum/console"
 )
 
-func StartNodeEx(ctx *cli.Context, stack *node.Node, mining bool) error {
+func StartNodeEx(ctx *cli.Context, stack *node.Node) error {
 
 	StartNode1(stack)
 
