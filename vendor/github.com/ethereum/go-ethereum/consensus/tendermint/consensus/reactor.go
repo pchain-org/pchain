@@ -22,6 +22,8 @@ const (
 	VoteChannel        = 0x22
 	VoteSetBitsChannel = 0x23
 
+	waitReactorInterval         = 100 * time.Millisecond
+	waitReactorTimes            = 50
 	peerGossipSleepDuration     = 100 * time.Millisecond // Time to sleep if there's nothing to send.
 	peerQueryMaj23SleepDuration = 2 * time.Second        // Time to sleep after each VoteSetMaj23Message sent
 	maxConsensusMessageSize     = 1048576                // 1MB; NOTE: keep in sync with types.PartSet sizes.
@@ -58,9 +60,6 @@ func (conR *ConsensusReactor) OnStart() error {
 	//log.Notice("ConsensusReactor ", "fastSync", conR.fastSync)
 	conR.BaseService.OnStart()
 
-	// if there were peers added before start, start routines for them
-	conR.startPeerRoutine()
-
 	// callbacks for broadcasting new steps and votes to peers
 	// upon their respective events (ie. uses evsw)
 	conR.registerEventCallbacks()
@@ -73,6 +72,17 @@ func (conR *ConsensusReactor) OnStart() error {
 	}
 
 	return nil
+}
+
+func (conR *ConsensusReactor) AfterStart() {
+
+	// if there were peers added before start, start routines for them
+	//wait at most 5 seconds, then start peer routings anyway
+	for i:=0; i<waitReactorTimes && !conR.IsRunning(); i++ {
+		log.Infof("(conR *ConsensusReactor) OnStart(), wait %v times for conR running", i)
+		time.Sleep(100 * time.Millisecond)
+	}
+	conR.startPeerRoutine()
 }
 
 func (conR *ConsensusReactor) OnStop() {
