@@ -135,12 +135,10 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 
 	// Update HTLC Hard Fork and Contract if any one blank
 	if ctx.ChainId() == "child_0" {
-		if (chainConfig.HashTimeLockBlock == nil || chainConfig.HashTimeLockContract == common.Address{}) {
+		if (chainConfig.HashTimeLockContract == common.Address{}) {
 			if isTestnet {
-				chainConfig.HashTimeLockBlock = params.TestnetChainConfig.Child0HashTimeLockBlock
 				chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
 			} else {
-				chainConfig.HashTimeLockBlock = params.MainnetChainConfig.Child0HashTimeLockBlock
 				chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
 			}
 		}

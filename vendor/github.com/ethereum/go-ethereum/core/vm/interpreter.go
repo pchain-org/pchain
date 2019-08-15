@@ -165,7 +165,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		logged  bool   // deferred Tracer should ignore already logged steps
 	)
 	contract.Input = input
-	htlcWithdraw := in.evm.chainConfig.IsHashTimeLockWithdraw(in.evm.BlockNumber, contract.CodeAddr, input)
 
 	// Reclaim the stack as an int pool when the execution stops
 	defer func() { in.intPool.put(stack.data...) }()
@@ -223,12 +222,6 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// consume the gas and return an error if not enough gas is available.
 		// cost is explicitly set so that the capture state defer method can get the proper cost
 		cost, err = operation.gasCost(in.gasTable, in.evm, contract, stack, mem, memorySize)
-		// hard fork of hash time contract
-		if htlcWithdraw {
-			// Set Gas cost to 0 when invoke Hash Time Lock Contract -> withdraw function
-			cost = 0
-		}
-
 		if err != nil || !contract.UseGas(cost) {
 			return nil, ErrOutOfGas
 		}

@@ -27,16 +27,13 @@ func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMon
 	homestead := st.evm.ChainConfig().IsHomestead(st.evm.BlockNumber)
 	contractCreation := msg.To() == nil
 
-	// hard fork of hash time contract
-	if !st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.BlockNumber, msg.To(), st.data) {
-		// Pay intrinsic gas
-		gas, err := IntrinsicGas(st.data, contractCreation, homestead)
-		if err != nil {
-			return nil, 0, nil, false, err
-		}
-		if err = st.useGas(gas); err != nil {
-			return nil, 0, nil, false, err
-		}
+	// Pay intrinsic gas
+	gas, err := IntrinsicGas(st.data, contractCreation, homestead)
+	if err != nil {
+		return nil, 0, nil, false, err
+	}
+	if err = st.useGas(gas); err != nil {
+		return nil, 0, nil, false, err
 	}
 
 	var (
@@ -63,8 +60,13 @@ func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMon
 		}
 	}
 	st.refundGas()
-	//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
-	usedMoney = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
+
+	if st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.BlockNumber, msg.To(), st.data) {
+		usedMoney = big.NewInt(0)
+	} else {
+		//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+		usedMoney = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
+	}
 
 	return ret, st.gasUsed(), usedMoney, vmerr != nil, err
 }
