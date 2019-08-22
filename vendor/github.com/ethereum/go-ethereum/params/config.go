@@ -46,7 +46,7 @@ var (
 		//ByzantiumBlock:      big.NewInt(4370000),
 		ByzantiumBlock:             big.NewInt(0), //let's start from 1 block
 		ConstantinopleBlock:        nil,
-		Child0HashTimeLockContract: common.HexToAddress("0xfefca16182123ac9db544beca6ab7cef1172e1b4"),
+		Child0HashTimeLockContract: common.HexToAddress("0x18c496af47eb1c0946f64a25d3f589f71934bf3d"),
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
