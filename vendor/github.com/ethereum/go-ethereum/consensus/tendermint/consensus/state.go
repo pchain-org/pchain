@@ -596,14 +596,6 @@ func (cs *ConsensusState) OnStart() error {
 	return nil
 }
 
-// timeoutRoutine: receive requests for timeouts on tickChan and fire timeouts on tockChan
-// receiveRoutine: serializes processing of proposoals, block parts, votes; coordinates state transitions
-/*
-func (cs *ConsensusState) startRoutines(maxSteps int) {
-	cs.timeoutTicker.Start()
-	go cs.receiveRoutine(maxSteps)
-}
-*/
 func (cs *ConsensusState) OnStop() {
 
 	cs.BaseService.OnStop()
@@ -715,7 +707,7 @@ func (cs *ConsensusState) ReconstructLastCommit(state *sm.State) {
 
 func (cs *ConsensusState) newStep() {
 	rs := cs.RoundStateEvent()
-	//cs.wal.Save(rs)
+
 	cs.nSteps += 1
 	// newStep is called by updateToStep in NewConsensusState before the evsw is set!
 	if cs.evsw != nil {
@@ -744,34 +736,20 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 
 		select {
 		case mi = <-cs.peerMsgQueue:
-			//cs.wal.Save(mi)
 			// handles proposals, block parts, votes
 			// may generate internal events (votes, complete proposals, 2/3 majorities)
 			rs := cs.RoundState
 			cs.handleMsg(mi, rs)
 		case mi = <-cs.internalMsgQueue:
-			//cs.wal.Save(mi)
 			// handles proposals, block parts, votes
 			rs := cs.RoundState
 			cs.handleMsg(mi, rs)
 		case ti := <-cs.timeoutTicker.Chan(): // tockChan:
-			//cs.wal.Save(ti)
 			// if the timeout is relevant to the rs
 			// go to the next step
 			rs := cs.RoundState
 			cs.handleTimeout(ti, rs)
 		case <-cs.Quit:
-
-			// NOTE: the internalMsgQueue may have signed messages from our
-			// priv_val that haven't hit the WAL, but its ok because
-			// priv_val tracks LastSig
-
-			/*
-				// close wal now that we're done writing to it
-				if cs.wal != nil {
-					cs.wal.Stop()
-				}
-			*/
 
 			close(cs.done)
 			return
@@ -821,10 +799,6 @@ func (cs *ConsensusState) handleMsg(mi msgInfo, rs RoundState) {
 
 		// NOTE: the vote is broadcast to peers by the reactor listening
 		// for vote events
-
-		// TODO: If rs.Height == vote.Height && rs.Round < vote.Round,
-		// the peer is sending us CatchupCommit precommits.
-		// We could make note of this and help filter in broadcastHasVoteMessage().
 	default:
 		cs.logger.Warnf("handleMsg. Unknown msg type %v", reflect.TypeOf(msg))
 	}
@@ -1095,24 +1069,7 @@ func (cs *ConsensusState) isProposalComplete() bool {
 		return false
 	}
 
-	//actually here we can return true to replace the bunch of code commented below
 	return true
-
-	/*
-	// we have the proposal. if there's a POLRound,
-	// make sure we have the prevotes from it too
-	if cs.Proposal.POLRound < 0 {
-		return true
-	} else {
-		// if this is false the proposer is lying or we haven't received the POL yet
-		sa := cs.VoteSignAggr.Prevotes(cs.Proposal.POLRound)
-		if sa != nil {
-			return sa.HasTwoThirdsMajority(cs.Validators)
-		} else {
-			return true
-		}
-	}
-	 */
 }
 
 // Create the next block to propose and return it.
