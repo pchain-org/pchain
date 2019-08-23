@@ -128,11 +128,22 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	}
 
 	isMainChain := params.IsMainChain(ctx.ChainId())
-
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithDefault(chainDb, config.Genesis, isMainChain, isTestnet)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
+
+	// Update HTLC Hard Fork and Contract if any one blank
+	if ctx.ChainId() == "child_0" {
+		if (chainConfig.HashTimeLockContract == common.Address{}) {
+			if isTestnet {
+				chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
+			} else {
+				chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
+			}
+		}
+	}
+
 	chainConfig.ChainLogger = logger
 	logger.Info("Initialised chain configuration", "config", chainConfig)
 

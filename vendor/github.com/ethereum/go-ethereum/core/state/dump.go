@@ -126,7 +126,7 @@ func (self *StateDB) RawDump() Dump {
 			tx3It := trie.NewIterator(obj.getTX3Trie(self.db).NodeIterator(nil))
 			for tx3It.Next() {
 				tx3hash := common.BytesToHash(self.trie.GetKey(tx3It.Key))
-				account.Tx3Detail = append(account.Tx1Detail, tx3hash.Hex())
+				account.Tx3Detail = append(account.Tx3Detail, tx3hash.Hex())
 			}
 
 			if data.ProxiedRoot.String() != "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421" {
