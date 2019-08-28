@@ -91,6 +91,24 @@ func (hvs *HeightVoteSignAggr) SetRound(round int) {
 	hvs.round = round
 }
 
+// Create more RoundVoteSets up to round.
+func (hvs *HeightVoteSignAggr) ResetTop2Round(round int) {
+	hvs.mtx.Lock()
+	defer hvs.mtx.Unlock()
+	if hvs.round < round || round < 1 {
+		PanicSanity("HeightVoteSignAggr.ResetTop2Round() must have enough round to reset")
+	}
+	for r := round-1; r <= hvs.round; r++ {
+		if _, ok := hvs.roundVoteSignAggrs[r]; ok {
+			delete(hvs.roundVoteSignAggrs, r)
+		}
+	}
+
+	hvs.addRound(round - 1)
+	hvs.addRound(round)
+	hvs.round = round
+}
+
 func (hvs *HeightVoteSignAggr) addRound(round int) {
 	if _, ok := hvs.roundVoteSignAggrs[round]; ok {
 		PanicSanity("addRound() for an existing round")

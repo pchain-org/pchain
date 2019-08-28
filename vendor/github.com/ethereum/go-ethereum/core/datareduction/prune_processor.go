@@ -17,7 +17,7 @@ import (
 
 var (
 	// max scan trie height
-	max_count_trie uint64 = 100
+	max_count_trie uint64 = 1000
 	// max retain trie height
 	max_remain_trie uint64 = 10
 	// emptyRoot is the known root hash of an empty trie.

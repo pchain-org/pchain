@@ -71,6 +71,7 @@ func (cs *ConsensusState) Initialize() {
 
 	//initialize round state
 	cs.proposer = nil
+	cs.isProposer = false
 	cs.ProposerPeerKey = ""
 	cs.Validators = nil
 	cs.Proposal = nil
@@ -124,6 +125,9 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	cs.Validators = validators
 	cs.Votes = NewHeightVoteSet(cs.chainConfig.PChainId, height, validators, cs.logger)
 	cs.VoteSignAggr = NewHeightVoteSignAggr(cs.chainConfig.PChainId, height, validators, cs.logger)
+
+	cs.vrfValIndex = -1
+	cs.pastRoundStates = make(map[int]int)
 
 	cs.state = state
 
