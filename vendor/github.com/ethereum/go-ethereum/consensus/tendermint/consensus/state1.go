@@ -6,6 +6,7 @@ import (
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	cmn "github.com/tendermint/go-common"
 	"time"
 )
@@ -106,16 +107,19 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 
 	// RoundState fields
 	cs.updateRoundStep(0, RoundStepNewHeight)
-	//cs.StartTime = cs.timeoutParams.Commit(time.Now())
-	if cs.CommitTime.IsZero() {
-		// "Now" makes it easier to sync up dev nodes.
-		// We add timeoutCommit to allow transactions
-		// to be gathered for the first block.
-		// And alternative solution that relies on clocks:
-		//  cs.StartTime = state.LastBlockTime.Add(timeoutCommit)
+
+	if cs.state.TdmExtra.ChainID == params.MainnetChainConfig.PChainId ||
+		cs.state.TdmExtra.ChainID == params.TestnetChainConfig.PChainId {
+
 		cs.StartTime = cs.timeoutParams.Commit(time.Now())
+
 	} else {
-		cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
+
+		if cs.CommitTime.IsZero() {
+			cs.StartTime = cs.timeoutParams.Commit(time.Now())
+		} else {
+			cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
+		}
 	}
 
 	// Reset fields based on state.
