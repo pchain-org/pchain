@@ -108,8 +108,8 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	// RoundState fields
 	cs.updateRoundStep(0, RoundStepNewHeight)
 
-	if cs.state.TdmExtra.ChainID == params.MainnetChainConfig.PChainId ||
-		cs.state.TdmExtra.ChainID == params.TestnetChainConfig.PChainId {
+	if state.TdmExtra.ChainID == params.MainnetChainConfig.PChainId ||
+		state.TdmExtra.ChainID == params.TestnetChainConfig.PChainId {
 
 		cs.StartTime = cs.timeoutParams.Commit(time.Now())
 
