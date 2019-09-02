@@ -984,6 +984,18 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	rawdb.WriteBlock(bc.db, block)
 
+	// reward outside
+	rewardOutside := bc.chainConfig.IsOutOfStorage(block.Number())
+	if rewardOutside {
+		outsideReward := state.GetOutsideReward()
+		for addr, reward := range outsideReward {
+			for epoch, rewardAmount := range reward {
+				rawdb.WriteReward(bc.db, addr, epoch, rewardAmount)
+			}
+		}
+		state.ClearOutsideReward()
+	}
+
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return NonStatTy, err

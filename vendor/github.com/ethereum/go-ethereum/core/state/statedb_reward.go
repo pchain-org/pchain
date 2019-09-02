@@ -95,6 +95,58 @@ func (db *StateDB) ForEachReward(addr common.Address, cb func(key uint64, reward
 	}
 }
 
+func (self *StateDB) GetOutsideReward() map[common.Address]Reward {
+	return self.rewardOutsideSet
+}
+
+func (self *StateDB) ClearOutsideReward() {
+	self.rewardOutsideSet = make(map[common.Address]Reward)
+}
+
+func (self *StateDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64) *big.Int {
+	if rewardset, exist := self.rewardOutsideSet[addr]; exist {
+		if rewardbalance, rewardexist := rewardset[epochNo]; rewardexist {
+			return rewardbalance
+		}
+	}
+	rb := self.db.TrieDB().GetEpochReward(addr, epochNo)
+	return rb
+}
+
+func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, amount *big.Int) {
+	currentRewardBalance := self.GetOutsideRewardBalanceByEpochNumber(addr, epochNo)
+	newReward := new(big.Int).Add(currentRewardBalance, amount)
+	if rs, exist := self.rewardOutsideSet[addr]; exist {
+		rs[epochNo] = newReward
+	} else {
+		epochReward := Reward{epochNo: newReward}
+		self.rewardOutsideSet[addr] = epochReward
+	}
+
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		// Add amount to Total Reward Balance
+		stateObject.AddRewardBalance(amount)
+	}
+}
+
+func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, amount *big.Int) {
+	currentRewardBalance := self.GetOutsideRewardBalanceByEpochNumber(addr, epochNo)
+	newReward := new(big.Int).Sub(currentRewardBalance, amount)
+	if rs, exist := self.rewardOutsideSet[addr]; exist {
+		rs[epochNo] = newReward
+	} else {
+		epochReward := Reward{epochNo: newReward}
+		self.rewardOutsideSet[addr] = epochReward
+	}
+
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		// Add amount to Total Reward Balance
+		stateObject.SubRewardBalance(amount)
+	}
+}
+
 // ----- Reward Set
 
 // MarkAddressReward adds the specified object to the dirty map to avoid

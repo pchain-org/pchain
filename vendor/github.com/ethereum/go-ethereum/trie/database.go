@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"sync"
 	"time"
 
@@ -869,4 +870,37 @@ func (db *Database) accumulate(hash common.Hash, reachable map[common.Hash]struc
 	for _, child := range node.childs() {
 		db.accumulate(child, reachable)
 	}
+}
+
+var rewardPrefix = []byte("w")
+
+func encodeEpochNumber(number uint64) []byte {
+	enc := make([]byte, 8)
+	binary.BigEndian.PutUint64(enc, number)
+	return enc
+}
+
+func decodeEpochNumber(raw []byte) uint64 {
+	return binary.BigEndian.Uint64(raw)
+}
+
+func (db *Database) GetEpochReward(address common.Address, epoch uint64) *big.Int {
+	reward, _ := db.diskdb.Get(append(append(rewardPrefix, address.Bytes()...), encodeEpochNumber(epoch)...))
+	if len(reward) == 0 {
+		return big.NewInt(0)
+	}
+	return new(big.Int).SetBytes(reward)
+}
+
+func (db *Database) GetAllEpochReward(address common.Address) map[uint64]*big.Int {
+	it := db.diskdb.NewIteratorWithPrefix(append(rewardPrefix, address.Bytes()...))
+	defer it.Release()
+
+	result := make(map[uint64]*big.Int)
+	for it.Next() {
+		epoch := decodeEpochNumber(it.Key()[21:])
+		reward := new(big.Int).SetBytes(it.Value())
+		result[epoch] = reward
+	}
+	return result
 }

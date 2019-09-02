@@ -142,6 +142,11 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 				chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
 			}
 		}
+		if isTestnet {
+			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.Child0OutOfStorageBlock
+		} else {
+			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.Child0OutOfStorageBlock
+		}
 	}
 
 	chainConfig.ChainLogger = logger
