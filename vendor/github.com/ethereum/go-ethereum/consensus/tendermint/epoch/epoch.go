@@ -360,6 +360,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB, out
 				if outsideReward {
 					currentEpochReward := state.GetOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber)
 					if currentEpochReward.Sign() == 1 {
+						state.SubOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
 						state.AddBalance(rewardAddress, currentEpochReward)
 					}
 				} else {

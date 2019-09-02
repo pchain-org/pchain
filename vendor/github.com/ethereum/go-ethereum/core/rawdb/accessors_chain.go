@@ -437,3 +437,9 @@ func WriteReward(db ethdb.Writer, address common.Address, epoch uint64, reward *
 		log.Crit("Failed to store epoch reward", "err", err)
 	}
 }
+
+func DeleteReward(db ethdb.Writer, address common.Address, epoch uint64) {
+	if err := db.Delete(rewardKey(address, epoch)); err != nil {
+		log.Crit("Failed to delete epoch reward", "err", err)
+	}
+}

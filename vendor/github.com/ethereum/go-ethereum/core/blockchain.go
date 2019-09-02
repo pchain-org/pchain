@@ -990,7 +990,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		outsideReward := state.GetOutsideReward()
 		for addr, reward := range outsideReward {
 			for epoch, rewardAmount := range reward {
-				rawdb.WriteReward(bc.db, addr, epoch, rewardAmount)
+				if rewardAmount.Sign() == 0 {
+					rawdb.DeleteReward(bc.db, addr, epoch)
+				} else {
+					rawdb.WriteReward(bc.db, addr, epoch, rewardAmount)
+				}
 			}
 		}
 		state.ClearOutsideReward()
