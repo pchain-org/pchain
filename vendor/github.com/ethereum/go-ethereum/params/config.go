@@ -69,8 +69,8 @@ var (
 		ByzantiumBlock:             big.NewInt(1700000),
 		ConstantinopleBlock:        nil,
 		Child0HashTimeLockContract: common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
-		OutOfStorageBlock:          big.NewInt(800),
-		Child0OutOfStorageBlock:    big.NewInt(15000000),
+		OutOfStorageBlock:          big.NewInt(11790000),
+		Child0OutOfStorageBlock:    big.NewInt(14470000),
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
