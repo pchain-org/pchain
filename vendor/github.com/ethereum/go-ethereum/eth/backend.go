@@ -134,7 +134,16 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	}
 
 	// Update HTLC Hard Fork and Contract if any one blank
-	if ctx.ChainId() == "child_0" {
+	switch ctx.ChainId() {
+	case "pchain":
+		if chainConfig.OutOfStorageBlock == nil {
+			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
+		}
+	case "testnet":
+		if chainConfig.OutOfStorageBlock == nil {
+			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
+		}
+	case "child_0":
 		if (chainConfig.HashTimeLockContract == common.Address{}) {
 			if isTestnet {
 				chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract

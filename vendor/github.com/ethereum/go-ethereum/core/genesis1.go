@@ -182,6 +182,7 @@ var DefaultMainnetGenesisJSON = `{
 		"eip155Block": 0,
 		"eip158Block": 0,
 		"byzantiumBlock": 0,
+		"oosBlock": 100,
 		"tendermint": {
 			"epoch": 30000,
 			"policy": 0
@@ -736,6 +737,7 @@ var DefaultTestnetGenesisJSON = `{
                 "eip155Block": 0,
                 "eip158Block": 0,
                 "byzantiumBlock": 0,
+				"oosBlock": 100,
                 "tendermint": {
                         "epoch": 30000,
                         "policy": 0
