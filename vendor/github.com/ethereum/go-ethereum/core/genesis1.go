@@ -737,7 +737,7 @@ var DefaultTestnetGenesisJSON = `{
                 "eip155Block": 0,
                 "eip158Block": 0,
                 "byzantiumBlock": 0,
-				"oosBlock": 11790000,
+				"oosBlock": 11800000,
                 "tendermint": {
                         "epoch": 30000,
                         "policy": 0

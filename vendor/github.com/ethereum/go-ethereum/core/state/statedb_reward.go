@@ -110,6 +110,11 @@ func (self *StateDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, e
 		}
 	}
 	rb := self.db.TrieDB().GetEpochReward(addr, epochNo)
+	// if 0 epoch reward, try to read from trie
+	if rb.Sign() == 0 {
+		rb = self.GetRewardBalanceByEpochNumber(addr, epochNo)
+	}
+
 	return rb
 }
 
