@@ -475,7 +475,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
-	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state); ok {
+	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state, sb.chainConfig.IsOutOfStorage(header.Number)); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
@@ -785,8 +785,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		}
 	}
 
+	outsideReward := config.IsOutOfStorage(header.Number)
+
 	// Move the self reward to Reward Trie
-	divideRewardByEpoch(state, header.Coinbase, ep.Number, selfReward)
+	divideRewardByEpoch(state, header.Coinbase, ep.Number, selfReward, outsideReward)
 
 	// Calculate the Delegate Reward
 	if delegateReward != nil && delegateReward.Sign() > 0 {
@@ -796,7 +798,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			if depositProxiedBalance.Sign() == 1 {
 				// deposit * delegateReward / total deposit
 				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
-				divideRewardByEpoch(state, key, ep.Number, individualReward)
+				divideRewardByEpoch(state, key, ep.Number, individualReward, outsideReward)
 				totalIndividualReward.Add(totalIndividualReward, individualReward)
 			}
 			return true
@@ -806,23 +808,39 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		if cmp == 1 {
 			// if delegate reward > actual given reward, give remaining reward to Candidate
 			diff := new(big.Int).Sub(delegateReward, totalIndividualReward)
-			state.AddRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
+			if outsideReward {
+				state.AddOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
+			} else {
+				state.AddRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
+			}
 		} else if cmp == -1 {
 			// if delegate reward < actual given reward, subtract the diff from Candidate
 			diff := new(big.Int).Sub(totalIndividualReward, delegateReward)
-			state.SubRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
+			if outsideReward {
+				state.SubOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
+			} else {
+				state.SubRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
+			}
 		}
 	}
 }
 
-func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64, reward *big.Int) {
+func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64, reward *big.Int, outsideReward bool) {
 	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
 	lastEpochReward := new(big.Int).Set(reward)
 	for i := epochNumber; i < epochNumber+12; i++ {
 		if i == epochNumber+11 {
-			state.AddRewardBalanceByEpochNumber(addr, i, lastEpochReward)
+			if outsideReward {
+				state.AddOutsideRewardBalanceByEpochNumber(addr, i, lastEpochReward)
+			} else {
+				state.AddRewardBalanceByEpochNumber(addr, i, lastEpochReward)
+			}
 		} else {
-			state.AddRewardBalanceByEpochNumber(addr, i, epochReward)
+			if outsideReward {
+				state.AddOutsideRewardBalanceByEpochNumber(addr, i, epochReward)
+			} else {
+				state.AddRewardBalanceByEpochNumber(addr, i, epochReward)
+			}
 			lastEpochReward.Sub(lastEpochReward, epochReward)
 		}
 	}
