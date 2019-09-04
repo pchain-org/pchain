@@ -18,9 +18,9 @@ import (
 
 var (
 	// max scan trie height
-	max_count_trie uint64 = 1000
+	max_count_trie uint64 = 5000
 	// max retain trie height
-	max_remain_trie uint64 = 1000
+	max_remain_trie uint64 = 10000
 	// emptyRoot is the known root hash of an empty trie.
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 
