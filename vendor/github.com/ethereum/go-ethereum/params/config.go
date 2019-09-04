@@ -47,6 +47,8 @@ var (
 		ByzantiumBlock:             big.NewInt(0), //let's start from 1 block
 		ConstantinopleBlock:        nil,
 		Child0HashTimeLockContract: common.HexToAddress("0x18c496af47eb1c0946f64a25d3f589f71934bf3d"),
+		OutOfStorageBlock:          big.NewInt(5890000),
+		Child0OutOfStorageBlock:    big.NewInt(13930000),
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -67,6 +69,8 @@ var (
 		ByzantiumBlock:             big.NewInt(1700000),
 		ConstantinopleBlock:        nil,
 		Child0HashTimeLockContract: common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
+		OutOfStorageBlock:          big.NewInt(11800000),
+		Child0OutOfStorageBlock:    big.NewInt(14490000),
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -116,16 +120,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, common.Address{}, new(EthashConfig), nil, nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, common.Address{}, nil, new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, common.Address{}, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, common.Address{}, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, common.Address{}, new(EthashConfig), nil, nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, common.Address{}, nil, new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -158,10 +162,13 @@ type ChainConfig struct {
 	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
-	HashTimeLockContract common.Address `json:"htlc,omitempty"` // Hash Time Lock Contract Address
+	// PCHAIN HF
+	HashTimeLockContract common.Address `json:"htlc,omitempty"`     // Hash Time Lock Contract Address
+	OutOfStorageBlock    *big.Int       `json:"oosBlock,omitempty"` // Out of storage HF block
 
 	// For default setup propose
 	Child0HashTimeLockContract common.Address
+	Child0OutOfStorageBlock    *big.Int
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
@@ -301,6 +308,10 @@ func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 
 func (c *ChainConfig) IsHashTimeLockWithdraw(num *big.Int, contractAddress *common.Address, withdraw []byte) bool {
 	return contractAddress != nil && c.HashTimeLockContract == *contractAddress && len(withdraw) > 4 && bytes.Equal(withdraw[:4], common.Hex2Bytes("63615149"))
+}
+
+func (c *ChainConfig) IsOutOfStorage(num *big.Int) bool {
+	return isForked(c.OutOfStorageBlock, num)
 }
 
 // Check whether is on main chain or not

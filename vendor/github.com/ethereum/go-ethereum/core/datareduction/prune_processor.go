@@ -65,7 +65,7 @@ func NewPruneProcessor(chaindb, prunedb ethdb.Database, bc *core.BlockChain, pru
 		bc:                    bc,
 		chainDb:               chaindb,
 		pruneBodyData:         pruneBodyData,
-		nodeCount:           make(NodeCount),
+		nodeCount:             make(NodeCount),
 	}
 }
 

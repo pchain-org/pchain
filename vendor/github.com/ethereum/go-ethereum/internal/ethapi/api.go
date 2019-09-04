@@ -505,7 +505,7 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
 func (s *PublicBlockChainAPI) GetFullBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber, fullDetail bool) (map[string]interface{}, error) {
-	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	state, header, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
 		return nil, err
 	}
@@ -542,10 +542,19 @@ func (s *PublicBlockChainAPI) GetFullBalance(ctx context.Context, address common
 		fields["proxied_detail"] = proxied_detail
 
 		reward_detail := make(map[EpochLabel]*hexutil.Big)
-		state.ForEachReward(address, func(key uint64, rewardBalance *big.Int) bool {
-			reward_detail[EpochLabel(key)] = (*hexutil.Big)(rewardBalance)
-			return true
-		})
+
+		outsideReward := s.b.ChainConfig().IsOutOfStorage(header.Number)
+		if outsideReward {
+			r := state.Database().TrieDB().GetAllEpochReward(address)
+			for k, v := range r {
+				reward_detail[EpochLabel(k)] = (*hexutil.Big)(v)
+			}
+		} else {
+			state.ForEachReward(address, func(key uint64, rewardBalance *big.Int) bool {
+				reward_detail[EpochLabel(key)] = (*hexutil.Big)(rewardBalance)
+				return true
+			})
+		}
 
 		fields["reward_detail"] = reward_detail
 	}
