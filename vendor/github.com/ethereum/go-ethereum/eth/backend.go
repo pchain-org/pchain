@@ -506,7 +506,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	go s.loopForMiningEvent()
 
 	// Start the Data Reduction
-	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0" {
+	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0"{
 		go s.StartScanAndPrune(0)
 	}
 
@@ -605,17 +605,11 @@ func (s *Ethereum) StartScanAndPrune(blockNumber uint64) {
 	}
 	log.Infof("Data Reduction - Last scan number %v, prune number %v", scanNumber, pruneNumber)
 
-	pruneProcessor := datareduction.NewPruneProcessor(s.chainDb, s.pruneDb, s.blockchain)
+	pruneProcessor := datareduction.NewPruneProcessor(s.chainDb, s.pruneDb, s.blockchain, s.config.PruneBlockData)
+	//pruneProcessor := datareduction.NewPruneProcessor(s.chainDb, s.pruneDb, s.blockchain)
 
 	lastScanNumber, lastPruneNumber := pruneProcessor.Process(blockNumber, scanNumber, pruneNumber)
-	log.Infof("Data Reduction - After prune, last number scan %v, prune number %v", lastScanNumber, lastPruneNumber)
-	if s.config.PruneBlockData {
-		for i := uint64(1); i < lastPruneNumber; i++ {
-			rawdb.DeleteBody(s.chainDb, rawdb.ReadCanonicalHash(s.chainDb, i), i)
-		}
-		log.Infof("deleted block from 1 to %v", lastPruneNumber)
-	}
-	log.Info("Data Reduction - Completed")
+	log.Infof("Data Reduction Completed - After prune, last number scan %v, prune number %v", lastScanNumber, lastPruneNumber)
 
 	datareduction.StopPruning()
 }

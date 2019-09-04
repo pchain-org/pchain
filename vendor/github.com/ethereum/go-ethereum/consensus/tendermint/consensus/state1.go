@@ -6,9 +6,7 @@ import (
 	sm "github.com/ethereum/go-ethereum/consensus/tendermint/state"
 	"github.com/ethereum/go-ethereum/consensus/tendermint/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	cmn "github.com/tendermint/go-common"
-	"time"
 )
 
 // The +2/3 and other Precommit-votes for block at `height`.
@@ -107,7 +105,8 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 
 	// RoundState fields
 	cs.updateRoundStep(0, RoundStepNewHeight)
-
+	cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
+	/*
 	if state.TdmExtra.ChainID == params.MainnetChainConfig.PChainId ||
 		state.TdmExtra.ChainID == params.TestnetChainConfig.PChainId {
 
@@ -121,6 +120,7 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 			cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
 		}
 	}
+	*/
 
 	// Reset fields based on state.
 	_, validators, _ := state.GetValidators()
