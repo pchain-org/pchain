@@ -252,6 +252,12 @@ func (p *peer) SendPreimagesRLP(preimages [][]byte) error {
 	return p2p.Send(p.rw, PreImagesMsg, preimages)
 }
 
+// SendTrieNodeData sends a batch of arbitrary internal data, corresponding to the
+// hashes requested.
+func (p *peer) SendTrieNodeData(data [][]byte) error {
+	return p2p.Send(p.rw, TrieNodeDataMsg, data)
+}
+
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
 func (p *peer) RequestOneHeader(hash common.Hash) error {

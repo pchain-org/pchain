@@ -786,6 +786,22 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			rawdb.WritePreimages(db, preimagesMap)
 			pm.preimageLogger.Info("PreImages wrote into database")
 		}
+
+	case msg.Code == TrieNodeDataMsg:
+		pm.logger.Debug("TrieNodeDataMsg received")
+		var trienodes [][]byte
+		if err := msg.Decode(&trienodes); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
+		db, _ := pm.blockchain.StateCache().TrieDB().DiskDB().(ethdb.Database)
+		for _, tnode := range trienodes {
+			thash := crypto.Keccak256Hash(tnode)
+			if has, herr := db.Has(thash.Bytes()); !has && herr == nil {
+				db.Put(thash.Bytes(), tnode)
+			}
+		}
+
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
