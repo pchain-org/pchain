@@ -350,8 +350,6 @@ func (sb *backend) VerifyUncles(chain consensus.ChainReader, block *types.Block)
 // verifyCommittedSeals checks whether every committed seal is signed by one of the parent's validators
 func (sb *backend) verifyCommittedSeals(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
 
-	sb.logger.Info("Tendermint (backend) verifyCommittedSeals, add logic here")
-
 	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
 	if err != nil {
 		return errInvalidExtraDataFormat
