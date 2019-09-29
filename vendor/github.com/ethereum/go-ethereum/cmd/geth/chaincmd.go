@@ -19,6 +19,8 @@ package gethmain
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 	"os"
 	"runtime"
 	"strconv"
@@ -167,6 +169,20 @@ Remove blockchain and state databases`,
 The arguments are interpreted as block numbers or hashes.
 Use "ethereum dump 0" to dump the genesis block.`,
 	}
+	countBlockStateCommand = cli.Command{
+		Action:    utils.MigrateFlags(countBlockState),
+		Name:      "count-blockstate",
+		Usage:     "Count the block state",
+		ArgsUsage: "<datafile>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.SyncModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+		Description: `
+	The count-blockstate command count the block state from a given height.`,
+	}
 )
 
 // initGenesis will initialise the given JSON format genesis file and writes it as
@@ -208,6 +224,8 @@ func importChain(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack := makeFullNode(ctx)
+	defer stack.Close()
+
 	chain, db := utils.MakeChain(ctx, stack)
 	defer db.Close()
 
@@ -288,7 +306,6 @@ func importChain(ctx *cli.Context) error {
 		utils.Fatalf("Failed to read database iostats: %v", err)
 	}
 	fmt.Println(ioStats)
-
 	return nil
 }
 
@@ -297,6 +314,8 @@ func exportChain(ctx *cli.Context) error {
 		utils.Fatalf("This command requires an argument.")
 	}
 	stack := makeFullNode(ctx)
+	defer stack.Close()
+
 	chain, _ := utils.MakeChain(ctx, stack)
 	start := time.Now()
 
@@ -480,4 +499,110 @@ func dump(ctx *cli.Context) error {
 func hashish(x string) bool {
 	_, err := strconv.Atoi(x)
 	return err != nil
+}
+
+func countBlockState(ctx *cli.Context) error {
+	if len(ctx.Args()) < 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+
+	chainName := ctx.Args().Get(1)
+	if chainName == "" {
+		chainName = "pchain"
+	}
+
+	stack, cfg := makeConfigNode(ctx, chainName)
+	utils.RegisterEthService(stack, &cfg.Eth)
+	defer stack.Close()
+
+	chainDb := utils.MakeChainDatabase(ctx, stack)
+
+	height, _ := strconv.ParseUint(ctx.Args().First(), 10, 64)
+
+	blockhash := rawdb.ReadCanonicalHash(chainDb, height)
+	block := rawdb.ReadBlock(chainDb, blockhash, height)
+	bsize := block.Size()
+
+	root := block.Header().Root
+	statedb, _ := state.New(block.Root(), state.NewDatabase(chainDb))
+	accountTrie, _ := statedb.Database().OpenTrie(root)
+
+	count := CountSize{}
+	countTrie(chainDb, accountTrie, &count, func(addr common.Address, account state.Account) {
+		if account.Root != emptyRoot {
+			storageTrie, _ := statedb.Database().OpenStorageTrie(common.Hash{}, account.Root)
+			countTrie(chainDb, storageTrie, &count, nil)
+		}
+
+		if account.TX1Root != emptyRoot {
+			tx1Trie, _ := statedb.Database().OpenTX1Trie(common.Hash{}, account.TX1Root)
+			countTrie(chainDb, tx1Trie, &count, nil)
+		}
+
+		if account.TX3Root != emptyRoot {
+			tx3Trie, _ := statedb.Database().OpenTX3Trie(common.Hash{}, account.TX3Root)
+			countTrie(chainDb, tx3Trie, &count, nil)
+		}
+
+		if account.ProxiedRoot != emptyRoot {
+			proxiedTrie, _ := statedb.Database().OpenProxiedTrie(common.Hash{}, account.ProxiedRoot)
+			countTrie(chainDb, proxiedTrie, &count, nil)
+		}
+
+		if account.RewardRoot != emptyRoot {
+			rewardTrie, _ := statedb.Database().OpenRewardTrie(common.Hash{}, account.RewardRoot)
+			countTrie(chainDb, rewardTrie, &count, nil)
+		}
+	})
+
+	// Open the file handle and potentially wrap with a gzip stream
+	fh, err := os.OpenFile("blockstate_nodedump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	// Write Node Data into file
+	for _, data := range count.Data {
+		fh.WriteString(data.key + " " + data.value + "\n")
+	}
+
+	fmt.Printf("Block %d, block size %v, state node %v, state size %v\n", height, bsize, count.Totalnode, count.Totalnodevaluesize)
+	return nil
+}
+
+type CountSize struct {
+	Totalnodevaluesize, Totalnode int
+	Data                          []nodeData
+}
+
+type nodeData struct {
+	key, value string
+}
+
+type processLeafTrie func(addr common.Address, account state.Account)
+
+var emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+
+func countTrie(db ethdb.Database, t state.Trie, count *CountSize, processLeaf processLeafTrie) {
+	for it := t.NodeIterator(nil); it.Next(true); {
+		if !it.Leaf() {
+			// non leaf node -> count += value
+			node, _ := db.Get(it.Hash().Bytes())
+			count.Totalnodevaluesize += len(node)
+			count.Totalnode++
+			count.Data = append(count.Data, nodeData{it.Hash().String(), common.Bytes2Hex(node)})
+		} else {
+			// Process the Account -> Inner Trie
+			if processLeaf != nil {
+				addr := t.GetKey(it.LeafKey())
+				if len(addr) == 20 {
+					var data state.Account
+					rlp.DecodeBytes(it.LeafBlob(), &data)
+
+					processLeaf(common.BytesToAddress(addr), data)
+				}
+			}
+		}
+	}
 }
