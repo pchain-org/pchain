@@ -62,7 +62,7 @@ It expects the genesis file as argument.`,
 		Action:    utils.MigrateFlags(importChain),
 		Name:      "import",
 		Usage:     "Import a blockchain file",
-		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
+		ArgsUsage: "<chainname> <filename> (<filename 2> ... <filename N>) ",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.CacheFlag,
@@ -83,7 +83,7 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 		Action:    utils.MigrateFlags(exportChain),
 		Name:      "export",
 		Usage:     "Export blockchain into file",
-		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
+		ArgsUsage: "<chainname> <filename> [<blockNumFirst> <blockNumLast>]",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.CacheFlag,
@@ -223,7 +223,15 @@ func importChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack := makeFullNode(ctx)
+
+	chainName := ctx.Args().First()
+	if chainName == "" {
+		utils.Fatalf("This command requires chain name specified.")
+	}
+
+	stack, cfg := makeConfigNode(ctx, chainName)
+	utils.RegisterEthService(stack, &cfg.Eth)
+	//stack := makeFullNode(ctx)
 	defer stack.Close()
 
 	chain, db := utils.MakeChain(ctx, stack)
@@ -247,12 +255,15 @@ func importChain(ctx *cli.Context) error {
 	// Import the chain
 	start := time.Now()
 
-	if len(ctx.Args()) == 1 {
-		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
+	if len(ctx.Args()) == 2 {
+		if err := utils.ImportChain(chain, ctx.Args().Get(1)); err != nil {
 			log.Error("Import error", "err", err)
 		}
 	} else {
-		for _, arg := range ctx.Args() {
+		for i, arg := range ctx.Args() {
+			if i == 0 {
+				continue // skip the chain name
+			}
 			if err := utils.ImportChain(chain, arg); err != nil {
 				log.Error("Import error", "file", arg, "err", err)
 			}
@@ -313,20 +324,28 @@ func exportChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack := makeFullNode(ctx)
+
+	chainName := ctx.Args().First()
+	if chainName == "" {
+		utils.Fatalf("This command requires chain name specified.")
+	}
+
+	stack, cfg := makeConfigNode(ctx, chainName)
+	utils.RegisterEthService(stack, &cfg.Eth)
+	//stack := makeFullNode(ctx)
 	defer stack.Close()
 
 	chain, _ := utils.MakeChain(ctx, stack)
 	start := time.Now()
 
 	var err error
-	fp := ctx.Args().First()
-	if len(ctx.Args()) < 3 {
+	fp := ctx.Args().Get(1)
+	if len(ctx.Args()) < 4 {
 		err = utils.ExportChain(chain, fp)
 	} else {
 		// This can be improved to allow for numbers larger than 9223372036854775807
-		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
-		last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+		first, ferr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+		last, lerr := strconv.ParseInt(ctx.Args().Get(3), 10, 64)
 		if ferr != nil || lerr != nil {
 			utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
 		}
