@@ -177,6 +177,10 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 		return errUnknownBlock
 	}
 
+	if header.Number.Uint64() == 0 {
+		return nil // Ignore verify for genesis block
+	}
+
 	// Don't waste time checking blocks from the future
 	if header.Time.Cmp(big.NewInt(now().Unix())) > 0 {
 		sb.logger.Warnf("date/time different between different nodes. block from future with time:%v, bigger than now:%v", header.Time.Uint64(), now().Unix())
