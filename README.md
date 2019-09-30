@@ -1,3 +1,4 @@
+welcome to our lastest [instruction](https://pchaindoc.readthedocs.io/en/latest/index.html).
 ## Pchain
 
 [中文README](https://github.com/pchain-org/pchain/wiki/README_CN)
