@@ -264,18 +264,20 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{PChainId: %s ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Engine: %v}",
+	return fmt.Sprintf("{PChainId: %s ChainID: %v Engine: %v OutOfStorageBlock: %v CorrectRevealVoteBlock: %v}",
 		c.PChainId,
 		c.ChainId,
-		c.HomesteadBlock,
-		c.DAOForkBlock,
-		c.DAOForkSupport,
-		c.EIP150Block,
-		c.EIP155Block,
-		c.EIP158Block,
-		c.ByzantiumBlock,
-		c.ConstantinopleBlock,
+		//c.HomesteadBlock,
+		//c.DAOForkBlock,
+		//c.DAOForkSupport,
+		//c.EIP150Block,
+		//c.EIP155Block,
+		//c.EIP158Block,
+		//c.ByzantiumBlock,
+		//c.ConstantinopleBlock,
 		engine,
+		c.OutOfStorageBlock,
+		c.CorrectRevealVoteBlock,
 	)
 }
 
