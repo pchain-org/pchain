@@ -600,3 +600,7 @@ func (api *PrivateDebugAPI) PrintTrieNode(ctx context.Context, root common.Hash)
 	}
 	return result, it.Error()
 }
+
+func (api *PrivateDebugAPI) PrintChainConfig(ctx context.Context) (string, error) {
+	return api.config.String(), nil
+}
