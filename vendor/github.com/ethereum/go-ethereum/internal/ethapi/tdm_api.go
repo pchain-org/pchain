@@ -135,15 +135,20 @@ func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChai
 		return verror
 	}
 
-	// Apply Logic
-	if state.IsCandidate(from) {
-		// Move delegate amount first if Candidate
-		state.ForEachProxied(from, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
-			// Move Proxied Amount to Deposit Proxied Amount
-			state.SubProxiedBalanceByUser(from, key, proxiedBalance)
-			state.AddDepositProxiedBalanceByUser(from, key, proxiedBalance)
-			return true
-		})
+	// Since un-mined header not passed from outside, we use latest confirmed header number, could be a potential issue
+	if bc.Config().IsCorrectRevealVote(bc.CurrentHeader().Number) {
+		// New logic, skip the balance movement for delegator
+	} else {
+		// Apply Logic (old logic)
+		if state.IsCandidate(from) {
+			// Move delegate amount first if Candidate
+			state.ForEachProxied(from, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
+				// Move Proxied Amount to Deposit Proxied Amount
+				state.SubProxiedBalanceByUser(from, key, proxiedBalance)
+				state.AddDepositProxiedBalanceByUser(from, key, proxiedBalance)
+				return true
+			})
+		}
 	}
 
 	// Rest Vote Amount
