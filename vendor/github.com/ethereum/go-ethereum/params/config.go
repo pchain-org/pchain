@@ -44,12 +44,13 @@ var (
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
 		//ByzantiumBlock:      big.NewInt(4370000),
-		ByzantiumBlock:             big.NewInt(0), //let's start from 1 block
-		ConstantinopleBlock:        nil,
-		Child0HashTimeLockContract: common.HexToAddress("0x18c496af47eb1c0946f64a25d3f589f71934bf3d"),
-		OutOfStorageBlock:          big.NewInt(5890000),
-		Child0OutOfStorageBlock:    big.NewInt(13930000),
-		CorrectRevealVoteBlock:     nil,
+		ByzantiumBlock:               big.NewInt(0), //let's start from 1 block
+		ConstantinopleBlock:          nil,
+		Child0HashTimeLockContract:   common.HexToAddress("0x18c496af47eb1c0946f64a25d3f589f71934bf3d"),
+		OutOfStorageBlock:            big.NewInt(5890000),
+		Child0OutOfStorageBlock:      big.NewInt(13930000),
+		CorrectRevealVoteBlock:       nil,
+		Child0CorrectRevealVoteBlock: nil,
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -58,21 +59,22 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the test network.
 	TestnetChainConfig = &ChainConfig{
-		PChainId:                   "testnet",
-		ChainId:                    big.NewInt(2),
-		HomesteadBlock:             big.NewInt(0),
-		DAOForkBlock:               nil,
-		DAOForkSupport:             true,
-		EIP150Block:                big.NewInt(0),
-		EIP150Hash:                 common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-		EIP155Block:                big.NewInt(10),
-		EIP158Block:                big.NewInt(10),
-		ByzantiumBlock:             big.NewInt(1700000),
-		ConstantinopleBlock:        nil,
-		Child0HashTimeLockContract: common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
-		OutOfStorageBlock:          big.NewInt(11800000),
-		Child0OutOfStorageBlock:    big.NewInt(14490000),
-		CorrectRevealVoteBlock:     nil,
+		PChainId:                     "testnet",
+		ChainId:                      big.NewInt(2),
+		HomesteadBlock:               big.NewInt(0),
+		DAOForkBlock:                 nil,
+		DAOForkSupport:               true,
+		EIP150Block:                  big.NewInt(0),
+		EIP150Hash:                   common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+		EIP155Block:                  big.NewInt(10),
+		EIP158Block:                  big.NewInt(10),
+		ByzantiumBlock:               big.NewInt(1700000),
+		ConstantinopleBlock:          nil,
+		Child0HashTimeLockContract:   common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
+		OutOfStorageBlock:            big.NewInt(11800000),
+		Child0OutOfStorageBlock:      big.NewInt(14490000),
+		CorrectRevealVoteBlock:       nil,
+		Child0CorrectRevealVoteBlock: nil,
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -170,8 +172,9 @@ type ChainConfig struct {
 	CorrectRevealVoteBlock *big.Int       `json:"revealvoteBlock,omitempty"` //
 
 	// For default setup propose
-	Child0HashTimeLockContract common.Address
-	Child0OutOfStorageBlock    *big.Int
+	Child0HashTimeLockContract   common.Address
+	Child0OutOfStorageBlock      *big.Int
+	Child0CorrectRevealVoteBlock *big.Int
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`

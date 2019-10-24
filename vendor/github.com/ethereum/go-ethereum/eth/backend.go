@@ -139,9 +139,15 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		if chainConfig.OutOfStorageBlock == nil {
 			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
 		}
+		if chainConfig.CorrectRevealVoteBlock == nil {
+			chainConfig.CorrectRevealVoteBlock = params.MainnetChainConfig.CorrectRevealVoteBlock
+		}
 	case "testnet":
 		if chainConfig.OutOfStorageBlock == nil {
 			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
+		}
+		if chainConfig.CorrectRevealVoteBlock == nil {
+			chainConfig.CorrectRevealVoteBlock = params.TestnetChainConfig.CorrectRevealVoteBlock
 		}
 	case "child_0":
 		if (chainConfig.HashTimeLockContract == common.Address{}) {
@@ -153,8 +159,10 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		}
 		if isTestnet {
 			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.CorrectRevealVoteBlock = params.TestnetChainConfig.Child0CorrectRevealVoteBlock
 		} else {
 			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.CorrectRevealVoteBlock = params.MainnetChainConfig.Child0CorrectRevealVoteBlock
 		}
 	}
 
@@ -506,7 +514,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	go s.loopForMiningEvent()
 
 	// Start the Data Reduction
-	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0"{
+	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0" {
 		go s.StartScanAndPrune(0)
 	}
 
