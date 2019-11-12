@@ -10,8 +10,11 @@ var AttachCommand = attachCommand
 
 //var JavascriptCommand = javascriptCommand
 
+var ImportChainCommand = importCommand
+var ExportChainCommand = exportCommand
 var ImportPreimagesCommand = importPreimagesCommand
 var ExportPreimagesCommand = exportPreimagesCommand
+var CountBlockStateCommand = countBlockStateCommand
 
 var ConfigFileFlag = configFileFlag
 

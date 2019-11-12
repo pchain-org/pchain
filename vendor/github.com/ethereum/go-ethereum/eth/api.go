@@ -561,3 +561,42 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	}
 	return dirty, nil
 }
+
+// ReadRawDBNode is a debug API function that returns the node rlp data for a hash key, if known.
+func (api *PrivateDebugAPI) ReadRawDBNode(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+	if exist, _ := api.eth.ChainDb().Has(hash.Bytes()); exist {
+		return api.eth.ChainDb().Get(hash.Bytes())
+	}
+	return nil, errors.New("key not exist")
+}
+
+func (api *PrivateDebugAPI) BroadcastRawDBNode(ctx context.Context, hash common.Hash) (map[string]error, error) {
+	result := make(map[string]error)
+	if exist, _ := api.eth.ChainDb().Has(hash.Bytes()); exist {
+		data, _ := api.eth.chainDb.Get(hash.Bytes())
+		// Broadcast the node to other peers
+		for _, peer := range api.eth.protocolManager.peers.Peers() {
+			result[peer.id] = peer.SendTrieNodeData([][]byte{data})
+		}
+	}
+	return result, nil
+}
+
+type resultNode struct {
+	Key common.Hash   `json:"hash"`
+	Val hexutil.Bytes `json:"value"`
+}
+
+func (api *PrivateDebugAPI) PrintTrieNode(ctx context.Context, root common.Hash) ([]resultNode, error) {
+	result := make([]resultNode, 0)
+	t, _ := trie.NewSecure(root, trie.NewDatabase(api.eth.chainDb))
+	it := t.NodeIterator(nil)
+	for it.Next(true) {
+		if !it.Leaf() {
+			h := it.Hash()
+			v, _ := api.eth.chainDb.Get(h.Bytes())
+			result = append(result, resultNode{h, v})
+		}
+	}
+	return result, it.Error()
+}

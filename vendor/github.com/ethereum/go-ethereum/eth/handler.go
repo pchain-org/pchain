@@ -786,6 +786,29 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			rawdb.WritePreimages(db, preimagesMap)
 			pm.preimageLogger.Info("PreImages wrote into database")
 		}
+
+	case msg.Code == TrieNodeDataMsg:
+		pm.logger.Debug("TrieNodeDataMsg received")
+		var trienodes [][]byte
+		if err := msg.Decode(&trienodes); err != nil {
+			pm.logger.Warnf("Unable decode TrieNodeData %v", err)
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		pm.logger.Debugf("%d TrieNodeData received", len(trienodes))
+
+		db, _ := pm.blockchain.StateCache().TrieDB().DiskDB().(ethdb.Database)
+		for _, tnode := range trienodes {
+			thash := crypto.Keccak256Hash(tnode)
+			if has, herr := db.Has(thash.Bytes()); !has && herr == nil {
+				puterr := db.Put(thash.Bytes(), tnode)
+				if puterr == nil {
+					pm.logger.Debugf("Insert TrieNodeData %x", thash)
+				}
+			} else if has {
+				pm.logger.Debugf("TrieNodeData %x already existed", thash)
+			}
+		}
+
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}

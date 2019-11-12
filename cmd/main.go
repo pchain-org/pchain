@@ -79,8 +79,11 @@ func main() {
 		//gethmain.ConsoleCommand,
 		gethmain.AttachCommand,
 		//gethmain.JavascriptCommand,
+		gethmain.ImportChainCommand,
+		gethmain.ExportChainCommand,
 		gethmain.ImportPreimagesCommand,
 		gethmain.ExportPreimagesCommand,
+		gethmain.CountBlockStateCommand,
 
 		//walletCommand,
 		accountCommand,

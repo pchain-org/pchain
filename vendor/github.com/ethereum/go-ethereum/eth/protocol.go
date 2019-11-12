@@ -53,6 +53,7 @@ const (
 
 	GetPreImagesMsg = 0x19
 	PreImagesMsg    = 0x1a
+	TrieNodeDataMsg = 0x1b
 )
 
 type errCode int
