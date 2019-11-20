@@ -30,6 +30,7 @@ func NewPublicDelegateAPI(b Backend) *PublicDelegateAPI {
 var (
 	defaultSelfSecurityDeposit = math.MustParseBig256("10000000000000000000000") // 10,000 * e18
 	minimumDelegationAmount    = math.MustParseBig256("1000000000000000000000")  // 1000 * e18
+	maxDelegationAddresses     = 1000
 )
 
 func (api *PublicDelegateAPI) Delegate(ctx context.Context, from, candidate common.Address, amount *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
@@ -303,13 +304,22 @@ func delegateValidation(from common.Address, tx *types.Transaction, state *state
 		return nil, core.ErrNotCandidate
 	}
 
+	depositBalance := state.GetDepositProxiedBalanceByUser(args.Candidate, from)
+	if depositBalance.Sign() == 0 {
+		// Check if exceed the limit of delegated addresses
+		// if exceed the limit of delegation address number, return error
+		delegatedAddressNumber := state.GetProxiedAddressNumber(args.Candidate)
+		if delegatedAddressNumber >= maxDelegationAddresses {
+			return nil, core.ErrExceedDelegationAddressLimit
+		}
+	}
+
 	// If Candidate is supernode, only allow to increase the stack(whitelist proxied list), not allow to create the new stack
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
 		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 	}
 	if _, supernode := ep.Validators.GetByAddress(args.Candidate.Bytes()); supernode != nil && supernode.RemainingEpoch > 0 {
-		depositBalance := state.GetDepositProxiedBalanceByUser(args.Candidate, from)
 		if depositBalance.Sign() == 0 {
 			return nil, core.ErrCannotDelegate
 		}
