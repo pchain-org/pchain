@@ -985,7 +985,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteBlock(bc.db, block)
 
 	// reward outside
-	rewardOutside := bc.chainConfig.IsOutOfStorage(block.Number())
+	rewardOutside := bc.chainConfig.IsOutOfStorage(block.Number(), block.Header().MainChainNumber)
 	if rewardOutside {
 		outsideReward := state.GetOutsideReward()
 		for addr, reward := range outsideReward {

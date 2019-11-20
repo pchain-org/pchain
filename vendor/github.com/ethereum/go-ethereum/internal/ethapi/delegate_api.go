@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"math/big"
@@ -131,6 +132,51 @@ func (api *PublicDelegateAPI) CheckCandidate(ctx context.Context, address common
 	return fields, state.Error()
 }
 
+
+func (api *PublicDelegateAPI) ExtractReward(ctx context.Context, from common.Address, gasPrice *hexutil.Big) (common.Hash, error) {
+
+	//we validate here; even this tx is executed in later block, the result will be correct
+	var ep *epoch.Epoch
+	if tdm, ok := api.b.Engine().(consensus.Tendermint); ok {
+
+		mainChainId := api.b.GetCrossChainHelper().GetMainChainId()
+
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(api.b.CurrentBlock().NumberU64())
+		header, _ := api.b.HeaderByNumber(ctx, rpc.BlockNumber(ep.StartBlock))
+		mainBlock := header.MainChainNumber
+		if params.IsMainChain(api.b.ChainConfig().PChainId) {
+			mainBlock = header.Number
+		}
+
+		selfRetrieveReward := params.IsSelfRetrieveReward(mainChainId, mainBlock)
+
+		if !selfRetrieveReward {
+			return common.Hash{}, errors.New("not enabled yet")
+		}
+	} else {
+		return common.Hash{}, errors.New("not pdbft engine")
+	}
+
+	input, err := pabi.ChainABI.Pack(pabi.ExtractReward.String())
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	defaultGas := pabi.ExtractReward.RequiredGas()
+
+	args := SendTxArgs{
+		From:     from,
+		To:       &pabi.ChainContractMagicAddr,
+		Gas:      (*hexutil.Uint64)(&defaultGas),
+		GasPrice: gasPrice,
+		Value:    nil,
+		Input:    (*hexutil.Bytes)(&input),
+		Nonce:    nil,
+	}
+	return api.b.GetInnerAPIBridge().SendTransaction(ctx, args)
+}
+
+
 func init() {
 	// Delegate
 	core.RegisterValidateCb(pabi.Delegate, del_ValidateCb)
@@ -147,6 +193,10 @@ func init() {
 	// Cancel Candidate
 	core.RegisterValidateCb(pabi.CancelCandidate, ccdd_ValidateCb)
 	core.RegisterApplyCb(pabi.CancelCandidate, ccdd_ApplyCb)
+
+	//Extract Reward
+	core.RegisterValidateCb(pabi.ExtractReward, extrRwd_ValidateCb)
+	core.RegisterApplyCb(pabi.ExtractReward, extrRwd_ApplyCb)
 }
 
 func del_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
@@ -284,6 +334,16 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 
 	return nil
 }
+
+func extrRwd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
+
+	return nil
+}
+
+func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+	return nil
+}
+
 
 // Validation
 

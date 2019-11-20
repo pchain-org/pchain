@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -214,5 +215,9 @@ func (b *LesApiBackend) GetCrossChainHelper() core.CrossChainHelper {
 }
 
 func (b *LesApiBackend) BroadcastTX3ProofData(proofData *types.TX3ProofData) {
+	panic("not supported")
+}
+
+func (b *LesApiBackend) Engine() consensus.Engine{
 	panic("not supported")
 }

@@ -472,17 +472,20 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	}
 
 	epoch := sb.GetEpoch().GetEpochByBlockNumber(header.Number.Uint64())
+	mainBlock := sb.chain.GetBlockByNumber(epoch.StartBlock).Header().MainChainNumber
+	selfRetrieveReward := sb.chainConfig.IsSelfRetrieveReward(mainBlock)
 
 	// Calculate the rewards
-	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee)
+	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
-	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state, sb.chainConfig.IsOutOfStorage(header.Number)); ok {
+	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state,
+										sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
+										selfRetrieveReward); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
 		})
-
 	}
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -718,7 +721,8 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 // The total reward consists of the static block reward of Owner setup and total tx gas fee.
 //
 // If the coinbase is Candidate, divide the rewards by weight
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch, totalGasFee *big.Int) {
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch,
+						totalGasFee *big.Int, selfRetrieveReward bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
 	if config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId {
@@ -787,10 +791,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		}
 	}
 
-	outsideReward := config.IsOutOfStorage(header.Number)
+	outsideReward := config.IsOutOfStorage(header.Number, header.MainChainNumber)
 
 	// Move the self reward to Reward Trie
-	divideRewardByEpoch(state, header.Coinbase, ep.Number, selfReward, outsideReward)
+	divideRewardByEpoch(state, header.Coinbase, ep.Number, selfReward, outsideReward, selfRetrieveReward)
 
 	// Calculate the Delegate Reward
 	if delegateReward != nil && delegateReward.Sign() > 0 {
@@ -800,7 +804,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			if depositProxiedBalance.Sign() == 1 {
 				// deposit * delegateReward / total deposit
 				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
-				divideRewardByEpoch(state, key, ep.Number, individualReward, outsideReward)
+				divideRewardByEpoch(state, key, ep.Number, individualReward, outsideReward, selfRetrieveReward)
 				totalIndividualReward.Add(totalIndividualReward, individualReward)
 			}
 			return true
@@ -827,7 +831,8 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 }
 
-func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64, reward *big.Int, outsideReward bool) {
+func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64, reward *big.Int,
+						outsideReward, selfRetrieveReward bool) {
 	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
 	lastEpochReward := new(big.Int).Set(reward)
 	for i := epochNumber; i < epochNumber+12; i++ {
@@ -846,5 +851,7 @@ func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber 
 			lastEpochReward.Sub(lastEpochReward, epochReward)
 		}
 	}
-	state.MarkAddressReward(addr)
+	if !selfRetrieveReward {
+		state.MarkAddressReward(addr)
+	}
 }

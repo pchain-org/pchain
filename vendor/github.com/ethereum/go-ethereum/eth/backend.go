@@ -139,10 +139,12 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		if chainConfig.OutOfStorageBlock == nil {
 			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
 		}
+		chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
 	case "testnet":
 		if chainConfig.OutOfStorageBlock == nil {
 			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
 		}
+		chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
 	case "child_0":
 		if (chainConfig.HashTimeLockContract == common.Address{}) {
 			if isTestnet {
@@ -153,8 +155,18 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		}
 		if isTestnet {
 			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
 		} else {
 			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
+		}
+	default:
+		if isTestnet {
+			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
+		} else {
+			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
 		}
 	}
 
