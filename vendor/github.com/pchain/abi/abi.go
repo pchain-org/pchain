@@ -146,6 +146,8 @@ func StringToFunctionType(s string) FunctionType {
 		return CancelCandidate
 	case "SetBlockReward":
 		return SetBlockReward
+	case "ExtractReward":
+		return ExtractReward
 	default:
 		return Unknown
 	}
@@ -419,6 +421,12 @@ const jsonChainABI = `
 				"type": "uint256"
 			}
 		]
+	},
+	{
+		"type": "function",
+		"name": "ExtractReward",
+		"constant": false,
+		"inputs": []
 	}
 ]`
 

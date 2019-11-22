@@ -880,6 +880,11 @@ web3._extend({
 			call: 'del_checkCandidate',
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter]
+		})，
+		new web3._extend.Method({
+			name: 'extractReward',
+			call: 'del_extractReward',
+			params: 2
 		})
 	],
 	properties:

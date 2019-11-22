@@ -135,28 +135,6 @@ func (api *PublicDelegateAPI) CheckCandidate(ctx context.Context, address common
 
 func (api *PublicDelegateAPI) ExtractReward(ctx context.Context, from common.Address, gasPrice *hexutil.Big) (common.Hash, error) {
 
-	//we validate here; even this tx is executed in later block, the result will be correct
-	var ep *epoch.Epoch
-	if tdm, ok := api.b.Engine().(consensus.Tendermint); ok {
-
-		mainChainId := api.b.GetCrossChainHelper().GetMainChainId()
-
-		ep = tdm.GetEpoch().GetEpochByBlockNumber(api.b.CurrentBlock().NumberU64())
-		header, _ := api.b.HeaderByNumber(ctx, rpc.BlockNumber(ep.StartBlock))
-		mainBlock := header.MainChainNumber
-		if params.IsMainChain(api.b.ChainConfig().PChainId) {
-			mainBlock = header.Number
-		}
-
-		selfRetrieveReward := params.IsSelfRetrieveReward(mainChainId, mainBlock)
-
-		if !selfRetrieveReward {
-			return common.Hash{}, errors.New("not enabled yet")
-		}
-	} else {
-		return common.Hash{}, errors.New("not pdbft engine")
-	}
-
 	input, err := pabi.ChainABI.Pack(pabi.ExtractReward.String())
 	if err != nil {
 		return common.Hash{}, err
@@ -337,10 +315,55 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 
 func extrRwd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
 
-	return nil
+	var ep *epoch.Epoch
+	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
+
+		mainChainId := bc.GetCrossChainHelper().GetMainChainId()
+
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
+		header := bc.GetHeaderByNumber(ep.StartBlock)
+		mainBlock := header.Number
+		if !params.IsMainChain(bc.Config().PChainId) {
+			mainBlock = header.MainChainNumber
+		}
+
+		selfRetrieveReward := params.IsSelfRetrieveReward(mainChainId, mainBlock)
+
+		if !selfRetrieveReward {
+			return errors.New("not enabled yet")
+		}
+
+		return nil
+	} else {
+		return errors.New("not pdbft engine")
+	}
 }
 
 func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+
+	//validate again
+	if err := extrRwd_ValidateCb(tx, state, bc); err != nil {
+		return err
+	}
+
+	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
+
+		epoch := tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
+
+		currentEpochNumber := epoch.Number
+		from := derivedAddressFromTx(tx)
+		rewards := state.GetAllEpochReward(from)
+
+		//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
+		for epNumber, reward := range rewards{
+			if epNumber < currentEpochNumber {
+				state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, reward)
+				state.AddBalance(from, reward)
+				state.DeleteEpochReward(from, epNumber)
+			}
+		}
+	}
+
 	return nil
 }
 

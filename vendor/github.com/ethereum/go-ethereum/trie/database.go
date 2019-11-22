@@ -904,3 +904,7 @@ func (db *Database) GetAllEpochReward(address common.Address) map[uint64]*big.In
 	}
 	return result
 }
+
+func (db *Database) DeleteEpochReward(address common.Address, epoch uint64) error {
+	return db.diskdb.Delete(append(append(rewardPrefix, address.Bytes()...), encodeEpochNumber(epoch)...))
+}

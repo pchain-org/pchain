@@ -179,7 +179,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		} else {
 			root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 		}
-		receipt := types.NewReceipt(root, false, *usedGas)
+		receipt := types.NewReceipt(root, true, *usedGas)
 		receipt.TxHash = tx.Hash()
 		receipt.GasUsed = gas
 

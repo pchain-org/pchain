@@ -472,7 +472,11 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	}
 
 	epoch := sb.GetEpoch().GetEpochByBlockNumber(header.Number.Uint64())
-	mainBlock := sb.chain.GetBlockByNumber(epoch.StartBlock).Header().MainChainNumber
+	epStartHeader := chain.GetBlockByNumber(epoch.StartBlock).Header()
+	mainBlock := epStartHeader.Number
+	if !sb.chainConfig.IsMainChain() {
+		mainBlock = epStartHeader.MainChainNumber
+	}
 	selfRetrieveReward := sb.chainConfig.IsSelfRetrieveReward(mainBlock)
 
 	// Calculate the rewards

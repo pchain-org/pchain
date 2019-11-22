@@ -152,6 +152,19 @@ func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, e
 	}
 }
 
+
+func (self *StateDB) GetEpochReward(address common.Address, epoch uint64) *big.Int {
+	return self.db.TrieDB().GetEpochReward(address, epoch)
+}
+
+func (self *StateDB) GetAllEpochReward(address common.Address) map[uint64]*big.Int {
+	return self.db.TrieDB().GetAllEpochReward(address)
+}
+
+func (self *StateDB) DeleteEpochReward(address common.Address, epoch uint64) error {
+	return self.db.TrieDB().DeleteEpochReward(address, epoch)
+}
+
 // ----- Reward Set
 
 // MarkAddressReward adds the specified object to the dirty map to avoid
