@@ -472,7 +472,10 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	}
 
 	epoch := sb.GetEpoch().GetEpochByBlockNumber(header.Number.Uint64())
-	epStartHeader := chain.GetBlockByNumber(epoch.StartBlock).Header()
+	epStartHeader := header
+	if header.Number != epoch.StartBlock {
+		epStartHeader = chain.GetBlockByNumber(epoch.StartBlock).Header()
+	}
 	mainBlock := epStartHeader.Number
 	if !sb.chainConfig.IsMainChain() {
 		mainBlock = epStartHeader.MainChainNumber
