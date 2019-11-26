@@ -873,6 +873,7 @@ func (db *Database) accumulate(hash common.Hash, reachable map[common.Hash]struc
 }
 
 var rewardPrefix = []byte("w")
+var rewardExtractPrefix = []byte("extrRwd-epoch-")
 
 func encodeEpochNumber(number uint64) []byte {
 	enc := make([]byte, 8)
@@ -905,6 +906,17 @@ func (db *Database) GetAllEpochReward(address common.Address) map[uint64]*big.In
 	return result
 }
 
-func (db *Database) DeleteEpochReward(address common.Address, epoch uint64) error {
-	return db.diskdb.Delete(append(append(rewardPrefix, address.Bytes()...), encodeEpochNumber(epoch)...))
+func (db *Database) MarkEpochRewardExtracted(address common.Address, epoch uint64) error {
+	return db.diskdb.Put(append(rewardExtractPrefix, address.Bytes()...), encodeEpochNumber(epoch))
+}
+
+func (db *Database) GetEpochRewardExtracted(address common.Address) (uint64, error) {
+
+	epochBytes, err := db.diskdb.Get(append(rewardExtractPrefix, address.Bytes()...))
+
+	if err != nil {
+		return 0xffffffffffffffff, err
+	}
+
+	return decodeEpochNumber(epochBytes), nil
 }

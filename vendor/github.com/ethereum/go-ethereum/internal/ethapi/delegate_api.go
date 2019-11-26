@@ -348,18 +348,29 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
 
-		epoch := tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
-
-		currentEpochNumber := epoch.Number
 		from := derivedAddressFromTx(tx)
+
+		epoch := tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
+		currentEpochNumber := epoch.Number
+		noExtractMark := false
+		extractEpochNumber, err := state.GetEpochRewardExtracted(from)
+		if err != nil {
+			noExtractMark = true
+		}
+		maxExtractEpochNumber := uint64(0)
+
 		rewards := state.GetAllEpochReward(from)
 
 		//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
 		for epNumber, reward := range rewards{
-			if epNumber < currentEpochNumber {
+			if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
 				state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, reward)
 				state.AddBalance(from, reward)
-				state.DeleteEpochReward(from, epNumber)
+
+				if maxExtractEpochNumber < epNumber {
+					maxExtractEpochNumber = epNumber
+					state.MarkEpochRewardExtracted(from, maxExtractEpochNumber)
+				}
 			}
 		}
 	}
