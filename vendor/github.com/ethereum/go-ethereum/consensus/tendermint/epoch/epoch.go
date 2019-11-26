@@ -352,6 +352,8 @@ func (epoch *Epoch) GetPreviousEpoch() *Epoch {
 func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB, 
 			outsideReward, selfRetrieveReward bool) (bool, *tmTypes.ValidatorSet, error) {
 
+	log.Infof("test-log ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
+
 	if height == epoch.EndBlock {
 		epoch.nextEpoch = epoch.GetNextEpoch()
 		if epoch.nextEpoch != nil {

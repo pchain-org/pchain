@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
@@ -328,7 +329,7 @@ func extrRwd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Bl
 		}
 
 		selfRetrieveReward := params.IsSelfRetrieveReward(mainChainId, mainBlock)
-
+		log.Infof("test-log selfRetrieveReward is %v\n", selfRetrieveReward)
 		if !selfRetrieveReward {
 			return errors.New("not enabled yet")
 		}
@@ -360,6 +361,9 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 		maxExtractEpochNumber := uint64(0)
 
 		rewards := state.GetAllEpochReward(from)
+
+		log.Infof("test-log extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
+		log.Infof("test-log extrRwd_ApplyCb rewards is %v\n", rewards)
 
 		//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
 		for epNumber, reward := range rewards{

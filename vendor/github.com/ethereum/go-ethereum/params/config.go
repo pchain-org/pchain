@@ -35,7 +35,7 @@ var (
 	// Note: it does not work exactly from this block, it works from the next epoch
 	//       and this number is the main chain block number
 	MainnetExtractRewardMainBlock = big.NewInt(1111111111)
-	TestnetExtractRewardMainBlock = big.NewInt(1111111111)
+	TestnetExtractRewardMainBlock = big.NewInt(11)
 )
 
 var (
@@ -76,8 +76,8 @@ var (
 		ByzantiumBlock:             big.NewInt(1700000),
 		ConstantinopleBlock:        nil,
 		Child0HashTimeLockContract: common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
-		OutOfStorageBlock:          big.NewInt(11800000),
-		Child0OutOfStorageBlock:    big.NewInt(14490000),
+		OutOfStorageBlock:          big.NewInt(10),
+		Child0OutOfStorageBlock:    big.NewInt(10),
 		ExtractRewardMainBlock:     TestnetExtractRewardMainBlock,
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -321,10 +321,11 @@ func (c *ChainConfig) IsHashTimeLockWithdraw(num *big.Int, contractAddress *comm
 
 func (c *ChainConfig) IsOutOfStorage(blockNumber, mainBlockNumber *big.Int) bool {
 
-	switch c.PChainId {
-	case "child_0":
+	log.Infof("test-log IsOutOfStorage, c.PChainId, c.OutOfStorageBlock, blockNumber, mainBlockNumber is %v, %v, %v, %v",
+		c.PChainId, c.OutOfStorageBlock, blockNumber, mainBlockNumber)
+	if c.PChainId == "child_0" || c.IsMainChain() {
 		return isForked(c.OutOfStorageBlock, blockNumber)
-	default:
+	} else {
 		return isForked(c.OutOfStorageBlock, mainBlockNumber)
 	}
 }
