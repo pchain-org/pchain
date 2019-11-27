@@ -161,12 +161,24 @@ func (self *StateDB) GetAllEpochReward(address common.Address) map[uint64]*big.I
 	return self.db.TrieDB().GetAllEpochReward(address)
 }
 
-func (self *StateDB) MarkEpochRewardExtracted(address common.Address, epoch uint64) error {
-	return self.db.TrieDB().MarkEpochRewardExtracted(address, epoch)
+func (self *StateDB) GetExtractRewardSet() map[common.Address]uint64 {
+	return self.extractRewardSet
+}
+
+func (self *StateDB) ClearExtractRewardSet() {
+	self.extractRewardSet = make(map[common.Address]uint64)
+}
+
+func (self *StateDB) MarkEpochRewardExtracted(address common.Address, epoch uint64) {
+	self.extractRewardSet[address] = epoch
 }
 
 func (self *StateDB) GetEpochRewardExtracted(address common.Address) (uint64, error) {
 	return self.db.TrieDB().GetEpochRewardExtracted(address)
+}
+
+func (self *StateDB) WriteEpochRewardExtracted(address common.Address, epoch uint64) error {
+	return self.db.TrieDB().WriteEpochRewardExtracted(address, epoch)
 }
 
 // ----- Reward Set

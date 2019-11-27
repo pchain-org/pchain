@@ -319,8 +319,6 @@ func extrRwd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Bl
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
 
-		mainChainId := bc.GetCrossChainHelper().GetMainChainId()
-
 		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 		header := bc.GetHeaderByNumber(ep.StartBlock)
 		mainBlock := header.Number
@@ -328,7 +326,7 @@ func extrRwd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Bl
 			mainBlock = header.MainChainNumber
 		}
 
-		selfRetrieveReward := params.IsSelfRetrieveReward(mainChainId, mainBlock)
+		selfRetrieveReward := bc.Config().IsSelfRetrieveReward(mainBlock)
 		log.Infof("test-log selfRetrieveReward is %v\n", selfRetrieveReward)
 		if !selfRetrieveReward {
 			return errors.New("not enabled yet")

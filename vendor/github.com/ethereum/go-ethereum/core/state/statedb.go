@@ -69,6 +69,7 @@ type StateDB struct {
 	childChainRewardPerBlockDirty bool
 
 	rewardOutsideSet map[common.Address]Reward
+	extractRewardSet map[common.Address]uint64
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -113,6 +114,7 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		childChainRewardPerBlock:      nil,
 		childChainRewardPerBlockDirty: false,
 		rewardOutsideSet:              make(map[common.Address]Reward),
+		extractRewardSet:              make(map[common.Address]uint64),
 		logs:                          make(map[common.Hash][]*types.Log),
 		preimages:                     make(map[common.Hash][]byte),
 	}, nil
@@ -143,6 +145,7 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.rewardSet = make(RewardSet)
 	self.childChainRewardPerBlock = nil
 	self.rewardOutsideSet = make(map[common.Address]Reward)
+	self.extractRewardSet = make(map[common.Address]uint64)
 	self.thash = common.Hash{}
 	self.bhash = common.Hash{}
 	self.txIndex = 0
@@ -612,6 +615,7 @@ func (self *StateDB) Copy() *StateDB {
 		rewardSetDirty:                self.rewardSetDirty,
 		childChainRewardPerBlockDirty: self.childChainRewardPerBlockDirty,
 		rewardOutsideSet:              make(map[common.Address]Reward, len(self.rewardOutsideSet)),
+		extractRewardSet:              make(map[common.Address]uint64, len(self.extractRewardSet)),
 		refund:                        self.refund,
 		logs:                          make(map[common.Hash][]*types.Log, len(self.logs)),
 		logSize:                       self.logSize,
@@ -633,6 +637,9 @@ func (self *StateDB) Copy() *StateDB {
 	}
 	for addr := range self.rewardOutsideSet {
 		state.rewardOutsideSet[addr] = self.rewardOutsideSet[addr].Copy()
+	}
+	for addr := range self.extractRewardSet {
+		state.extractRewardSet[addr] = self.extractRewardSet[addr]
 	}
 	for hash, logs := range self.logs {
 		state.logs[hash] = make([]*types.Log, len(logs))

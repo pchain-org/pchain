@@ -1000,14 +1000,38 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		state.ClearOutsideReward()
 	}
 
+	tdm := bc.Engine().(consensus.Tendermint)
+	curBlockNumber := block.NumberU64()
+	curEpoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
+	epStartHeader := block.Header()
+	if curBlockNumber != curEpoch.StartBlock {
+		epStartHeader = bc.GetBlockByNumber(curEpoch.StartBlock).Header()
+	}
+	mainBlock := epStartHeader.Number
+	if !bc.chainConfig.IsMainChain() {
+		mainBlock = epStartHeader.MainChainNumber
+	}
+	selfRetrieveReward := bc.chainConfig.IsSelfRetrieveReward(mainBlock)
+	if selfRetrieveReward {
+		extractRewardSet := state.GetExtractRewardSet()
+		for addr, epoch := range extractRewardSet {
+			state.WriteEpochRewardExtracted(addr, epoch)
+		}
+		state.ClearExtractRewardSet()
+	}
+
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return NonStatTy, err
 	}
 	triedb := bc.stateCache.TrieDB()
 
+	//we flush db within 5 blocks before/after epoch-switch to avoid rollback issues
+	FORCE_FULSH_WINDOW := uint64(5)
+	withinEpochSwitchWindow := (curBlockNumber < curEpoch.StartBlock + FORCE_FULSH_WINDOW || curBlockNumber > curEpoch.EndBlock - FORCE_FULSH_WINDOW)
+
 	// If we're running an archive node, always flush
-	if bc.cacheConfig.TrieDirtyDisabled {
+	if withinEpochSwitchWindow || bc.cacheConfig.TrieDirtyDisabled {
 		if err := triedb.Commit(root, false); err != nil {
 			return NonStatTy, err
 		}

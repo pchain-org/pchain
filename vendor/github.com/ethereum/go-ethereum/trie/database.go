@@ -906,7 +906,7 @@ func (db *Database) GetAllEpochReward(address common.Address) map[uint64]*big.In
 	return result
 }
 
-func (db *Database) MarkEpochRewardExtracted(address common.Address, epoch uint64) error {
+func (db *Database) WriteEpochRewardExtracted(address common.Address, epoch uint64) error {
 	return db.diskdb.Put(append(rewardExtractPrefix, address.Bytes()...), encodeEpochNumber(epoch))
 }
 
