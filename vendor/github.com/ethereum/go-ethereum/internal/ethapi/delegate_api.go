@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"math/big"
@@ -316,17 +315,9 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 
 func extrRwd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
 
-	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
 
-		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
-		header := bc.GetHeaderByNumber(ep.StartBlock)
-		mainBlock := header.Number
-		if !params.IsMainChain(bc.Config().PChainId) {
-			mainBlock = header.MainChainNumber
-		}
-
-		selfRetrieveReward := bc.Config().IsSelfRetrieveReward(mainBlock)
+		selfRetrieveReward := consensus.IsSelfRetrieveReward(tdm.GetEpoch(), bc, bc.CurrentBlock().Header())
 		log.Infof("test-log selfRetrieveReward is %v\n", selfRetrieveReward)
 		if !selfRetrieveReward {
 			return errors.New("not enabled yet")

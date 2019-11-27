@@ -1001,17 +1001,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 
 	tdm := bc.Engine().(consensus.Tendermint)
-	curBlockNumber := block.NumberU64()
-	curEpoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
-	epStartHeader := block.Header()
-	if curBlockNumber != curEpoch.StartBlock {
-		epStartHeader = bc.GetBlockByNumber(curEpoch.StartBlock).Header()
-	}
-	mainBlock := epStartHeader.Number
-	if !bc.chainConfig.IsMainChain() {
-		mainBlock = epStartHeader.MainChainNumber
-	}
-	selfRetrieveReward := bc.chainConfig.IsSelfRetrieveReward(mainBlock)
+	selfRetrieveReward := consensus.IsSelfRetrieveReward(tdm.GetEpoch(), bc, block.Header())
 	if selfRetrieveReward {
 		extractRewardSet := state.GetExtractRewardSet()
 		for addr, epoch := range extractRewardSet {
@@ -1028,6 +1018,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	//we flush db within 5 blocks before/after epoch-switch to avoid rollback issues
 	FORCE_FULSH_WINDOW := uint64(5)
+	curBlockNumber := block.NumberU64()
+	curEpoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
 	withinEpochSwitchWindow := (curBlockNumber < curEpoch.StartBlock + FORCE_FULSH_WINDOW || curBlockNumber > curEpoch.EndBlock - FORCE_FULSH_WINDOW)
 
 	// If we're running an archive node, always flush

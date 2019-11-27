@@ -474,15 +474,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	curBlockNumber := header.Number.Uint64()
 	epoch := sb.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
 
-	epStartHeader := header
-	if curBlockNumber != epoch.StartBlock {
-		epStartHeader = chain.GetBlockByNumber(epoch.StartBlock).Header()
-	}
-	mainBlock := epStartHeader.Number
-	if !sb.chainConfig.IsMainChain() {
-		mainBlock = epStartHeader.MainChainNumber
-	}
-	selfRetrieveReward := sb.chainConfig.IsSelfRetrieveReward(mainBlock)
+	selfRetrieveReward := consensus.IsSelfRetrieveReward(sb.GetEpoch(), chain, header)
 
 	// Calculate the rewards
 	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
