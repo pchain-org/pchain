@@ -22,6 +22,23 @@ func (self *StateDB) GetTotalRewardBalance(addr common.Address) *big.Int {
 	return common.Big0
 }
 
+func (self *StateDB) AddRewardBalance(addr common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		// Add amount to Total Reward Balance
+		stateObject.AddRewardBalance(amount)
+	}
+}
+
+func (self *StateDB) SubRewardBalance(addr common.Address, amount *big.Int) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		// Add amount to Total Reward Balance
+		stateObject.SubRewardBalance(amount)
+	}
+}
+
+
 // ----- Reward Trie
 
 // GetRewardBalanceByEpochNumber
@@ -128,11 +145,7 @@ func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, e
 		self.rewardOutsideSet[addr] = epochReward
 	}
 
-	stateObject := self.GetOrNewStateObject(addr)
-	if stateObject != nil {
-		// Add amount to Total Reward Balance
-		stateObject.AddRewardBalance(amount)
-	}
+	self.AddRewardBalance(addr, amount)
 }
 
 func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, amount *big.Int) {
@@ -145,11 +158,7 @@ func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, e
 		self.rewardOutsideSet[addr] = epochReward
 	}
 
-	stateObject := self.GetOrNewStateObject(addr)
-	if stateObject != nil {
-		// Add amount to Total Reward Balance
-		stateObject.SubRewardBalance(amount)
-	}
+	self.SubRewardBalance(addr, amount)
 }
 
 
@@ -179,6 +188,16 @@ func (self *StateDB) GetEpochRewardExtracted(address common.Address) (uint64, er
 
 func (self *StateDB) WriteEpochRewardExtracted(address common.Address, epoch uint64) error {
 	return self.db.TrieDB().WriteEpochRewardExtracted(address, epoch)
+}
+
+
+//record candidate's last proposed block which brings reward
+func (self *StateDB) ReadOOSLastBlock() (*big.Int, error) {
+	return self.db.TrieDB().ReadOOSLastBlock()
+}
+
+func (self *StateDB) WriteOOSLastBlock(blockNumber *big.Int) error {
+	return self.db.TrieDB().WriteOOSLastBlock(blockNumber)
 }
 
 // ----- Reward Set

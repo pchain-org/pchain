@@ -998,6 +998,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 		}
 		state.ClearOutsideReward()
+
+		prevLastBlock, err := state.ReadOOSLastBlock()
+		if err != nil || prevLastBlock.Cmp(block.Number()) < 0 {
+			state.WriteOOSLastBlock(block.Number())
+		}
 	}
 
 	tdm := bc.Engine().(consensus.Tendermint)
