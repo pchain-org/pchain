@@ -321,7 +321,7 @@ func (c *ChainConfig) IsHashTimeLockWithdraw(num *big.Int, contractAddress *comm
 
 func (c *ChainConfig) IsOutOfStorage(blockNumber, mainBlockNumber *big.Int) bool {
 
-	log.Debugf("test-log IsOutOfStorage, c.PChainId, c.OutOfStorageBlock, blockNumber, mainBlockNumber is %v, %v, %v, %v",
+	log.Debugf("IsOutOfStorage, c.PChainId, c.OutOfStorageBlock, blockNumber, mainBlockNumber is %v, %v, %v, %v",
 		c.PChainId, c.OutOfStorageBlock, blockNumber, mainBlockNumber)
 	if c.PChainId == "child_0" || c.IsMainChain() {
 		return isForked(c.OutOfStorageBlock, blockNumber)

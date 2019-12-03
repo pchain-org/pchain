@@ -318,7 +318,7 @@ func extrRwd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Bl
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
 
 		selfRetrieveReward := consensus.IsSelfRetrieveReward(tdm.GetEpoch(), bc, bc.CurrentBlock().Header())
-		log.Debugf("test-log selfRetrieveReward is %v\n", selfRetrieveReward)
+		log.Debugf("extrRwd_ValidateCb selfRetrieveReward is %v\n", selfRetrieveReward)
 		if !selfRetrieveReward {
 			return errors.New("not enabled yet")
 		}
@@ -351,8 +351,8 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 		rewards := state.GetAllEpochReward(from)
 
-		log.Debugf("test-log extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
-		log.Debugf("test-log extrRwd_ApplyCb rewards is %v\n", rewards)
+		log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
+		log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
 
 		//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
 		for epNumber, reward := range rewards{
