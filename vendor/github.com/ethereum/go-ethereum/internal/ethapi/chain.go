@@ -708,22 +708,26 @@ func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 	return nil
 }
 
+//for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
 func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
 	signer := types.NewEIP155Signer(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
-		return core.ErrInvalidSender
+		return core.ErrInvalidTx4
+		//return core.ErrInvalidSender
 	}
 
 	var args pabi.WithdrawFromMainChainArgs
 	data := tx.Data()
 	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
-		return err
+		return core.ErrInvalidTx4
+		//return err
 	}
 
 	if state.HasTX3(from, args.TxHash) {
-		return fmt.Errorf("tx %x already used in the main chain", args.TxHash)
+		return core.ErrInvalidTx4
+		//return fmt.Errorf("tx %x already used in the main chain", args.TxHash)
 	}
 
 	if mining { // validate only when mining.
@@ -735,13 +739,15 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		signer2 := types.NewEIP155Signer(wfccTx.ChainId())
 		wfccFrom, err := types.Sender(signer2, wfccTx)
 		if err != nil {
-			return core.ErrInvalidSender
+			return core.ErrInvalidTx4
+			//return core.ErrInvalidSender
 		}
 
 		var wfccArgs pabi.WithdrawFromChildChainArgs
 		wfccData := wfccTx.Data()
 		if err := pabi.ChainABI.UnpackMethodInputs(&wfccArgs, pabi.WithdrawFromChildChain.String(), wfccData[4:]); err != nil {
-			return err
+			return core.ErrInvalidTx4
+			//return err
 		}
 
 		if from != wfccFrom || args.ChainId != wfccArgs.ChainId || args.Amount.Cmp(wfccTx.Value()) != 0 {
@@ -751,7 +757,8 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 	if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
-		return errors.New("no enough balance to withdraw")
+		return core.ErrInvalidTx4
+		//return errors.New("no enough balance to withdraw")
 	}
 
 	// mark from -> tx3 on the main chain (to indicate tx3's used).
