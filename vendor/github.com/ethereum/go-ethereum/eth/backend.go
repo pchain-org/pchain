@@ -28,8 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/istanbul"
 	istanbulBackend "github.com/ethereum/go-ethereum/consensus/istanbul/backend"
-	"github.com/ethereum/go-ethereum/consensus/tendermint"
-	tendermintBackend "github.com/ethereum/go-ethereum/consensus/tendermint"
+	"github.com/ethereum/go-ethereum/consensus/pdbft"
+	tendermintBackend "github.com/ethereum/go-ethereum/consensus/pdbft"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/datareduction"
@@ -290,7 +290,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 		if chainConfig.Tendermint.Epoch != 0 {
 			config.Tendermint.Epoch = chainConfig.Tendermint.Epoch
 		}
-		config.Tendermint.ProposerPolicy = tendermint.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
+		config.Tendermint.ProposerPolicy = pdbft.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
 		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), cch)
 	}
 

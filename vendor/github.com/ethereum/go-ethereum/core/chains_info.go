@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	ep "github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/tendermint/go-crypto"

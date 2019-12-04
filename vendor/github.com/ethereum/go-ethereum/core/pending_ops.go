@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/consensus"
-	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	tmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
