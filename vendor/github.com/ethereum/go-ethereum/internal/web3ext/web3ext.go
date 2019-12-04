@@ -779,8 +779,7 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'depositInMainChain',
 			call: 'chain_depositInMainChain',
-			params: 4,
-			inputFormatter: [null]
+			params: 4
 		}),
 		new web3._extend.Method({
 			name: 'depositInChildChain',
@@ -805,6 +804,16 @@ web3._extend({
 			name: 'signAddress',
 			call: 'chain_signAddress',
 			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'setBlockReward',
+			call: 'chain_setBlockReward',
+			params: 3
+		}),
+		new web3._extend.Method({
+			name: 'getBlockReward',
+			call: 'chain_getBlockReward',
+			params: 1
 		})
 	],
 	properties:
@@ -880,6 +889,11 @@ web3._extend({
 			call: 'del_checkCandidate',
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'extractReward',
+			call: 'del_extractReward',
+			params: 2
 		})
 	],
 	properties:

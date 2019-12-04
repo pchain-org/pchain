@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"sync"
 	"time"
 
@@ -452,8 +453,9 @@ func (db *Database) preimage(hash common.Hash) ([]byte, error) {
 // buffer. The caller must not hold onto the return value because it will become
 // invalid on the next call.
 func (db *Database) secureKey(key []byte) []byte {
-	buf := append(db.seckeybuf[:0], secureKeyPrefix...)
-	buf = append(buf, key...)
+	buf := append(secureKeyPrefix[:], key...)
+	//buf := append(db.seckeybuf[:0], secureKeyPrefix...)
+	//buf = append(buf, key...)
 	return buf
 }
 
@@ -868,4 +870,68 @@ func (db *Database) accumulate(hash common.Hash, reachable map[common.Hash]struc
 	for _, child := range node.childs() {
 		db.accumulate(child, reachable)
 	}
+}
+
+var rewardPrefix = []byte("w")
+var rewardExtractPrefix = []byte("extrRwd-epoch-")
+var oosLastBlockKey = []byte("oos-last-block")
+
+func encodeEpochNumber(number uint64) []byte {
+	enc := make([]byte, 8)
+	binary.BigEndian.PutUint64(enc, number)
+	return enc
+}
+
+func decodeEpochNumber(raw []byte) uint64 {
+	return binary.BigEndian.Uint64(raw)
+}
+
+func (db *Database) GetEpochReward(address common.Address, epoch uint64) *big.Int {
+	reward, _ := db.diskdb.Get(append(append(rewardPrefix, address.Bytes()...), encodeEpochNumber(epoch)...))
+	if len(reward) == 0 {
+		return big.NewInt(0)
+	}
+	return new(big.Int).SetBytes(reward)
+}
+
+func (db *Database) GetAllEpochReward(address common.Address) map[uint64]*big.Int {
+	it := db.diskdb.NewIteratorWithPrefix(append(rewardPrefix, address.Bytes()...))
+	defer it.Release()
+
+	result := make(map[uint64]*big.Int)
+	for it.Next() {
+		epoch := decodeEpochNumber(it.Key()[21:])
+		reward := new(big.Int).SetBytes(it.Value())
+		result[epoch] = reward
+	}
+	return result
+}
+
+func (db *Database) WriteEpochRewardExtracted(address common.Address, epoch uint64) error {
+	return db.diskdb.Put(append(rewardExtractPrefix, address.Bytes()...), encodeEpochNumber(epoch))
+}
+
+func (db *Database) GetEpochRewardExtracted(address common.Address) (uint64, error) {
+
+	epochBytes, err := db.diskdb.Get(append(rewardExtractPrefix, address.Bytes()...))
+
+	if err != nil {
+		return 0xffffffffffffffff, err
+	}
+
+	return decodeEpochNumber(epochBytes), nil
+}
+
+func (db *Database) ReadOOSLastBlock() (*big.Int, error) {
+	blockBytes, err := db.diskdb.Get(oosLastBlockKey)
+
+	if err != nil {
+		return big.NewInt(-1), err
+	}
+
+	return new(big.Int).SetBytes(blockBytes), nil
+}
+
+func (db *Database) WriteOOSLastBlock(blockNumber *big.Int) error {
+	return db.diskdb.Put(oosLastBlockKey, blockNumber.Bytes())
 }

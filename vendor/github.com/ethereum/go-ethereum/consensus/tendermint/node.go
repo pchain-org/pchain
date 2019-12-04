@@ -114,6 +114,7 @@ func (n *Node) OnStart() error {
 		n.logger.Errorf("Failed to start Consensus Reactor. Error: %v", err)
 		return err
 	}
+	n.consensusReactor.AfterStart()
 
 	return nil
 }

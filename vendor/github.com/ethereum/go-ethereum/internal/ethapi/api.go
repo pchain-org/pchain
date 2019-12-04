@@ -43,7 +43,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const (
@@ -506,7 +505,7 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
 func (s *PublicBlockChainAPI) GetFullBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber, fullDetail bool) (map[string]interface{}, error) {
-	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+	state, header, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
 		return nil, err
 	}
@@ -543,10 +542,19 @@ func (s *PublicBlockChainAPI) GetFullBalance(ctx context.Context, address common
 		fields["proxied_detail"] = proxied_detail
 
 		reward_detail := make(map[EpochLabel]*hexutil.Big)
-		state.ForEachReward(address, func(key uint64, rewardBalance *big.Int) bool {
-			reward_detail[EpochLabel(key)] = (*hexutil.Big)(rewardBalance)
-			return true
-		})
+
+		outsideReward := s.b.ChainConfig().IsOutOfStorage(header.Number, header.MainChainNumber)
+		if outsideReward {
+			r := state.Database().TrieDB().GetAllEpochReward(address)
+			for k, v := range r {
+				reward_detail[EpochLabel(k)] = (*hexutil.Big)(v)
+			}
+		} else {
+			state.ForEachReward(address, func(key uint64, rewardBalance *big.Int) bool {
+				reward_detail[EpochLabel(key)] = (*hexutil.Big)(rewardBalance)
+				return true
+			})
+		}
 
 		fields["reward_detail"] = reward_detail
 	}
@@ -1517,16 +1525,9 @@ func (api *PrivateDebugAPI) ChaindbProperty(property string) (string, error) {
 }
 
 func (api *PrivateDebugAPI) ChaindbCompact() error {
-	ldb, ok := api.b.ChainDb().(interface {
-		LDB() *leveldb.DB
-	})
-	if !ok {
-		return fmt.Errorf("chaindbCompact does not work for memory databases")
-	}
 	for b := byte(0); b < 255; b++ {
 		log.Info("Compacting chain database", "range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1))
-		err := ldb.LDB().CompactRange(util.Range{Start: []byte{b}, Limit: []byte{b + 1}})
-		if err != nil {
+		if err := api.b.ChainDb().Compact([]byte{b}, []byte{b + 1}); err != nil {
 			log.Error("Database compaction failed", "err", err)
 			return err
 		}

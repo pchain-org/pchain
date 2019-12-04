@@ -112,7 +112,6 @@ type BlockChain struct {
 
 	chainmu sync.RWMutex // blockchain insertion lock
 
-	checkpoint       int          // checkpoint counts towards the new checkpoint
 	currentBlock     atomic.Value // Current head of the block chain
 	currentFastBlock atomic.Value // Current head of the fast-sync chain (may be above the block chain!)
 
@@ -494,7 +493,7 @@ func (bc *BlockChain) insert(block *types.Block) {
 		bc.currentFastBlock.Store(block)
 	}
 
-	log.Info(fmt.Sprintf("(bc *BlockChain) insert block number %v, hash: %x", block.NumberU64(), block.Hash()))
+	bc.logger.Info(fmt.Sprintf("(bc *BlockChain) insert block number %v, hash: %x", block.NumberU64(), block.Hash()))
 	ibCbMap := GetInsertBlockCbMap()
 	for _, cb := range ibCbMap {
 		cb(bc, block)
@@ -656,7 +655,6 @@ func (bc *BlockChain) GetUnclesInChain(block *types.Block, length int) []*types.
 
 // ChainValidator execute and validate the block with the current latest block.
 func (bc *BlockChain) ValidateBlock(block *types.Block) (*state.StateDB, types.Receipts, *types.PendingOps, error) {
-	log.Info("ValidateBlock checkpoint 0")
 	// If the header is a banned one, straight out abort
 	if BadHashes[block.Hash()] {
 		return nil, nil, nil, ErrBlacklistedHash
@@ -949,6 +947,7 @@ func (bc *BlockChain) MuLock() {
 func (bc *BlockChain) MuUnLock() {
 	bc.chainmu.Unlock()
 }
+
 // WriteBlockWithState writes the block and all associated state to the database.
 func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.Receipt, state *state.StateDB) (status WriteStatus, err error) {
 
@@ -985,14 +984,51 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	rawdb.WriteBlock(bc.db, block)
 
+	// reward outside
+	rewardOutside := bc.chainConfig.IsOutOfStorage(block.Number(), block.Header().MainChainNumber)
+	if rewardOutside {
+		outsideReward := state.GetOutsideReward()
+		for addr, reward := range outsideReward {
+			for epoch, rewardAmount := range reward {
+				if rewardAmount.Sign() == 0 {
+					rawdb.DeleteReward(bc.db, addr, epoch)
+				} else {
+					rawdb.WriteReward(bc.db, addr, epoch, rewardAmount)
+				}
+			}
+		}
+		state.ClearOutsideReward()
+
+		prevLastBlock, err := state.ReadOOSLastBlock()
+		if err != nil || prevLastBlock.Cmp(block.Number()) < 0 {
+			state.WriteOOSLastBlock(block.Number())
+		}
+	}
+
+	tdm := bc.Engine().(consensus.Tendermint)
+	selfRetrieveReward := consensus.IsSelfRetrieveReward(tdm.GetEpoch(), bc, block.Header())
+	if selfRetrieveReward {
+		extractRewardSet := state.GetExtractRewardSet()
+		for addr, epoch := range extractRewardSet {
+			state.WriteEpochRewardExtracted(addr, epoch)
+		}
+		state.ClearExtractRewardSet()
+	}
+
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return NonStatTy, err
 	}
 	triedb := bc.stateCache.TrieDB()
 
+	//we flush db within 5 blocks before/after epoch-switch to avoid rollback issues
+	FORCE_FULSH_WINDOW := uint64(5)
+	curBlockNumber := block.NumberU64()
+	curEpoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
+	withinEpochSwitchWindow := (curBlockNumber < curEpoch.StartBlock + FORCE_FULSH_WINDOW || curBlockNumber > curEpoch.EndBlock - FORCE_FULSH_WINDOW)
+
 	// If we're running an archive node, always flush
-	if bc.cacheConfig.TrieDirtyDisabled {
+	if withinEpochSwitchWindow || bc.cacheConfig.TrieDirtyDisabled {
 		if err := triedb.Commit(root, false); err != nil {
 			return NonStatTy, err
 		}
@@ -1192,7 +1228,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		// Skip all known blocks that are behind us
 		current := bc.CurrentBlock().NumberU64()
 		for block != nil && err == ErrKnownBlock {
-			if  current >= block.NumberU64() {
+			if current >= block.NumberU64() {
 				stats.ignored++
 				block, err = it.next()
 			} else {
@@ -1745,6 +1781,9 @@ func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 
 // Engine retrieves the blockchain's consensus engine.
 func (bc *BlockChain) Engine() consensus.Engine { return bc.engine }
+
+//GetCrossChainHelper retrieves the blockchain's cross chain helper.
+func (bc *BlockChain) GetCrossChainHelper() CrossChainHelper {return bc.cch}
 
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
 func (bc *BlockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {

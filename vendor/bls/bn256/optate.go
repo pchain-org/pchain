@@ -1,5 +1,107 @@
 package bn256
 
+
+func lineFunctionAdd_SaveMem(r, p *twistPoint, q *curvePoint, r2 *gfP2, a, b, c *gfP2, rOut *twistPoint) {
+
+	a.SetZero()
+	b.SetZero()
+	c.SetZero()
+	rOut.Set(&twistPoint{})
+
+	// See the mixed addition algorithm from "Faster Computation of the
+	// Tate Pairing", http://arxiv.org/pdf/0904.0854v3.pdf
+	B := (&gfP2{}).Mul(&p.x, &r.t)
+
+	D := (&gfP2{}).Add(&p.y, &r.z)
+	D.Square(D).Sub(D, r2).Sub(D, &r.t).Mul(D, &r.t)
+
+	H := (&gfP2{}).Sub(B, &r.x)
+	I := (&gfP2{}).Square(H)
+
+	E := (&gfP2{}).Add(I, I)
+	E.Add(E, E)
+
+	J := (&gfP2{}).Mul(H, E)
+
+	L1 := (&gfP2{}).Sub(D, &r.y)
+	L1.Sub(L1, &r.y)
+
+	V := (&gfP2{}).Mul(&r.x, E)
+
+	rOut.x.Square(L1).Sub(&rOut.x, J).Sub(&rOut.x, V).Sub(&rOut.x, V)
+
+	rOut.z.Add(&r.z, H).Square(&rOut.z).Sub(&rOut.z, &r.t).Sub(&rOut.z, I)
+
+	t := (&gfP2{}).Sub(V, &rOut.x)
+	t.Mul(t, L1)
+	t2 := (&gfP2{}).Mul(&r.y, J)
+	t2.Add(t2, t2)
+	rOut.y.Sub(t, t2)
+
+	rOut.t.Square(&rOut.z)
+
+	t.Add(&p.y, &rOut.z).Square(t).Sub(t, r2).Sub(t, &rOut.t)
+
+	t2.Mul(L1, &p.x)
+	t2.Add(t2, t2)
+	a = a.Sub(t2, t)
+
+	c = c.MulScalar(&rOut.z, &q.y)
+	c.Add(c, c)
+
+	b = b.Neg(L1)
+	b.MulScalar(b, &q.x).Add(b, b)
+
+	return
+}
+
+func lineFunctionDouble_SaveMem(r *twistPoint, q *curvePoint, a, b, c *gfP2, rOut *twistPoint) {
+
+	a.SetZero()
+	b.SetZero()
+	c.SetZero()
+	rOut.Set(&twistPoint{})
+
+	// See the doubling algorithm for a=0 from "Faster Computation of the
+	// Tate Pairing", http://arxiv.org/pdf/0904.0854v3.pdf
+	A := (&gfP2{}).Square(&r.x)
+	B := (&gfP2{}).Square(&r.y)
+	C := (&gfP2{}).Square(B)
+
+	D := (&gfP2{}).Add(&r.x, B)
+	D.Square(D).Sub(D, A).Sub(D, C).Add(D, D)
+
+	E := (&gfP2{}).Add(A, A)
+	E.Add(E, A)
+
+	G := (&gfP2{}).Square(E)
+
+	rOut.x.Sub(G, D).Sub(&rOut.x, D)
+
+	rOut.z.Add(&r.y, &r.z).Square(&rOut.z).Sub(&rOut.z, B).Sub(&rOut.z, &r.t)
+
+	rOut.y.Sub(D, &rOut.x).Mul(&rOut.y, E)
+	t := (&gfP2{}).Add(C, C)
+	t.Add(t, t).Add(t, t)
+	rOut.y.Sub(&rOut.y, t)
+
+	rOut.t.Square(&rOut.z)
+
+	t.Mul(E, &r.t).Add(t, t)
+	b = b.Neg(t)
+	b.MulScalar(b, &q.x)
+
+	a = a.Add(&r.x, E)
+	a.Square(a).Sub(a, A).Sub(a, G)
+	t.Add(B, B).Add(t, t)
+	a.Sub(a, t)
+
+	c = c.Mul(&rOut.z, &r.t)
+	c.Add(c, c).MulScalar(c, &q.y)
+
+	return
+}
+
 func lineFunctionAdd(r, p *twistPoint, q *curvePoint, r2 *gfP2) (a, b, c *gfP2, rOut *twistPoint) {
 	// See the mixed addition algorithm from "Faster Computation of the
 	// Tate Pairing", http://arxiv.org/pdf/0904.0854v3.pdf
@@ -135,26 +237,34 @@ func miller(q *twistPoint, p *curvePoint) *gfP12 {
 
 	r2 := (&gfP2{}).Square(&aAffine.y)
 
+	a := &gfP2{}
+	b := &gfP2{}
+	c := &gfP2{}
+	newR  := &twistPoint{}
+
 	for i := len(sixuPlus2NAF) - 1; i > 0; i-- {
-		a, b, c, newR := lineFunctionDouble(r, bAffine)
+		//a, b, c, newR := lineFunctionDouble(r, bAffine)
+		lineFunctionDouble_SaveMem(r, bAffine, a, b, c, newR)
 		if i != len(sixuPlus2NAF)-1 {
 			ret.Square(ret)
 		}
 
 		mulLine(ret, a, b, c)
-		r = newR
+		r.Set(newR)
 
 		switch sixuPlus2NAF[i-1] {
 		case 1:
-			a, b, c, newR = lineFunctionAdd(r, aAffine, bAffine, r2)
+			//a, b, c, newR = lineFunctionAdd(r, aAffine, bAffine, r2)
+			lineFunctionAdd_SaveMem(r, aAffine, bAffine, r2, a, b, c, newR)
 		case -1:
-			a, b, c, newR = lineFunctionAdd(r, minusA, bAffine, r2)
+			//a, b, c, newR = lineFunctionAdd(r, minusA, bAffine, r2)
+			lineFunctionAdd_SaveMem(r, minusA, bAffine, r2, a, b, c, newR)
 		default:
 			continue
 		}
 
 		mulLine(ret, a, b, c)
-		r = newR
+		r.Set(newR)
 	}
 
 	// In order to calculate Q1 we have to convert q from the sextic twist
@@ -191,14 +301,16 @@ func miller(q *twistPoint, p *curvePoint) *gfP12 {
 	minusQ2.t.SetOne()
 
 	r2.Square(&q1.y)
-	a, b, c, newR := lineFunctionAdd(r, q1, bAffine, r2)
+	//a, b, c, newR := lineFunctionAdd(r, q1, bAffine, r2)
+	lineFunctionAdd_SaveMem(r, q1, bAffine, r2, a, b, c, newR)
 	mulLine(ret, a, b, c)
-	r = newR
+	r.Set(newR)
 
 	r2.Square(&minusQ2.y)
-	a, b, c, newR = lineFunctionAdd(r, minusQ2, bAffine, r2)
+	//a, b, c, newR = lineFunctionAdd(r, minusQ2, bAffine, r2)
+	lineFunctionAdd_SaveMem(r, minusQ2, bAffine, r2, a, b, c, newR)
 	mulLine(ret, a, b, c)
-	r = newR
+	r.Set(newR)
 
 	return ret
 }

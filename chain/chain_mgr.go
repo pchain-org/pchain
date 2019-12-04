@@ -324,6 +324,9 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		})
 	}
 
+	// Write down the genesis into chain info db when exit the routine
+	defer writeGenesisIntoChainInfoDB(cm.cch.chainInfoDB, chainId, validators)
+
 	if !validator {
 		log.Warnf("You are not in the validators of child chain %v, no need to start the child chain", chainId)
 		// Update Child Chain to formal
@@ -494,4 +497,10 @@ func (cm *ChainManager) getNodeValidator(ethNode *node.Node) (common.Address, bo
 		return etherbase, false
 	}
 
+}
+
+func writeGenesisIntoChainInfoDB(db dbm.DB, childChainId string, validators []types.GenesisValidator) {
+	ethByte, _ := generateETHGenesis(childChainId, validators)
+	tdmByte, _ := generateTDMGenesis(childChainId, validators)
+	core.SaveChainGenesis(db, childChainId, ethByte, tdmByte)
 }

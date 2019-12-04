@@ -341,7 +341,7 @@ func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
 	header := proofData.Header
 	// Don't waste time checking blocks from the future
 	if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
-		return errors.New("block in the future")
+		//return errors.New("block in the future")
 	}
 
 	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
@@ -469,7 +469,7 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 	header := proofData.Header
 	// Don't waste time checking blocks from the future
 	if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
-		return errors.New("block in the future")
+		//return errors.New("block in the future")
 	}
 
 	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)

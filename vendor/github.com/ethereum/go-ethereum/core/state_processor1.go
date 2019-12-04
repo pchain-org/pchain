@@ -179,7 +179,18 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		} else {
 			root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 		}
+
 		receipt := types.NewReceipt(root, true, *usedGas)
+
+		//fix receipt status value
+		mainBlock := header.Number
+		if !bc.chainConfig.IsMainChain() {
+			mainBlock = header.MainChainNumber
+		}
+		if bc.Config().IsSelfRetrieveReward(mainBlock) {
+			receipt = types.NewReceipt(root, false, *usedGas)
+		}
+
 		receipt.TxHash = tx.Hash()
 		receipt.GasUsed = gas
 

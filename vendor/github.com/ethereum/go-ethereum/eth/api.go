@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"io"
 	"math/big"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/datareduction"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -302,9 +304,20 @@ func (api *PrivateAdminAPI) ImportChain(file string) (bool, error) {
 	return true, nil
 }
 
-func (api *PrivateAdminAPI) PruneStateData() (bool, error) {
-	go api.eth.StartScanAndPrune()
+func (api *PrivateAdminAPI) PruneStateData(height *hexutil.Uint64) (bool, error) {
+	var blockNumber uint64
+	if height != nil && *height > 0 {
+		blockNumber = uint64(*height)
+	}
+
+	go api.eth.StartScanAndPrune(blockNumber)
 	return true, nil
+}
+
+func (api *PrivateAdminAPI) LatestPruneState() (*datareduction.PruneStatus, error) {
+	status := datareduction.GetLatestStatus(api.eth.pruneDb)
+	status.LatestBlockNumber = api.eth.blockchain.CurrentHeader().Number.Uint64()
+	return status, nil
 }
 
 // PublicDebugAPI is the collection of Ethereum full node APIs exposed
@@ -363,6 +376,51 @@ func (api *PrivateDebugAPI) Preimage(ctx context.Context, hash common.Hash) (hex
 		return preimage, nil
 	}
 	return nil, errors.New("unknown preimage")
+}
+
+// RemotePreimage is a debug API function that start to sync the preimage for a sha3 hash from the best remote peer.
+func (api *PrivateDebugAPI) RemotePreimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+	peer := api.eth.protocolManager.peers.BestPeer()
+
+	hashes := make([]common.Hash, 0)
+	return nil, peer.RequestPreimages(append(hashes, hash))
+}
+
+// RemovePreimage is a debug API function that remove the preimage for a sha3 hash, if known.
+func (api *PrivateDebugAPI) RemovePreimage(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+	rawdb.DeletePreimage(api.eth.ChainDb(), hash)
+	return nil, nil
+}
+
+// Testing method
+func (api *PrivateDebugAPI) BrokenPreimage(ctx context.Context, hash common.Hash, preimage hexutil.Bytes) (hexutil.Bytes, error) {
+	// Broken the preimage
+	rawdb.WritePreimages(api.eth.ChainDb(), map[common.Hash][]byte{hash: preimage})
+	// try to read it from db
+	if read_preimage := rawdb.ReadPreimage(api.eth.ChainDb(), hash); read_preimage != nil {
+		return read_preimage, nil
+	}
+	return nil, errors.New("broken preimage failed")
+}
+
+func (api *PrivateDebugAPI) FindBadPreimage(ctx context.Context) (interface{}, error) {
+
+	images := make(map[common.Hash]string)
+
+	// Iterate the entire sha3 preimages for checking
+	db := api.eth.ChainDb() //.blockchain.StateCache().TrieDB().DiskDB().(ethdb.Database)
+	it := db.NewIteratorWithPrefix([]byte("secure-key-"))
+	for it.Next() {
+		keyHash := common.BytesToHash(it.Key())
+		valueHash := crypto.Keccak256Hash(it.Value())
+		if keyHash != valueHash {
+			// Add bad preimages
+			images[keyHash] = common.Bytes2Hex(it.Value())
+		}
+	}
+	it.Release()
+
+	return images, nil
 }
 
 // GetBadBLocks returns a list of the last 'bad blocks' that the client has seen on the network
@@ -502,4 +560,43 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 		dirty = append(dirty, common.BytesToAddress(key))
 	}
 	return dirty, nil
+}
+
+// ReadRawDBNode is a debug API function that returns the node rlp data for a hash key, if known.
+func (api *PrivateDebugAPI) ReadRawDBNode(ctx context.Context, hash common.Hash) (hexutil.Bytes, error) {
+	if exist, _ := api.eth.ChainDb().Has(hash.Bytes()); exist {
+		return api.eth.ChainDb().Get(hash.Bytes())
+	}
+	return nil, errors.New("key not exist")
+}
+
+func (api *PrivateDebugAPI) BroadcastRawDBNode(ctx context.Context, hash common.Hash) (map[string]error, error) {
+	result := make(map[string]error)
+	if exist, _ := api.eth.ChainDb().Has(hash.Bytes()); exist {
+		data, _ := api.eth.chainDb.Get(hash.Bytes())
+		// Broadcast the node to other peers
+		for _, peer := range api.eth.protocolManager.peers.Peers() {
+			result[peer.id] = peer.SendTrieNodeData([][]byte{data})
+		}
+	}
+	return result, nil
+}
+
+type resultNode struct {
+	Key common.Hash   `json:"hash"`
+	Val hexutil.Bytes `json:"value"`
+}
+
+func (api *PrivateDebugAPI) PrintTrieNode(ctx context.Context, root common.Hash) ([]resultNode, error) {
+	result := make([]resultNode, 0)
+	t, _ := trie.NewSecure(root, trie.NewDatabase(api.eth.chainDb))
+	it := t.NodeIterator(nil)
+	for it.Next(true) {
+		if !it.Leaf() {
+			h := it.Hash()
+			v, _ := api.eth.chainDb.Get(h.Bytes())
+			result = append(result, resultNode{h, v})
+		}
+	}
+	return result, it.Error()
 }

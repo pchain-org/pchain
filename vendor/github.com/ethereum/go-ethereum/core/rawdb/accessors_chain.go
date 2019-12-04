@@ -423,3 +423,23 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 	}
 	return a
 }
+
+func ReadReward(db ethdb.Reader, address common.Address, epoch uint64) *big.Int {
+	reward, _ := db.Get(rewardKey(address, epoch))
+	if len(reward) == 0 {
+		return big.NewInt(0)
+	}
+	return new(big.Int).SetBytes(reward)
+}
+
+func WriteReward(db ethdb.Writer, address common.Address, epoch uint64, reward *big.Int) {
+	if err := db.Put(rewardKey(address, epoch), reward.Bytes()); err != nil {
+		log.Crit("Failed to store epoch reward", "err", err)
+	}
+}
+
+func DeleteReward(db ethdb.Writer, address common.Address, epoch uint64) {
+	if err := db.Delete(rewardKey(address, epoch)); err != nil {
+		log.Crit("Failed to delete epoch reward", "err", err)
+	}
+}

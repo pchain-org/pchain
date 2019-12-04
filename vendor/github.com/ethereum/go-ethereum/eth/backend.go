@@ -128,11 +128,48 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	}
 
 	isMainChain := params.IsMainChain(ctx.ChainId())
-
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithDefault(chainDb, config.Genesis, isMainChain, isTestnet)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
+
+	// Update HTLC Hard Fork and Contract if any one blank
+	switch ctx.ChainId() {
+	case "pchain":
+		if chainConfig.OutOfStorageBlock == nil {
+			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
+		}
+		chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
+	case "testnet":
+		if chainConfig.OutOfStorageBlock == nil {
+			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
+		}
+		chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
+	case "child_0":
+		if (chainConfig.HashTimeLockContract == common.Address{}) {
+			if isTestnet {
+				chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
+			} else {
+				chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
+			}
+		}
+		if isTestnet {
+			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
+		} else {
+			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
+		}
+	default:
+		if isTestnet {
+			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
+		} else {
+			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
+		}
+	}
+
 	chainConfig.ChainLogger = logger
 	logger.Info("Initialised chain configuration", "config", chainConfig)
 
@@ -481,8 +518,8 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	go s.loopForMiningEvent()
 
 	// Start the Data Reduction
-	if s.config.PruneStateData {
-		go s.StartScanAndPrune()
+	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0"{
+		go s.StartScanAndPrune(0)
 	}
 
 	return nil
@@ -550,10 +587,22 @@ func (s *Ethereum) loopForMiningEvent() {
 	}
 }
 
-func (s *Ethereum) StartScanAndPrune() {
-	log.Debug("Data Reduction - Start")
-	blockNumber := s.blockchain.CurrentHeader().Number.Uint64()
-	log.Debugf("Data Reduction - Last block number %v", blockNumber)
+func (s *Ethereum) StartScanAndPrune(blockNumber uint64) {
+
+	if datareduction.StartPruning() {
+		log.Info("Data Reduction - Start")
+	} else {
+		log.Info("Data Reduction - Pruning is already running")
+		return
+	}
+
+	latestBlockNumber := s.blockchain.CurrentHeader().Number.Uint64()
+	if blockNumber == 0 || blockNumber >= latestBlockNumber {
+		blockNumber = latestBlockNumber
+		log.Infof("Data Reduction - Last block number %v", blockNumber)
+	} else {
+		log.Infof("Data Reduction - User defined Last block number %v", blockNumber)
+	}
 
 	ps := rawdb.ReadHeadScanNumber(s.pruneDb)
 	var scanNumber uint64
@@ -566,17 +615,13 @@ func (s *Ethereum) StartScanAndPrune() {
 	if pp != nil {
 		pruneNumber = *pp
 	}
-	log.Debugf("Data Reduction - Last scan number %v, prune number %v", scanNumber, pruneNumber)
+	log.Infof("Data Reduction - Last scan number %v, prune number %v", scanNumber, pruneNumber)
 
-	pruneProcessor := datareduction.NewPruneProcessor(s.chainDb, s.pruneDb, s.blockchain)
+	pruneProcessor := datareduction.NewPruneProcessor(s.chainDb, s.pruneDb, s.blockchain, s.config.PruneBlockData)
+	//pruneProcessor := datareduction.NewPruneProcessor(s.chainDb, s.pruneDb, s.blockchain)
 
 	lastScanNumber, lastPruneNumber := pruneProcessor.Process(blockNumber, scanNumber, pruneNumber)
-	log.Debugf("Data Reduction - After prune, last number scan %v, prune number %v", lastScanNumber, lastPruneNumber)
-	if s.config.PruneBlockData {
-		for i := uint64(1); i < lastPruneNumber; i++ {
-			rawdb.DeleteBody(s.chainDb, rawdb.ReadCanonicalHash(s.chainDb, i), i)
-		}
-		log.Debugf("deleted block from 1 to %v", lastPruneNumber)
-	}
-	log.Debug("Data Reduction - Completed")
+	log.Infof("Data Reduction Completed - After prune, last number scan %v, prune number %v", lastScanNumber, lastPruneNumber)
+
+	datareduction.StopPruning()
 }

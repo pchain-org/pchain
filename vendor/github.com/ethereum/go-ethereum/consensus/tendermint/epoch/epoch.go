@@ -349,23 +349,36 @@ func (epoch *Epoch) GetPreviousEpoch() *Epoch {
 	return epoch.previousEpoch
 }
 
-func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB) (bool, *tmTypes.ValidatorSet, error) {
+func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB, 
+			outsideReward, selfRetrieveReward bool) (bool, *tmTypes.ValidatorSet, error) {
+
+	log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
 
 	if height == epoch.EndBlock {
 		epoch.nextEpoch = epoch.GetNextEpoch()
 		if epoch.nextEpoch != nil {
-			// Step 0: Give the Epoch Reward
-			currentEpochNumber := epoch.Number
-			for rewardAddress := range state.GetRewardSet() {
-				currentEpochReward := state.GetRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber)
-				if currentEpochReward.Sign() == 1 {
-					state.SubRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
-					state.AddBalance(rewardAddress, currentEpochReward)
-				}
 
-				// Check Remaining Reward Balance
-				if state.GetTotalRewardBalance(rewardAddress).Sign() == 0 {
-					state.ClearRewardSetByAddress(rewardAddress)
+			if !selfRetrieveReward {
+				// Step 0: Give the Epoch Reward
+				currentEpochNumber := epoch.Number
+				for rewardAddress := range state.GetRewardSet() {
+					if outsideReward {
+						currentEpochReward := state.GetOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber)
+						if currentEpochReward.Sign() == 1 {
+							state.SubOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
+							state.AddBalance(rewardAddress, currentEpochReward)
+						}
+					} else {
+						currentEpochReward := state.GetRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber)
+						if currentEpochReward.Sign() == 1 {
+							state.SubRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
+							state.AddBalance(rewardAddress, currentEpochReward)
+						}
+					}
+					// Check Remaining Reward Balance
+					if state.GetTotalRewardBalance(rewardAddress).Sign() == 0 {
+						state.ClearRewardSetByAddress(rewardAddress)
+					}
 				}
 			}
 

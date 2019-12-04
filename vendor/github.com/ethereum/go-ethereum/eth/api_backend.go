@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -236,4 +237,8 @@ func (b *EthApiBackend) GetCrossChainHelper() core.CrossChainHelper {
 
 func (b *EthApiBackend) BroadcastTX3ProofData(proofData *types.TX3ProofData) {
 	b.eth.protocolManager.BroadcastTX3ProofData(proofData.Header.Hash(), proofData)
+}
+
+func (b *EthApiBackend) Engine()  consensus.Engine {
+	return b.eth.Engine()
 }
