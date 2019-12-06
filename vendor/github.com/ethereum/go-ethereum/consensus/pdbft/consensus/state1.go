@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	cmn "github.com/tendermint/go-common"
 	"time"
+	"math/big"
 )
 
 // The +2/3 and other Precommit-votes for block at `height`.
@@ -87,6 +88,9 @@ func (cs *ConsensusState) Initialize() {
 	cs.PrecommitMaj23SignAggr = nil
 	cs.CommitRound = -1
 	cs.state = nil
+	cs.totalVotingPower = big.NewInt(0)
+	cs.powerPerBlockF = big.NewFloat(0.0)
+	cs.pickedStep = uint64(1)
 }
 
 // Updates ConsensusState and increments height to match thatRewardScheme of state.
@@ -133,14 +137,58 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 
 	cs.state = state
 
+	cs.totalVotingPower = big.NewInt(0)
+	for _, validator := range cs.Validators.Validators {
+		cs.totalVotingPower = cs.totalVotingPower.Add(cs.totalVotingPower, validator.VotingPower)
+	}
+
+	blockCount := cs.state.Epoch.EndBlock - cs.state.Epoch.StartBlock + 1
+	cs.powerPerBlockF = big.NewFloat(0.0).SetInt(cs.totalVotingPower)
+	cs.powerPerBlockF = cs.powerPerBlockF.Quo(cs.powerPerBlockF, big.NewFloat(float64(blockCount)))
+	log.Debugf("UpdateToState, totalVotingPower: %v, powerPerBlock: %v\n",
+		cs.totalVotingPower, cs.powerPerBlockF)
+	cs.pickedStep = cs.pickLongStep(cs.Validators.Validators)
+
 	cs.newStep()
+}
+
+func (cs *ConsensusState)pickLongStep(validators []*types.Validator) uint64 {
+
+	primeArr := []uint64{2,3,7,13,31,61,127,251,509,1021,2039,4093,8191,
+		16381,32749,65521,131071,262139,524287,1048573,2097143,4194301,
+		8388593,16777213,33554393,67108859,134217689}
+
+	epBlockCount := cs.Epoch.EndBlock - cs.Epoch.StartBlock + 1
+	validatorSize := len(validators)
+
+	pickedStep := uint64(1)
+
+	log.Debug("pickLongStep", "validatorSize", validatorSize,
+		"epBlockCount", epBlockCount)
+	if validatorSize > 1 {
+		tmpNum := epBlockCount
+		if validatorSize > 3 {
+			tmpNum = epBlockCount / uint64(validatorSize/3)
+		} else {
+			tmpNum = epBlockCount / uint64(validatorSize)
+		}
+		for i := len(primeArr) - 1; i >= 0; i-- {
+			prime := primeArr[i]
+			if tmpNum > prime && epBlockCount%prime != 0 {
+				pickedStep = prime
+				break
+			}
+		}
+	}
+
+	return pickedStep
 }
 
 // The +2/3 and other Precommit-votes for block at `height`.
 // This Commit comes from block.LastCommit for `height+1`.
-func (bs *ConsensusState) LoadBlock(height uint64) *types.TdmBlock {
+func (cs *ConsensusState) LoadBlock(height uint64) *types.TdmBlock {
 
-	cr := bs.GetChainReader()
+	cr := cs.GetChainReader()
 
 	ethBlock := cr.GetBlockByNumber(height)
 	if ethBlock == nil {
@@ -162,9 +210,9 @@ func (bs *ConsensusState) LoadBlock(height uint64) *types.TdmBlock {
 	}
 }
 
-func (bs *ConsensusState) LoadLastTendermintExtra() (*types.TendermintExtra, uint64) {
+func (cs *ConsensusState) LoadLastTendermintExtra() (*types.TendermintExtra, uint64) {
 
-	cr := bs.backend.ChainReader()
+	cr := cs.backend.ChainReader()
 
 	curEthBlock := cr.CurrentBlock()
 	curHeight := curEthBlock.NumberU64()
@@ -172,29 +220,29 @@ func (bs *ConsensusState) LoadLastTendermintExtra() (*types.TendermintExtra, uin
 		return nil, 0
 	}
 
-	return bs.LoadTendermintExtra(curHeight)
+	return cs.LoadTendermintExtra(curHeight)
 }
 
-func (bs *ConsensusState) LoadTendermintExtra(height uint64) (*types.TendermintExtra, uint64) {
+func (cs *ConsensusState) LoadTendermintExtra(height uint64) (*types.TendermintExtra, uint64) {
 
-	cr := bs.backend.ChainReader()
+	cr := cs.backend.ChainReader()
 
 	ethBlock := cr.GetBlockByNumber(height)
 	if ethBlock == nil {
-		bs.logger.Warn("LoadTendermintExtra. nil block")
+		cs.logger.Warn("LoadTendermintExtra. nil block")
 		return nil, 0
 	}
 
 	header := cr.GetHeader(ethBlock.Hash(), ethBlock.NumberU64())
 	tdmExtra, err := types.ExtractTendermintExtra(header)
 	if err != nil {
-		bs.logger.Warnf("LoadTendermintExtra. error: %v", err)
+		cs.logger.Warnf("LoadTendermintExtra. error: %v", err)
 		return nil, 0
 	}
 
 	blockHeight := ethBlock.NumberU64()
 	if tdmExtra.Height != blockHeight {
-		bs.logger.Warnf("extra.height:%v, block.Number %v, reset it", tdmExtra.Height, blockHeight)
+		cs.logger.Warnf("extra.height:%v, block.Number %v, reset it", tdmExtra.Height, blockHeight)
 		tdmExtra.Height = blockHeight
 	}
 

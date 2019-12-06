@@ -53,8 +53,7 @@ func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.Ch
 	}
 
 	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(backend, config, chainConfig, cch)
-	consensusState.Epoch = ep
+	consensusState := consensus.NewConsensusState(backend, config, chainConfig, cch, ep)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}

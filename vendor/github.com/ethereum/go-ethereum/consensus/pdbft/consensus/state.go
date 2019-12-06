@@ -305,6 +305,9 @@ type ConsensusState struct {
 	mtx sync.Mutex
 	RoundState
 	Epoch *ep.Epoch // Current Epoch
+	totalVotingPower *big.Int //total voting power of current epoch
+	powerPerBlockF *big.Float //total voting power divide block number of current epoch
+	pickedStep     uint64     //step to jump in LSRR
 	state *sm.State // State until height-1.
 	vrfValIndex int
 	pastRoundStates map[int]int //key: round; value: 0 - no proposal, 1 - invalid
@@ -333,7 +336,8 @@ type ConsensusState struct {
 	logger log.Logger
 }
 
-func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.ChainConfig, cch core.CrossChainHelper) *ConsensusState {
+func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.ChainConfig,
+						cch core.CrossChainHelper, epoch *ep.Epoch) *ConsensusState {
 	cs := &ConsensusState{
 		chainConfig:      chainConfig,
 		cch:              cch,
@@ -344,6 +348,7 @@ func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.C
 		//done:             make(chan struct{}),
 		blockFromMiner: nil,
 		backend:        backend,
+		Epoch:          epoch,
 		logger:         backend.GetLogger(),
 	}
 
@@ -495,20 +500,42 @@ func (cs *ConsensusState) proposerByRound(round int)  *VRFProposer{
 func (cs *ConsensusState) proposersByVRF() (lastProposer int, curProposer int) {
 
 	chainReader := cs.backend.ChainReader()
+	chainConfig := chainReader.Config()
 	header := chainReader.CurrentHeader()
-	headerHash := header.Hash()
 
-	curProposer = cs.proposerByVRF(headerHash, cs.Validators.Validators)
-
-	headerHeight := header.Number.Uint64()
-	if headerHeight == cs.Epoch.StartBlock {
-		return -1, curProposer
+	mainBlock := new(big.Int).SetUint64(cs.Height)
+	if !chainConfig.IsMainChain() { //if not main chain, LSRR would be be enabled one block later
+		mainBlock = header.MainChainNumber
 	}
 
-	if headerHeight > 0 {
-		lastHeader := chainReader.GetHeaderByNumber(headerHeight - 1)
-		lastHeaderHash := lastHeader.Hash()
-		lastProposer = cs.proposerByVRF(lastHeaderHash, cs.Validators.Validators)
+	isLSRR := chainConfig.IsLSRR(mainBlock)
+
+	if !isLSRR {
+
+		headerHash := header.Hash()
+
+		curProposer = cs.proposerByVRF(headerHash, cs.Validators.Validators)
+
+		headerHeight := header.Number.Uint64()
+		if headerHeight == cs.Epoch.StartBlock {
+			return -1, curProposer
+		}
+
+		if headerHeight > 0 {
+			lastHeader := chainReader.GetHeaderByNumber(headerHeight - 1)
+			lastHeaderHash := lastHeader.Hash()
+			lastProposer = cs.proposerByVRF(lastHeaderHash, cs.Validators.Validators)
+			return lastProposer, curProposer
+		}
+	} else {
+		curProposer = cs.proposerByLSRR(cs.Height, cs.Validators.Validators)
+
+		if cs.Height == cs.Epoch.StartBlock {
+			return -1, curProposer
+		}
+
+		lastProposer = cs.proposerByLSRR(cs.Height - 1, cs.Validators.Validators)
+
 		return lastProposer, curProposer
 	}
 
@@ -540,6 +567,35 @@ func (cs *ConsensusState) proposerByVRF(headerHash common.Hash, validators []*ty
 			break
 		}
 	}
+
+	return idx
+}
+
+//get proposer by Long Step Round-Robin
+//theory: gcd(a, p) = 1 => {0, 1, 2, ..., p-1} = {a*0, a*1, a*2, ..., a*(p-1)} (mod p)
+func (cs *ConsensusState) proposerByLSRR(height uint64, validators []*types.Validator) (proposer int) {
+
+	stepF := big.NewFloat(float64(cs.pickedStep))
+	stepF = stepF.Mul(stepF, big.NewFloat(float64(height)))
+	stepF = stepF.Mul(stepF, cs.powerPerBlockF)
+	stepI := big.NewInt(0)
+	stepI,_ = stepF.Int(stepI)
+	stepI = stepI.Mod(stepI, cs.totalVotingPower)
+
+	log.Debug("proposerByLSRR", "pickedStep", cs.pickedStep,
+		"height", height, "stepF", stepF, "totalVotingPower", cs.totalVotingPower, "stepI", stepI)
+
+	idx := -1
+	bigInt0 := big.NewInt(0)
+	for i, validator := range validators {
+		stepI.Sub(stepI, validator.VotingPower)
+		if stepI.Cmp(bigInt0) <= 0 {
+			idx = i
+			break
+		}
+	}
+
+	log.Debug("proposerByLSRR", "idx", idx)
 
 	return idx
 }
