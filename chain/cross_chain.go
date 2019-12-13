@@ -408,14 +408,8 @@ func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
 	return nil
 }
 
-func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(bs []byte) error {
+func (cch *CrossChainHelper) SaveChildChainProofDataToMainChain(proofData *types.ChildChainProofData) error {
 	log.Debug("SaveChildChainProofDataToMainChain - start")
-
-	var proofData types.ChildChainProofData
-	err := rlp.DecodeBytes(bs, &proofData)
-	if err != nil {
-		return err
-	}
 
 	header := proofData.Header
 	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
@@ -607,6 +601,154 @@ func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transac
 		return errors.New("params are not consistent with tx in child chain")
 	}
 
+	return nil
+}
+
+//SaveDataToMainV1 acceps both epoch and tx3
+func (cch *CrossChainHelper) VerifyChildChainProofDataV1(proofData *types.ChildChainProofDataV1) error {
+
+	log.Debug("VerifyChildChainProofDataV1 - start")
+
+	header := proofData.Header
+	// Don't waste time checking blocks from the future
+	if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
+		//return errors.New("block in the future")
+	}
+
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
+	if err != nil {
+		return err
+	}
+
+	chainId := tdmExtra.ChainID
+	if chainId == "" || chainId == MainChain || chainId == TestnetChain {
+		return fmt.Errorf("invalid child chain id: %s", chainId)
+	}
+
+	if header.Nonce != (types.TendermintEmptyNonce) && !bytes.Equal(header.Nonce[:], types.TendermintNonce) {
+		return errors.New("invalid nonce")
+	}
+
+	if header.MixDigest != types.TendermintDigest {
+		return errors.New("invalid mix digest")
+	}
+
+	if header.UncleHash != types.TendermintNilUncleHash {
+		return errors.New("invalid uncle Hash")
+	}
+
+	if header.Difficulty == nil || header.Difficulty.Cmp(types.TendermintDefaultDifficulty) != 0 {
+		return errors.New("invalid difficulty")
+	}
+
+	// special case: epoch 0 update
+	// TODO: how to verify this block which includes epoch 0?
+	if tdmExtra.EpochBytes != nil && len(tdmExtra.EpochBytes) != 0 {
+		ep := epoch.FromBytes(tdmExtra.EpochBytes)
+		if ep != nil && ep.Number == 0 {
+			return nil
+		}
+	}
+
+	// Bypass the validator check for official child chain 0
+	if chainId != "child_0" {
+		ci := core.GetChainInfo(cch.chainInfoDB, chainId)
+		if ci == nil {
+			return fmt.Errorf("chain info %s not found", chainId)
+		}
+		epoch := ci.GetEpochByBlockNumber(tdmExtra.Height)
+		if epoch == nil {
+			return fmt.Errorf("could not get epoch for block height %v", tdmExtra.Height)
+		}
+		valSet := epoch.Validators
+		if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
+			return errors.New("inconsistent validator set")
+		}
+
+		seenCommit := tdmExtra.SeenCommit
+		if !bytes.Equal(tdmExtra.SeenCommitHash, seenCommit.Hash()) {
+			return errors.New("invalid committed seals")
+		}
+
+		if err = valSet.VerifyCommit(tdmExtra.ChainID, tdmExtra.Height, seenCommit); err != nil {
+			return err
+		}
+	}
+
+	//Verify Tx3
+	// tx merkle proof verify
+	keybuf := new(bytes.Buffer)
+	for i, txIndex := range proofData.TxIndexs {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(txIndex))
+		_, _, err := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Debug("VerifyChildChainProofDataV1 - end")
+	return nil
+}
+
+func (cch *CrossChainHelper) SaveChildChainProofDataToMainChainV1(proofData *types.ChildChainProofDataV1) error {
+	log.Debug("SaveChildChainProofDataToMainChainV1 - start")
+
+	header := proofData.Header
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
+	if err != nil {
+		return err
+	}
+
+	chainId := tdmExtra.ChainID
+	if chainId == "" || chainId == MainChain || chainId == TestnetChain {
+		return fmt.Errorf("invalid child chain id: %s", chainId)
+	}
+
+	// here is epoch update; should be a more general mechanism
+	if len(tdmExtra.EpochBytes) != 0 {
+		ep := epoch.FromBytes(tdmExtra.EpochBytes)
+		if ep != nil {
+			ci := core.GetChainInfo(cch.chainInfoDB, tdmExtra.ChainID)
+			// ChainInfo is nil means we need to wait for Child Chain to be launched, this could happened during catch-up scenario
+			if ci == nil {
+				for {
+					// wait for 3 sec and try again
+					time.Sleep(3 * time.Second)
+					ci = core.GetChainInfo(cch.chainInfoDB, tdmExtra.ChainID)
+					if ci != nil {
+						break
+					}
+				}
+			}
+
+			futureEpoch := ep.Number > ci.EpochNumber && tdmExtra.Height < ep.StartBlock
+			if futureEpoch {
+				// Future Epoch, just save the Epoch into Chain Info DB
+				core.SaveFutureEpoch(cch.chainInfoDB, ep, chainId)
+			} else if ep.Number == 0 || ep.Number >= ci.EpochNumber {
+				// New Epoch, save or update the Epoch into Chain Info DB
+				ci.EpochNumber = ep.Number
+				ci.Epoch = ep
+				core.SaveChainInfo(cch.chainInfoDB, ci)
+				log.Infof("Epoch saved from chain: %s, epoch: %v", chainId, ep)
+			}
+		}
+	}
+
+	// Write the TX3ProofData
+	if len(proofData.TxIndexs) != 0 {
+		tx3ProofData := &types.TX3ProofData{
+			Header:   proofData.Header,
+			TxIndexs: proofData.TxIndexs,
+			TxProofs: proofData.TxProofs,
+		}
+		if err := cch.WriteTX3ProofData(tx3ProofData); err != nil {
+			log.Error("TX3ProofDataMsg write error", "error", err)
+		}
+	}
+
+	log.Debug("SaveChildChainProofDataToMainChainV1 - end")
 	return nil
 }
 

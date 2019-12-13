@@ -500,15 +500,9 @@ func (cs *ConsensusState) proposerByRound(round int)  *VRFProposer{
 func (cs *ConsensusState) proposersByVRF() (lastProposer int, curProposer int) {
 
 	chainReader := cs.backend.ChainReader()
-	chainConfig := chainReader.Config()
 	header := chainReader.CurrentHeader()
 
-	mainBlock := new(big.Int).SetUint64(cs.Height)
-	if !chainConfig.IsMainChain() { //if not main chain, LSRR would be be enabled one block later
-		mainBlock = header.MainChainNumber
-	}
-
-	isLSRR := chainConfig.IsLSRR(mainBlock)
+	isLSRR := cs.chainConfig.IsLSRR(cs.getMainBlock())
 
 	if !isLSRR {
 
@@ -1033,26 +1027,38 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		}
 	}()
 
-	// Save block to main chain (this happens only on validator node).
-	// Note!!! This will BLOCK the WHOLE consensus stack since it blocks receiveRoutine.
-	// TODO: what if there're more than one round for a height? 'saveBlockToMainChain' would be called more than once
-	if cs.state.TdmExtra.NeedToSave &&
-		(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
-		if cs.privValidator != nil && cs.IsProposer() {
-			cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
-			lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
-			cs.saveBlockToMainChain(lastBlock)
-			cs.state.TdmExtra.NeedToSave = false
+	if !cs.chainConfig.IsSd2mcV1(cs.getMainBlock()) {
+		// Save block to main chain (this happens only on validator node).
+		// Note!!! This will BLOCK the WHOLE consensus stack since it blocks receiveRoutine.
+		// TODO: what if there're more than one round for a height? 'saveBlockToMainChain' would be called more than once
+		if cs.state.TdmExtra.NeedToSave &&
+			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
+			if cs.privValidator != nil && cs.IsProposer() {
+				cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
+				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
+				cs.saveBlockToMainChain(lastBlock, 0)
+				cs.state.TdmExtra.NeedToSave = false
+			}
 		}
-	}
 
-	if cs.state.TdmExtra.NeedToBroadcast &&
-		(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
-		if cs.privValidator != nil && cs.IsProposer() {
-			cs.logger.Infof("enterPropose: broadcastTX3ProofDataToMainChain height: %v", cs.state.TdmExtra.Height)
-			lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
-			cs.broadcastTX3ProofDataToMainChain(lastBlock)
-			cs.state.TdmExtra.NeedToBroadcast = false
+		if cs.state.TdmExtra.NeedToBroadcast &&
+			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
+			if cs.privValidator != nil && cs.IsProposer() {
+				cs.logger.Infof("enterPropose: broadcastTX3ProofDataToMainChain height: %v", cs.state.TdmExtra.Height)
+				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
+				cs.broadcastTX3ProofDataToMainChain(lastBlock)
+				cs.state.TdmExtra.NeedToBroadcast = false
+			}
+		}
+	} else {
+		if cs.state.TdmExtra.NeedToSave &&
+			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
+			if cs.privValidator != nil && cs.IsProposer() {
+				cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
+				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
+				cs.saveBlockToMainChain(lastBlock, 1)
+				cs.state.TdmExtra.NeedToSave = false
+			}
 		}
 	}
 
@@ -1173,30 +1179,10 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 		//This block could be used for later round
 		//cs.blockFromMiner = nil
 
-		// retrieve TX3ProofData for TX4
-		var tx3ProofData []*ethTypes.TX3ProofData
-		txs := ethBlock.Transactions()
-		for _, tx := range txs {
-			if pabi.IsPChainContractAddr(tx.To()) {
-				data := tx.Data()
-				function, err := pabi.FunctionTypeFromId(data[:4])
-				if err != nil {
-					continue
-				}
-
-				if function == pabi.WithdrawFromMainChain {
-					var args pabi.WithdrawFromMainChainArgs
-					data := tx.Data()
-					if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
-						continue
-					}
-
-					proof := cs.cch.GetTX3ProofData(args.ChainId, args.TxHash)
-					if proof != nil {
-						tx3ProofData = append(tx3ProofData, proof)
-					}
-				}
-			}
+		var tx3ProofData []*ethTypes.TX3ProofData = nil;
+		if !cs.chainConfig.IsSd2mcV1(cs.getMainBlock()) {
+			// retrieve TX3ProofData for TX4
+			tx3ProofData = cs.GetTX3ProofDataForTx4(ethBlock)
 		}
 
 		return types.MakeBlock(cs.Height, cs.state.TdmExtra.ChainID, commit, ethBlock,
@@ -1263,13 +1249,15 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 		return
 	}
 
-	// Validate TX4
-	err = cs.ValidateTX4(cs.ProposalBlock)
-	if err != nil {
-		// ProposalBlock is invalid, prevote nil.
-		cs.logger.Warnf("enterPrevote: ProposalBlock is invalid, error: %v", err)
-		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
-		return
+	if !cs.chainConfig.IsSd2mcV1(cs.getMainBlock()) {
+		// Validate TX4
+		err = cs.ValidateTX4(cs.ProposalBlock)
+		if err != nil {
+			// ProposalBlock is invalid, prevote nil.
+			cs.logger.Warnf("enterPrevote: ProposalBlock is invalid, error: %v", err)
+			cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+			return
+		}
 	}
 
 	// non-proposer should validate and execute block here.
@@ -1574,23 +1562,16 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 				block.TdmExtra.NeedToSave = true
 				cs.logger.Infof("NeedToSave set to true due to epoch. Chain: %s, Height: %v", block.TdmExtra.ChainID, block.TdmExtra.Height)
 			}
-			// check special cross-chain tx
-			txs := block.Block.Transactions()
-			for _, tx := range txs {
-				if pabi.IsPChainContractAddr(tx.To()) {
-					data := tx.Data()
-					function, err := pabi.FunctionTypeFromId(data[:4])
-					if err != nil {
-						continue
-					}
 
-					if function == pabi.WithdrawFromChildChain {
-						block.TdmExtra.NeedToBroadcast = true
-						cs.logger.Infof("NeedToBroadcast set to true due to tx. Tx: %s, Chain: %s, Height: %v", function.String(), block.TdmExtra.ChainID, block.TdmExtra.Height)
-						break
-					}
+			// check special cross-chain tx
+			if cs.HasTx3(block.Block) {
+				if !cs.chainConfig.IsSd2mcV1(cs.getMainBlock()) {
+					block.TdmExtra.NeedToBroadcast = true
+				} else {
+					block.TdmExtra.NeedToSave = true
 				}
-			}
+				cs.logger.Infof("NeedToBroadcast/NeedToSave set to true due to tx. Chain: %s, Height: %v", block.TdmExtra.ChainID, block.TdmExtra.Height)
+			 }
 		}
 
 		// Fire event for new block.
@@ -2089,6 +2070,68 @@ func CompareHRS(h1 uint64, r1 int, s1 RoundStepType, h2 uint64, r2 int, s2 Round
 	return 1
 }
 
+func (cs *ConsensusState)getMainBlock() *big.Int {
+	chainReader := cs.backend.ChainReader()
+	chainConfig := chainReader.Config()
+	header := chainReader.CurrentHeader()
+
+	mainBlock := new(big.Int).SetUint64(cs.Height)
+	if !chainConfig.IsMainChain() { //if not main chain, LSRR would be be enabled one block later
+		mainBlock = header.MainChainNumber
+	}
+	return mainBlock
+}
+
+func (cs *ConsensusState) HasTx3(block *ethTypes.Block) bool {
+
+	txs := block.Transactions()
+	for _, tx := range txs {
+		if pabi.IsPChainContractAddr(tx.To()) {
+			data := tx.Data()
+			function, err := pabi.FunctionTypeFromId(data[:4])
+			if err != nil {
+				continue
+			}
+
+			if function == pabi.WithdrawFromChildChain {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (cs *ConsensusState) GetTX3ProofDataForTx4(block *ethTypes.Block) []*ethTypes.TX3ProofData{
+
+	var tx3ProofData []*ethTypes.TX3ProofData = nil;
+
+	txs := block.Transactions()
+	for _, tx := range txs {
+		if pabi.IsPChainContractAddr(tx.To()) {
+			data := tx.Data()
+			function, err := pabi.FunctionTypeFromId(data[:4])
+			if err != nil {
+				continue
+			}
+
+			if function == pabi.WithdrawFromMainChain {
+				var args pabi.WithdrawFromMainChainArgs
+				data := tx.Data()
+				if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+					continue
+				}
+
+				proof := cs.cch.GetTX3ProofData(args.ChainId, args.TxHash)
+				if proof != nil {
+					tx3ProofData = append(tx3ProofData, proof)
+				}
+			}
+		}
+	}
+
+	return tx3ProofData
+}
+
 func (cs *ConsensusState) ValidateTX4(b *types.TdmBlock) error {
 	var index int
 
@@ -2123,22 +2166,36 @@ func (cs *ConsensusState) ValidateTX4(b *types.TdmBlock) error {
 	return nil
 }
 
-func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block) {
+func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block, version int) {
 
 	client := cs.cch.GetClient()
 	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 	//ctx := context.Background() // testing only!
 
-	proofData, err := ethTypes.NewChildChainProofData(block)
-	if err != nil {
-		cs.logger.Error("saveDataToMainChain: failed to create proof data", "block", block, "err", err)
-		return
-	}
+	bs := []byte{}
+	if version == 0 {
+		proofData, err := ethTypes.NewChildChainProofData(block)
+		if err != nil {
+			cs.logger.Error("saveDataToMainChain: failed to create proof data", "block", block, "err", err)
+			return
+		}
+		bs, err = rlp.EncodeToBytes(proofData)
+		if err != nil {
+			cs.logger.Error("saveDataToMainChain: failed to encode proof data", "proof data", proofData, "err", err)
+			return
+		}
 
-	bs, err := rlp.EncodeToBytes(proofData)
-	if err != nil {
-		cs.logger.Error("saveDataToMainChain: failed to encode proof data", "proof data", proofData, "err", err)
-		return
+	} else {
+		proofData, err := ethTypes.NewChildChainProofDataV1(block)
+		if err != nil {
+			cs.logger.Error("saveDataToMainChain: failed to create proof data", "block", block, "err", err)
+			return
+		}
+		bs, err = rlp.EncodeToBytes(proofData)
+		if err != nil {
+			cs.logger.Error("saveDataToMainChain: failed to encode proof data", "proof data", proofData, "err", err)
+			return
+		}
 	}
 	cs.logger.Infof("saveDataToMainChain proof data length: %d", len(bs))
 

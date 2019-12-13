@@ -1203,9 +1203,24 @@ func (args *SendTxArgs) setDefaults(ctx context.Context, b Backend) error {
 	}
 
 	// force GasLimit to 0 for DepositInChildChain/WithdrawFromMainChain/SaveDataToMainChain in order to avoid being dropped by TxPool.
-	if function == pabi.DepositInChildChain || function == pabi.WithdrawFromMainChain || function == pabi.SaveDataToMainChain {
+	if function == pabi.DepositInChildChain || function == pabi.WithdrawFromMainChain {
 		args.Gas = new(hexutil.Uint64)
 		*(*uint64)(args.Gas) = 0
+	} else if  function == pabi.SaveDataToMainChain {
+		args.Gas = new(hexutil.Uint64)
+		*(*uint64)(args.Gas) = 0
+
+		config := b.ChainConfig()
+		header := b.CurrentBlock().Header()
+		mainBlock := header.Number
+		if !config.IsMainChain() {
+			mainBlock = header.MainChainNumber
+		}
+		isSd2mcV1 := config.IsSd2mcV1(mainBlock)
+		if isSd2mcV1 && args.Data != nil{
+			*(*uint64)(args.Gas) = uint64(len(*args.Data)) * 672 //21000*(256/8)*1000
+		}
+
 	} else {
 		if args.Gas == nil {
 			args.Gas = new(hexutil.Uint64)

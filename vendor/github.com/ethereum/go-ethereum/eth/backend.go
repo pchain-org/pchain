@@ -140,13 +140,15 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
 		}
 		chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
-		chainConfig.LSRRMainBlock = params.MainnetChainConfig.LSRRMainBlock
+		chainConfig.LSRRMainBlock          = params.MainnetChainConfig.LSRRMainBlock
+		chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
 	case "testnet":
 		if chainConfig.OutOfStorageBlock == nil {
 			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
 		}
 		chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
-		chainConfig.LSRRMainBlock = params.TestnetChainConfig.LSRRMainBlock
+		chainConfig.LSRRMainBlock          = params.TestnetChainConfig.LSRRMainBlock
+		chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
 	case "child_0":
 		if (chainConfig.HashTimeLockContract == common.Address{}) {
 			if isTestnet {
@@ -156,23 +158,27 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			}
 		}
 		if isTestnet {
-			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.OutOfStorageBlock      = params.TestnetChainConfig.Child0OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
-			chainConfig.LSRRMainBlock = params.TestnetChainConfig.LSRRMainBlock
+			chainConfig.LSRRMainBlock          = params.TestnetChainConfig.LSRRMainBlock
+			chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
 		} else {
-			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.OutOfStorageBlock      = params.MainnetChainConfig.Child0OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
-			chainConfig.LSRRMainBlock = params.MainnetChainConfig.LSRRMainBlock
+			chainConfig.LSRRMainBlock          = params.MainnetChainConfig.LSRRMainBlock
+			chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
 		}
 	default:
 		if isTestnet {
-			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
+			chainConfig.OutOfStorageBlock      = params.TestnetChainConfig.OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
-			chainConfig.LSRRMainBlock = params.TestnetChainConfig.LSRRMainBlock
+			chainConfig.LSRRMainBlock          = params.TestnetChainConfig.LSRRMainBlock
+			chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
 		} else {
-			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
+			chainConfig.OutOfStorageBlock      = params.MainnetChainConfig.OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
-			chainConfig.LSRRMainBlock = params.MainnetChainConfig.LSRRMainBlock
+			chainConfig.LSRRMainBlock          = params.MainnetChainConfig.LSRRMainBlock
+			chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
 		}
 	}
 

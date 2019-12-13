@@ -40,6 +40,10 @@ var (
 	//consensus enable Long-Step Round-Robin proposer selection algorithm
 	MainnetLSRRMainBlock = big.NewInt(1111111111)
 	TestnetLSRRMainBlock = big.NewInt(11)
+
+	//use SaveData2MainBlock v1; which reports epoch/tx3 to main block
+	MainnetSd2mcV1MainBlock = big.NewInt(1111111111)
+	TestnetSd2mcV1MainBlock = big.NewInt(11)
 )
 
 var (
@@ -61,6 +65,7 @@ var (
 		Child0OutOfStorageBlock:    big.NewInt(13930000),
 		ExtractRewardMainBlock:     MainnetExtractRewardMainBlock,
 		LSRRMainBlock:              MainnetLSRRMainBlock,
+		Sd2mcV1Block:               MainnetSd2mcV1MainBlock,
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -85,6 +90,7 @@ var (
 		Child0OutOfStorageBlock:    big.NewInt(10),
 		ExtractRewardMainBlock:     TestnetExtractRewardMainBlock,
 		LSRRMainBlock:              TestnetLSRRMainBlock,
+		Sd2mcV1Block:               TestnetSd2mcV1MainBlock,
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -134,16 +140,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, new(EthashConfig), nil, nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, new(EthashConfig), nil, nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -181,6 +187,7 @@ type ChainConfig struct {
 	OutOfStorageBlock    *big.Int       `json:"oosBlock,omitempty"` // Out of storage HF block
 	ExtractRewardMainBlock *big.Int     `json:"erBlock,omitempty"` // Extract reward HF block
 	LSRRMainBlock *big.Int              `json:"lsrrBlock,omitempty"` // Long Step Round Robin HF block
+	Sd2mcV1Block  *big.Int              `json:"sd2mcV1Block, omitempty"`
 
 	// For default setup propose
 	Child0HashTimeLockContract common.Address
@@ -345,6 +352,10 @@ func (c *ChainConfig) IsLSRR(mainBlockNumber *big.Int) bool {
 	return isForked(c.LSRRMainBlock, mainBlockNumber)
 }
 
+func (c *ChainConfig) IsSd2mcV1(mainBlockNumber *big.Int) bool {
+return isForked(c.Sd2mcV1Block, mainBlockNumber)
+}
+
 func IsSelfRetrieveReward(mainChainId string, mainBlockNumber *big.Int) bool {
 	if mainChainId == MainnetChainConfig.PChainId {
 		return isForked(MainnetExtractRewardMainBlock, mainBlockNumber)
@@ -359,6 +370,16 @@ func IsLSRR(mainChainId string, mainBlockNumber *big.Int) bool {
 		return isForked(MainnetLSRRMainBlock, mainBlockNumber)
 	} else if mainChainId == TestnetChainConfig.PChainId{
 		return isForked(TestnetLSRRMainBlock, mainBlockNumber)
+	}
+	return false
+}
+
+
+func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {
+	if mainChainId == MainnetChainConfig.PChainId {
+		return isForked(MainnetSd2mcV1MainBlock, mainBlockNumber)
+	} else if mainChainId == TestnetChainConfig.PChainId{
+		return isForked(TestnetSd2mcV1MainBlock, mainBlockNumber)
 	}
 	return false
 }
