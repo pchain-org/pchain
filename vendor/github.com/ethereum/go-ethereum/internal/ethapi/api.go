@@ -543,7 +543,7 @@ func (s *PublicBlockChainAPI) GetFullBalance(ctx context.Context, address common
 
 		reward_detail := make(map[EpochLabel]*hexutil.Big)
 
-		outsideReward := s.b.ChainConfig().IsOutOfStorage(header.Number)
+		outsideReward := s.b.ChainConfig().IsOutOfStorage(header.Number, header.MainChainNumber)
 		if outsideReward {
 			r := state.Database().TrieDB().GetAllEpochReward(address)
 			for k, v := range r {

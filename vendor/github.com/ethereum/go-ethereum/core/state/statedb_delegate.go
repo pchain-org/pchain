@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/big"
 	"sort"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // ----- DelegateBalance
@@ -138,6 +139,20 @@ func (self *StateDB) GetDepositProxiedBalanceByUser(addr, user common.Address) *
 		}
 	}
 	return common.Big0
+}
+
+
+func (self *StateDB) GetProxiedAddressNumber(addr common.Address) int {
+	stateObject := self.getStateObject(addr)
+	if stateObject == nil {
+		return 0
+	}
+	number := 0
+	it := trie.NewIterator(stateObject.getProxiedTrie(self.db).NodeIterator(nil))
+	for it.Next() {
+		number ++
+	}
+	return number
 }
 
 // AddDepositProxiedBalanceByUser adds proxied amount to the account associated with addr

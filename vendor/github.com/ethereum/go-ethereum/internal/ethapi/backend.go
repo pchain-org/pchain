@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -73,6 +74,8 @@ type Backend interface {
 	SetInnerAPIBridge(inBridge InnerAPIBridge)
 	GetInnerAPIBridge() InnerAPIBridge
 	GetCrossChainHelper() core.CrossChainHelper
+
+	Engine()  consensus.Engine
 
 	BroadcastTX3ProofData(proofData *types.TX3ProofData)
 }

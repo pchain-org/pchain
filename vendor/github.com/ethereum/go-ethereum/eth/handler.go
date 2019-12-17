@@ -51,6 +51,10 @@ const (
 	// txChanSize is the size of channel listening to TxPreEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
+
+	// tx3PrfDtChainSize is the size of channel listening to Tx3PrfDataEvent.
+	// The number is referenced from the size of tx pool.
+	tx3PrfDtChainSize = 4096
 )
 
 var (
@@ -82,9 +86,15 @@ type ProtocolManager struct {
 
 	SubProtocols []p2p.Protocol
 
-	eventMux      *event.TypeMux
 	txCh          chan core.TxPreEvent
 	txSub         event.Subscription
+
+	tx3PrfDtCh    chan core.Tx3ProofDataEvent
+	tx3PrfDtFeed  event.Feed
+	tx3PrfDtScope event.SubscriptionScope
+	tx3PrfDtSub   event.Subscription
+
+	eventMux      *event.TypeMux
 	minedBlockSub *event.TypeMuxSubscription
 
 	// channels for fetcher, syncer, txsyncLoop
@@ -227,6 +237,10 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.txSub = pm.txpool.SubscribeTxPreEvent(pm.txCh)
 	go pm.txBroadcastLoop()
 
+	pm.tx3PrfDtCh = make(chan core.Tx3ProofDataEvent, tx3PrfDtChainSize)
+	pm.tx3PrfDtSub = pm.tx3PrfDtScope.Track(pm.tx3PrfDtFeed.Subscribe(pm.tx3PrfDtCh))
+	go pm.tx3PrfDtBroadcastLoop()
+
 	// broadcast mined blocks
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go pm.minedBroadcastLoop()
@@ -240,6 +254,7 @@ func (pm *ProtocolManager) Stop() {
 	pm.logger.Info("Stopping Ethereum protocol")
 
 	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
+	pm.tx3PrfDtSub.Unsubscribe()   // quits tx3PrfDtBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
 
 	// Quit the sync loop.
@@ -732,6 +747,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			if err := pm.cch.WriteTX3ProofData(proofData); err != nil {
 				pm.logger.Error("TX3ProofDataMsg write error", "msg", msg, "error", err)
 			}
+
+			go pm.tx3PrfDtFeed.Send(core.Tx3ProofDataEvent{proofData})
 		}
 
 	case msg.Code == GetPreImagesMsg:
@@ -948,6 +965,19 @@ func (self *ProtocolManager) txBroadcastLoop() {
 
 		// Err() channel will be closed when unsubscribing.
 		case <-self.txSub.Err():
+			return
+		}
+	}
+}
+
+func (self *ProtocolManager) tx3PrfDtBroadcastLoop() {
+	for {
+		select {
+		case event := <-self.tx3PrfDtCh:
+			self.BroadcastTX3ProofData(event.Tx3PrfDt.Header.Hash(), event.Tx3PrfDt)
+
+		// Err() channel will be closed when unsubscribing.
+		case <-self.tx3PrfDtSub.Err():
 			return
 		}
 	}

@@ -349,32 +349,39 @@ func (epoch *Epoch) GetPreviousEpoch() *Epoch {
 	return epoch.previousEpoch
 }
 
-func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB, outsideReward bool) (bool, *tmTypes.ValidatorSet, error) {
+func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB, 
+			outsideReward, selfRetrieveReward bool) (bool, *tmTypes.ValidatorSet, error) {
+
+	log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
 
 	if height == epoch.EndBlock {
 		epoch.nextEpoch = epoch.GetNextEpoch()
 		if epoch.nextEpoch != nil {
-			// Step 0: Give the Epoch Reward
-			currentEpochNumber := epoch.Number
-			for rewardAddress := range state.GetRewardSet() {
-				if outsideReward {
-					currentEpochReward := state.GetOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber)
-					if currentEpochReward.Sign() == 1 {
-						state.SubOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
-						state.AddBalance(rewardAddress, currentEpochReward)
+
+			if !selfRetrieveReward {
+				// Step 0: Give the Epoch Reward
+				currentEpochNumber := epoch.Number
+				for rewardAddress := range state.GetRewardSet() {
+					if outsideReward {
+						currentEpochReward := state.GetOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber)
+						if currentEpochReward.Sign() == 1 {
+							state.SubOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
+							state.AddBalance(rewardAddress, currentEpochReward)
+						}
+					} else {
+						currentEpochReward := state.GetRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber)
+						if currentEpochReward.Sign() == 1 {
+							state.SubRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
+							state.AddBalance(rewardAddress, currentEpochReward)
+						}
 					}
-				} else {
-					currentEpochReward := state.GetRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber)
-					if currentEpochReward.Sign() == 1 {
-						state.SubRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, currentEpochReward)
-						state.AddBalance(rewardAddress, currentEpochReward)
+					// Check Remaining Reward Balance
+					if state.GetTotalRewardBalance(rewardAddress).Sign() == 0 {
+						state.ClearRewardSetByAddress(rewardAddress)
 					}
-				}
-				// Check Remaining Reward Balance
-				if state.GetTotalRewardBalance(rewardAddress).Sign() == 0 {
-					state.ClearRewardSetByAddress(rewardAddress)
 				}
 			}
+
 			// Step 1: Refund the Delegate (subtract the pending refund / deposit proxied amount)
 			for refundAddress := range state.GetDelegateAddressRefundSet() {
 				state.ForEachProxied(refundAddress, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {

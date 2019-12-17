@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"math/big"
@@ -30,6 +31,7 @@ func NewPublicDelegateAPI(b Backend) *PublicDelegateAPI {
 var (
 	defaultSelfSecurityDeposit = math.MustParseBig256("10000000000000000000000") // 10,000 * e18
 	minimumDelegationAmount    = math.MustParseBig256("1000000000000000000000")  // 1000 * e18
+	maxDelegationAddresses     = 1000
 )
 
 func (api *PublicDelegateAPI) Delegate(ctx context.Context, from, candidate common.Address, amount *hexutil.Big, gasPrice *hexutil.Big) (common.Hash, error) {
@@ -130,6 +132,29 @@ func (api *PublicDelegateAPI) CheckCandidate(ctx context.Context, address common
 	return fields, state.Error()
 }
 
+
+func (api *PublicDelegateAPI) ExtractReward(ctx context.Context, from common.Address, gasPrice *hexutil.Big) (common.Hash, error) {
+
+	input, err := pabi.ChainABI.Pack(pabi.ExtractReward.String())
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	defaultGas := pabi.ExtractReward.RequiredGas()
+
+	args := SendTxArgs{
+		From:     from,
+		To:       &pabi.ChainContractMagicAddr,
+		Gas:      (*hexutil.Uint64)(&defaultGas),
+		GasPrice: gasPrice,
+		Value:    nil,
+		Input:    (*hexutil.Bytes)(&input),
+		Nonce:    nil,
+	}
+	return api.b.GetInnerAPIBridge().SendTransaction(ctx, args)
+}
+
+
 func init() {
 	// Delegate
 	core.RegisterValidateCb(pabi.Delegate, del_ValidateCb)
@@ -146,6 +171,10 @@ func init() {
 	// Cancel Candidate
 	core.RegisterValidateCb(pabi.CancelCandidate, ccdd_ValidateCb)
 	core.RegisterApplyCb(pabi.CancelCandidate, ccdd_ApplyCb)
+
+	//Extract Reward
+	core.RegisterValidateCb(pabi.ExtractReward, extrRwd_ValidateCb)
+	core.RegisterApplyCb(pabi.ExtractReward, extrRwd_ApplyCb)
 }
 
 func del_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
@@ -284,6 +313,65 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 	return nil
 }
 
+func extrRwd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
+
+	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
+
+		selfRetrieveReward := consensus.IsSelfRetrieveReward(tdm.GetEpoch(), bc, bc.CurrentBlock().Header())
+		log.Debugf("extrRwd_ValidateCb selfRetrieveReward is %v\n", selfRetrieveReward)
+		if !selfRetrieveReward {
+			return errors.New("not enabled yet")
+		}
+
+		return nil
+	} else {
+		return errors.New("not pdbft engine")
+	}
+}
+
+func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+
+	//validate again
+	if err := extrRwd_ValidateCb(tx, state, bc); err != nil {
+		return err
+	}
+
+	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
+
+		from := derivedAddressFromTx(tx)
+
+		epoch := tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
+		currentEpochNumber := epoch.Number
+		noExtractMark := false
+		extractEpochNumber, err := state.GetEpochRewardExtracted(from)
+		if err != nil {
+			noExtractMark = true
+		}
+		maxExtractEpochNumber := uint64(0)
+
+		rewards := state.GetAllEpochReward(from)
+
+		log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
+		log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
+
+		//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
+		for epNumber, reward := range rewards{
+			if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
+				state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, reward)
+				state.AddBalance(from, reward)
+
+				if maxExtractEpochNumber < epNumber {
+					maxExtractEpochNumber = epNumber
+					state.MarkEpochRewardExtracted(from, maxExtractEpochNumber)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+
 // Validation
 
 func delegateValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.DelegateArgs, error) {
@@ -303,13 +391,22 @@ func delegateValidation(from common.Address, tx *types.Transaction, state *state
 		return nil, core.ErrNotCandidate
 	}
 
+	depositBalance := state.GetDepositProxiedBalanceByUser(args.Candidate, from)
+	if depositBalance.Sign() == 0 {
+		// Check if exceed the limit of delegated addresses
+		// if exceed the limit of delegation address number, return error
+		delegatedAddressNumber := state.GetProxiedAddressNumber(args.Candidate)
+		if delegatedAddressNumber >= maxDelegationAddresses {
+			return nil, core.ErrExceedDelegationAddressLimit
+		}
+	}
+
 	// If Candidate is supernode, only allow to increase the stack(whitelist proxied list), not allow to create the new stack
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
 		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 	}
 	if _, supernode := ep.Validators.GetByAddress(args.Candidate.Bytes()); supernode != nil && supernode.RemainingEpoch > 0 {
-		depositBalance := state.GetDepositProxiedBalanceByUser(args.Candidate, from)
 		if depositBalance.Sign() == 0 {
 			return nil, core.ErrCannotDelegate
 		}

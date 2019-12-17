@@ -873,6 +873,8 @@ func (db *Database) accumulate(hash common.Hash, reachable map[common.Hash]struc
 }
 
 var rewardPrefix = []byte("w")
+var rewardExtractPrefix = []byte("extrRwd-epoch-")
+var oosLastBlockKey = []byte("oos-last-block")
 
 func encodeEpochNumber(number uint64) []byte {
 	enc := make([]byte, 8)
@@ -903,4 +905,33 @@ func (db *Database) GetAllEpochReward(address common.Address) map[uint64]*big.In
 		result[epoch] = reward
 	}
 	return result
+}
+
+func (db *Database) WriteEpochRewardExtracted(address common.Address, epoch uint64) error {
+	return db.diskdb.Put(append(rewardExtractPrefix, address.Bytes()...), encodeEpochNumber(epoch))
+}
+
+func (db *Database) GetEpochRewardExtracted(address common.Address) (uint64, error) {
+
+	epochBytes, err := db.diskdb.Get(append(rewardExtractPrefix, address.Bytes()...))
+
+	if err != nil {
+		return 0xffffffffffffffff, err
+	}
+
+	return decodeEpochNumber(epochBytes), nil
+}
+
+func (db *Database) ReadOOSLastBlock() (*big.Int, error) {
+	blockBytes, err := db.diskdb.Get(oosLastBlockKey)
+
+	if err != nil {
+		return big.NewInt(-1), err
+	}
+
+	return new(big.Int).SetBytes(blockBytes), nil
+}
+
+func (db *Database) WriteOOSLastBlock(blockNumber *big.Int) error {
+	return db.diskdb.Put(oosLastBlockKey, blockNumber.Bytes())
 }

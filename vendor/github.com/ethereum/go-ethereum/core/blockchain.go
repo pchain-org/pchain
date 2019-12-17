@@ -985,7 +985,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteBlock(bc.db, block)
 
 	// reward outside
-	rewardOutside := bc.chainConfig.IsOutOfStorage(block.Number())
+	rewardOutside := bc.chainConfig.IsOutOfStorage(block.Number(), block.Header().MainChainNumber)
 	if rewardOutside {
 		outsideReward := state.GetOutsideReward()
 		for addr, reward := range outsideReward {
@@ -998,6 +998,21 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			}
 		}
 		state.ClearOutsideReward()
+
+		prevLastBlock, err := state.ReadOOSLastBlock()
+		if err != nil || prevLastBlock.Cmp(block.Number()) < 0 {
+			state.WriteOOSLastBlock(block.Number())
+		}
+	}
+
+	tdm := bc.Engine().(consensus.Tendermint)
+	selfRetrieveReward := consensus.IsSelfRetrieveReward(tdm.GetEpoch(), bc, block.Header())
+	if selfRetrieveReward {
+		extractRewardSet := state.GetExtractRewardSet()
+		for addr, epoch := range extractRewardSet {
+			state.WriteEpochRewardExtracted(addr, epoch)
+		}
+		state.ClearExtractRewardSet()
 	}
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
@@ -1006,8 +1021,14 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	triedb := bc.stateCache.TrieDB()
 
+	//we flush db within 5 blocks before/after epoch-switch to avoid rollback issues
+	FORCE_FULSH_WINDOW := uint64(5)
+	curBlockNumber := block.NumberU64()
+	curEpoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
+	withinEpochSwitchWindow := (curBlockNumber < curEpoch.StartBlock + FORCE_FULSH_WINDOW || curBlockNumber > curEpoch.EndBlock - FORCE_FULSH_WINDOW)
+
 	// If we're running an archive node, always flush
-	if bc.cacheConfig.TrieDirtyDisabled {
+	if withinEpochSwitchWindow || bc.cacheConfig.TrieDirtyDisabled {
 		if err := triedb.Commit(root, false); err != nil {
 			return NonStatTy, err
 		}
@@ -1760,6 +1781,9 @@ func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 
 // Engine retrieves the blockchain's consensus engine.
 func (bc *BlockChain) Engine() consensus.Engine { return bc.engine }
+
+//GetCrossChainHelper retrieves the blockchain's cross chain helper.
+func (bc *BlockChain) GetCrossChainHelper() CrossChainHelper {return bc.cch}
 
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
 func (bc *BlockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {

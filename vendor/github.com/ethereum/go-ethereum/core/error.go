@@ -68,6 +68,9 @@ var (
 	// ErrNotCandidate is returned if the request address is not a candidate
 	ErrNotCandidate = errors.New("address not candidate")
 
+	//ErrExceedDelegationAddressLimit is returned if delegated address number exceed the limit
+	ErrExceedDelegationAddressLimit = errors.New("exceed the delegation address limit")
+
 	// ErrMinimumSecurityDeposit is returned if the request security deposit less than the minimum value
 	ErrMinimumSecurityDeposit = errors.New("security deposit not meet the minimum value")
 
