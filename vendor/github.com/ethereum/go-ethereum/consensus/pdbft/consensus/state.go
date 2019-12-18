@@ -1570,7 +1570,8 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 				} else {
 					block.TdmExtra.NeedToSave = true
 				}
-				cs.logger.Infof("NeedToBroadcast/NeedToSave set to true due to tx. Chain: %s, Height: %v", block.TdmExtra.ChainID, block.TdmExtra.Height)
+				cs.logger.Infof("NeedToBroadcast/NeedToSave %v/%v set to true due to tx. Chain: %s, Height: %v",
+					block.TdmExtra.NeedToBroadcast, block.TdmExtra.NeedToSave, block.TdmExtra.ChainID, block.TdmExtra.Height)
 			 }
 		}
 
@@ -2216,6 +2217,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block, version in
 	} else {
 		panic("saveDataToMainChain: unexpected privValidator type")
 	}
+
 	hash, err := client.SendDataToMainChain(ctx, bs, prv, cs.cch.GetMainChainId())
 	if err != nil {
 		cs.logger.Error("saveDataToMainChain(rpc) failed", "err", err)

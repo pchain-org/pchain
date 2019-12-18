@@ -127,24 +127,16 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		statedb.SubBalance(from, gasValue)
 		log.Infof("ApplyTransactionEx() 1, gas is %v, gasPrice is %v, gasValue is %v\n", gasLimit, tx.GasPrice(), gasValue)
 
-		mainBlock := header.Number
-		if !bc.chainConfig.IsMainChain() {
-			mainBlock = header.MainChainNumber
-		}
-		isSd2mcV1 := bc.chainConfig.IsSd2mcV1(mainBlock)
 		// use gas
-		gas := uint64(0)
-		if !isSd2mcV1 {
-			gas = function.RequiredGas()
-		} else {
-			gas = function.RequiredGasForSd2mcV1(uint64(len(data)))
-		}
+		gas := function.RequiredGas()
 		if gasLimit < gas {
+			log.Infof("ApplyTransactionEx(), error is %v\n", vm.ErrOutOfGas)
 			return nil, 0, vm.ErrOutOfGas
 		}
 
 		// Check Tx Amount
 		if statedb.GetBalance(from).Cmp(tx.Value()) == -1 {
+			log.Infof("ApplyTransactionEx(), error is %v\n", fmt.Errorf("insufficient PI for tx amount (%x). Req %v, has %v", from.Bytes()[:4], tx.Value(), statedb.GetBalance(from)))
 			return nil, 0, fmt.Errorf("insufficient PI for tx amount (%x). Req %v, has %v", from.Bytes()[:4], tx.Value(), statedb.GetBalance(from))
 		}
 
@@ -156,6 +148,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 					cch.GetMutex().Unlock()
 
 					if err != nil {
+						log.Infof("ApplyTransactionEx(), error is %v\n", vm.ErrOutOfGas)
 						return nil, 0, err
 					}
 				} else {
@@ -164,6 +157,7 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 			} else {
 				if fn, ok := applyCb.(NonCrossChainApplyCb); ok {
 					if err := fn(tx, statedb, bc, ops); err != nil {
+						log.Infof("ApplyTransactionEx(), error is %v\n", vm.ErrOutOfGas)
 						return nil, 0, err
 					}
 				} else {
@@ -192,6 +186,10 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 		receipt := types.NewReceipt(root, true, *usedGas)
 
+		mainBlock := header.Number
+		if !bc.chainConfig.IsMainChain() {
+			mainBlock = header.MainChainNumber
+		}
 		//fix receipt status value
 		if bc.Config().IsSelfRetrieveReward(mainBlock) {
 			receipt = types.NewReceipt(root, false, *usedGas)

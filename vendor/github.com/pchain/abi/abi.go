@@ -79,15 +79,6 @@ func (t FunctionType) RequiredGas() uint64 {
 	}
 }
 
-func (t FunctionType) RequiredGasForSd2mcV1(dataLength uint64) uint64 {
-	switch t {
-	case SaveDataToMainChain:
-		return dataLength * 672 //dataLength / 1000 * 672000
-	default:
-		return t.RequiredGas()
-	}
-}
-
 func (t FunctionType) String() string {
 	switch t {
 	case CreateChildChain:

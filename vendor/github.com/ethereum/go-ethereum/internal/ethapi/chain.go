@@ -398,6 +398,11 @@ func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 		return core.ErrInvalidSender
 	}
 
+	chainBalance := state.GetChainBalance(from)
+	if chainBalance.Sign() > 0 {
+		return errors.New("this address has created one chain, can't create another chain")
+	}
+
 	var args pabi.CreateChildChainArgs
 	data := tx.Data()
 	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CreateChildChain.String(), data[4:]); err != nil {
@@ -417,6 +422,11 @@ func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
+	}
+
+	chainBalance := state.GetChainBalance(from)
+	if chainBalance.Sign() > 0 {
+		return errors.New("this address has created one chain, can't create another chain")
 	}
 
 	var args pabi.CreateChildChainArgs

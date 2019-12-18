@@ -32,11 +32,6 @@ import (
 	"unicode/utf8"
 )
 
-const (
-	OFFICIAL_MINIMUM_VALIDATORS = 1
-	OFFICIAL_MINIMUM_DEPOSIT    = "100000000000000000000000" // 100,000 * e18
-)
-
 type CrossChainHelper struct {
 	mtx             sync.Mutex
 	chainInfoDB     dbm.DB
@@ -95,12 +90,12 @@ func (cch *CrossChainHelper) CanCreateChildChain(from common.Address, chainId st
 	}
 
 	// Check the minimum validators
-	if minValidators < OFFICIAL_MINIMUM_VALIDATORS {
-		return fmt.Errorf("Validators count is not meet the minimum official validator count (%v)", OFFICIAL_MINIMUM_VALIDATORS)
+	if minValidators < core.OFFICIAL_MINIMUM_VALIDATORS {
+		return fmt.Errorf("Validators count is not meet the minimum official validator count (%v)", core.OFFICIAL_MINIMUM_VALIDATORS)
 	}
 
 	// Check the minimum deposit amount
-	officialMinimumDeposit := math.MustParseBig256(OFFICIAL_MINIMUM_DEPOSIT)
+	officialMinimumDeposit := math.MustParseBig256(core.OFFICIAL_MINIMUM_DEPOSIT)
 	if minDepositAmount.Cmp(officialMinimumDeposit) == -1 {
 		return fmt.Errorf("Deposit amount is not meet the minimum official deposit amount (%v PI)", new(big.Int).Div(officialMinimumDeposit, big.NewInt(params.PI)))
 	}
@@ -650,8 +645,9 @@ func (cch *CrossChainHelper) VerifyChildChainProofDataV1(proofData *types.ChildC
 		}
 	}
 
+	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), cch.GetHeightFromMainChain())
 	// Bypass the validator check for official child chain 0
-	if chainId != "child_0" {
+	if chainId != "child_0" || isSd2mc {
 		ci := core.GetChainInfo(cch.chainInfoDB, chainId)
 		if ci == nil {
 			return fmt.Errorf("chain info %s not found", chainId)
@@ -692,7 +688,7 @@ func (cch *CrossChainHelper) VerifyChildChainProofDataV1(proofData *types.ChildC
 }
 
 func (cch *CrossChainHelper) SaveChildChainProofDataToMainChainV1(proofData *types.ChildChainProofDataV1) error {
-	log.Debug("SaveChildChainProofDataToMainChainV1 - start")
+	log.Info("SaveChildChainProofDataToMainChainV1 - start")
 
 	header := proofData.Header
 	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
@@ -707,6 +703,7 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChainV1(proofData *typ
 
 	// here is epoch update; should be a more general mechanism
 	if len(tdmExtra.EpochBytes) != 0 {
+		log.Info("SaveChildChainProofDataToMainChainV1 - Save Epoch")
 		ep := epoch.FromBytes(tdmExtra.EpochBytes)
 		if ep != nil {
 			ci := core.GetChainInfo(cch.chainInfoDB, tdmExtra.ChainID)
@@ -738,6 +735,8 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChainV1(proofData *typ
 
 	// Write the TX3ProofData
 	if len(proofData.TxIndexs) != 0 {
+
+		log.Infof("SaveChildChainProofDataToMainChainV1 - Save Tx3, count is %v", len(proofData.TxIndexs))
 		tx3ProofData := &types.TX3ProofData{
 			Header:   proofData.Header,
 			TxIndexs: proofData.TxIndexs,
@@ -748,7 +747,7 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChainV1(proofData *typ
 		}
 	}
 
-	log.Debug("SaveChildChainProofDataToMainChainV1 - end")
+	log.Info("SaveChildChainProofDataToMainChainV1 - end")
 	return nil
 }
 
