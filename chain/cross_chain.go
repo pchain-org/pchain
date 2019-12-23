@@ -636,27 +636,48 @@ func (cch *CrossChainHelper) VerifyChildChainProofDataV1(proofData *types.ChildC
 		return errors.New("invalid difficulty")
 	}
 
-	// special case: epoch 0 update
-	// TODO: how to verify this block which includes epoch 0?
-	if tdmExtra.EpochBytes != nil && len(tdmExtra.EpochBytes) != 0 {
-		ep := epoch.FromBytes(tdmExtra.EpochBytes)
-		if ep != nil && ep.Number == 0 {
-			return nil
-		}
+	ci := core.GetChainInfo(cch.chainInfoDB, chainId)
+	if ci == nil {
+		return fmt.Errorf("chain info %s not found", chainId)
 	}
 
 	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), cch.GetHeightFromMainChain())
 	// Bypass the validator check for official child chain 0
 	if chainId != "child_0" || isSd2mc {
-		ci := core.GetChainInfo(cch.chainInfoDB, chainId)
-		if ci == nil {
-			return fmt.Errorf("chain info %s not found", chainId)
+
+		getValidatorsFromChainInfo := false
+		if tdmExtra.EpochBytes != nil && len(tdmExtra.EpochBytes) != 0 {
+			ep := epoch.FromBytes(tdmExtra.EpochBytes)
+			if ep != nil && ep.Number == 0 {
+				//Child chain just created and save the epoch info, get validators from chain info
+				getValidatorsFromChainInfo = true
+			}
 		}
-		epoch := ci.GetEpochByBlockNumber(tdmExtra.Height)
-		if epoch == nil {
-			return fmt.Errorf("could not get epoch for block height %v", tdmExtra.Height)
+
+		var valSet *tdmTypes.ValidatorSet = nil
+		if !getValidatorsFromChainInfo {
+			ep := ci.GetEpochByBlockNumber(tdmExtra.Height)
+			if ep == nil {
+				return fmt.Errorf("could not get epoch for block height %v", tdmExtra.Height)
+			}
+			valSet = ep.Validators
+		} else {
+			_, tdmGenesis := core.LoadChainGenesis(cch.chainInfoDB, chainId)
+			if tdmGenesis == nil {
+				return errors.New(fmt.Sprintf("unable to retrieve the genesis file for child chain %s", chainId))
+			}
+			coreGenesis, err := tdmTypes.GenesisDocFromJSON(tdmGenesis)
+			if err != nil {
+				return err
+			}
+
+			ep := epoch.MakeOneEpoch(nil, &coreGenesis.CurrentEpoch, nil)
+			if ep == nil {
+				return fmt.Errorf("could not get epoch for genesis information")
+			}
+			valSet = ep.Validators
 		}
-		valSet := epoch.Validators
+
 		if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
 			return errors.New("inconsistent validator set")
 		}
@@ -709,14 +730,7 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChainV1(proofData *typ
 			ci := core.GetChainInfo(cch.chainInfoDB, tdmExtra.ChainID)
 			// ChainInfo is nil means we need to wait for Child Chain to be launched, this could happened during catch-up scenario
 			if ci == nil {
-				for {
-					// wait for 3 sec and try again
-					time.Sleep(3 * time.Second)
-					ci = core.GetChainInfo(cch.chainInfoDB, tdmExtra.ChainID)
-					if ci != nil {
-						break
-					}
-				}
+				return fmt.Errorf("not possible to pass verification")
 			}
 
 			futureEpoch := ep.Number > ci.EpochNumber && tdmExtra.Height < ep.StartBlock
