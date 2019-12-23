@@ -34,8 +34,8 @@ var (
 	//From epoch after this block, delegators need to query/retrieve his/her reward by RPC APIs.
 	// Note: it does not work exactly from this block, it works from the next epoch
 	//       and this number is the main chain block number
-	MainnetExtractRewardMainBlock = big.NewInt(1111111111)
-	TestnetExtractRewardMainBlock = big.NewInt(11)
+	MainnetExtractRewardMainBlock = big.NewInt(9383000)
+	TestnetExtractRewardMainBlock = big.NewInt(2550000)
 )
 
 var (
@@ -171,9 +171,9 @@ type ChainConfig struct {
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
 	// PCHAIN HF
-	HashTimeLockContract common.Address `json:"htlc,omitempty"`     // Hash Time Lock Contract Address
-	OutOfStorageBlock    *big.Int       `json:"oosBlock,omitempty"` // Out of storage HF block
-	ExtractRewardMainBlock *big.Int       `json:"erBlock,omitempty"` // Extract reward HF block
+	HashTimeLockContract   common.Address `json:"htlc,omitempty"`     // Hash Time Lock Contract Address
+	OutOfStorageBlock      *big.Int       `json:"oosBlock,omitempty"` // Out of storage HF block
+	ExtractRewardMainBlock *big.Int       `json:"erBlock,omitempty"`  // Extract reward HF block
 
 	// For default setup propose
 	Child0HashTimeLockContract common.Address
@@ -337,7 +337,7 @@ func (c *ChainConfig) IsSelfRetrieveReward(mainBlockNumber *big.Int) bool {
 func IsSelfRetrieveReward(mainChainId string, mainBlockNumber *big.Int) bool {
 	if mainChainId == MainnetChainConfig.PChainId {
 		return isForked(MainnetExtractRewardMainBlock, mainBlockNumber)
-	} else if mainChainId == TestnetChainConfig.PChainId{
+	} else if mainChainId == TestnetChainConfig.PChainId {
 		return isForked(TestnetExtractRewardMainBlock, mainBlockNumber)
 	}
 	return false
