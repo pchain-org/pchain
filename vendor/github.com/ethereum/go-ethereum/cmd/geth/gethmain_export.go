@@ -1,13 +1,20 @@
 package gethmain
 
 import (
-	"gopkg.in/urfave/cli.v1"
 	"github.com/ethereum/go-ethereum/node"
+	"gopkg.in/urfave/cli.v1"
 )
 
 //var ConsoleCommand = consoleCommand
 var AttachCommand = attachCommand
+
 //var JavascriptCommand = javascriptCommand
+
+var ImportChainCommand = importCommand
+var ExportChainCommand = exportCommand
+var ImportPreimagesCommand = importPreimagesCommand
+var ExportPreimagesCommand = exportPreimagesCommand
+var CountBlockStateCommand = countBlockStateCommand
 
 var ConfigFileFlag = configFileFlag
 

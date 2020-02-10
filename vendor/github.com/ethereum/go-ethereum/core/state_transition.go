@@ -20,7 +20,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
-	
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
@@ -171,16 +171,23 @@ func (st *StateTransition) buyGas() error {
 		sender = st.from()
 	)
 	mgval := new(big.Int).Mul(new(big.Int).SetUint64(st.msg.Gas()), st.gasPrice)
-	if state.GetBalance(sender.Address()).Cmp(mgval) < 0 {
-		return errInsufficientBalanceForGas
+	// HF of HTLC
+	if !st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.BlockNumber, st.msg.To(), st.data) {
+		if state.GetBalance(sender.Address()).Cmp(mgval) < 0 {
+			return errInsufficientBalanceForGas
+		}
 	}
+
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
 		return err
 	}
 	st.gas += st.msg.Gas()
 
 	st.initialGas = st.msg.Gas()
-	state.SubBalance(sender.Address(), mgval)
+	// HF of HTLC
+	if !st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.BlockNumber, st.msg.To(), st.data) {
+		state.SubBalance(sender.Address(), mgval)
+	}
 	return nil
 }
 
@@ -264,8 +271,10 @@ func (st *StateTransition) refundGas() {
 	sender := st.from()
 
 	remaining := new(big.Int).Mul(new(big.Int).SetUint64(st.gas), st.gasPrice)
-
-	st.state.AddBalance(sender.Address(), remaining)
+	// HF of HTLC
+	if !st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.BlockNumber, st.msg.To(), st.data) {
+		st.state.AddBalance(sender.Address(), remaining)
+	}
 
 	// Also return remaining gas to the block gas counter so it is
 	// available for the next transaction.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -38,7 +39,7 @@ func SetupGenesisBlockEx(db ethdb.Database, genesis *Genesis) (*types.Block, err
 	var err error = nil
 
 	// Just commit the new block if there is no stored genesis block.
-	stored := GetCanonicalHash(db, 0)
+	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{}) {
 		if genesis == nil {
 			log.Info("Writing default main-net genesis block")
@@ -61,13 +62,10 @@ func SetupGenesisBlockEx(db ethdb.Database, genesis *Genesis) (*types.Block, err
 
 	// Get the existing chain configuration.
 	newcfg := genesis.configOrDefault(stored)
-	storedcfg, err := GetChainConfig(db, stored)
-	if err != nil {
-		if err == ErrChainConfigNotFound {
-			// This case happens if a genesis write was interrupted.
-			log.Warn("Found genesis block without chain config")
-			err = WriteChainConfig(db, stored, newcfg)
-		}
+	storedcfg := rawdb.ReadChainConfig(db, stored)
+	if storedcfg == nil {
+		log.Warn("Found genesis block without chain config")
+		rawdb.WriteChainConfig(db, stored, newcfg)
 		return block, err
 	}
 	// Special case: don't change the existing config of a non-mainnet chain if no new
@@ -79,12 +77,12 @@ func SetupGenesisBlockEx(db ethdb.Database, genesis *Genesis) (*types.Block, err
 
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
-	height := GetBlockNumber(db, GetHeadHeaderHash(db))
-	if height == missingNumber {
+	height := rawdb.ReadHeaderNumber(db, rawdb.ReadHeadHeaderHash(db))
+	if height == nil {
 		return nil, fmt.Errorf("missing block number for head header hash")
 	}
-	compatErr := storedcfg.CheckCompatible(newcfg, height)
-	if compatErr != nil && height != 0 && compatErr.RewindTo != 0 {
+	compatErr := storedcfg.CheckCompatible(newcfg, *height)
+	if compatErr != nil && *height != 0 && compatErr.RewindTo != 0 {
 		return nil, compatErr
 	}
 	return block, err
@@ -109,7 +107,7 @@ func SetupGenesisBlockWithDefault(db ethdb.Database, genesis *Genesis, isMainCha
 	}
 
 	// Just commit the new block if there is no stored genesis block.
-	stored := GetCanonicalHash(db, 0)
+	stored := rawdb.ReadCanonicalHash(db, 0)
 	if (stored == common.Hash{} && isMainChain) {
 		if genesis == nil {
 			log.Info("Writing default main-net genesis block")
@@ -135,18 +133,11 @@ func SetupGenesisBlockWithDefault(db ethdb.Database, genesis *Genesis, isMainCha
 
 	// Get the existing chain configuration.
 	newcfg := genesis.configOrDefault(stored)
-	storedcfg, err := GetChainConfig(db, stored)
-	if err != nil {
-		if err == ErrChainConfigNotFound {
-			if isMainChain {
-				// This case happens if a genesis write was interrupted.
-				log.Warn("Found genesis block without chain config")
-				err = WriteChainConfig(db, stored, newcfg)
-			} else {
-				log.Error("Missing Child Chain Genesis, make sure init the Child Chain First")
-			}
-		}
-		return newcfg, stored, err
+	storedcfg := rawdb.ReadChainConfig(db, stored)
+	if storedcfg == nil {
+		log.Warn("Found genesis block without chain config")
+		rawdb.WriteChainConfig(db, stored, newcfg)
+		return newcfg, stored, nil
 	}
 	// Special case: don't change the existing config of a non-mainnet chain if no new
 	// config is supplied. These chains would get AllProtocolChanges (and a compat error)
@@ -157,15 +148,16 @@ func SetupGenesisBlockWithDefault(db ethdb.Database, genesis *Genesis, isMainCha
 
 	// Check config compatibility and write the config. Compatibility errors
 	// are returned to the caller unless we're already at block zero.
-	height := GetBlockNumber(db, GetHeadHeaderHash(db))
-	if height == missingNumber {
+	height := rawdb.ReadHeaderNumber(db, rawdb.ReadHeadHeaderHash(db))
+	if height == nil {
 		return newcfg, stored, fmt.Errorf("missing block number for head header hash")
 	}
-	compatErr := storedcfg.CheckCompatible(newcfg, height)
-	if compatErr != nil && height != 0 && compatErr.RewindTo != 0 {
+	compatErr := storedcfg.CheckCompatible(newcfg, *height)
+	if compatErr != nil && *height != 0 && compatErr.RewindTo != 0 {
 		return newcfg, stored, compatErr
 	}
-	return newcfg, stored, WriteChainConfig(db, stored, newcfg)
+	rawdb.WriteChainConfig(db, stored, newcfg)
+	return newcfg, stored, nil
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
@@ -190,6 +182,7 @@ var DefaultMainnetGenesisJSON = `{
 		"eip155Block": 0,
 		"eip158Block": 0,
 		"byzantiumBlock": 0,
+		"oosBlock": 5890000,
 		"tendermint": {
 			"epoch": 30000,
 			"policy": 0
@@ -744,6 +737,7 @@ var DefaultTestnetGenesisJSON = `{
                 "eip155Block": 0,
                 "eip158Block": 0,
                 "byzantiumBlock": 0,
+				"oosBlock": 11800000,
                 "tendermint": {
                         "epoch": 30000,
                         "policy": 0
@@ -755,7 +749,7 @@ var DefaultTestnetGenesisJSON = `{
         "gasLimit": "0x8000000",
         "difficulty": "0x400",
         "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "coinbase": "0xf84634254ea1189516e66d9b007760092d9b8922",
+        "coinbase": "0x0000000000000000000000000000000000000000",
         "alloc": {
                 "05f256d2d5d512c59ba09b56a4fb202e5c883268": {
                         "balance": "0xffd09bead87c0378d8e6400000000",

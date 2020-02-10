@@ -51,6 +51,13 @@ func main() {
 		},
 
 		{
+			Action:      chain.InitChildChainCmd,
+			Name:        "init_child_chain",
+			Usage:       "./pchain --datadir=.pchain --childChain=child_0,child_1,child_2 init_child_chain",
+			Description: "Initialize child chain genesis from chain info db",
+		},
+
+		{
 			Action:      GenerateNodeInfoCmd,
 			Name:        "gen_node_info",
 			Usage:       "gen_node_info number", //generate node info for 'number' nodes
@@ -72,6 +79,11 @@ func main() {
 		//gethmain.ConsoleCommand,
 		gethmain.AttachCommand,
 		//gethmain.JavascriptCommand,
+		gethmain.ImportChainCommand,
+		gethmain.ExportChainCommand,
+		gethmain.ImportPreimagesCommand,
+		gethmain.ExportPreimagesCommand,
+		gethmain.CountBlockStateCommand,
 
 		//walletCommand,
 		accountCommand,
@@ -167,8 +179,8 @@ func newCliApp(version, usage string) *cli.App {
 		//utils.LightKDFFlag,
 		utils.CacheFlag,
 		utils.CacheDatabaseFlag,
+		utils.CacheTrieFlag,
 		utils.CacheGCFlag,
-		utils.TrieCacheGenFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
@@ -190,6 +202,8 @@ func newCliApp(version, usage string) *cli.App {
 		//utils.OttomanFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
+		utils.PruneFlag,
+		//utils.PruneBlockFlag,
 
 		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
@@ -227,9 +241,6 @@ func newCliApp(version, usage string) *cli.App {
 
 		LogDirFlag,
 		ChildChainFlag,
-
-		//abnormal behavior test cases flag
-		ABTestCaseFlag,
 
 		/*
 			//Tendermint flags

@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -99,16 +100,16 @@ func (b *EthApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 	return stateDb, header, err
 }
 
-func (b *EthApiBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error) {
-	return b.eth.blockchain.GetBlockByHash(blockHash), nil
+func (b *EthApiBackend) GetBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
+	return b.eth.blockchain.GetBlockByHash(hash), nil
 }
 
-func (b *EthApiBackend) GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error) {
-	return core.GetBlockReceipts(b.eth.chainDb, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash)), nil
+func (b *EthApiBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.Receipts, error) {
+	return b.eth.blockchain.GetReceiptsByHash(hash), nil
 }
 
-func (b *EthApiBackend) GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error) {
-	receipts := core.GetBlockReceipts(b.eth.chainDb, blockHash, core.GetBlockNumber(b.eth.chainDb, blockHash))
+func (b *EthApiBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types.Log, error) {
+	receipts := b.eth.blockchain.GetReceiptsByHash(hash)
 	if receipts == nil {
 		return nil, nil
 	}
@@ -236,4 +237,8 @@ func (b *EthApiBackend) GetCrossChainHelper() core.CrossChainHelper {
 
 func (b *EthApiBackend) BroadcastTX3ProofData(proofData *types.TX3ProofData) {
 	b.eth.protocolManager.BroadcastTX3ProofData(proofData.Header.Hash(), proofData)
+}
+
+func (b *EthApiBackend) Engine()  consensus.Engine {
+	return b.eth.Engine()
 }

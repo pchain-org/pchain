@@ -69,6 +69,8 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		Extra       *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
 		MixDigest   *common.Hash    `json:"mixHash"          gencodec:"required"`
 		Nonce       *BlockNonce     `json:"nonce"            gencodec:"required"`
+
+		MainChainNumber *hexutil.Big `json:"mainchainNumber" gencodec:"required"`
 	}
 	var dec Header
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -134,5 +136,8 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'nonce' for Header")
 	}
 	h.Nonce = *dec.Nonce
+	if dec.MainChainNumber != nil {
+		h.MainChainNumber = (*big.Int)(dec.MainChainNumber)
+	}
 	return nil
 }

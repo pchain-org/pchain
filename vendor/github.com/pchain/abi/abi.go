@@ -31,6 +31,7 @@ var (
 	CancelDelegate  = FunctionType{13, false, true, true}
 	Candidate       = FunctionType{14, false, true, true}
 	CancelCandidate = FunctionType{15, false, true, true}
+	ExtractReward   = FunctionType{16, false, true, true}
 	// Unknown
 	Unknown = FunctionType{-1, false, false, false}
 )
@@ -108,6 +109,8 @@ func (t FunctionType) String() string {
 		return "CancelCandidate"
 	case SetBlockReward:
 		return "SetBlockReward"
+	case ExtractReward:
+		return "ExtractReward"
 	default:
 		return "UnKnown"
 	}
@@ -143,6 +146,8 @@ func StringToFunctionType(s string) FunctionType {
 		return CancelCandidate
 	case "SetBlockReward":
 		return SetBlockReward
+	case "ExtractReward":
+		return ExtractReward
 	default:
 		return Unknown
 	}
@@ -414,6 +419,17 @@ const jsonChainABI = `
 			{
 				"name": "reward",
 				"type": "uint256"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "ExtractReward",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "address",
+				"type": "address"
 			}
 		]
 	}

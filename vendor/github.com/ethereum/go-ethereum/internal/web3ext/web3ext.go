@@ -23,7 +23,7 @@ var Modules = map[string]string{
 	"clique":     Clique_JS,
 	"debug":      Debug_JS,
 	"eth":        Eth_JS,
-	"pi":        PI_JS,
+	"pi":         PI_JS,
 	"miner":      Miner_JS,
 	"net":        Net_JS,
 	"personal":   Personal_JS,
@@ -164,6 +164,10 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'stopWS',
 			call: 'admin_stopWS'
+		}),
+		new web3._extend.Method({
+			name: 'startScanAndPrune',
+			call: 'admin_startScanAndPrune'
 		}),
 	],
 	properties: [
@@ -765,33 +769,32 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'createChildChain',
 			call: 'chain_createChildChain',
-			params: 3
+			params: 7
 		}),
 		new web3._extend.Method({
 			name: 'joinChildChain',
 			call: 'chain_joinChildChain',
-			params: 7
+			params: 6
 		}),
 		new web3._extend.Method({
 			name: 'depositInMainChain',
 			call: 'chain_depositInMainChain',
-			params: 5,
-			inputFormatter: [null]
+			params: 4
 		}),
 		new web3._extend.Method({
 			name: 'depositInChildChain',
 			call: 'chain_depositInChildChain',
-			params: 3
+			params: 2
 		}),
 		new web3._extend.Method({
 			name: 'withdrawFromChildChain',
 			call: 'chain_withdrawFromChildChain',
-			params: 4
+			params: 3
 		}),
 		new web3._extend.Method({
 			name: 'withdrawFromMainChain',
 			call: 'chain_withdrawFromMainChain',
-			params: 5
+			params: 4
 		}),
 		new web3._extend.Method({
 			name: 'getAllChains',
@@ -801,6 +804,16 @@ web3._extend({
 			name: 'signAddress',
 			call: 'chain_signAddress',
 			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'setBlockReward',
+			call: 'chain_setBlockReward',
+			params: 3
+		}),
+		new web3._extend.Method({
+			name: 'getBlockReward',
+			call: 'chain_getBlockReward',
+			params: 1
 		})
 	],
 	properties:
@@ -816,12 +829,12 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'voteNextEpoch',
 			call: 'tdm_voteNextEpoch',
-			params: 4
+			params: 3
 		}),
 		new web3._extend.Method({
 			name: 'revealVote',
 			call: 'tdm_revealVote',
-			params: 7
+			params: 6
 		}),
 		new web3._extend.Method({
 			name: 'getCurrentEpochNumber',
@@ -854,22 +867,33 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'delegate',
 			call: 'del_delegate',
-			params: 5
+			params: 4
 		}),
 		new web3._extend.Method({
 			name: 'cancelDelegate',
 			call: 'del_cancelDelegate',
-			params: 5
+			params: 4
 		}),
 		new web3._extend.Method({
 			name: 'applyCandidate',
 			call: 'del_applyCandidate',
-			params: 5
+			params: 4
 		}),
 		new web3._extend.Method({
 			name: 'cancelCandidate',
 			call: 'del_cancelCandidate',
-			params: 3
+			params: 2
+		}),
+		new web3._extend.Method({
+			name: 'checkCandidate',
+			call: 'del_checkCandidate',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputDefaultBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'extractReward',
+			call: 'del_extractReward',
+			params: 2
 		})
 	],
 	properties:

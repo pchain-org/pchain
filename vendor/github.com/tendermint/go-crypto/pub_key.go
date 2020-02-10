@@ -221,7 +221,7 @@ func (pubKey PubKeySecp256k1) Equals(other PubKey) bool {
 type EthereumPubKey []byte
 
 func (pubKey EthereumPubKey) Address() []byte {
-	cKey := ethcrypto.ToECDSAPub(pubKey[:])
+	cKey, _ := ethcrypto.UnmarshalPubkey(pubKey[:])
 	address := ethcrypto.PubkeyToAddress(*cKey)
 	return address[:]
 }

@@ -153,8 +153,8 @@ type Config struct {
 
 type NodeInfoToSend struct {
 	valNodeInfo *P2PValidatorNodeInfo
-	action uint64
-	p *Peer
+	action      uint64
+	p           *Peer
 }
 
 // Server manages all peer connections.
@@ -190,10 +190,11 @@ type Server struct {
 	peerFeed      event.Feed
 	log           log.Logger
 
-	events        chan *PeerEvent
+	events    chan *PeerEvent
+	eventsSub event.Subscription
 
-	nodeInfoLock  sync.Mutex // protects running
-	nodeInfoList  []*NodeInfoToSend
+	nodeInfoLock sync.Mutex // protects running
+	nodeInfoList []*NodeInfoToSend
 }
 
 type peerOpFunc func(map[discover.NodeID]*Peer)
@@ -359,16 +360,18 @@ func (srv *Server) makeSelf(listener net.Listener, ntab discoverTable) *discover
 // It blocks until all active connections have been closed.
 func (srv *Server) Stop() {
 	srv.lock.Lock()
-	defer srv.lock.Unlock()
 	if !srv.running {
+		srv.lock.Unlock()
 		return
 	}
+	srv.eventsSub.Unsubscribe()
 	srv.running = false
 	if srv.listener != nil {
 		// this unblocks listener Accept
 		srv.listener.Close()
 	}
 	close(srv.quit)
+	srv.lock.Unlock()
 	srv.loopWG.Wait()
 }
 
@@ -432,10 +435,9 @@ func (srv *Server) Start() (err error) {
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
 	srv.events = make(chan *PeerEvent)
+	srv.eventsSub = srv.SubscribeEvents(srv.events)
 
 	srv.nodeInfoList = make([]*NodeInfoToSend, 0)
-
-	srv.SubscribeEvents(srv.events)
 
 	var (
 		conn      *net.UDPConn
@@ -1061,11 +1063,11 @@ func (srv *Server) AddLocalValidator(chainId string, address common.Address) {
 	log.Debug("AddLocalValidator")
 
 	validator := P2PValidator{
-		ChainId:chainId,
-		Address:address,
+		ChainId: chainId,
+		Address: address,
 	}
 
-	for i:=0; i<len(srv.LocalValidators); i++ {
+	for i := 0; i < len(srv.LocalValidators); i++ {
 		if validator == srv.LocalValidators[i] {
 			return
 		}
@@ -1074,10 +1076,10 @@ func (srv *Server) AddLocalValidator(chainId string, address common.Address) {
 	srv.LocalValidators = append(srv.LocalValidators, validator)
 
 	srv.broadcastRefreshValidatorNodeInfo(&P2PValidatorNodeInfo{
-		Node: *srv.Self(),
-		TimeStamp: 	time.Now(),
-		Validator:  validator,
-		Original: true,
+		Node:      *srv.Self(),
+		TimeStamp: time.Now(),
+		Validator: validator,
+		Original:  true,
 	}, nil)
 }
 
@@ -1085,13 +1087,13 @@ func (srv *Server) RemoveLocalValidator(chainId string, address common.Address) 
 
 	log.Debug("RemoveLocalValidator")
 
-	validator := P2PValidator {
+	validator := P2PValidator{
 		ChainId: chainId,
 		Address: address,
 	}
 
 	idx := -1
-	for i:=0; i<len(srv.LocalValidators); i++ {
+	for i := 0; i < len(srv.LocalValidators); i++ {
 		if validator == srv.LocalValidators[i] {
 			idx = i
 			break
@@ -1105,10 +1107,10 @@ func (srv *Server) RemoveLocalValidator(chainId string, address common.Address) 
 	srv.LocalValidators = append(srv.LocalValidators[:idx], srv.LocalValidators[idx+1:]...)
 
 	srv.broadcastRemoveValidatorNodeInfo(&P2PValidatorNodeInfo{
-		Node: *srv.Self(),
-		TimeStamp: 	time.Now(),
-		Validator:  validator,
-		Original:   true,
+		Node:      *srv.Self(),
+		TimeStamp: time.Now(),
+		Validator: validator,
+		Original:  true,
 	}, nil)
 }
 
@@ -1128,7 +1130,7 @@ func (srv *Server) validatorAdd(valNodeInfo P2PValidatorNodeInfo, peers []*Peer,
 		con1 := valNodeInfo.Node.ID == nodeInfo.Node.ID
 		con2 := valNodeInfo.Node.IP.String() == nodeInfo.Node.IP.String()
 		log.Debugf("con1: %v, con2: %v", con1, con2)
-		if  con1 && con2 /*not compare PORT*/ {
+		if con1 && con2 /*not compare PORT*/ {
 			log.Debug("validator found, not add")
 			return nil
 		}
@@ -1138,7 +1140,7 @@ func (srv *Server) validatorAdd(valNodeInfo P2PValidatorNodeInfo, peers []*Peer,
 	srv.Validators[validator] = &valNodeInfo
 	inSameChain := false
 	//if this validator is in the same chains which we join as validator, connect to it
-	for i:=0; i<len(srv.LocalValidators); i++ {
+	for i := 0; i < len(srv.LocalValidators); i++ {
 		if validator.ChainId == srv.LocalValidators[i].ChainId {
 			inSameChain = true
 			break
@@ -1158,7 +1160,7 @@ func (srv *Server) validatorAdd(valNodeInfo P2PValidatorNodeInfo, peers []*Peer,
 	}
 
 	//broadcast this node info to peers
-	srv.broadcastRefreshValidatorNodeInfo(&valNodeInfo, peers);
+	//srv.broadcastRefreshValidatorNodeInfo(&valNodeInfo, peers)
 
 	return nil
 }
@@ -1183,9 +1185,9 @@ func (srv *Server) validatorRemove(valNodeInfo P2PValidatorNodeInfo, peers []*Pe
 
 	inSameChain := 0
 	//if this validator is in the same chains which we join as validator
-	for i:=0; i<len(srv.LocalValidators); i++ {
+	for i := 0; i < len(srv.LocalValidators); i++ {
 		if validator.ChainId == srv.LocalValidators[i].ChainId {
-			inSameChain ++
+			inSameChain++
 		}
 	}
 
@@ -1206,7 +1208,7 @@ func (srv *Server) validatorRemove(valNodeInfo P2PValidatorNodeInfo, peers []*Pe
 	}
 
 	//broadcast this node info to peers
-	srv.broadcastRemoveValidatorNodeInfo(&valNodeInfo, peers);
+	//srv.broadcastRemoveValidatorNodeInfo(&valNodeInfo, peers)
 
 	return nil
 }
@@ -1227,40 +1229,40 @@ func (srv *Server) validatorAddPeer(peer *Peer) error {
 		}
 
 		/*
-		err1 := Send(peer.rw, RefreshValidatorNodeInfoMsg, validatorNodeInfo)
-		if err == nil && err1 != nil {
-			err = err1
-		}
+			err1 := Send(peer.rw, RefreshValidatorNodeInfoMsg, validatorNodeInfo)
+			if err == nil && err1 != nil {
+				err = err1
+			}
 		*/
 		sendList = append(sendList, &NodeInfoToSend{
 			valNodeInfo: validatorNodeInfo,
-			action: RefreshValidatorNodeInfoMsg,
-			p : peer,
+			action:      RefreshValidatorNodeInfoMsg,
+			p:           peer,
 		})
 	}
 
 	node := *srv.Self()
-	for i := 0; i<len(srv.LocalValidators); i++ {
+	for i := 0; i < len(srv.LocalValidators); i++ {
 		/*
-		err1 := Send(peer.rw, RefreshValidatorNodeInfoMsg, P2PValidatorNodeInfo{
-			Node: node,
-			TimeStamp: time.Now(),
-			Validator: srv.LocalValidators[i],
-			Original: true,
-		})
-		if err == nil && err1 != nil {
-			err = err1
-		}
-		*/
-		sendList = append(sendList, &NodeInfoToSend{
-			valNodeInfo: &P2PValidatorNodeInfo{
+			err1 := Send(peer.rw, RefreshValidatorNodeInfoMsg, P2PValidatorNodeInfo{
 				Node: node,
 				TimeStamp: time.Now(),
 				Validator: srv.LocalValidators[i],
 				Original: true,
+			})
+			if err == nil && err1 != nil {
+				err = err1
+			}
+		*/
+		sendList = append(sendList, &NodeInfoToSend{
+			valNodeInfo: &P2PValidatorNodeInfo{
+				Node:      node,
+				TimeStamp: time.Now(),
+				Validator: srv.LocalValidators[i],
+				Original:  true,
 			},
 			action: RefreshValidatorNodeInfoMsg,
-			p : peer,
+			p:      peer,
 		})
 	}
 
@@ -1277,14 +1279,14 @@ func (srv *Server) validatorDelPeer(nodeId discover.NodeID) error {
 	defer srv.nodeInfoLock.Unlock()
 
 	tailIndex := 0
-	for i:=0; i<len(srv.nodeInfoList); i++ {
+	for i := 0; i < len(srv.nodeInfoList); i++ {
 
 		nodeInfo := srv.nodeInfoList[i]
 		if nodeInfo.valNodeInfo.Node.ID != nodeId {
 			if i != tailIndex {
 				srv.nodeInfoList[tailIndex] = nodeInfo
 			}
-			tailIndex ++
+			tailIndex++
 		}
 	}
 
@@ -1297,7 +1299,7 @@ func (srv *Server) validatorDelPeer(nodeId discover.NodeID) error {
 	return nil
 }
 
-func (srv *Server) broadcastRefreshValidatorNodeInfo(data interface{}, peers []*Peer) {
+func (srv *Server) broadcastRefreshValidatorNodeInfo(data *P2PValidatorNodeInfo, peers []*Peer) {
 
 	log.Debug("broadcastRefreshValidatorNodeInfo")
 	if peers == nil {
@@ -1308,9 +1310,9 @@ func (srv *Server) broadcastRefreshValidatorNodeInfo(data interface{}, peers []*
 	for _, p := range peers {
 
 		sendList = append(sendList, &NodeInfoToSend{
-			valNodeInfo: data.(*P2PValidatorNodeInfo),
-			action: RefreshValidatorNodeInfoMsg,
-			p : p,
+			valNodeInfo: data,
+			action:      RefreshValidatorNodeInfoMsg,
+			p:           p,
 		})
 		//Send(p.rw, RefreshValidatorNodeInfoMsg, data)
 	}
@@ -1330,8 +1332,8 @@ func (srv *Server) broadcastRemoveValidatorNodeInfo(data interface{}, peers []*P
 
 		sendList = append(sendList, &NodeInfoToSend{
 			valNodeInfo: data.(*P2PValidatorNodeInfo),
-			action: RemoveValidatorNodeInfoMsg,
-			p : p,
+			action:      RemoveValidatorNodeInfoMsg,
+			p:           p,
 		})
 		//Send(p.rw, RemoveValidatorNodeInfoMsg, data)
 	}
@@ -1356,7 +1358,6 @@ func (srv *Server) sendValidatorNodeInfoMessages() {
 	for srv.running {
 
 		if len(srv.nodeInfoList) > 0 {
-
 			srv.nodeInfoLock.Lock()
 
 			nodeInfo := srv.nodeInfoList[0]

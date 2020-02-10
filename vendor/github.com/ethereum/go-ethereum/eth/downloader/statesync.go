@@ -23,12 +23,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
+	"golang.org/x/crypto/sha3"
 )
 
 // stateReq represents a batch of state fetch requests groupped together into
@@ -214,7 +214,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 type stateSync struct {
 	d *Downloader // Downloader instance to access and manage current peerset
 
-	sched  *trie.TrieSync             // State trie sync scheduler defining the tasks
+	sched  *trie.Sync                 // State trie sync scheduler defining the tasks
 	keccak hash.Hash                  // Keccak256 hasher to verify deliveries with
 	tasks  map[common.Hash]*stateTask // Set of tasks currently queued for retrieval
 
@@ -240,7 +240,7 @@ func newStateSync(d *Downloader, root common.Hash) *stateSync {
 	return &stateSync{
 		d:       d,
 		sched:   state.NewStateSync(root, d.stateDB),
-		keccak:  sha3.NewKeccak256(),
+		keccak:  sha3.NewLegacyKeccak256(),
 		tasks:   make(map[common.Hash]*stateTask),
 		deliver: make(chan *stateReq),
 		cancel:  make(chan struct{}),
@@ -468,6 +468,6 @@ func (s *stateSync) updateStats(written, duplicate, unexpected int, duration tim
 		log.Info("Imported new state entries", "count", written, "elapsed", common.PrettyDuration(duration), "processed", s.d.syncStatsState.processed, "pending", s.d.syncStatsState.pending, "retry", len(s.tasks), "duplicate", s.d.syncStatsState.duplicate, "unexpected", s.d.syncStatsState.unexpected)
 	}
 	if written > 0 {
-		core.WriteTrieSyncProgress(s.d.stateDB, s.d.syncStatsState.processed)
+		rawdb.WriteFastTrieProgress(s.d.stateDB, s.d.syncStatsState.processed)
 	}
 }

@@ -19,6 +19,7 @@ package node
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"net"
 	"os"
 	"path/filepath"
@@ -119,6 +120,29 @@ func New(conf *Config) (*Node, error) {
 		eventmux:          new(event.TypeMux),
 		log:               conf.Logger,
 	}, nil
+}
+
+// Close stops the Node and releases resources acquired in
+// Node constructor New.
+func (n *Node) Close() error {
+	var errs []error
+
+	// Terminate all subsystems and collect any errors
+	if err := n.Stop(); err != nil && err != ErrNodeStopped {
+		errs = append(errs, err)
+	}
+	if err := n.accman.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	// Report any errors that might have occurred
+	switch len(errs) {
+	case 0:
+		return nil
+	case 1:
+		return errs[0]
+	default:
+		return fmt.Errorf("%v", errs)
+	}
 }
 
 // Register injects a new service into the node's stack. The service created by
@@ -566,11 +590,11 @@ func (n *Node) EventMux() *event.TypeMux {
 // OpenDatabase opens an existing database with the given name (or creates one if no
 // previous can be found) from within the node's instance directory. If the node is
 // ephemeral, a memory database is returned.
-func (n *Node) OpenDatabase(name string, cache, handles int) (ethdb.Database, error) {
+func (n *Node) OpenDatabase(name string, cache, handles int, namespace string) (ethdb.Database, error) {
 	if n.config.DataDir == "" {
-		return ethdb.NewMemDatabase()
+		return rawdb.NewMemoryDatabase(), nil
 	}
-	return ethdb.NewLDBDatabase(n.config.ResolvePath(name), cache, handles)
+	return rawdb.NewLevelDBDatabase(n.config.ResolvePath(name), cache, handles, namespace)
 }
 
 // ResolvePath returns the absolute path of a resource in the instance directory.
@@ -580,6 +604,10 @@ func (n *Node) ResolvePath(x string) string {
 
 func (n *Node) SetP2PServer(p2pServer *p2p.Server) {
 	n.server = p2pServer
+}
+
+func (n *Node) StopChan() <-chan struct{} {
+	return n.stop
 }
 
 // apis returns the collection of RPC descriptors this node offers.

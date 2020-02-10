@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/istanbul"
-	"github.com/ethereum/go-ethereum/consensus/tendermint"
+	"github.com/ethereum/go-ethereum/consensus/pdbft"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -46,14 +46,15 @@ var DefaultConfig = Config{
 		DatasetsInMem:  1,
 		DatasetsOnDisk: 2,
 	},
-	NetworkId:     1,
-	LightPeers:    100,
-	DatabaseCache: 768,
-	TrieCache:     256,
-	TrieTimeout:   5 * time.Minute,
-	MinerGasFloor: 8000000,
-	MinerGasCeil:  8000000,
-	MinerGasPrice: big.NewInt(params.GWei),
+	NetworkId:      1,
+	LightPeers:     100,
+	DatabaseCache:  512,
+	TrieCleanCache: 256,
+	TrieDirtyCache: 256,
+	TrieTimeout:    60 * time.Minute,
+	MinerGasFloor:  8000000,
+	MinerGasCeil:   8000000,
+	MinerGasPrice:  big.NewInt(params.GWei),
 
 	TxPool: core.DefaultTxPoolConfig,
 	GPO: gasprice.Config{
@@ -88,7 +89,8 @@ type Config struct {
 	// Protocol options
 	NetworkId uint64 // Network ID to use for selecting peers to connect to
 	SyncMode  downloader.SyncMode
-	NoPruning bool
+
+	NoPruning bool // Whether to disable pruning and flush everything to disk
 
 	// Light client options
 	LightServ  int `toml:",omitempty"` // Maximum percentage of time allowed for serving LES requests
@@ -98,8 +100,10 @@ type Config struct {
 	SkipBcVersionCheck bool `toml:"-"`
 	DatabaseHandles    int  `toml:"-"`
 	DatabaseCache      int
-	TrieCache          int
-	TrieTimeout        time.Duration
+
+	TrieCleanCache int
+	TrieDirtyCache int
+	TrieTimeout    time.Duration
 
 	// Mining-related options
 	Etherbase     common.Address `toml:",omitempty"`
@@ -127,10 +131,14 @@ type Config struct {
 	Istanbul istanbul.Config
 
 	// Tendermint options
-	Tendermint tendermint.Config
+	Tendermint pdbft.Config
 
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
+
+	// Data Reduction options
+	PruneStateData bool
+	PruneBlockData bool
 }
 
 type configMarshaling struct {

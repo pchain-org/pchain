@@ -24,12 +24,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus/istanbul"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"gopkg.in/karalabe/cookiejar.v2/collections/prque"
 )
 
 // New creates an Istanbul consensus core
@@ -43,7 +43,7 @@ func New(backend istanbul.Backend, config *istanbul.Config) Engine {
 		backend:            backend,
 		backlogs:           make(map[istanbul.Validator]*prque.Prque),
 		backlogsMu:         new(sync.Mutex),
-		pendingRequests:    prque.New(),
+		pendingRequests:    prque.New(nil),
 		pendingRequestsMu:  new(sync.Mutex),
 		consensusTimestamp: time.Time{},
 		roundMeter:         metrics.NewRegisteredMeter("consensus/istanbul/core/round", nil),

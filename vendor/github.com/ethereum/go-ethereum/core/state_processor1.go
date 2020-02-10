@@ -78,6 +78,9 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		receipt.Logs = statedb.GetLogs(tx.Hash())
 		//log.Debugf("ApplyTransactionEx，new receipt with receipt.Logs %v\n", receipt.Logs)
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		receipt.BlockHash = statedb.BlockHash()
+		receipt.BlockNumber = header.Number
+		receipt.TransactionIndex = uint(statedb.TxIndex())
 		//log.Debugf("ApplyTransactionEx，new receipt with receipt.Bloom %v\n", receipt.Bloom)
 		//log.Debugf("ApplyTransactionEx 4\n")
 		return receipt, gas, err
@@ -137,10 +140,12 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 		if applyCb := GetApplyCb(function); applyCb != nil {
 			if function.IsCrossChainType() {
-				cch.GetMutex().Lock()
-				defer cch.GetMutex().Unlock()
 				if fn, ok := applyCb.(CrossChainApplyCb); ok {
-					if err := fn(tx, statedb, ops, cch, mining); err != nil {
+					cch.GetMutex().Lock()
+					err := fn(tx, statedb, ops, cch, mining)
+					cch.GetMutex().Unlock()
+
+					if err != nil {
 						return nil, 0, err
 					}
 				} else {
@@ -174,13 +179,27 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 		} else {
 			root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 		}
+
 		receipt := types.NewReceipt(root, true, *usedGas)
+
+		//fix receipt status value
+		mainBlock := header.Number
+		if !bc.chainConfig.IsMainChain() {
+			mainBlock = header.MainChainNumber
+		}
+		if bc.Config().IsSelfRetrieveReward(mainBlock) {
+			receipt = types.NewReceipt(root, false, *usedGas)
+		}
+
 		receipt.TxHash = tx.Hash()
 		receipt.GasUsed = gas
 
 		// Set the receipt logs and create a bloom for filtering
 		receipt.Logs = statedb.GetLogs(tx.Hash())
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+		receipt.BlockHash = statedb.BlockHash()
+		receipt.BlockNumber = header.Number
+		receipt.TransactionIndex = uint(statedb.TxIndex())
 
 		statedb.SetNonce(msg.From(), statedb.GetNonce(msg.From())+1)
 		log.Infof("ApplyTransactionEx() 3, totalUsedMoney is %v\n", totalUsedMoney)

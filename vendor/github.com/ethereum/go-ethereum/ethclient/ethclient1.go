@@ -49,7 +49,8 @@ func (ec *Client) SendDataToMainChain(ctx context.Context, data []byte, prv *ecd
 	signer := types.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
 
 	var hash = common.Hash{}
-	err = retry(3, time.Millisecond*300, func() error {
+	//should send successfully, let's wait longer time
+	err = retry(30, time.Second*3, func() error {
 		// gasPrice
 		gasPrice, err := ec.SuggestGasPrice(ctx)
 		if err != nil {

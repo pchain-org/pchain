@@ -19,6 +19,8 @@ package gethmain
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 	"os"
 	"runtime"
 	"strconv"
@@ -29,14 +31,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -62,11 +62,11 @@ It expects the genesis file as argument.`,
 		Action:    utils.MigrateFlags(importChain),
 		Name:      "import",
 		Usage:     "Import a blockchain file",
-		ArgsUsage: "<filename> (<filename 2> ... <filename N>) ",
+		ArgsUsage: "<chainname> <filename> (<filename 2> ... <filename N>) ",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.CacheFlag,
-			utils.LightModeFlag,
+			utils.SyncModeFlag,
 			utils.GCModeFlag,
 			utils.CacheDatabaseFlag,
 			utils.CacheGCFlag,
@@ -83,11 +83,11 @@ processing will proceed even if an individual RLP-file import failure occurs.`,
 		Action:    utils.MigrateFlags(exportChain),
 		Name:      "export",
 		Usage:     "Export blockchain into file",
-		ArgsUsage: "<filename> [<blockNumFirst> <blockNumLast>]",
+		ArgsUsage: "<chainname> <filename> [<blockNumFirst> <blockNumLast>]",
 		Flags: []cli.Flag{
 			utils.DataDirFlag,
 			utils.CacheFlag,
-			utils.LightModeFlag,
+			utils.SyncModeFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -95,6 +95,34 @@ Requires a first argument of the file to write to.
 Optional second and third arguments control the first and
 last block to write. In this mode, the file will be appended
 if already existing.`,
+	}
+	importPreimagesCommand = cli.Command{
+		Action:    utils.MigrateFlags(importPreimages),
+		Name:      "import-preimages",
+		Usage:     "Import the preimage database from an RLP stream",
+		ArgsUsage: "<datafile>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.SyncModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+		Description: `
+	The import-preimages command imports hash preimages from an RLP encoded stream.`,
+	}
+	exportPreimagesCommand = cli.Command{
+		Action:    utils.MigrateFlags(exportPreimages),
+		Name:      "export-preimages",
+		Usage:     "Export the preimage database into an RLP stream",
+		ArgsUsage: "<dumpfile>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.SyncModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+		Description: `
+The export-preimages command export hash preimages to an RLP encoded stream`,
 	}
 	copydbCommand = cli.Command{
 		Action:    utils.MigrateFlags(copyDb),
@@ -141,6 +169,20 @@ Remove blockchain and state databases`,
 The arguments are interpreted as block numbers or hashes.
 Use "ethereum dump 0" to dump the genesis block.`,
 	}
+	countBlockStateCommand = cli.Command{
+		Action:    utils.MigrateFlags(countBlockState),
+		Name:      "count-blockstate",
+		Usage:     "Count the block state",
+		ArgsUsage: "<datafile>",
+		Flags: []cli.Flag{
+			utils.DataDirFlag,
+			utils.CacheFlag,
+			utils.SyncModeFlag,
+		},
+		Category: "BLOCKCHAIN COMMANDS",
+		Description: `
+	The count-blockstate command count the block state from a given height.`,
+	}
 )
 
 // initGenesis will initialise the given JSON format genesis file and writes it as
@@ -164,7 +206,7 @@ func initGenesis(ctx *cli.Context) error {
 	// Open an initialise both full and light databases
 	stack := makeFullNode(ctx)
 	for _, name := range []string{"chaindata", "lightchaindata"} {
-		chaindb, err := stack.OpenDatabase(name, 0, 0)
+		chaindb, err := stack.OpenDatabase(name, 0, 0, "")
 		if err != nil {
 			utils.Fatalf("Failed to open database: %v", err)
 		}
@@ -181,9 +223,19 @@ func importChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack := makeFullNode(ctx)
-	chain, chainDb := utils.MakeChain(ctx, stack)
-	defer chainDb.Close()
+
+	chainName := ctx.Args().First()
+	if chainName == "" {
+		utils.Fatalf("This command requires chain name specified.")
+	}
+
+	stack, cfg := makeConfigNode(ctx, chainName)
+	utils.RegisterEthService(stack, &cfg.Eth)
+	//stack := makeFullNode(ctx)
+	defer stack.Close()
+
+	chain, db := utils.MakeChain(ctx, stack)
+	defer db.Close()
 
 	// Start periodically gathering memory profiles
 	var peakMemAlloc, peakMemSys uint64
@@ -203,12 +255,15 @@ func importChain(ctx *cli.Context) error {
 	// Import the chain
 	start := time.Now()
 
-	if len(ctx.Args()) == 1 {
-		if err := utils.ImportChain(chain, ctx.Args().First()); err != nil {
+	if len(ctx.Args()) == 2 {
+		if err := utils.ImportChain(chain, ctx.Args().Get(1)); err != nil {
 			log.Error("Import error", "err", err)
 		}
 	} else {
-		for _, arg := range ctx.Args() {
+		for i, arg := range ctx.Args() {
+			if i == 0 {
+				continue // skip the chain name
+			}
 			if err := utils.ImportChain(chain, arg); err != nil {
 				log.Error("Import error", "file", arg, "err", err)
 			}
@@ -218,22 +273,17 @@ func importChain(ctx *cli.Context) error {
 	fmt.Printf("Import done in %v.\n\n", time.Since(start))
 
 	// Output pre-compaction stats mostly to see the import trashing
-	db := chainDb.(*ethdb.LDBDatabase)
-
-	stats, err := db.LDB().GetProperty("leveldb.stats")
+	stats, err := db.Stat("leveldb.stats")
 	if err != nil {
 		utils.Fatalf("Failed to read database stats: %v", err)
 	}
 	fmt.Println(stats)
 
-	ioStats, err := db.LDB().GetProperty("leveldb.iostats")
+	ioStats, err := db.Stat("leveldb.iostats")
 	if err != nil {
 		utils.Fatalf("Failed to read database iostats: %v", err)
 	}
 	fmt.Println(ioStats)
-
-	fmt.Printf("Trie cache misses:  %d\n", trie.CacheMisses())
-	fmt.Printf("Trie cache unloads: %d\n\n", trie.CacheUnloads())
 
 	// Print the memory statistics used by the importing
 	mem := new(runtime.MemStats)
@@ -251,23 +301,22 @@ func importChain(ctx *cli.Context) error {
 	// Compact the entire database to more accurately measure disk io and print the stats
 	start = time.Now()
 	fmt.Println("Compacting entire database...")
-	if err = db.LDB().CompactRange(util.Range{}); err != nil {
+	if err = db.Compact(nil, nil); err != nil {
 		utils.Fatalf("Compaction failed: %v", err)
 	}
 	fmt.Printf("Compaction done in %v.\n\n", time.Since(start))
 
-	stats, err = db.LDB().GetProperty("leveldb.stats")
+	stats, err = db.Stat("leveldb.stats")
 	if err != nil {
 		utils.Fatalf("Failed to read database stats: %v", err)
 	}
 	fmt.Println(stats)
 
-	ioStats, err = db.LDB().GetProperty("leveldb.iostats")
+	ioStats, err = db.Stat("leveldb.iostats")
 	if err != nil {
 		utils.Fatalf("Failed to read database iostats: %v", err)
 	}
 	fmt.Println(ioStats)
-
 	return nil
 }
 
@@ -275,18 +324,28 @@ func exportChain(ctx *cli.Context) error {
 	if len(ctx.Args()) < 1 {
 		utils.Fatalf("This command requires an argument.")
 	}
-	stack := makeFullNode(ctx)
+
+	chainName := ctx.Args().First()
+	if chainName == "" {
+		utils.Fatalf("This command requires chain name specified.")
+	}
+
+	stack, cfg := makeConfigNode(ctx, chainName)
+	utils.RegisterEthService(stack, &cfg.Eth)
+	//stack := makeFullNode(ctx)
+	defer stack.Close()
+
 	chain, _ := utils.MakeChain(ctx, stack)
 	start := time.Now()
 
 	var err error
-	fp := ctx.Args().First()
-	if len(ctx.Args()) < 3 {
+	fp := ctx.Args().Get(1)
+	if len(ctx.Args()) < 4 {
 		err = utils.ExportChain(chain, fp)
 	} else {
 		// This can be improved to allow for numbers larger than 9223372036854775807
-		first, ferr := strconv.ParseInt(ctx.Args().Get(1), 10, 64)
-		last, lerr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+		first, ferr := strconv.ParseInt(ctx.Args().Get(2), 10, 64)
+		last, lerr := strconv.ParseInt(ctx.Args().Get(3), 10, 64)
 		if ferr != nil || lerr != nil {
 			utils.Fatalf("Export error in parsing parameters: block number not an integer\n")
 		}
@@ -303,6 +362,55 @@ func exportChain(ctx *cli.Context) error {
 	return nil
 }
 
+// importPreimages imports preimage data from the specified file.
+func importPreimages(ctx *cli.Context) error {
+	if len(ctx.Args()) < 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+
+	chainName := ctx.Args().Get(1)
+	if chainName == "" {
+		chainName = "pchain"
+	}
+
+	stack, cfg := makeConfigNode(ctx, chainName)
+	utils.RegisterEthService(stack, &cfg.Eth)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack)
+	start := time.Now()
+
+	if err := utils.ImportPreimages(db, ctx.Args().First()); err != nil {
+		utils.Fatalf("Import error: %v\n", err)
+	}
+	fmt.Printf("Import done in %v\n", time.Since(start))
+	return nil
+}
+
+// exportPreimages dumps the preimage data to specified json file in streaming way.
+func exportPreimages(ctx *cli.Context) error {
+	if len(ctx.Args()) < 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+
+	chainName := ctx.Args().Get(1)
+	if chainName == "" {
+		chainName = "pchain"
+	}
+
+	stack, cfg := makeConfigNode(ctx, chainName)
+	utils.RegisterEthService(stack, &cfg.Eth)
+	defer stack.Close()
+
+	db := utils.MakeChainDatabase(ctx, stack)
+	start := time.Now()
+
+	if err := utils.ExportPreimages(db, ctx.Args().First()); err != nil {
+		utils.Fatalf("Export error: %v\n", err)
+	}
+	fmt.Printf("Export done in %v\n", time.Since(start))
+	return nil
+}
 func copyDb(ctx *cli.Context) error {
 	// Ensure we have a source chain directory to copy
 	if len(ctx.Args()) != 1 {
@@ -316,7 +424,7 @@ func copyDb(ctx *cli.Context) error {
 	dl := downloader.New(syncmode, chainDb, new(event.TypeMux), chain, nil, nil, nil)
 
 	// Create a source peer to satisfy downloader requests from
-	db, err := ethdb.NewLDBDatabase(ctx.Args().First(), ctx.GlobalInt(utils.CacheFlag.Name), 256)
+	db, err := rawdb.NewLevelDBDatabase(ctx.Args().First(), ctx.GlobalInt(utils.CacheFlag.Name), 256, "")
 	if err != nil {
 		return err
 	}
@@ -343,7 +451,7 @@ func copyDb(ctx *cli.Context) error {
 	// Compact the entire database to remove any sync overhead
 	start = time.Now()
 	fmt.Println("Compacting entire database...")
-	if err = chainDb.(*ethdb.LDBDatabase).LDB().CompactRange(util.Range{}); err != nil {
+	if err = db.Compact(nil, nil); err != nil {
 		utils.Fatalf("Compaction failed: %v", err)
 	}
 	fmt.Printf("Compaction done in %v.\n\n", time.Since(start))
@@ -410,4 +518,110 @@ func dump(ctx *cli.Context) error {
 func hashish(x string) bool {
 	_, err := strconv.Atoi(x)
 	return err != nil
+}
+
+func countBlockState(ctx *cli.Context) error {
+	if len(ctx.Args()) < 1 {
+		utils.Fatalf("This command requires an argument.")
+	}
+
+	chainName := ctx.Args().Get(1)
+	if chainName == "" {
+		chainName = "pchain"
+	}
+
+	stack, cfg := makeConfigNode(ctx, chainName)
+	utils.RegisterEthService(stack, &cfg.Eth)
+	defer stack.Close()
+
+	chainDb := utils.MakeChainDatabase(ctx, stack)
+
+	height, _ := strconv.ParseUint(ctx.Args().First(), 10, 64)
+
+	blockhash := rawdb.ReadCanonicalHash(chainDb, height)
+	block := rawdb.ReadBlock(chainDb, blockhash, height)
+	bsize := block.Size()
+
+	root := block.Header().Root
+	statedb, _ := state.New(block.Root(), state.NewDatabase(chainDb))
+	accountTrie, _ := statedb.Database().OpenTrie(root)
+
+	count := CountSize{}
+	countTrie(chainDb, accountTrie, &count, func(addr common.Address, account state.Account) {
+		if account.Root != emptyRoot {
+			storageTrie, _ := statedb.Database().OpenStorageTrie(common.Hash{}, account.Root)
+			countTrie(chainDb, storageTrie, &count, nil)
+		}
+
+		if account.TX1Root != emptyRoot {
+			tx1Trie, _ := statedb.Database().OpenTX1Trie(common.Hash{}, account.TX1Root)
+			countTrie(chainDb, tx1Trie, &count, nil)
+		}
+
+		if account.TX3Root != emptyRoot {
+			tx3Trie, _ := statedb.Database().OpenTX3Trie(common.Hash{}, account.TX3Root)
+			countTrie(chainDb, tx3Trie, &count, nil)
+		}
+
+		if account.ProxiedRoot != emptyRoot {
+			proxiedTrie, _ := statedb.Database().OpenProxiedTrie(common.Hash{}, account.ProxiedRoot)
+			countTrie(chainDb, proxiedTrie, &count, nil)
+		}
+
+		if account.RewardRoot != emptyRoot {
+			rewardTrie, _ := statedb.Database().OpenRewardTrie(common.Hash{}, account.RewardRoot)
+			countTrie(chainDb, rewardTrie, &count, nil)
+		}
+	})
+
+	// Open the file handle and potentially wrap with a gzip stream
+	fh, err := os.OpenFile("blockstate_nodedump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fh.Close()
+
+	// Write Node Data into file
+	for _, data := range count.Data {
+		fh.WriteString(data.key + " " + data.value + "\n")
+	}
+
+	fmt.Printf("Block %d, block size %v, state node %v, state size %v\n", height, bsize, count.Totalnode, count.Totalnodevaluesize)
+	return nil
+}
+
+type CountSize struct {
+	Totalnodevaluesize, Totalnode int
+	Data                          []nodeData
+}
+
+type nodeData struct {
+	key, value string
+}
+
+type processLeafTrie func(addr common.Address, account state.Account)
+
+var emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+
+func countTrie(db ethdb.Database, t state.Trie, count *CountSize, processLeaf processLeafTrie) {
+	for it := t.NodeIterator(nil); it.Next(true); {
+		if !it.Leaf() {
+			// non leaf node -> count += value
+			node, _ := db.Get(it.Hash().Bytes())
+			count.Totalnodevaluesize += len(node)
+			count.Totalnode++
+			count.Data = append(count.Data, nodeData{it.Hash().String(), common.Bytes2Hex(node)})
+		} else {
+			// Process the Account -> Inner Trie
+			if processLeaf != nil {
+				addr := t.GetKey(it.LeafKey())
+				if len(addr) == 20 {
+					var data state.Account
+					rlp.DecodeBytes(it.LeafBlob(), &data)
+
+					processLeaf(common.BytesToAddress(addr), data)
+				}
+			}
+		}
+	}
 }

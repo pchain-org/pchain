@@ -1,13 +1,9 @@
 package utils
 
 import (
-	"fmt"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/log"
-	"os"
-	"os/signal"
-	//"strings"
-	"github.com/ethereum/go-ethereum/internal/debug"
+
 	"github.com/ethereum/go-ethereum/node"
 	"gopkg.in/urfave/cli.v1"
 	//"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -70,22 +66,22 @@ func StartNode1(stack *node.Node) {
 		Fatalf("Error starting protocol stack: %v", err)
 	}
 
-	go func() {
-		sigc := make(chan os.Signal, 1)
-		signal.Notify(sigc, os.Interrupt)
-		defer signal.Stop(sigc)
-		<-sigc
-		log.Info("Got interrupt, shutting down...")
-		go stack.Stop()
-		for i := 3; i > 0; i-- {
-			<-sigc
-			if i > 1 {
-				log.Info(fmt.Sprintf("Already shutting down, interrupt %d more times for panic.", i-1))
-			}
-		}
-		debug.Exit() // ensure trace and CPU profile data is flushed.
-		debug.LoudPanic("boom")
-	}()
+	//go func() {
+	//	sigc := make(chan os.Signal, 1)
+	//	signal.Notify(sigc, os.Interrupt)
+	//	defer signal.Stop(sigc)
+	//	<-sigc
+	//	log.Info("Got interrupt, shutting down...")
+	//	go stack.Stop()
+	//	for i := 3; i > 0; i-- {
+	//		<-sigc
+	//		if i > 1 {
+	//			log.Info(fmt.Sprintf("Already shutting down, interrupt %d more times for panic.", i-1))
+	//		}
+	//	}
+	//	debug.Exit() // ensure trace and CPU profile data is flushed.
+	//	debug.LoudPanic("boom")
+	//}()
 }
 
 /*

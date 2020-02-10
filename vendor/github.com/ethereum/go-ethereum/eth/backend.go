@@ -20,11 +20,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"math/big"
-	"runtime"
-	"sync"
-	"sync/atomic"
-
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -33,10 +28,12 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/istanbul"
 	istanbulBackend "github.com/ethereum/go-ethereum/consensus/istanbul/backend"
-	"github.com/ethereum/go-ethereum/consensus/tendermint"
-	tendermintBackend "github.com/ethereum/go-ethereum/consensus/tendermint"
+	"github.com/ethereum/go-ethereum/consensus/pdbft"
+	tendermintBackend "github.com/ethereum/go-ethereum/consensus/pdbft"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
+	"github.com/ethereum/go-ethereum/core/datareduction"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -54,6 +51,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
+	"math/big"
+	"runtime"
+	"sync"
+	"sync/atomic"
 )
 
 type LesServer interface {
@@ -69,8 +70,7 @@ type Ethereum struct {
 	chainConfig *params.ChainConfig
 
 	// Channel for shutting down the service
-	shutdownChan  chan bool    // Channel for shutting down the ethereum
-	stopDbUpgrade func() error // stop chain db sequential key upgrade
+	shutdownChan chan bool // Channel for shutting down the ethereum
 
 	// Handlers
 	txPool          *core.TxPool
@@ -80,6 +80,7 @@ type Ethereum struct {
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
+	pruneDb ethdb.Database // Prune data database
 
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
@@ -117,30 +118,76 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
-	chainDb, err := CreateDB(ctx, config, "chaindata")
+	chainDb, err := ctx.OpenDatabase("chaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/")
 	if err != nil {
 		return nil, err
 	}
-	stopDbUpgrade := upgradeDeduplicateData(chainDb)
+	pruneDb, err := ctx.OpenDatabase("prunedata", config.DatabaseCache, config.DatabaseHandles, "pchain/db/prune/")
+	if err != nil {
+		return nil, err
+	}
 
 	isMainChain := params.IsMainChain(ctx.ChainId())
-
 	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithDefault(chainDb, config.Genesis, isMainChain, isTestnet)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
+
+	// Update HTLC Hard Fork and Contract if any one blank
+	switch ctx.ChainId() {
+	case "pchain":
+		if chainConfig.OutOfStorageBlock == nil {
+			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
+		}
+		chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
+		chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
+	case "testnet":
+		if chainConfig.OutOfStorageBlock == nil {
+			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
+		}
+		chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
+		chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
+	case "child_0":
+		if (chainConfig.HashTimeLockContract == common.Address{}) {
+			if isTestnet {
+				chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
+			} else {
+				chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
+			}
+		}
+		if isTestnet {
+			chainConfig.OutOfStorageBlock      = params.TestnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
+			chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
+		} else {
+			chainConfig.OutOfStorageBlock      = params.MainnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
+			chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
+		}
+	default:
+		if isTestnet {
+			chainConfig.OutOfStorageBlock      = params.TestnetChainConfig.OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
+			chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
+		} else {
+			chainConfig.OutOfStorageBlock      = params.MainnetChainConfig.OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
+			chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
+		}
+	}
+
 	chainConfig.ChainLogger = logger
 	logger.Info("Initialised chain configuration", "config", chainConfig)
 
 	eth := &Ethereum{
 		config:         config,
 		chainDb:        chainDb,
+		pruneDb:        pruneDb,
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
 		engine:         CreateConsensusEngine(ctx, config, chainConfig, chainDb, cliCtx, cch),
 		shutdownChan:   make(chan bool),
-		stopDbUpgrade:  stopDbUpgrade,
 		networkId:      config.NetworkId,
 		gasPrice:       config.MinerGasPrice,
 		etherbase:      config.Etherbase,
@@ -154,18 +201,30 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		eth.etherbase = crypto.PubkeyToAddress(ctx.NodeKey().PublicKey)
 	}
 
-	logger.Info("Initialising Ethereum protocol", "versions", eth.engine.Protocol().Versions, "network", config.NetworkId)
+	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
+	var dbVer = "<nil>"
+	if bcVersion != nil {
+		dbVer = fmt.Sprintf("%d", *bcVersion)
+	}
+	logger.Info("Initialising Ethereum protocol", "versions", eth.engine.Protocol().Versions, "network", config.NetworkId, "dbversion", dbVer)
 
 	if !config.SkipBcVersionCheck {
-		bcVersion := core.GetBlockChainVersion(chainDb)
-		if bcVersion != core.BlockChainVersion && bcVersion != 0 {
-			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run geth upgradedb.\n", bcVersion, core.BlockChainVersion)
+		if bcVersion != nil && *bcVersion > core.BlockChainVersion {
+			return nil, fmt.Errorf("database version is v%d, Geth %s only supports v%d", *bcVersion, params.VersionWithMeta, core.BlockChainVersion)
+		} else if bcVersion == nil || *bcVersion < core.BlockChainVersion {
+			logger.Warn("Upgrade blockchain database version", "from", dbVer, "to", core.BlockChainVersion)
+			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
 		}
-		core.WriteBlockChainVersion(chainDb, core.BlockChainVersion)
 	}
 	var (
 		vmConfig    = vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
-		cacheConfig = &core.CacheConfig{Disabled: config.NoPruning, TrieNodeLimit: config.TrieCache, TrieTimeLimit: config.TrieTimeout}
+		cacheConfig = &core.CacheConfig{
+			TrieCleanLimit: config.TrieCleanCache,
+
+			TrieDirtyLimit:    config.TrieDirtyCache,
+			TrieDirtyDisabled: config.NoPruning,
+			TrieTimeLimit:     config.TrieTimeout,
+		}
 	)
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig, cch)
 	if err != nil {
@@ -175,7 +234,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		logger.Warn("Rewinding chain to upgrade configuration", "err", compat)
 		eth.blockchain.SetHead(compat.RewindTo)
-		core.WriteChainConfig(chainDb, genesisHash, chainConfig)
+		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 	eth.bloomIndexer.Start(eth.blockchain)
 
@@ -217,18 +276,6 @@ func makeExtraData(extra []byte) []byte {
 	return extra
 }
 
-// CreateDB creates the chain database.
-func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Database, error) {
-	db, err := ctx.OpenDatabase(name, config.DatabaseCache, config.DatabaseHandles)
-	if err != nil {
-		return nil, err
-	}
-	if db, ok := db.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/chaindata/")
-	}
-	return db, nil
-}
-
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
 func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig *params.ChainConfig, db ethdb.Database,
 	cliCtx *cli.Context, cch core.CrossChainHelper) consensus.Engine {
@@ -249,8 +296,8 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 		if chainConfig.Tendermint.Epoch != 0 {
 			config.Tendermint.Epoch = chainConfig.Tendermint.Epoch
 		}
-		config.Tendermint.ProposerPolicy = tendermint.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
-		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), db, cch)
+		config.Tendermint.ProposerPolicy = pdbft.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
+		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), cch)
 	}
 
 	// Otherwise assume proof-of-work
@@ -341,23 +388,32 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 }
 
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
-	s.lock.RLock()
-	etherbase := s.etherbase
-	s.lock.RUnlock()
+	if tdm, ok := s.engine.(consensus.Tendermint); ok {
+		eb = tdm.PrivateValidator()
+		if eb != (common.Address{}) {
+			return eb, nil
+		} else {
+			return eb, errors.New("private validator missing")
+		}
+	} else {
+		s.lock.RLock()
+		etherbase := s.etherbase
+		s.lock.RUnlock()
 
-	if etherbase != (common.Address{}) {
-		return etherbase, nil
-	}
-	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
-		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-			etherbase := accounts[0].Address
-
-			s.lock.Lock()
-			s.etherbase = etherbase
-			s.lock.Unlock()
-
-			log.Info("Etherbase automatically configured", "address", etherbase)
+		if etherbase != (common.Address{}) {
 			return etherbase, nil
+		}
+		if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
+			if accounts := wallets[0].Accounts(); len(accounts) > 0 {
+				etherbase := accounts[0].Address
+
+				s.lock.Lock()
+				s.etherbase = etherbase
+				s.lock.Unlock()
+
+				log.Info("Etherbase automatically configured", "address", etherbase)
+				return etherbase, nil
+			}
 		}
 	}
 	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
@@ -467,15 +523,17 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	// Start the Auto Mining Loop
 	go s.loopForMiningEvent()
 
+	// Start the Data Reduction
+	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0"{
+		go s.StartScanAndPrune(0)
+	}
+
 	return nil
 }
 
 // Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
-	if s.stopDbUpgrade != nil {
-		s.stopDbUpgrade()
-	}
 	s.bloomIndexer.Close()
 	s.blockchain.Stop()
 	s.protocolManager.Stop()
@@ -484,9 +542,12 @@ func (s *Ethereum) Stop() error {
 	}
 	s.txPool.Stop()
 	s.miner.Stop()
+	s.engine.Close()
+	s.miner.Close()
 	s.eventMux.Stop()
 
 	s.chainDb.Close()
+	s.pruneDb.Close()
 	close(s.shutdownChan)
 
 	return nil
@@ -530,4 +591,43 @@ func (s *Ethereum) loopForMiningEvent() {
 			return
 		}
 	}
+}
+
+func (s *Ethereum) StartScanAndPrune(blockNumber uint64) {
+
+	if datareduction.StartPruning() {
+		log.Info("Data Reduction - Start")
+	} else {
+		log.Info("Data Reduction - Pruning is already running")
+		return
+	}
+
+	latestBlockNumber := s.blockchain.CurrentHeader().Number.Uint64()
+	if blockNumber == 0 || blockNumber >= latestBlockNumber {
+		blockNumber = latestBlockNumber
+		log.Infof("Data Reduction - Last block number %v", blockNumber)
+	} else {
+		log.Infof("Data Reduction - User defined Last block number %v", blockNumber)
+	}
+
+	ps := rawdb.ReadHeadScanNumber(s.pruneDb)
+	var scanNumber uint64
+	if ps != nil {
+		scanNumber = *ps
+	}
+
+	pp := rawdb.ReadHeadPruneNumber(s.pruneDb)
+	var pruneNumber uint64
+	if pp != nil {
+		pruneNumber = *pp
+	}
+	log.Infof("Data Reduction - Last scan number %v, prune number %v", scanNumber, pruneNumber)
+
+	pruneProcessor := datareduction.NewPruneProcessor(s.chainDb, s.pruneDb, s.blockchain, s.config.PruneBlockData)
+	//pruneProcessor := datareduction.NewPruneProcessor(s.chainDb, s.pruneDb, s.blockchain)
+
+	lastScanNumber, lastPruneNumber := pruneProcessor.Process(blockNumber, scanNumber, pruneNumber)
+	log.Infof("Data Reduction Completed - After prune, last number scan %v, prune number %v", lastScanNumber, lastPruneNumber)
+
+	datareduction.StopPruning()
 }

@@ -1,4 +1,7 @@
+welcome to our lastest [instruction](https://pchaindoc.readthedocs.io/en/latest/index.html).
 ## Pchain
+
+[中文README](https://github.com/pchain-org/pchain/wiki/README_CN)
 
 Official golang implementation of the Pchain protocol.
 
@@ -6,7 +9,7 @@ To get familiar with pchain, you could read about [Overview](https://github.com/
 
 ## Installation Instructions for Ubuntu(Official recommendation 16.04)
 
-Installing from PPA
+Installing from PPA, or [install from release](https://github.com/pchain-org/pchain/wiki/Install-pchain-from-release)(If you wanna become PCHAIN validator, we recommend you to install from release)
 ```
 sudo apt update
 sudo apt upgrade
@@ -17,7 +20,7 @@ sudo apt install pchain
 ```
 You should now be able to check the different options and commands with 'pchain --help'.
 
-Upgrade the latest version
+Upgrade the latest version of 'pchain'
 
 ```
 sudo apt update
@@ -35,7 +38,7 @@ brew tap pchain-org/pchain
 brew install pchain
 ```
 
-Upgrade the latest version
+Upgrade the latest version of 'pchain'
 
 ```shell
 brew upgrade pchain
@@ -51,7 +54,7 @@ Building pchain requires both a Go (version 1.10 or later) and a C compiler.
 You can install them using your favourite package manager.
 Once the dependencies are installed, run
 ```shell
-git clone https://github.com/pchain-org/pchain.git
+git clone -b pre_mainnet https://github.com/pchain-org/pchain.git
 cd pchain
 make pchain
 ```
@@ -67,32 +70,31 @@ If you want to build and run pchain under Windows(Not recommended), you could re
 If you want to know more about our Command Line Options,please consult our 
 [CLI Wiki page](https://github.com/pchain-org/pchain/wiki/Command-Line-Options)
 
-### Please Check Your Pchain Client Version (Latest:0.8.0-test2.3)
+### Please Check Your Pchain Client Version (Latest:1.1.04)
 
 ```
 $ pchain version
-//0.8.0-test2.3
+//1.1.04
 ```
+
+### Sync and run testnet
+If you wanna testing your smart contract, it's better to deploy it on testnet first. 
+You can follow [this guide](https://github.com/pchain-org/pchain/wiki/How-to-sync-and-run-pchain's-testnet) to run pchain's testnet.
+
+You can [Get free tPI](https://testnet.pchain.org/vfaucet.html) from our testnet.
 
 ### Full Node On The Pchain Main Network
 
-Pchain Main network will come soon.
-
-
-### Full Node On the Pchain Test Network 
-
 ```
-$ pchain --testnet
+$ pchain
 ```
-
 You can set your own data directory by '--datadir yourOwnDirectory'
-
 If you want to open RPC,just add the options '--rpc' and '--rpcapi "db,eth,net,web3,admin,tdm,miner,personal,chain,txpool" '. More details,please read [How To Interact With Pchain](https://github.com/pchain-org/pchain#how-to-interact-with-pchainrpc-or-ipc-console)
 
-you can add '&' at the end of command above,Pchain client will run in the background
+you can use 'nohup' and add '&' at the end of command above,Pchain client will run in the background
 
 ```
-$ pchain --testnet  &
+$ nohup pchain &
 ```
 
 | Platform | Default Datadir Directory |
@@ -101,21 +103,21 @@ $ pchain --testnet  &
 | Mac | ~/Library/Pchain|
 | Windows | %APPDATA%\Pchain|
 
-Specifying the `--testnet` flag however will reconfigure your pchain instance a bit:
+### Docker quick start
 
- * Instead of using the default data directory , pchain will nest
-   itself one level deeper into a `testnet` subfolder (`<Default_Datadir>/testnet`). 
+One of the quickest ways to get Pchain up and running on your machine is by using Docker:
+```
+docker run -d --name pchain-node -v ~/pchain/.pchain:/.pchain \
+           -p 6969:6969 -p 30308:30308 \
+           pchain/client-go --datadir=/.pchain
+```
+This will start pchain just as the above command does. It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports.
 
- * Instead of connecting the main pchain network, the client will connect to the test network,
-   which uses different P2P bootnodes, different network IDs and genesis states.
+Do not forget `--rpcaddr=0.0.0.0 --rpc --rpcapi=eth,web3,admin,tdm,miner,personal,chain,txpool,del`, if you want to access RPC from other containers and/or hosts. By default, pchain binds to the local interface and RPC endpoints is not accessible from the outside.
 
 ### How To Interact With Pchain(RPC OR IPC CONSOLE)
 
 Please Read The Wiki [How To Interact With Pchain](https://github.com/pchain-org/pchain/wiki/How-To-Interact-With-Pchain)
-
-### How To Get Free Testnet PI (Pchain Token)
-
-[Get Free Testnet PI](https://testnet.pchain.org/vfaucet.html)
 
 ### How To Become A Validator
 
@@ -141,3 +143,5 @@ Please Read The Wiki [How To Delegate](https://github.com/pchain-org/pchain/wiki
 
 Please Read The Wiki [Operating A Private Network With A Single Validator](https://github.com/pchain-org/pchain/wiki/Operating-A-Private-Network-With-A-Single-Validator)
 
+### Run pchain testnet
+Please read this [guide](https://github.com/pchain-org/pchain/wiki/How-to-sync-and-run-pchain's-testnet)

@@ -27,12 +27,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
-	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -94,6 +93,8 @@ type Result struct {
 type worker struct {
 	config *params.ChainConfig
 	engine consensus.Engine
+	eth    Backend
+	chain  *core.BlockChain
 
 	gasFloor uint64
 	gasCeil  uint64
@@ -110,13 +111,11 @@ type worker struct {
 	chainSideSub event.Subscription
 	wg           sync.WaitGroup
 
-	agents map[Agent]struct{}
-	recv   chan *Result
+	agents   map[Agent]struct{}
+	resultCh chan *Result
+	exitCh   chan struct{}
 
-	eth     Backend
-	chain   *core.BlockChain
-	proc    core.Validator
-	chainDb ethdb.Database
+	proc core.Validator
 
 	coinbase common.Address
 	extra    []byte
@@ -148,8 +147,8 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 		txCh:           make(chan core.TxPreEvent, txChanSize),
 		chainHeadCh:    make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:    make(chan core.ChainSideEvent, chainSideChanSize),
-		chainDb:        eth.ChainDb(),
-		recv:           make(chan *Result, resultQueueSize),
+		resultCh:       make(chan *Result, resultQueueSize),
+		exitCh:         make(chan struct{}),
 		chain:          eth.BlockChain(),
 		proc:           eth.BlockChain().Validator(),
 		possibleUncles: make(map[common.Hash]*types.Block),
@@ -163,9 +162,10 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
-	go worker.update()
 
-	go worker.wait()
+	go worker.mainLoop()
+
+	go worker.resultLoop()
 	//worker.commitNewWork()
 
 	return worker
@@ -248,7 +248,12 @@ func (self *worker) stop() {
 	}
 
 	if stoppableEngine, ok := self.engine.(consensus.EngineStartStop); ok {
-		stoppableEngine.Stop()
+		engineStopErr := stoppableEngine.Stop()
+		if engineStopErr != nil {
+			self.logger.Error("Stop Engine failed.", "err", engineStopErr)
+		} else {
+			self.logger.Info("Stop Engine Success.")
+		}
 	}
 
 	atomic.StoreInt32(&self.mining, 0)
@@ -260,11 +265,17 @@ func (w *worker) isRunning() bool {
 	return atomic.LoadInt32(&w.mining) == 1
 }
 
+// close terminates all background threads maintained by the worker.
+// Note the worker does not support being closed multiple times.
+func (w *worker) close() {
+	close(w.exitCh)
+}
+
 func (self *worker) register(agent Agent) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	self.agents[agent] = struct{}{}
-	agent.SetReturnCh(self.recv)
+	agent.SetReturnCh(self.resultCh)
 }
 
 func (self *worker) unregister(agent Agent) {
@@ -274,7 +285,7 @@ func (self *worker) unregister(agent Agent) {
 	agent.Stop()
 }
 
-func (self *worker) update() {
+func (self *worker) mainLoop() {
 	defer self.txSub.Unsubscribe()
 	defer self.chainHeadSub.Unsubscribe()
 	defer self.chainSideSub.Unsubscribe()
@@ -314,6 +325,8 @@ func (self *worker) update() {
 			}
 
 		// System stopped
+		case <-self.exitCh:
+			return
 		case <-self.txSub.Err():
 			return
 		case <-self.chainHeadSub.Err():
@@ -324,10 +337,11 @@ func (self *worker) update() {
 	}
 }
 
-func (self *worker) wait() {
+func (self *worker) resultLoop() {
 	for {
 		mustCommitNewWork := true
-		for result := range self.recv {
+		select {
+		case result := <-self.resultCh:
 			atomic.AddInt32(&self.atWork, -1)
 
 			if result == nil {
@@ -341,23 +355,37 @@ func (self *worker) wait() {
 
 			if result.Work != nil {
 				block = result.Block
-
+				hash := block.Hash()
 				work := result.Work
-				// Update the block hash in all logs since it is now available and not when the
-				// receipt/log of individual transactions were created.
-				for _, r := range work.receipts {
-					for _, l := range r.Logs {
-						l.BlockHash = block.Hash()
+
+				for i, receipt := range work.receipts {
+					// add block location fields
+					receipt.BlockHash = hash
+					receipt.BlockNumber = block.Number()
+					receipt.TransactionIndex = uint(i)
+
+					// Update the block hash in all logs since it is now available and not when the
+					// receipt/log of individual transactions were created.
+					for _, l := range receipt.Logs {
+						l.BlockHash = hash
 					}
 				}
 				for _, log := range work.state.Logs() {
-					log.BlockHash = block.Hash()
+					log.BlockHash = hash
 				}
 				receipts = work.receipts
 				state = work.state
 				ops = work.ops
 			} else if result.Intermediate != nil {
 				block = result.Intermediate.Block
+
+				for i, receipt := range result.Intermediate.Receipts {
+					// add block location fields
+					receipt.BlockHash = block.Hash()
+					receipt.BlockNumber = block.Number()
+					receipt.TransactionIndex = uint(i)
+				}
+
 				receipts = result.Intermediate.Receipts
 				state = result.Intermediate.State
 				ops = result.Intermediate.Ops
@@ -365,9 +393,12 @@ func (self *worker) wait() {
 				continue
 			}
 
+			self.chain.MuLock()
+
 			stat, err := self.chain.WriteBlockWithState(block, receipts, state)
 			if err != nil {
 				self.logger.Error("Failed writing block to chain", "err", err)
+				self.chain.MuUnLock()
 				continue
 			}
 			// execute the pending ops.
@@ -392,6 +423,8 @@ func (self *worker) wait() {
 				events = append(events, core.ChainHeadEvent{Block: block})
 			}
 
+			self.chain.MuUnLock()
+
 			self.chain.PostChainEvents(events, logs)
 
 			// Insert the block into the set of pending ones to wait for confirmations
@@ -400,6 +433,8 @@ func (self *worker) wait() {
 			if mustCommitNewWork {
 				self.commitNewWork()
 			}
+		case <-self.exitCh:
+			return
 		}
 	}
 }
@@ -462,14 +497,16 @@ func (self *worker) commitNewWork() {
 	parent := self.chain.CurrentBlock()
 
 	tstamp := tstart.Unix()
-	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
-		tstamp = parent.Time().Int64() + 1
+	if parent.Time() >= uint64(tstamp) {
+		tstamp = int64(parent.Time() + 1)
 	}
+
 	// this will ensure we're not going off too far in the future
 	if now := time.Now().Unix(); tstamp > now+1 {
 		wait := time.Duration(tstamp-now) * time.Second
-		self.logger.Info("Mining too far in the future", "wait", common.PrettyDuration(wait))
-		time.Sleep(wait)
+		self.logger.Info("Mining too far in the future", "suppose but not wait", common.PrettyDuration(wait))
+		//In pchain, there is no need to sleep to wait, commit work immediately
+		//time.Sleep(wait)
 	}
 
 	num := parent.Number()

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math"
 	"math/big"
 	"sync"
@@ -50,6 +51,10 @@ const (
 	// txChanSize is the size of channel listening to TxPreEvent.
 	// The number is referenced from the size of tx pool.
 	txChanSize = 4096
+
+	// tx3PrfDtChainSize is the size of channel listening to Tx3PrfDataEvent.
+	// The number is referenced from the size of tx pool.
+	tx3PrfDtChainSize = 4096
 )
 
 var (
@@ -81,9 +86,15 @@ type ProtocolManager struct {
 
 	SubProtocols []p2p.Protocol
 
-	eventMux      *event.TypeMux
 	txCh          chan core.TxPreEvent
 	txSub         event.Subscription
+
+	tx3PrfDtCh    chan core.Tx3ProofDataEvent
+	tx3PrfDtFeed  event.Feed
+	tx3PrfDtScope event.SubscriptionScope
+	tx3PrfDtSub   event.Subscription
+
+	eventMux      *event.TypeMux
 	minedBlockSub *event.TypeMuxSubscription
 
 	// channels for fetcher, syncer, txsyncLoop
@@ -100,7 +111,8 @@ type ProtocolManager struct {
 
 	cch core.CrossChainHelper
 
-	logger log.Logger
+	logger         log.Logger
+	preimageLogger log.Logger
 }
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
@@ -108,19 +120,20 @@ type ProtocolManager struct {
 func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkId uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, cch core.CrossChainHelper) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		networkId:   networkId,
-		eventMux:    mux,
-		txpool:      txpool,
-		blockchain:  blockchain,
-		chainconfig: config,
-		peers:       newPeerSet(),
-		newPeerCh:   make(chan *peer),
-		noMorePeers: make(chan struct{}),
-		txsyncCh:    make(chan *txsync),
-		quitSync:    make(chan struct{}),
-		engine:      engine,
-		cch:         cch,
-		logger:      config.ChainLogger,
+		networkId:      networkId,
+		eventMux:       mux,
+		txpool:         txpool,
+		blockchain:     blockchain,
+		chainconfig:    config,
+		peers:          newPeerSet(),
+		newPeerCh:      make(chan *peer),
+		noMorePeers:    make(chan struct{}),
+		txsyncCh:       make(chan *txsync),
+		quitSync:       make(chan struct{}),
+		engine:         engine,
+		cch:            cch,
+		logger:         config.ChainLogger,
+		preimageLogger: config.ChainLogger.New("module", "preimages"),
 	}
 
 	if handler, ok := manager.engine.(consensus.Handler); ok {
@@ -224,6 +237,10 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.txSub = pm.txpool.SubscribeTxPreEvent(pm.txCh)
 	go pm.txBroadcastLoop()
 
+	pm.tx3PrfDtCh = make(chan core.Tx3ProofDataEvent, tx3PrfDtChainSize)
+	pm.tx3PrfDtSub = pm.tx3PrfDtScope.Track(pm.tx3PrfDtFeed.Subscribe(pm.tx3PrfDtCh))
+	go pm.tx3PrfDtBroadcastLoop()
+
 	// broadcast mined blocks
 	pm.minedBlockSub = pm.eventMux.Subscribe(core.NewMinedBlockEvent{})
 	go pm.minedBroadcastLoop()
@@ -237,6 +254,7 @@ func (pm *ProtocolManager) Stop() {
 	pm.logger.Info("Stopping Ethereum protocol")
 
 	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
+	pm.tx3PrfDtSub.Unsubscribe()   // quits tx3PrfDtBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
 
 	// Quit the sync loop.
@@ -710,9 +728,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			p.MarkTransaction(tx.Hash())
 		}
 		pm.txpool.AddRemotes(txs)
-		
+
 	case msg.Code == TX3ProofDataMsg:
-		pm.logger.Info("TX3ProofDataMsg received")
+		pm.logger.Debug("TX3ProofDataMsg received")
 		var proofDatas []*types.TX3ProofData
 		if err := msg.Decode(&proofDatas); err != nil {
 			pm.logger.Error("TX3ProofDataMsg decode error", "msg", msg, "error", err)
@@ -728,6 +746,83 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			// Write the remote TX3ProofData
 			if err := pm.cch.WriteTX3ProofData(proofData); err != nil {
 				pm.logger.Error("TX3ProofDataMsg write error", "msg", msg, "error", err)
+			}
+
+			go pm.tx3PrfDtFeed.Send(core.Tx3ProofDataEvent{proofData})
+		}
+
+	case msg.Code == GetPreImagesMsg:
+		pm.preimageLogger.Debug("GetPreImagesMsg received")
+		// Decode the retrieval message
+		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
+		if _, err := msgStream.List(); err != nil {
+			return err
+		}
+		// Gather state data until the fetch or network limits is reached
+		var (
+			hash      common.Hash
+			bytes     int
+			preimages [][]byte
+		)
+
+		for bytes < softResponseLimit && len(preimages) < downloader.MaxReceiptFetch {
+			// Retrieve the hash of the next block
+			if err := msgStream.Decode(&hash); err == rlp.EOL {
+				break
+			} else if err != nil {
+
+				return errResp(ErrDecode, "msg %v: %v", msg, err)
+			}
+			// Retrieve the requested block's receipts, skipping if unknown to us
+			preimage := rawdb.ReadPreimage(pm.blockchain.StateCache().TrieDB().DiskDB(), hash)
+			// Double check the local preimage
+			if hash != crypto.Keccak256Hash(preimage) {
+				pm.preimageLogger.Errorf("Failed to pass the preimage double check. Request hash %x, Local Preimage %x", hash, preimage)
+				continue
+			}
+
+			preimages = append(preimages, preimage)
+			bytes += len(preimage)
+		}
+		return p.SendPreimagesRLP(preimages)
+
+	case msg.Code == PreImagesMsg:
+		pm.preimageLogger.Debug("PreImagesMsg received")
+		var preimages [][]byte
+		if err := msg.Decode(&preimages); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
+		preimagesMap := make(map[common.Hash][]byte)
+		for _, preimage := range preimages {
+			pm.preimageLogger.Debugf("PreImagesMsg received: %x", preimage)
+			preimagesMap[crypto.Keccak256Hash(preimage)] = common.CopyBytes(preimage)
+		}
+		if len(preimagesMap) > 0 {
+			db, _ := pm.blockchain.StateCache().TrieDB().DiskDB().(ethdb.Database)
+			rawdb.WritePreimages(db, preimagesMap)
+			pm.preimageLogger.Info("PreImages wrote into database")
+		}
+
+	case msg.Code == TrieNodeDataMsg:
+		pm.logger.Debug("TrieNodeDataMsg received")
+		var trienodes [][]byte
+		if err := msg.Decode(&trienodes); err != nil {
+			pm.logger.Warnf("Unable decode TrieNodeData %v", err)
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		pm.logger.Debugf("%d TrieNodeData received", len(trienodes))
+
+		db, _ := pm.blockchain.StateCache().TrieDB().DiskDB().(ethdb.Database)
+		for _, tnode := range trienodes {
+			thash := crypto.Keccak256Hash(tnode)
+			if has, herr := db.Has(thash.Bytes()); !has && herr == nil {
+				puterr := db.Put(thash.Bytes(), tnode)
+				if puterr == nil {
+					pm.logger.Debugf("Insert TrieNodeData %x", thash)
+				}
+			} else if has {
+				pm.logger.Debugf("TrieNodeData %x already existed", thash)
 			}
 		}
 
@@ -806,6 +901,50 @@ func (pm *ProtocolManager) BroadcastMessage(msgcode uint64, data interface{}) {
 	pm.logger.Trace("Broadcast p2p message", "code", msgcode, "recipients", recipients, "msg", data)
 }
 
+func (pm *ProtocolManager) TryFixBadPreimages() {
+	// Record all preimages (Testing)
+	images := make(map[common.Hash][]byte)
+
+	var hashes []common.Hash
+
+	// Iterate the entire sha3 preimages for checking
+	db, _ := pm.blockchain.StateCache().TrieDB().DiskDB().(ethdb.Database)
+	it := db.NewIteratorWithPrefix([]byte("secure-key-"))
+	for it.Next() {
+		keyHash := common.BytesToHash(it.Key())
+		valueHash := crypto.Keccak256Hash(it.Value())
+		if keyHash != valueHash {
+			// If value's hash doesn't match the key hash, add to list and send to other peer for correct
+			hashes = append(hashes, keyHash)
+		}
+		// Add to all preimages (Testing)
+		images[keyHash] = common.CopyBytes(it.Value())
+	}
+	it.Release()
+
+	if len(hashes) > 0 {
+		pm.preimageLogger.Critf("Found %d Bad Preimage(s)", len(hashes))
+		pm.preimageLogger.Critf("Bad Preimages: %x", hashes)
+
+		// Print all preimages (Testing)
+		//pm.preimageLogger.Crit("All Preimage(s)")
+		//var list []common.Hash
+		//for k := range images {
+		//	list = append(list, k)
+		//}
+		//sort.Slice(list, func(i, j int) bool {
+		//	return bytes.Compare(list[i][:], list[j][:]) == 1
+		//})
+		//for _, k := range list {
+		//	pm.preimageLogger.Crit(k.Hex(), common.Bytes2Hex(images[k]))
+		//}
+
+		//panic("Stop the system when found bad preimages, for testing purpose")
+		pm.peers.BestPeer().RequestPreimages(hashes)
+	}
+
+}
+
 // Mined broadcast loop
 func (self *ProtocolManager) minedBroadcastLoop() {
 	// automatically stops if unsubscribe
@@ -826,6 +965,19 @@ func (self *ProtocolManager) txBroadcastLoop() {
 
 		// Err() channel will be closed when unsubscribing.
 		case <-self.txSub.Err():
+			return
+		}
+	}
+}
+
+func (self *ProtocolManager) tx3PrfDtBroadcastLoop() {
+	for {
+		select {
+		case event := <-self.tx3PrfDtCh:
+			self.BroadcastTX3ProofData(event.Tx3PrfDt.Header.Hash(), event.Tx3PrfDt)
+
+		// Err() channel will be closed when unsubscribing.
+		case <-self.tx3PrfDtSub.Err():
 			return
 		}
 	}

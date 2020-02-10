@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -242,8 +242,11 @@ func revealVoteValidation(from common.Address, tx *types.Transaction, state *sta
 
 	// Check Vote
 	voteSet := ep.GetNextEpoch().GetEpochValidatorVoteSet()
-	vote, exist := voteSet.GetVoteByAddress(from)
+	if voteSet == nil {
+		return nil, errors.New(fmt.Sprintf("Can not found the vote for Address %x", from))
+	}
 
+	vote, exist := voteSet.GetVoteByAddress(from)
 	// Check Vote exist
 	if !exist {
 		return nil, errors.New(fmt.Sprintf("Can not found the vote for Address %x", from))
@@ -285,7 +288,7 @@ func revealVoteValidation(from common.Address, tx *types.Transaction, state *sta
 func checkEpochInHashVoteStage(bc *core.BlockChain) error {
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
-		ep = tdm.GetEpoch()
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 	}
 
 	if ep == nil {
@@ -308,7 +311,7 @@ func checkEpochInHashVoteStage(bc *core.BlockChain) error {
 func checkEpochInRevealVoteStage(bc *core.BlockChain) (*epoch.Epoch, error) {
 	var ep *epoch.Epoch
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
-		ep = tdm.GetEpoch()
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 	}
 
 	if ep == nil {

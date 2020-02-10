@@ -422,6 +422,12 @@ func (c *stateObject) getTrie(db Database) Trie {
 
 // GetState returns a value in account storage.
 func (self *stateObject) GetState(db Database, key common.Hash) common.Hash {
+	// If we have a dirty value for this state entry, return it
+	value, dirty := self.dirtyStorage[key]
+	if dirty {
+		return value
+	}
+
 	// If we have the original value cached, return that
 	value, cached := self.originStorage[key]
 	if cached {

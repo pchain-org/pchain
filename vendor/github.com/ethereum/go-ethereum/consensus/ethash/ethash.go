@@ -489,6 +489,11 @@ func NewShared() *Ethash {
 	return &Ethash{shared: sharedEthash}
 }
 
+// Close closes the exit channel to notify all backend threads exiting.
+func (ethash *Ethash) Close() error {
+	return nil
+}
+
 // cache tries to retrieve a verification cache for the specified block number
 // by first checking against a list of in-memory caches, then against caches
 // stored on disk, and finally generating one if none can be found.

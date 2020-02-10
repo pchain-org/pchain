@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	"github.com/ethereum/go-ethereum/common/math"
+	ep "github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/tendermint/go-crypto"
@@ -14,6 +15,11 @@ import (
 	"os"
 	"strings"
 	"sync"
+)
+
+const (
+	OFFICIAL_MINIMUM_VALIDATORS = 1
+	OFFICIAL_MINIMUM_DEPOSIT    = "100000000000000000000000" // 100,000 * e18
 )
 
 type CoreChainInfo struct {
@@ -59,7 +65,11 @@ type ChainInfo struct {
 	Epoch *ep.Epoch
 }
 
-const chainInfoKey = "CHAIN"
+const (
+	chainInfoKey  = "CHAIN"
+	ethGenesisKey = "ETH_GENESIS"
+	tdmGenesisKey = "TDM_GENESIS"
+)
 
 var allChainKey = []byte("AllChainID")
 
@@ -73,6 +83,14 @@ func calcCoreChainInfoKey(chainId string) []byte {
 
 func calcEpochKey(number uint64, chainId string) []byte {
 	return []byte(chainInfoKey + fmt.Sprintf("-%v-%s", number, chainId))
+}
+
+func calcETHGenesisKey(chainId string) []byte {
+	return []byte(ethGenesisKey + ":" + chainId)
+}
+
+func calcTDMGenesisKey(chainId string) []byte {
+	return []byte(tdmGenesisKey + ":" + chainId)
 }
 
 func GetChainInfo(db dbm.DB, chainId string) *ChainInfo {
@@ -118,6 +136,19 @@ func SaveChainInfo(db dbm.DB, ci *ChainInfo) error {
 
 	saveId(db, ci.ChainId)
 
+	return nil
+}
+
+func SaveFutureEpoch(db dbm.DB, futureEpoch *ep.Epoch, chainId string) error {
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	if futureEpoch != nil {
+		err := saveEpoch(db, futureEpoch, chainId)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -179,6 +210,13 @@ func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
 			return epoch
 		}
 
+		// If blockNumber > epoch EndBlock, find future epoch
+		if blockNumber > epoch.EndBlock {
+			ep := loadEpoch(ci.db, epoch.Number+1, ci.ChainId)
+			return ep
+		}
+
+		// If blockNumber < epoch StartBlock, find history epoch
 		number := epoch.Number
 		for {
 			if number == 0 {
@@ -253,6 +291,28 @@ func CheckChildChainRunning(db dbm.DB, chainId string) bool {
 	}
 
 	return false
+}
+
+// SaveChainGenesis save the genesis file for child chain
+func SaveChainGenesis(db dbm.DB, chainId string, ethGenesis, tdmGenesis []byte) {
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	// Save the eth genesis
+	db.SetSync(calcETHGenesisKey(chainId), ethGenesis)
+
+	// Save the tdm genesis
+	db.SetSync(calcTDMGenesisKey(chainId), tdmGenesis)
+}
+
+// LoadChainGenesis load the genesis file for child chain
+func LoadChainGenesis(db dbm.DB, chainId string) (ethGenesis, tdmGenesis []byte) {
+	mtx.RLock()
+	defer mtx.RUnlock()
+
+	ethGenesis = db.Get(calcETHGenesisKey(chainId))
+	tdmGenesis = db.Get(calcTDMGenesisKey(chainId))
+	return
 }
 
 // ---------------------
@@ -357,6 +417,13 @@ func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) 
 			for _, jv := range cci.JoinedValidators {
 				stateDB.SubChildChainDepositBalance(jv.Address, v.ChainID, jv.DepositAmount)
 				stateDB.AddBalance(jv.Address, jv.DepositAmount)
+			}
+
+			officialMinimumDeposit := math.MustParseBig256(OFFICIAL_MINIMUM_DEPOSIT)
+			stateDB.AddBalance(cci.Owner, officialMinimumDeposit)
+			stateDB.SubChainBalance(cci.Owner, officialMinimumDeposit)
+			if stateDB.GetChainBalance(cci.Owner).Sign() != 0 {
+				log.Error("the chain balance is not 0 when create chain failed, watch out!!!")
 			}
 
 			// Add the Child Chain Id to Remove List, to be removed after the consensus

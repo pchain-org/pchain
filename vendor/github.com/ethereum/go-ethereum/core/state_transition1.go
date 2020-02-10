@@ -19,13 +19,11 @@ func ApplyMessageEx(evm *vm.EVM, msg Message, gp *GasPool) ([]byte, uint64, *big
 
 // TransitionDbEx will move the state by applying the message against the given environment.
 func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMoney *big.Int, failed bool, err error) {
-
 	if err = st.preCheck(); err != nil {
 		return
 	}
 	msg := st.msg
 	sender := st.from() // err checked in preCheck
-
 	homestead := st.evm.ChainConfig().IsHomestead(st.evm.BlockNumber)
 	contractCreation := msg.To() == nil
 
@@ -45,24 +43,13 @@ func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMon
 		// error.
 		vmerr error
 	)
-
-	//log.Debugf("TransitionDbEx 0\n")
-
 	if contractCreation {
 		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
-		//log.Debugf("TransitionDbEx 1, sender is %x, nonce is \n", sender.Address(), st.state.GetNonce(sender.Address())+1)
-
 		st.state.SetNonce(sender.Address(), st.state.GetNonce(sender.Address())+1)
 		ret, st.gas, vmerr = evm.Call(sender, st.to().Address(), st.data, st.gas, st.value)
-
-		//log.Debugf("TransitionDbEx 2\n")
-
 	}
-
-	//log.Debugf("TransitionDbEx 3\n")
-
 	if vmerr != nil {
 		log.Debug("VM returned with error", "err", vmerr)
 		// The only possible consensus-error would be if there wasn't
@@ -72,20 +59,14 @@ func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMon
 			return nil, 0, nil, false, vmerr
 		}
 	}
-
 	st.refundGas()
 
-	//log.Debugf("TransitionDbEx 4, coinbase is %x, balance is %v\n",
-	//	st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
-
-	//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
-	usedMoney = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
-
-	//log.Debugf("TransitionDbEx 5\n")
-
-	//log.Debugf("TransitionDbEx, send.balance is %v\n", st.state.GetBalance(sender.Address()))
-	//log.Debugf("TransitionDbEx, return ret-%v, st.gasUsed()-%v, usedMoney-%v, vmerr-%v, err-%v\n",
-	//	ret, st.gasUsed(), usedMoney, vmerr, err)
+	if st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.BlockNumber, msg.To(), st.data) {
+		usedMoney = big.NewInt(0)
+	} else {
+		//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+		usedMoney = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
+	}
 
 	return ret, st.gasUsed(), usedMoney, vmerr != nil, err
 }
