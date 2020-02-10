@@ -28,8 +28,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/istanbul"
 	istanbulBackend "github.com/ethereum/go-ethereum/consensus/istanbul/backend"
-	"github.com/ethereum/go-ethereum/consensus/tendermint"
-	tendermintBackend "github.com/ethereum/go-ethereum/consensus/tendermint"
+	"github.com/ethereum/go-ethereum/consensus/pdbft"
+	tendermintBackend "github.com/ethereum/go-ethereum/consensus/pdbft"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/datareduction"
@@ -140,11 +140,13 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
 		}
 		chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
+		chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
 	case "testnet":
 		if chainConfig.OutOfStorageBlock == nil {
 			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
 		}
 		chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
+		chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
 	case "child_0":
 		if (chainConfig.HashTimeLockContract == common.Address{}) {
 			if isTestnet {
@@ -154,19 +156,23 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			}
 		}
 		if isTestnet {
-			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.OutOfStorageBlock      = params.TestnetChainConfig.Child0OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
+			chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
 		} else {
-			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.OutOfStorageBlock      = params.MainnetChainConfig.Child0OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
+			chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
 		}
 	default:
 		if isTestnet {
-			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
+			chainConfig.OutOfStorageBlock      = params.TestnetChainConfig.OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
+			chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
 		} else {
-			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
+			chainConfig.OutOfStorageBlock      = params.MainnetChainConfig.OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
+			chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
 		}
 	}
 
@@ -290,7 +296,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 		if chainConfig.Tendermint.Epoch != 0 {
 			config.Tendermint.Epoch = chainConfig.Tendermint.Epoch
 		}
-		config.Tendermint.ProposerPolicy = tendermint.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
+		config.Tendermint.ProposerPolicy = pdbft.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
 		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), cch)
 	}
 

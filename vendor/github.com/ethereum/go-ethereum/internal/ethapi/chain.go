@@ -398,6 +398,11 @@ func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 		return core.ErrInvalidSender
 	}
 
+	chainBalance := state.GetChainBalance(from)
+	if chainBalance.Sign() > 0 {
+		return errors.New("this address has created one chain, can't create another chain")
+	}
+
 	var args pabi.CreateChildChainArgs
 	data := tx.Data()
 	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CreateChildChain.String(), data[4:]); err != nil {
@@ -417,6 +422,11 @@ func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
+	}
+
+	chainBalance := state.GetChainBalance(from)
+	if chainBalance.Sign() > 0 {
+		return errors.New("this address has created one chain, can't create another chain")
 	}
 
 	var args pabi.CreateChildChainArgs
@@ -680,94 +690,23 @@ func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 
 func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
-	from, err := types.Sender(signer, tx)
-	if err != nil {
-		return core.ErrInvalidSender
+	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), cch.GetHeightFromMainChain())
+	if !isSd2mc {
+		return wfmcValidateCb(tx, state, cch)
+	} else {
+		return wfmcValidateCbV1(tx, state, cch)
 	}
-
-	var args pabi.WithdrawFromMainChainArgs
-	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
-		return err
-	}
-
-	if state.HasTX3(from, args.TxHash) {
-		return fmt.Errorf("tx %x already used in the main chain", args.TxHash)
-	}
-
-	// Notice: there's no validation logic for tx3 here.
-
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
-	if chainInfo == nil {
-		return errors.New("chain id not exist")
-	} else if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
-		return errors.New("no enough balance to withdraw")
-	}
-
-	return nil
 }
 
 //for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
 func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
-	from, err := types.Sender(signer, tx)
-	if err != nil {
-		return core.ErrInvalidTx4
-		//return core.ErrInvalidSender
+	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), cch.GetHeightFromMainChain())
+	if !isSd2mc {
+		return wfmcApplyCb(tx, state, ops, cch, mining)
+	} else {
+		return wfmcApplyCbV1(tx, state, ops, cch)
 	}
-
-	var args pabi.WithdrawFromMainChainArgs
-	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
-		return core.ErrInvalidTx4
-		//return err
-	}
-
-	if state.HasTX3(from, args.TxHash) {
-		return core.ErrInvalidTx4
-		//return fmt.Errorf("tx %x already used in the main chain", args.TxHash)
-	}
-
-	if mining { // validate only when mining.
-		wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
-		if wfccTx == nil {
-			return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
-		}
-
-		signer2 := types.NewEIP155Signer(wfccTx.ChainId())
-		wfccFrom, err := types.Sender(signer2, wfccTx)
-		if err != nil {
-			return core.ErrInvalidTx4
-			//return core.ErrInvalidSender
-		}
-
-		var wfccArgs pabi.WithdrawFromChildChainArgs
-		wfccData := wfccTx.Data()
-		if err := pabi.ChainABI.UnpackMethodInputs(&wfccArgs, pabi.WithdrawFromChildChain.String(), wfccData[4:]); err != nil {
-			return core.ErrInvalidTx4
-			//return err
-		}
-
-		if from != wfccFrom || args.ChainId != wfccArgs.ChainId || args.Amount.Cmp(wfccTx.Value()) != 0 {
-			return core.ErrInvalidTx4
-		}
-	}
-
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
-	if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
-		return core.ErrInvalidTx4
-		//return errors.New("no enough balance to withdraw")
-	}
-
-	// mark from -> tx3 on the main chain (to indicate tx3's used).
-	state.AddTX3(from, args.TxHash)
-
-	state.SubChainBalance(chainInfo.Owner, args.Amount)
-	state.AddBalance(from, args.Amount)
-
-	return nil
 }
 
 func sd2mc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
@@ -778,27 +717,40 @@ func sd2mc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cros
 		return err
 	}
 
-	err := cch.VerifyChildChainProofData(bs)
-	if err != nil {
-		return fmt.Errorf("data can not pass verification: %v", err)
+	if _, err := types.DecodeChildChainProofData(bs); err == nil {
+		return cch.VerifyChildChainProofData(bs)
 	}
 
-	return nil
+	if proofDataV1, err := types.DecodeChildChainProofDataV1(bs); err == nil {
+		return cch.VerifyChildChainProofDataV1(proofDataV1)
+	}
+
+	return fmt.Errorf("data can not pass verification")
 }
 
 func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+
 	var bs []byte
 	data := tx.Data()
 	if err := pabi.ChainABI.UnpackMethodInputs(&bs, pabi.SaveDataToMainChain.String(), data[4:]); err != nil {
 		return err
 	}
 
-	// Validate only when mining
-	if mining {
-		err := cch.VerifyChildChainProofData(bs)
+	if _, err := types.DecodeChildChainProofData(bs); err == nil {
+		// Validate only when mining
+		if mining {
+			err := cch.VerifyChildChainProofData(bs)
+			if err != nil {
+				return fmt.Errorf("data can not pass verification: %v", err)
+			}
+		}
+	} else if proofDataV1, err := types.DecodeChildChainProofDataV1(bs); err == nil {
+		err := cch.VerifyChildChainProofDataV1(proofDataV1)
 		if err != nil {
 			return fmt.Errorf("data can not pass verification: %v", err)
 		}
+	} else {
+		return fmt.Errorf("data can not pass verification")
 	}
 
 	op := types.SaveDataToMainChainOp{
@@ -866,4 +818,173 @@ func setBlockRewardValidation(from common.Address, tx *types.Transaction, cch co
 	}
 
 	return &args, nil
+}
+
+
+func wfmcValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.WithdrawFromMainChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	if state.HasTX3(from, args.TxHash) {
+		return fmt.Errorf("tx %x already used in the main chain", args.TxHash)
+	}
+
+	// Notice: there's no validation logic for tx3 here.
+
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
+	if chainInfo == nil {
+		return errors.New("chain id not exist")
+	} else if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
+		return errors.New("no enough balance to withdraw")
+	}
+
+	return nil
+}
+
+//for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
+func wfmcApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidTx4
+		//return core.ErrInvalidSender
+	}
+
+	var args pabi.WithdrawFromMainChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+		return core.ErrInvalidTx4
+		//return err
+	}
+
+	if state.HasTX3(from, args.TxHash) {
+		return core.ErrInvalidTx4
+		//return fmt.Errorf("tx %x already used in the main chain", args.TxHash)
+	}
+
+	if mining { // validate only when mining.
+		wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
+		if wfccTx == nil {
+			return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
+		}
+
+		signer2 := types.NewEIP155Signer(wfccTx.ChainId())
+		wfccFrom, err := types.Sender(signer2, wfccTx)
+		if err != nil {
+			return core.ErrInvalidTx4
+			//return core.ErrInvalidSender
+		}
+
+		var wfccArgs pabi.WithdrawFromChildChainArgs
+		wfccData := wfccTx.Data()
+		if err := pabi.ChainABI.UnpackMethodInputs(&wfccArgs, pabi.WithdrawFromChildChain.String(), wfccData[4:]); err != nil {
+			return core.ErrInvalidTx4
+			//return err
+		}
+
+		if from != wfccFrom || args.ChainId != wfccArgs.ChainId || args.Amount.Cmp(wfccTx.Value()) != 0 {
+			return core.ErrInvalidTx4
+		}
+	}
+
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
+	if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
+		return core.ErrInvalidTx4
+		//return errors.New("no enough balance to withdraw")
+	}
+
+	// mark from -> tx3 on the main chain (to indicate tx3's used).
+	state.AddTX3(from, args.TxHash)
+
+	state.SubChainBalance(chainInfo.Owner, args.Amount)
+	state.AddBalance(from, args.Amount)
+
+	return nil
+}
+
+func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.WithdrawFromMainChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	if state.HasTX3(from, args.TxHash) {
+		return fmt.Errorf("tx %x already used in the main chain", args.TxHash)
+	}
+
+	// Notice: there's validation logic for tx3 here.
+	{
+		wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
+		if wfccTx == nil {
+			return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
+		}
+
+		signer2 := types.NewEIP155Signer(wfccTx.ChainId())
+		wfccFrom, err := types.Sender(signer2, wfccTx)
+		if err != nil {
+			return core.ErrInvalidSender
+		}
+
+		var wfccArgs pabi.WithdrawFromChildChainArgs
+		wfccData := wfccTx.Data()
+		if err := pabi.ChainABI.UnpackMethodInputs(&wfccArgs, pabi.WithdrawFromChildChain.String(), wfccData[4:]); err != nil {
+			return err
+		}
+
+		if from != wfccFrom || args.ChainId != wfccArgs.ChainId || args.Amount.Cmp(wfccTx.Value()) != 0 {
+			return core.ErrInvalidTx4
+		}
+	}
+
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
+	if chainInfo == nil {
+		return errors.New("chain id not exist")
+	} else if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
+		return errors.New("no enough balance to withdraw")
+	}
+
+	return nil
+}
+
+//for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
+func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
+
+	if err := wfmcValidateCbV1(tx, state, cch); err != nil {
+		return err;
+	}
+
+	from, _ := types.Sender(types.NewEIP155Signer(tx.ChainId()), tx)
+	var args pabi.WithdrawFromMainChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+		return err
+	}
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
+
+	// mark from -> tx3 on the main chain (to indicate tx3's used).
+	state.AddTX3(from, args.TxHash)
+
+	state.SubChainBalance(chainInfo.Owner, args.Amount)
+	state.AddBalance(from, args.Amount)
+
+	return nil
 }

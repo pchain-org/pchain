@@ -3,7 +3,7 @@ package core
 import (
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -48,11 +48,15 @@ type CrossChainHelper interface {
 
 	// for epoch only
 	VerifyChildChainProofData(bs []byte) error
-	SaveChildChainProofDataToMainChain(bs []byte) error
+	SaveChildChainProofDataToMainChain(proofData *types.ChildChainProofData) error
 
 	TX3LocalCache
 	ValidateTX3ProofData(proofData *types.TX3ProofData) error
 	ValidateTX4WithInMemTX3ProofData(tx4 *types.Transaction, tx3ProofData *types.TX3ProofData) error
+
+	//SaveDataToMainV1 acceps both epoch and tx3
+	VerifyChildChainProofDataV1(proofData *types.ChildChainProofDataV1) error
+	SaveChildChainProofDataToMainChainV1(proofData *types.ChildChainProofDataV1) error
 }
 
 // CrossChain Callback

@@ -530,3 +530,70 @@ func NewTX3ProofData(block *Block) (*TX3ProofData, error) {
 
 	return ret, nil
 }
+
+// ChildChainProofData represents epoch from child chain to the main chain.
+type ChildChainProofDataV1 struct {
+	Header *Header
+
+	TxIndexs []uint
+	TxProofs []*BSKeyValueSet
+}
+
+func NewChildChainProofDataV1(block *Block) (*ChildChainProofDataV1, error) {
+
+	ret := &ChildChainProofDataV1{
+		Header: block.Header(),
+	}
+
+	txs := block.Transactions()
+	// build the Trie (see derive_sha.go)
+	keybuf := new(bytes.Buffer)
+	trie := new(trie.Trie)
+	for i := 0; i < txs.Len(); i++ {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(i))
+		trie.Update(keybuf.Bytes(), txs.GetRlp(i))
+	}
+	// do the Merkle Proof for the specific tx
+	for i, tx := range txs {
+		if pabi.IsPChainContractAddr(tx.To()) {
+			data := tx.Data()
+			function, err := pabi.FunctionTypeFromId(data[:4])
+			if err != nil {
+				continue
+			}
+
+			if function == pabi.WithdrawFromChildChain {
+				kvSet := MakeBSKeyValueSet()
+				keybuf.Reset()
+				rlp.Encode(keybuf, uint(i))
+				if err := trie.Prove(keybuf.Bytes(), 0, kvSet); err != nil {
+					return nil, err
+				}
+
+				ret.TxIndexs = append(ret.TxIndexs, uint(i))
+				ret.TxProofs = append(ret.TxProofs, kvSet)
+			}
+		}
+	}
+
+	return ret, nil
+}
+
+func DecodeChildChainProofData(bs []byte) (*ChildChainProofData, error) {
+	proofData := &ChildChainProofData{}
+	err := rlp.DecodeBytes(bs, proofData)
+	if err != nil {
+		return nil, err
+	}
+	return proofData, nil
+}
+
+func DecodeChildChainProofDataV1(bs []byte) (*ChildChainProofDataV1, error) {
+	proofData := &ChildChainProofDataV1{}
+	err := rlp.DecodeBytes(bs, proofData)
+	if err != nil {
+		return nil, err
+	}
+	return proofData, nil
+}

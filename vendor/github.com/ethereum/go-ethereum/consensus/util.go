@@ -1,7 +1,7 @@
 package consensus
 
 import (
-	"github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 

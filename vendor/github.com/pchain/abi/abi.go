@@ -426,7 +426,12 @@ const jsonChainABI = `
 		"type": "function",
 		"name": "ExtractReward",
 		"constant": false,
-		"inputs": []
+		"inputs": [
+			{
+				"name": "address",
+				"type": "address"
+			}
+		]
 	}
 ]`
 
