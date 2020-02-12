@@ -19,9 +19,10 @@ package params
 import (
 	"bytes"
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"math"
 	"math/big"
+
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -50,15 +51,15 @@ var (
 	MainnetValidateHTLCBlock = big.NewInt(16000000)
 	TestnetValidateHTLCBlock = big.NewInt(9785000)
 
-	MainnetHeaderHashWithoutTimeBlock=big.NewInt(17160000)
-	TestnetHeaderHashWithoutTimeBlock=big.NewInt(40)
-
+	MainnetHeaderHashWithoutTimeBlock = big.NewInt(17160000)
+	TestnetHeaderHashWithoutTimeBlock = big.NewInt(40)
 )
 
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
 		PChainId:       "pchain",
+		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		DAOForkBlock:   nil,
 		DAOForkSupport: false,
@@ -76,8 +77,8 @@ var (
 		ExtractRewardPatchMainBlock:  MainnetExtractRewardPatchMainBlock,
 		Sd2mcV1Block:                 MainnetSd2mcV1MainBlock,
 		ChildSd2mcWhenEpochEndsBlock: MainnetSd2mcWhenEpochEndsBlock,
-		ValidateHTLCBlock: MainnetValidateHTLCBlock,
-		HeaderHashWithoutTimeBlock: MainnetHeaderHashWithoutTimeBlock,
+		ValidateHTLCBlock:            MainnetValidateHTLCBlock,
+		HeaderHashWithoutTimeBlock:   MainnetHeaderHashWithoutTimeBlock,
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -87,26 +88,26 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the test network.
 	TestnetChainConfig = &ChainConfig{
-		PChainId:                   "testnet",
-		ChainId:                    big.NewInt(2),
-		HomesteadBlock:             big.NewInt(0),
-		DAOForkBlock:               nil,
-		DAOForkSupport:             true,
-		EIP150Block:                big.NewInt(0),
-		EIP150Hash:                 common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-		EIP155Block:                big.NewInt(10),
-		EIP158Block:                big.NewInt(10),
-		ByzantiumBlock:             big.NewInt(1700000),
-		ConstantinopleBlock:        nil,
-		Child0HashTimeLockContract: common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
-		OutOfStorageBlock:          big.NewInt(10),
-		Child0OutOfStorageBlock:    big.NewInt(10),
-		ExtractRewardMainBlock:     TestnetExtractRewardMainBlock,
-		ExtractRewardPatchMainBlock:TestnetExtractRewardPatchMainBlock,
-		Sd2mcV1Block:               TestnetSd2mcV1MainBlock,
+		PChainId:                     "testnet",
+		ChainId:                      big.NewInt(2),
+		HomesteadBlock:               big.NewInt(0),
+		DAOForkBlock:                 nil,
+		DAOForkSupport:               true,
+		EIP150Block:                  big.NewInt(0),
+		EIP150Hash:                   common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+		EIP155Block:                  big.NewInt(10),
+		EIP158Block:                  big.NewInt(10),
+		ByzantiumBlock:               big.NewInt(1700000),
+		ConstantinopleBlock:          nil,
+		Child0HashTimeLockContract:   common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
+		OutOfStorageBlock:            big.NewInt(10),
+		Child0OutOfStorageBlock:      big.NewInt(10),
+		ExtractRewardMainBlock:       TestnetExtractRewardMainBlock,
+		ExtractRewardPatchMainBlock:  TestnetExtractRewardPatchMainBlock,
+		Sd2mcV1Block:                 TestnetSd2mcV1MainBlock,
 		ChildSd2mcWhenEpochEndsBlock: TestnetSd2mcWhenEpochEndsBlock,
-		ValidateHTLCBlock: TestnetValidateHTLCBlock,
-		HeaderHashWithoutTimeBlock: TestnetHeaderHashWithoutTimeBlock,
+		ValidateHTLCBlock:            TestnetValidateHTLCBlock,
+		HeaderHashWithoutTimeBlock:   TestnetHeaderHashWithoutTimeBlock,
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -157,16 +158,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil,nil,nil, nil, new(EthashConfig), nil, nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil,nil,nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil,nil,nil, new(EthashConfig), nil, nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -200,18 +201,18 @@ type ChainConfig struct {
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
 	// PCHAIN HordFork
-	HashTimeLockContract   common.Address      `json:"htlc,omitempty"`     // Hash Time Lock Contract Address
-	OutOfStorageBlock      *big.Int            `json:"oosBlock,omitempty"` // Out of storage HardFork block
-	ExtractRewardMainBlock *big.Int            `json:"erBlock,omitempty"`  // Extract reward HardFork block
-	ExtractRewardPatchMainBlock *big.Int       `json:"erPatchBlock,omitempty"`  // Extract reward Patch HardFork block
-	Sd2mcV1Block           *big.Int            `json:"sd2mcV1Block, omitempty"`
+	HashTimeLockContract        common.Address `json:"htlc,omitempty"`         // Hash Time Lock Contract Address
+	OutOfStorageBlock           *big.Int       `json:"oosBlock,omitempty"`     // Out of storage HardFork block
+	ExtractRewardMainBlock      *big.Int       `json:"erBlock,omitempty"`      // Extract reward HardFork block
+	ExtractRewardPatchMainBlock *big.Int       `json:"erPatchBlock,omitempty"` // Extract reward Patch HardFork block
+	Sd2mcV1Block                *big.Int       `json:"sd2mcV1Block, omitempty"`
 
 	// For default setup propose
 	Child0HashTimeLockContract   common.Address
 	Child0OutOfStorageBlock      *big.Int
 	ChildSd2mcWhenEpochEndsBlock *big.Int
-	ValidateHTLCBlock *big.Int
-	HeaderHashWithoutTimeBlock *big.Int
+	ValidateHTLCBlock            *big.Int
+	HeaderHashWithoutTimeBlock   *big.Int
 	MarkProposedInEpochMainBlock *big.Int
 
 	// Various consensus engines
@@ -350,6 +351,10 @@ func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
 }
 
+func (c *ChainConfig) IsEWASM(num *big.Int) bool {
+	return false
+}
+
 func (c *ChainConfig) IsHashTimeLockWithdraw(num *big.Int, contractAddress *common.Address, withdraw []byte) bool {
 	return contractAddress != nil && c.HashTimeLockContract == *contractAddress && len(withdraw) > 4 && bytes.Equal(withdraw[:4], common.Hex2Bytes("63615149"))
 }
@@ -373,7 +378,7 @@ func (c *ChainConfig) IsSd2mcV1(mainBlockNumber *big.Int) bool {
 	return isForked(c.Sd2mcV1Block, mainBlockNumber)
 }
 
-func (c *ChainConfig)IsChildSd2mcWhenEpochEndsBlock(mainBlockNumber *big.Int) bool {
+func (c *ChainConfig) IsChildSd2mcWhenEpochEndsBlock(mainBlockNumber *big.Int) bool {
 	return isForked(c.ChildSd2mcWhenEpochEndsBlock, mainBlockNumber)
 }
 
@@ -386,7 +391,7 @@ func IsSelfRetrieveReward(mainChainId string, mainBlockNumber *big.Int) bool {
 	return false
 }
 
-func (c *ChainConfig)IsSelfRetrieveRewardPatch(blockNumber, mainBlockNumber *big.Int) bool {
+func (c *ChainConfig) IsSelfRetrieveRewardPatch(blockNumber, mainBlockNumber *big.Int) bool {
 	if c.IsMainChain() {
 		return isForked(c.ExtractRewardPatchMainBlock, blockNumber)
 	} else {
@@ -404,14 +409,13 @@ func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {
 	return false
 }
 
-func (c *ChainConfig)CeaseValidateHashTimeLockContract(mainBlockNumber *big.Int) bool {
+func (c *ChainConfig) CeaseValidateHashTimeLockContract(mainBlockNumber *big.Int) bool {
 	return isForked(c.ValidateHTLCBlock, mainBlockNumber)
 }
 
-func (c *ChainConfig)IsHeaderHashWithoutTimeBlock(mainBlockNumber *big.Int) bool {
+func (c *ChainConfig) IsHeaderHashWithoutTimeBlock(mainBlockNumber *big.Int) bool {
 	return isForked(c.HeaderHashWithoutTimeBlock, mainBlockNumber)
 }
-
 
 // Check whether is on main chain or not
 func (c *ChainConfig) IsMainChain() bool {
@@ -550,9 +554,9 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	ChainId                                   *big.Int
-	IsHomestead, IsEIP150, IsEIP155, IsEIP158 bool
-	IsByzantium                               bool
+	ChainId                                                 *big.Int
+	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
+	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 }
 
 func (c *ChainConfig) Rules(num *big.Int) Rules {
@@ -560,5 +564,15 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
-	return Rules{ChainId: new(big.Int).Set(chainId), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsByzantium: c.IsByzantium(num)}
+	return Rules{
+		ChainId:          new(big.Int).Set(chainId),
+		IsHomestead:      c.IsHomestead(num),
+		IsEIP150:         c.IsEIP150(num),
+		IsEIP155:         c.IsEIP155(num),
+		IsEIP158:         c.IsEIP158(num),
+		IsByzantium:      c.IsByzantium(num),
+		IsConstantinople: false,
+		IsPetersburg:     false,
+		IsIstanbul:       false,
+	}
 }
