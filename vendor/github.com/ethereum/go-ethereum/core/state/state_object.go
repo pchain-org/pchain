@@ -427,6 +427,12 @@ func (self *stateObject) GetState(db Database, key common.Hash) common.Hash {
 	if dirty {
 		return value
 	}
+	// Otherwise return the entry's original value
+	return self.GetCommittedState(db, key)
+}
+
+// GetCommittedState retrieves a value from the committed account storage trie.
+func (self *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
 
 	// If we have the original value cached, return that
 	value, cached := self.originStorage[key]
