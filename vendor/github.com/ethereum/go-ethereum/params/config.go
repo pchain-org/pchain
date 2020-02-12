@@ -46,6 +46,7 @@ var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
 		PChainId:       "pchain",
+		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(0),
 		DAOForkBlock:   nil,
 		DAOForkSupport: false,
@@ -322,6 +323,10 @@ func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
 }
 
+func (c *ChainConfig) IsEWASM(num *big.Int) bool {
+	return false
+}
+
 func (c *ChainConfig) IsHashTimeLockWithdraw(num *big.Int, contractAddress *common.Address, withdraw []byte) bool {
 	return contractAddress != nil && c.HashTimeLockContract == *contractAddress && len(withdraw) > 4 && bytes.Equal(withdraw[:4], common.Hex2Bytes("63615149"))
 }
@@ -503,7 +508,7 @@ func (err *ConfigCompatError) Error() string {
 type Rules struct {
 	ChainId                                   *big.Int
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158 bool
-	IsByzantium                               bool
+	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 }
 
 func (c *ChainConfig) Rules(num *big.Int) Rules {
@@ -511,5 +516,15 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
-	return Rules{ChainId: new(big.Int).Set(chainId), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsByzantium: c.IsByzantium(num)}
+	return Rules{
+		ChainId: new(big.Int).Set(chainId), 
+		IsHomestead: c.IsHomestead(num), 
+		IsEIP150: c.IsEIP150(num), 
+		IsEIP155: c.IsEIP155(num), 
+		IsEIP158: c.IsEIP158(num), 
+		IsByzantium: c.IsByzantium(num),
+		IsConstantinople: false,
+		IsPetersburg:     false,
+		IsIstanbul:       false,
+	}
 }
