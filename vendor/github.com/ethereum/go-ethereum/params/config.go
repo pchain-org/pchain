@@ -54,9 +54,10 @@ var (
 		EIP150Hash:     common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
-		//ByzantiumBlock:      big.NewInt(4370000),
 		ByzantiumBlock:             big.NewInt(0), //let's start from 1 block
-		ConstantinopleBlock:        nil,
+		ConstantinopleBlock:        big.NewInt(0),
+		PetersburgBlock:            big.NewInt(0),
+		IstanbulBlock:              big.NewInt(0),
 		Child0HashTimeLockContract: common.HexToAddress("0x18c496af47eb1c0946f64a25d3f589f71934bf3d"),
 		OutOfStorageBlock:          big.NewInt(5890000),
 		Child0OutOfStorageBlock:    big.NewInt(13930000),
@@ -80,7 +81,9 @@ var (
 		EIP155Block:                big.NewInt(10),
 		EIP158Block:                big.NewInt(10),
 		ByzantiumBlock:             big.NewInt(1700000),
-		ConstantinopleBlock:        nil,
+		ConstantinopleBlock:        big.NewInt(0),
+		PetersburgBlock:            big.NewInt(0),
+		IstanbulBlock:              big.NewInt(0),
 		Child0HashTimeLockContract: common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
 		OutOfStorageBlock:          big.NewInt(10),
 		Child0OutOfStorageBlock:    big.NewInt(10),
@@ -104,7 +107,9 @@ var (
 		EIP155Block:         big.NewInt(3),
 		EIP158Block:         big.NewInt(3),
 		ByzantiumBlock:      big.NewInt(1035301),
-		ConstantinopleBlock: nil,
+		ConstantinopleBlock: big.NewInt(3660663),
+		PetersburgBlock:     big.NewInt(4321234),
+		IstanbulBlock:       big.NewInt(5435345),
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -123,7 +128,9 @@ var (
 		EIP155Block:    big.NewInt(3),
 		EIP158Block:    big.NewInt(3),
 		ByzantiumBlock: big.NewInt(math.MaxInt64), // Don't enable yet
-
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(1561651),
 		Istanbul: &IstanbulConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -135,16 +142,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, new(EthashConfig), nil, nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, common.Address{}, nil, new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0),big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, common.Address{}, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, new(EthashConfig), nil, nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, common.Address{}, nil, new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -176,6 +183,8 @@ type ChainConfig struct {
 
 	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
+	PetersburgBlock     *big.Int `json:"petersburgBlock,omitempty"`     // Petersburg switch block (nil = same as Constantinople)
+	IstanbulBlock       *big.Int `json:"istanbulBlock,omitempty"`       // Istanbul switch block (nil = no fork, 0 = already on istanbul)
 
 	// PCHAIN HF
 	HashTimeLockContract common.Address `json:"htlc,omitempty"`     // Hash Time Lock Contract Address
@@ -250,7 +259,9 @@ func NewChildChainConfig(childChainID string) *ChainConfig {
 		EIP158Block:    big.NewInt(0),
 		//ByzantiumBlock:      big.NewInt(4370000),
 		ByzantiumBlock:      big.NewInt(0), //let's start from 1 block
-		ConstantinopleBlock: nil,
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -278,7 +289,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{PChainId: %s ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Engine: %v}",
+	return fmt.Sprintf("{PChainId: %s ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Engine: %v}",
 		c.PChainId,
 		c.ChainId,
 		c.HomesteadBlock,
@@ -289,6 +300,8 @@ func (c *ChainConfig) String() string {
 		c.EIP158Block,
 		c.ByzantiumBlock,
 		c.ConstantinopleBlock,
+		c.PetersburgBlock,
+		c.IstanbulBlock,
 		engine,
 	)
 }
@@ -322,6 +335,15 @@ func (c *ChainConfig) IsByzantium(num *big.Int) bool {
 func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
 }
+
+func (c *ChainConfig) IsPetersburg(num *big.Int) bool {
+	return isForked(c.PetersburgBlock, num) || c.PetersburgBlock == nil && isForked(c.ConstantinopleBlock, num)
+}
+
+func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
+	return isForked(c.IstanbulBlock, num)
+}
+
 
 func (c *ChainConfig) IsEWASM(num *big.Int) bool {
 	return false
@@ -442,6 +464,12 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.ConstantinopleBlock, newcfg.ConstantinopleBlock, head) {
 		return newCompatError("Constantinople fork block", c.ConstantinopleBlock, newcfg.ConstantinopleBlock)
 	}
+	if isForkIncompatible(c.PetersburgBlock, newcfg.PetersburgBlock, head) {
+		return newCompatError("Petersburg fork block", c.PetersburgBlock, newcfg.PetersburgBlock)
+	}
+	if isForkIncompatible(c.IstanbulBlock, newcfg.IstanbulBlock, head) {
+		return newCompatError("Istanbul fork block", c.IstanbulBlock, newcfg.IstanbulBlock)
+	}
 	return nil
 }
 
@@ -500,7 +528,7 @@ func (err *ConfigCompatError) Error() string {
 	return fmt.Sprintf("mismatching %s in database (have %d, want %d, rewindto %d)", err.What, err.StoredConfig, err.NewConfig, err.RewindTo)
 }
 
-// Rules wraps ChainConfig and is merely syntatic sugar or can be used for functions
+// Rules wraps ChainConfig and is merely syntactic sugar or can be used for functions
 // that do not have or require information about the block.
 //
 // Rules is a one time interface meaning that it shouldn't be used in between transition
@@ -523,8 +551,8 @@ func (c *ChainConfig) Rules(num *big.Int) Rules {
 		IsEIP155: c.IsEIP155(num), 
 		IsEIP158: c.IsEIP158(num), 
 		IsByzantium: c.IsByzantium(num),
-		IsConstantinople: false,
-		IsPetersburg:     false,
-		IsIstanbul:       false,
+		IsConstantinople: c.IsConstantinople(num),
+		IsPetersburg:     c.IsPetersburg(num),
+		IsIstanbul:       c.IsIstanbul(num),
 	}
 }

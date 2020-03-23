@@ -176,6 +176,11 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		}
 	}
 
+	//directly support corresponding instruction set
+	chainConfig.ConstantinopleBlock = big.NewInt(0)
+	chainConfig.PetersburgBlock     = big.NewInt(0)
+	chainConfig.IstanbulBlock       = big.NewInt(0)
+
 	chainConfig.ChainLogger = logger
 	logger.Info("Initialised chain configuration", "config", chainConfig)
 

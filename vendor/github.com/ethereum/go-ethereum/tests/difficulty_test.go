@@ -71,6 +71,15 @@ func TestDifficulty(t *testing.T) {
 	dt.config("Frontier", *params.TestnetChainConfig)
 	dt.config("MainNetwork", mainnetChainConfig)
 	dt.config("CustomMainNetwork", mainnetChainConfig)
+	dt.config("Constantinople", params.ChainConfig{
+		ConstantinopleBlock: big.NewInt(0),
+	})
+	dt.config("Petersburg", params.ChainConfig{
+		PetersburgBlock: big.NewInt(0),
+	})
+	dt.config("Istanbul", params.ChainConfig{
+		IstanbulBlock: big.NewInt(0),
+	})
 	dt.config("difficulty.json", mainnetChainConfig)
 
 	dt.walk(t, difficultyTestDir, func(t *testing.T, name string, test *DifficultyTest) {
