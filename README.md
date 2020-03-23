@@ -70,11 +70,11 @@ If you want to build and run pchain under Windows(Not recommended), you could re
 If you want to know more about our Command Line Options,please consult our 
 [CLI Wiki page](https://github.com/pchain-org/pchain/wiki/Command-Line-Options)
 
-### Please Check Your Pchain Client Version (Latest:1.1.04)
+### Please Check Your Pchain Client Version (Latest:1.2.2)
 
 ```
 $ pchain version
-//1.1.04
+//1.2.2
 ```
 
 ### Sync and run testnet

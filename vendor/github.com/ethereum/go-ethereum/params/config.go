@@ -34,8 +34,8 @@ var (
 	//From epoch after this block, delegators need to query/retrieve his/her reward by RPC APIs.
 	// Note: it does not work exactly from this block, it works from the next epoch
 	//       and this number is the main chain block number
-	MainnetExtractRewardMainBlock = big.NewInt(1111111111)
-	TestnetExtractRewardMainBlock = big.NewInt(11)
+	MainnetExtractRewardMainBlock = big.NewInt(9383000)
+	TestnetExtractRewardMainBlock = big.NewInt(2550000)
 
 	//use SaveData2MainBlock v1; which reports epoch/tx3 to main block
 	MainnetSd2mcV1MainBlock = big.NewInt(1111111111)
