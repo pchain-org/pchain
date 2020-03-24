@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/bridge"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
+	"github.com/ethereum/go-ethereum/consensus/pdbft/consensus"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pchain/chain"
 	"gopkg.in/urfave/cli.v1"

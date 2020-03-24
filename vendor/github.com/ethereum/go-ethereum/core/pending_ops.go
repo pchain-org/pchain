@@ -1,9 +1,10 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/consensus"
-	tmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	tmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -35,7 +36,12 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 		ep = ep.GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 		return cch.RevealVote(ep, op.From, op.Pubkey, op.Amount, op.Salt, op.TxHash)
 	case *types.SaveDataToMainChainOp:
-		return cch.SaveChildChainProofDataToMainChain(op.Data)
+		if proofData, err := types.DecodeChildChainProofData(op.Data); err == nil {
+			return cch.SaveChildChainProofDataToMainChain(proofData)
+		} else if proofDataV1, err := types.DecodeChildChainProofDataV1(op.Data); err == nil {
+			return cch.SaveChildChainProofDataToMainChainV1(proofDataV1)
+		}
+		return errors.New("SaveDataToMainChain data type not match")
 	case *tmTypes.SwitchEpochOp:
 		eng := bc.engine.(consensus.Tendermint)
 		nextEp, err := eng.GetEpoch().EnterNewEpoch(op.NewValidators)

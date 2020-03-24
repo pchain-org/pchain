@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	ep "github.com/ethereum/go-ethereum/consensus/tendermint/epoch"
+	"github.com/ethereum/go-ethereum/common/math"
+	ep "github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/tendermint/go-crypto"
@@ -14,6 +15,11 @@ import (
 	"os"
 	"strings"
 	"sync"
+)
+
+const (
+	OFFICIAL_MINIMUM_VALIDATORS = 1
+	OFFICIAL_MINIMUM_DEPOSIT    = "100000000000000000000000" // 100,000 * e18
 )
 
 type CoreChainInfo struct {
@@ -411,6 +417,13 @@ func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) 
 			for _, jv := range cci.JoinedValidators {
 				stateDB.SubChildChainDepositBalance(jv.Address, v.ChainID, jv.DepositAmount)
 				stateDB.AddBalance(jv.Address, jv.DepositAmount)
+			}
+
+			officialMinimumDeposit := math.MustParseBig256(OFFICIAL_MINIMUM_DEPOSIT)
+			stateDB.AddBalance(cci.Owner, officialMinimumDeposit)
+			stateDB.SubChainBalance(cci.Owner, officialMinimumDeposit)
+			if stateDB.GetChainBalance(cci.Owner).Sign() != 0 {
+				log.Error("the chain balance is not 0 when create chain failed, watch out!!!")
 			}
 
 			// Add the Child Chain Id to Remove List, to be removed after the consensus

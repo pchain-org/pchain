@@ -3,7 +3,7 @@ package chain
 import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	tdmTypes "github.com/ethereum/go-ethereum/consensus/tendermint/types"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/log"
 	eth "github.com/ethereum/go-ethereum/node"
 	"github.com/pchain/ethereum"
