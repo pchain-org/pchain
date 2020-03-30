@@ -38,8 +38,8 @@ var (
 	TestnetExtractRewardMainBlock = big.NewInt(2550000)
 
 	//use SaveData2MainBlock v1; which reports epoch/tx3 to main block
-	MainnetSd2mcV1MainBlock = big.NewInt(1111111111)
-	TestnetSd2mcV1MainBlock = big.NewInt(11)
+	MainnetSd2mcV1MainBlock = big.NewInt(11824000)
+	TestnetSd2mcV1MainBlock = big.NewInt(543000)
 )
 
 var (
@@ -177,10 +177,10 @@ type ChainConfig struct {
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
 	// PCHAIN HF
-	HashTimeLockContract common.Address `json:"htlc,omitempty"`     // Hash Time Lock Contract Address
-	OutOfStorageBlock    *big.Int       `json:"oosBlock,omitempty"` // Out of storage HF block
-	ExtractRewardMainBlock *big.Int     `json:"erBlock,omitempty"` // Extract reward HF block
-	Sd2mcV1Block  *big.Int              `json:"sd2mcV1Block, omitempty"`
+	HashTimeLockContract   common.Address `json:"htlc,omitempty"`     // Hash Time Lock Contract Address
+	OutOfStorageBlock      *big.Int       `json:"oosBlock,omitempty"` // Out of storage HF block
+	ExtractRewardMainBlock *big.Int       `json:"erBlock,omitempty"`  // Extract reward HF block
+	Sd2mcV1Block           *big.Int       `json:"sd2mcV1Block, omitempty"`
 
 	// For default setup propose
 	Child0HashTimeLockContract common.Address
@@ -342,23 +342,22 @@ func (c *ChainConfig) IsSelfRetrieveReward(mainBlockNumber *big.Int) bool {
 }
 
 func (c *ChainConfig) IsSd2mcV1(mainBlockNumber *big.Int) bool {
-return isForked(c.Sd2mcV1Block, mainBlockNumber)
+	return isForked(c.Sd2mcV1Block, mainBlockNumber)
 }
 
 func IsSelfRetrieveReward(mainChainId string, mainBlockNumber *big.Int) bool {
 	if mainChainId == MainnetChainConfig.PChainId {
 		return isForked(MainnetExtractRewardMainBlock, mainBlockNumber)
-	} else if mainChainId == TestnetChainConfig.PChainId{
+	} else if mainChainId == TestnetChainConfig.PChainId {
 		return isForked(TestnetExtractRewardMainBlock, mainBlockNumber)
 	}
 	return false
 }
 
-
 func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {
 	if mainChainId == MainnetChainConfig.PChainId {
 		return isForked(MainnetSd2mcV1MainBlock, mainBlockNumber)
-	} else if mainChainId == TestnetChainConfig.PChainId{
+	} else if mainChainId == TestnetChainConfig.PChainId {
 		return isForked(TestnetSd2mcV1MainBlock, mainBlockNumber)
 	}
 	return false
