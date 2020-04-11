@@ -384,6 +384,13 @@ func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
 		if epoch == nil {
 			return fmt.Errorf("could not get epoch for block height %v", tdmExtra.Height)
 		}
+
+		if epoch.Number > ci.EpochNumber {
+			ci.EpochNumber = epoch.Number
+			ci.Epoch = epoch
+			core.SaveChainInfo(cch.chainInfoDB, ci)
+		}
+
 		valSet := epoch.Validators
 		if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
 			return errors.New("inconsistent validator set")
@@ -504,6 +511,13 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 	if epoch == nil {
 		return fmt.Errorf("could not get epoch for block height %v", tdmExtra.Height)
 	}
+
+	if epoch.Number > ci.EpochNumber {
+		ci.EpochNumber = epoch.Number
+		ci.Epoch = epoch
+		core.SaveChainInfo(cch.chainInfoDB, ci)
+	}
+
 	valSet := epoch.Validators
 	if !bytes.Equal(valSet.Hash(), tdmExtra.ValidatorsHash) {
 		return errors.New("inconsistent validator set")
@@ -660,6 +674,13 @@ func (cch *CrossChainHelper) VerifyChildChainProofDataV1(proofData *types.ChildC
 			if ep == nil {
 				return fmt.Errorf("could not get epoch for block height %v", tdmExtra.Height)
 			}
+
+			if ep.Number > ci.EpochNumber {
+				ci.EpochNumber = ep.Number
+				ci.Epoch = ep
+				core.SaveChainInfo(cch.chainInfoDB, ci)
+			}
+
 			valSet = ep.Validators
 		} else {
 			_, tdmGenesis := core.LoadChainGenesis(cch.chainInfoDB, chainId)

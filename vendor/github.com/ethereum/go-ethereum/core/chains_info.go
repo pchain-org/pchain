@@ -210,27 +210,37 @@ func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
 			return epoch
 		}
 
+		number := epoch.Number
 		// If blockNumber > epoch EndBlock, find future epoch
 		if blockNumber > epoch.EndBlock {
-			ep := loadEpoch(ci.db, epoch.Number+1, ci.ChainId)
-			return ep
-		}
+			for {
+				number ++
 
-		// If blockNumber < epoch StartBlock, find history epoch
-		number := epoch.Number
-		for {
-			if number == 0 {
-				break
-			}
-			number--
+				ep := loadEpoch(ci.db, number, ci.ChainId)
+				if ep == nil {
+					return nil
+				}
 
-			ep := loadEpoch(ci.db, number, ci.ChainId)
-			if ep == nil {
-				return nil
+				if blockNumber >= ep.StartBlock && blockNumber <= ep.EndBlock {
+					return ep
+				}
 			}
 
-			if blockNumber >= ep.StartBlock && blockNumber <= ep.EndBlock {
-				return ep
+		} else { // If blockNumber < epoch StartBlock, find history epoch
+			for {
+				if number == 0 {
+					break
+				}
+				number--
+
+				ep := loadEpoch(ci.db, number, ci.ChainId)
+				if ep == nil {
+					return nil
+				}
+
+				if blockNumber >= ep.StartBlock && blockNumber <= ep.EndBlock {
+					return ep
+				}
 			}
 		}
 	}
