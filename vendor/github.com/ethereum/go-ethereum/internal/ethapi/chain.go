@@ -820,7 +820,6 @@ func setBlockRewardValidation(from common.Address, tx *types.Transaction, cch co
 	return &args, nil
 }
 
-
 func wfmcValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
 	signer := types.NewEIP155Signer(tx.ChainId())
@@ -932,7 +931,7 @@ func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.Cros
 	}
 
 	// Notice: there's validation logic for tx3 here.
-	{
+	if mining {
 		wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
 		if wfccTx == nil {
 			return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
@@ -969,7 +968,7 @@ func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.Cros
 func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
 	if err := wfmcValidateCbV1(tx, state, cch); err != nil {
-		return err;
+		return err
 	}
 
 	from, _ := types.Sender(types.NewEIP155Signer(tx.ChainId()), tx)
