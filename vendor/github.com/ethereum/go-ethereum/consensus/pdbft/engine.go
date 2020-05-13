@@ -480,7 +480,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
-	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state,
+	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
 										sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
 										selfRetrieveReward); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{

@@ -349,7 +349,7 @@ func (epoch *Epoch) GetPreviousEpoch() *Epoch {
 	return epoch.previousEpoch
 }
 
-func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB, 
+func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *state.StateDB,
 			outsideReward, selfRetrieveReward bool) (bool, *tmTypes.ValidatorSet, error) {
 
 	log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
@@ -389,7 +389,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB,
 						// Refund Pending Refund
 
 						//Due to the bug before, modified 33b28ce6d3316eba8115e22b3863a685d3d33eff refunding amount mandatorily to avoid the negative number error
-						if height == 26536499 && epoch.Number == 12 && state.GetDelegateBalance(key).Cmp(pendingRefundBalance) < 0 && key == common.HexToAddress("33b28ce6d3316eba8115e22b3863a685d3d33eff"){
+						if height == 26536499 && pchainId == "child_0" && state.GetDelegateBalance(key).Cmp(pendingRefundBalance) < 0 && key == common.HexToAddress("33b28ce6d3316eba8115e22b3863a685d3d33eff"){
 							pendingRefundBalance = new(big.Int).Div(pendingRefundBalance, big.NewInt(2))
 							log.Infof("Modified address 33b28ce6d3316eba8115e22b3863a685d3d33eff refunding amount, now is %s", pendingRefundBalance.String())
 						}
