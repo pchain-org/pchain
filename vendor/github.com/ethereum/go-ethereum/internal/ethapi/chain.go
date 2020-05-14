@@ -688,13 +688,13 @@ func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	return nil
 }
 
-func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper, mining bool) error {
+func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
 	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), cch.GetHeightFromMainChain())
 	if !isSd2mc {
 		return wfmcValidateCb(tx, state, cch)
 	} else {
-		return wfmcValidateCbV1(tx, state, cch, mining)
+		return wfmcValidateCbV1(tx, state, cch)
 	}
 }
 
@@ -705,7 +705,7 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	if !isSd2mc {
 		return wfmcApplyCb(tx, state, ops, cch, mining)
 	} else {
-		return wfmcApplyCbV1(tx, state, ops, cch, mining)
+		return wfmcApplyCbV1(tx, state, ops, cch)
 	}
 }
 
@@ -912,7 +912,7 @@ func wfmcApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 	return nil
 }
 
-func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper, mining bool) error {
+func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
 	signer := types.NewEIP155Signer(tx.ChainId())
 	from, err := types.Sender(signer, tx)
@@ -931,7 +931,7 @@ func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.Cros
 	}
 
 	// Notice: there's validation logic for tx3 here.
-	if mining {
+	{
 		wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
 		if wfccTx == nil {
 			return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
@@ -965,9 +965,9 @@ func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.Cros
 }
 
 //for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
-func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
-	if err := wfmcValidateCbV1(tx, state, cch, mining); err != nil {
+	if err := wfmcValidateCbV1(tx, state, cch); err != nil {
 		return err
 	}
 
