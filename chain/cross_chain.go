@@ -682,6 +682,8 @@ func (cch *CrossChainHelper) VerifyChildChainProofDataV1(proofData *types.ChildC
 			}
 
 			valSet = ep.Validators
+			fmt.Println("ep>>>>>>>>>>>>>>>>>>>>", ep.String(), ep.Validators.String())
+			fmt.Println("tdmextra>>>>>>>>>>>>>>>>>>", tdmExtra.String())
 		} else {
 			_, tdmGenesis := core.LoadChainGenesis(cch.chainInfoDB, chainId)
 			if tdmGenesis == nil {

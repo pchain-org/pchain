@@ -411,6 +411,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 			// Step 2.1: Update deposit amount base on the vote (Add/Substract deposit amount base on vote)
 			// Step 2.2: Sort the address with deposit + deposit proxied amount
 			newValidators := epoch.Validators.Copy()
+			epoch.logger.Infof("epoch.Validators.Copy >>>>>>>>> ", newValidators)
 			for _, v := range newValidators.Validators {
 				vAddr := common.BytesToAddress(v.Address)
 				totalProxiedBalance := new(big.Int).Add(state.GetTotalProxiedBalance(vAddr), state.GetTotalDepositProxiedBalance(vAddr))
@@ -418,13 +419,24 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 				newVotingPower := new(big.Int).Add(totalProxiedBalance, state.GetDepositBalance(vAddr))
 				if newVotingPower.Sign() == 0 {
 					newValidators.Remove(v.Address)
+					epoch.logger.Infof("newValidators.Remove Address>>>>>>>>> ",common.Bytes2Hex(v.Address))
+					epoch.logger.Infof("newValidators.Remove Address>>>>>>>>> ",common.BytesToAddress(v.Address))
+					epoch.logger.Infof("newValidators.Remove >>>>>>>>> ", newVotingPower.Sign())
 				} else {
 					v.VotingPower = newVotingPower
 				}
 			}
 
+			epoch.logger.Infof("updateEpochValidatorSet before >>>>>>>>>>>>> ", epoch.nextEpoch.validatorVoteSet)
+
 			// Update Validators with vote
 			refunds, err := updateEpochValidatorSet(newValidators, epoch.nextEpoch.validatorVoteSet)
+			epoch.logger.Infof("updateEpochValidatorSet >>>>>>>>>>>>> ", epoch.nextEpoch.validatorVoteSet)
+			epoch.logger.Infof("updateEpochValidatorSet22222 >>>>>>>>>>>>> ", newValidators)
+			epoch.logger.Infof("refunds33333333333 >>>>>>>>>>>>> ", refunds)
+
+
+
 			if err != nil {
 				epoch.logger.Warn("Error changing validator set", "error", err)
 				return false, nil, err
@@ -536,7 +548,7 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 	// Refund List will be vaildators contain from Vote (exit validator or less amount than previous amount) and Knockout after sort by amount
 	var refund []*tmTypes.RefundValidatorAmount
 	oldValSize, newValSize := validators.Size(), 0
-
+	fmt.Printf("updateEpochValidatorSet come start",oldValSize,newValSize)
 	// Process the Vote if vote set not empty
 	if !voteSet.IsEmpty() {
 		// Process the Votes and merge into the Validator Set
@@ -547,9 +559,14 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 			}
 
 			_, validator := validators.GetByAddress(v.Address[:])
+
+			fmt.Printf("updateEpochValidatorSet for validator 11111>>>>>>>>>",validator)
+
 			if validator == nil {
 				// Add the new validator
 				added := validators.Add(tmTypes.NewValidator(v.Address[:], v.PubKey, v.Amount))
+				fmt.Printf("updateEpochValidatorSet for added 22222>>>>>>>>>",added)
+
 				if !added {
 					return nil, fmt.Errorf("Failed to add new validator %x with voting power %d", v.Address, v.Amount)
 				}
@@ -558,6 +575,8 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 				refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: validator.VotingPower, Voteout: false})
 				// Remove the Validator
 				_, removed := validators.Remove(validator.Address)
+				fmt.Printf("updateEpochValidatorSet for removed 33333>>>>>>>>>",removed)
+
 				if !removed {
 					return nil, fmt.Errorf("Failed to remove validator %x", validator.Address)
 				}
@@ -566,6 +585,8 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 				if v.Amount.Cmp(validator.VotingPower) == -1 {
 					refundAmount := new(big.Int).Sub(validator.VotingPower, v.Amount)
 					refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: refundAmount, Voteout: false})
+					fmt.Printf("updateEpochValidatorSet for refundAmount 44444444>>>>>>>>>",refundAmount)
+
 				}
 
 				// Update the Validator Amount
@@ -593,11 +614,15 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 		}
 	}
 
+	fmt.Printf("updateEpochValidatorSet next start 55555>>>>>>>>>")
+
+
 	// If actual size of Validators greater than Determine Validator Size
 	// then sort the Validators with VotingPower and return the most top Validators
 	if validators.Size() > valSize {
 		// Sort the Validator Set with Amount
 		sort.Slice(validators.Validators, func(i, j int) bool {
+			fmt.Printf("updateEpochValidatorSet next Slice 6666666>>>>>>>>>",validators.Validators)
 			// Compare with remaining epoch first then, voting power
 			if validators.Validators[i].RemainingEpoch == validators.Validators[j].RemainingEpoch {
 				return validators.Validators[i].VotingPower.Cmp(validators.Validators[j].VotingPower) == 1
@@ -612,6 +637,9 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 		}
 
 		validators.Validators = validators.Validators[:valSize]
+
+		fmt.Printf("updateEpochValidatorSet next Validators 77777>>>>>>>>>",validators.Validators)
+
 	}
 
 	return refund, nil
