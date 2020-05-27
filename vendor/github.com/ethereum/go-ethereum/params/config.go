@@ -40,6 +40,8 @@ var (
 	//use SaveData2MainBlock v1; which reports epoch/tx3 to main block
 	MainnetSd2mcV1MainBlock = big.NewInt(11824000)
 	TestnetSd2mcV1MainBlock = big.NewInt(543000)
+
+	ChildSd2mcWhenEpochEndsBlock = big.NewInt(26536499)
 )
 
 var (
@@ -54,13 +56,14 @@ var (
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
 		//ByzantiumBlock:      big.NewInt(4370000),
-		ByzantiumBlock:             big.NewInt(0), //let's start from 1 block
-		ConstantinopleBlock:        nil,
-		Child0HashTimeLockContract: common.HexToAddress("0x18c496af47eb1c0946f64a25d3f589f71934bf3d"),
-		OutOfStorageBlock:          big.NewInt(5890000),
-		Child0OutOfStorageBlock:    big.NewInt(13930000),
-		ExtractRewardMainBlock:     MainnetExtractRewardMainBlock,
-		Sd2mcV1Block:               MainnetSd2mcV1MainBlock,
+		ByzantiumBlock:               big.NewInt(0), //let's start from 1 block
+		ConstantinopleBlock:          nil,
+		Child0HashTimeLockContract:   common.HexToAddress("0x18c496af47eb1c0946f64a25d3f589f71934bf3d"),
+		OutOfStorageBlock:            big.NewInt(5890000),
+		Child0OutOfStorageBlock:      big.NewInt(13930000),
+		ExtractRewardMainBlock:       MainnetExtractRewardMainBlock,
+		Sd2mcV1Block:                 MainnetSd2mcV1MainBlock,
+		ChildSd2mcWhenEpochEndsBlock: ChildSd2mcWhenEpochEndsBlock,
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -183,8 +186,9 @@ type ChainConfig struct {
 	Sd2mcV1Block           *big.Int       `json:"sd2mcV1Block, omitempty"`
 
 	// For default setup propose
-	Child0HashTimeLockContract common.Address
-	Child0OutOfStorageBlock    *big.Int
+	Child0HashTimeLockContract   common.Address
+	Child0OutOfStorageBlock      *big.Int
+	ChildSd2mcWhenEpochEndsBlock *big.Int
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
@@ -345,6 +349,10 @@ func (c *ChainConfig) IsSd2mcV1(mainBlockNumber *big.Int) bool {
 	return isForked(c.Sd2mcV1Block, mainBlockNumber)
 }
 
+func (c *ChainConfig)IsChildSd2mcWhenEpochEndsBlock(childBlockNumber *big.Int) bool {
+	return isForked(c.ChildSd2mcWhenEpochEndsBlock, mainBlockNumber)
+}
+
 func IsSelfRetrieveReward(mainChainId string, mainBlockNumber *big.Int) bool {
 	if mainChainId == MainnetChainConfig.PChainId {
 		return isForked(MainnetExtractRewardMainBlock, mainBlockNumber)
@@ -362,6 +370,8 @@ func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {
 	}
 	return false
 }
+
+
 
 // Check whether is on main chain or not
 func (c *ChainConfig) IsMainChain() bool {
