@@ -39,9 +39,9 @@ var (
 
 	//use SaveData2MainBlock v1; which reports epoch/tx3 to main block
 	MainnetSd2mcV1MainBlock = big.NewInt(11824000)
-	TestnetSd2mcV1MainBlock = big.NewInt(543000)
+	TestnetSd2mcV1MainBlock = big.NewInt(40)
 
-	ChildSd2mcWhenEpochEndsBlock = big.NewInt(26536499)
+	ChildSd2mcWhenEpochEndsBlock = big.NewInt(40)
 )
 
 var (
