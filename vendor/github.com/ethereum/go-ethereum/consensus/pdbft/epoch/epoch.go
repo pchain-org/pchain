@@ -390,11 +390,13 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 
 						//Due to the bug before, modified 33b28ce6d3316eba8115e22b3863a685d3d33eff refunding amount mandatorily to avoid the negative number error
 						if height == 26536499 && pchainId == "child_0" && state.GetDelegateBalance(key).Cmp(pendingRefundBalance) < 0 && key == common.HexToAddress("33b28ce6d3316eba8115e22b3863a685d3d33eff"){
+							state.SubPendingRefundBalanceByUser(refundAddress, key, pendingRefundBalance)
 							pendingRefundBalance = new(big.Int).Div(pendingRefundBalance, big.NewInt(2))
 							log.Infof("Modified address 33b28ce6d3316eba8115e22b3863a685d3d33eff refunding amount, now is %s", pendingRefundBalance.String())
+						}else {
+							state.SubPendingRefundBalanceByUser(refundAddress, key, pendingRefundBalance)
 						}
 						state.SubDepositProxiedBalanceByUser(refundAddress, key, pendingRefundBalance)
-						state.SubPendingRefundBalanceByUser(refundAddress, key, pendingRefundBalance)
 						state.SubDelegateBalance(key, pendingRefundBalance)
 						state.AddBalance(key, pendingRefundBalance)
 					}
