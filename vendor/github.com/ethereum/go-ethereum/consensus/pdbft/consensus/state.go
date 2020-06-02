@@ -35,7 +35,7 @@ import (
 )
 
 const ROUND_NOT_PROPOSED int = 0
-const ROUND_PROPOSED    int = 1
+const ROUND_PROPOSED int = 1
 
 type Backend interface {
 	Commit(proposal *types.TdmBlock, seals [][]byte, isProposer func() bool) error
@@ -215,7 +215,7 @@ type RoundState struct {
 	PrevoteMaj23SignAggr   *types.SignAggr
 	PrecommitMaj23SignAggr *types.SignAggr
 
-	proposer *VRFProposer //proposer for current height||round
+	proposer   *VRFProposer //proposer for current height||round
 	isProposer bool
 }
 
@@ -302,11 +302,11 @@ type ConsensusState struct {
 	privValidator PrivValidator // for signing votes
 	cch           core.CrossChainHelper
 
-	mtx sync.Mutex
+	mtx             sync.Mutex
 	RoundState
-	Epoch *ep.Epoch // Current Epoch
-	state *sm.State // State until height-1.
-	vrfValIndex int
+	Epoch           *ep.Epoch // Current Epoch
+	state           *sm.State // State until height-1.
+	vrfValIndex     int
 	pastRoundStates map[int]int //key: round; value: 0 - no proposal, 1 - invalid
 
 	peerMsgQueue     chan msgInfo   // serializes msgs affecting state (proposals, block parts, votes)
@@ -334,7 +334,7 @@ type ConsensusState struct {
 }
 
 func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.ChainConfig,
-						cch core.CrossChainHelper, epoch *ep.Epoch) *ConsensusState {
+	cch core.CrossChainHelper, epoch *ep.Epoch) *ConsensusState {
 	cs := &ConsensusState{
 		chainConfig:      chainConfig,
 		cch:              cch,
@@ -426,7 +426,7 @@ func (cs *ConsensusState) updateProposer() {
 	cs.isProposer = bytes.Equal(cs.proposer.Proposer.Address, cs.privValidator.GetAddress())
 
 	cs.logger.Debugf("proposer, privalidator are (%v, %v)\n", cs.proposer.Proposer, cs.privValidator)
-	if  cs.isProposer{
+	if cs.isProposer {
 		cs.logger.Debugf("IsProposer() return true\n")
 	} else {
 		cs.logger.Debugf("IsProposer() return false\n")
@@ -436,7 +436,7 @@ func (cs *ConsensusState) updateProposer() {
 }
 
 //PDBFT VRF proposer selection
-func (cs *ConsensusState) proposerByRound(round int)  *VRFProposer{
+func (cs *ConsensusState) proposerByRound(round int) *VRFProposer {
 
 	byVRF := false
 	if round == 0 {
@@ -918,7 +918,7 @@ func (cs *ConsensusState) enterLowerRound(height uint64, round int) {
 	cs.logger.Infof("Validators: %v", cs.Validators)
 
 	//clear all heigher round state
-	for r:=cs.Round; r>round; r-- {
+	for r := cs.Round; r > round; r-- {
 		if _, ok := cs.pastRoundStates[r]; ok {
 			delete(cs.pastRoundStates, r)
 		}
@@ -937,8 +937,8 @@ func (cs *ConsensusState) enterLowerRound(height uint64, round int) {
 	cs.PrevoteMaj23SignAggr = nil
 	cs.PrecommitMaj23SignAggr = nil
 
-	cs.VoteSignAggr.ResetTop2Round(round+1)
-	cs.Votes.ResetTop2Round(round+1)
+	cs.VoteSignAggr.ResetTop2Round(round + 1)
+	cs.Votes.ResetTop2Round(round + 1)
 	types.FireEventNewRound(cs.evsw, cs.RoundStateEvent())
 
 	// Immediately go to enterPropose.
@@ -1109,37 +1109,33 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 		if cs.Height == cs.Epoch.GetRevealVoteEndHeight()+2 {
 			// Save the next epoch data into block and tell the main chain
 			nextEp := cs.Epoch.GetNextEpoch()
-			cs.logger.Info("cs.Epoch.GetNextEpoch 95%>>>>>>>>>>>>>>>>>>>>>",nextEp.String())
+			cs.logger.Info("cs.Epoch.GetNextEpoch 95%>>>>>>>>>>>>>>>>>>>>>", nextEp.String())
 			if nextEp == nil {
 				panic("missing next epoch after reveal vote")
 			}
 			epochBytes = nextEp.Bytes()
-			cs.logger.Info("cs.Epoch.GetNextEpoch 95% epochBytes 0>>>>>>>>>>>>>>>>>>: %v",common.Bytes2Hex(epochBytes))
-			cs.logger.Info("cs.Epoch.GetNextEpoch 95% epochBytes 1>>>>>>>>>>>>>>>>>>: %v",epochBytes)
-
+			cs.logger.Info("cs.Epoch.GetNextEpoch 95% epochBytes 0>>>>>>>>>>>>>>>>>>: %v", common.Bytes2Hex(epochBytes))
+			cs.logger.Info("cs.Epoch.GetNextEpoch 95% epochBytes 1>>>>>>>>>>>>>>>>>>: %v", epochBytes)
 
 		} else if cs.Height == cs.Epoch.StartBlock || cs.Height == 1 {
 			// We're save the epoch data into block so that it'll be sent to the main chain.
 			// When block height equal to first block of Chain or Epoch
-			cs.logger.Info("cs.Epoch.GetNextEpoch StartBlock%>>>>>>>>>>>>>>>>>>>>>",cs.Epoch)
+			cs.logger.Info("cs.Epoch.GetNextEpoch StartBlock%>>>>>>>>>>>>>>>>>>>>>", cs.Epoch)
 			epochBytes = cs.Epoch.Bytes()
-		}else if !cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(big.NewInt(int64(cs.Height))) && cs.Height==cs.Epoch.EndBlock{
-			cs.logger.Info("cs.Epoch.GetNextEpoch 700>>>>>>>>>>>>>>>>>>>>>: %v",ethBlock.String())
-			cs.logger.Info("cs.Epoch.GetNextEpoch 701>>>>>>>>>>>>>>>>>>>>>: %v",ethBlock.Header().String())
-			cs.logger.Info("cs.Epoch.GetNextEpoch 702>>>>>>>>>>>>>>>>>>>>>: %v",ethBlock.Extra())
-			cs.logger.Info("cs.Epoch.GetNextEpoch 703>>>>>>>>>>>>>>>>>>>>>: %v",common.Bytes2Hex(ethBlock.Header().Extra))
-
-			epochBytes=cs.blockFromMiner.Header().Extra
-
+		} else if !cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(big.NewInt(int64(cs.Height))) && cs.Height == cs.Epoch.EndBlock {
+			cs.logger.Info("cs.Epoch.GetNextEpoch 700>>>>>>>>>>>>>>>>>>>>>: %v", ethBlock.String())
+			cs.logger.Info("cs.Epoch.GetNextEpoch 701>>>>>>>>>>>>>>>>>>>>>: %v", ethBlock.Header().String())
+			cs.logger.Info("cs.Epoch.GetNextEpoch 702>>>>>>>>>>>>>>>>>>>>>: %v", ethBlock.Extra())
+			epochBytes = cs.blockFromMiner.Header().Extra
 		} else {
 			shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
 			if shouldProposeEpoch {
 				lastHeight := cs.backend.ChainReader().CurrentBlock().Number().Uint64()
 				lastBlockTime := time.Unix(int64(cs.backend.ChainReader().CurrentBlock().Time()), 0)
 				epochBytes = cs.Epoch.ProposeNextEpoch(lastHeight, lastBlockTime).Bytes()
-				cs.logger.Info("cs.Epoch.GetNextEpoch else%>>>>>>>>>>>>>>>>>>>>>",cs.Epoch.ProposeNextEpoch(lastHeight, lastBlockTime))
-				cs.logger.Info("cs.Epoch.GetNextEpoch else epochBytes 0>>>>>>>>>>>>>>>>>>: %v",common.Bytes2Hex(epochBytes))
-				cs.logger.Info("cs.Epoch.GetNextEpoch else epochBytes 1>>>>>>>>>>>>>>>>>>: %v",epochBytes)
+				cs.logger.Info("cs.Epoch.GetNextEpoch else%>>>>>>>>>>>>>>>>>>>>>", cs.Epoch.ProposeNextEpoch(lastHeight, lastBlockTime))
+				cs.logger.Info("cs.Epoch.GetNextEpoch else epochBytes 0>>>>>>>>>>>>>>>>>>: %v", common.Bytes2Hex(epochBytes))
+				cs.logger.Info("cs.Epoch.GetNextEpoch else epochBytes 1>>>>>>>>>>>>>>>>>>: %v", epochBytes)
 
 			}
 		}
@@ -1264,6 +1260,18 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 				return
 			}
 		}
+	} else if cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(big.NewInt(int64(cs.Height))) && cs.Height == cs.Epoch.EndBlock {
+		if cs.Height == cs.blockFromMiner.Number().Uint64() {
+			selfEpochBytes := cs.blockFromMiner.Header().Extra
+			proposedEpochBytes := cs.ProposalBlock.TdmExtra.EpochBytes
+			if bytes.Equal(selfEpochBytes, proposedEpochBytes) {
+				cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header())
+				return
+			}
+		}
+
+		cs.signAddVote(types.VoteTypePrevote, nil, types.PartSetHeader{})
+		return
 	}
 
 	// Prevote cs.ProposalBlock
@@ -1542,7 +1550,7 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 				}
 				cs.logger.Infof("NeedToBroadcast/NeedToSave %v/%v set to true due to tx. Chain: %s, Height: %v",
 					block.TdmExtra.NeedToBroadcast, block.TdmExtra.NeedToSave, block.TdmExtra.ChainID, block.TdmExtra.Height)
-			 }
+			}
 		}
 
 		// Fire event for new block.
@@ -1570,7 +1578,7 @@ func (cs *ConsensusState) defaultSetProposal(proposal *types.Proposal) error {
 	}
 
 	// Does not apply
-	if proposal.Height != cs.Height || proposal.Round > cs.Round{
+	if proposal.Height != cs.Height || proposal.Round > cs.Round {
 		return nil
 	}
 
@@ -1598,7 +1606,7 @@ func (cs *ConsensusState) defaultSetProposal(proposal *types.Proposal) error {
 			return ErrInvalidProposalSignature
 		}
 
-		if len(cs.pastRoundStates) - 1 < proposal.Round {
+		if len(cs.pastRoundStates)-1 < proposal.Round {
 			cs.logger.Infof("length of pastRoundStates less then proposal.Round, not possible")
 			return nil
 		}
@@ -2041,7 +2049,7 @@ func CompareHRS(h1 uint64, r1 int, s1 RoundStepType, h2 uint64, r2 int, s2 Round
 	return 1
 }
 
-func (cs *ConsensusState)getMainBlock() *big.Int {
+func (cs *ConsensusState) getMainBlock() *big.Int {
 	chainReader := cs.backend.ChainReader()
 	chainConfig := chainReader.Config()
 	header := chainReader.CurrentHeader()
@@ -2072,10 +2080,9 @@ func (cs *ConsensusState) HasTx3(block *ethTypes.Block) bool {
 	return false
 }
 
-func (cs *ConsensusState) GetTX3ProofDataForTx4(block *ethTypes.Block) []*ethTypes.TX3ProofData{
+func (cs *ConsensusState) GetTX3ProofDataForTx4(block *ethTypes.Block) []*ethTypes.TX3ProofData {
 
 	var tx3ProofData []*ethTypes.TX3ProofData = nil;
-
 	txs := block.Transactions()
 	for _, tx := range txs {
 		if pabi.IsPChainContractAddr(tx.To()) {
