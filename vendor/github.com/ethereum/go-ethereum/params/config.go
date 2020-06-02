@@ -350,8 +350,8 @@ func (c *ChainConfig) IsSd2mcV1(mainBlockNumber *big.Int) bool {
 	return isForked(c.Sd2mcV1Block, mainBlockNumber)
 }
 
-func (c *ChainConfig)IsChildSd2mcWhenEpochEndsBlock(childBlockNumber *big.Int) bool {
-	return isForked(c.ChildSd2mcWhenEpochEndsBlock, childBlockNumber)
+func (c *ChainConfig)IsChildSd2mcWhenEpochEndsBlock(mainBlockNumber *big.Int) bool {
+	return isForked(c.ChildSd2mcWhenEpochEndsBlock, mainBlockNumber)
 }
 
 func IsSelfRetrieveReward(mainChainId string, mainBlockNumber *big.Int) bool {
