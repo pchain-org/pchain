@@ -1123,7 +1123,7 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 			// When block height equal to first block of Chain or Epoch
 			cs.logger.Info("cs.Epoch.GetNextEpoch StartBlock%>>>>>>>>>>>>>>>>>>>>>",cs.Epoch)
 			epochBytes = cs.Epoch.Bytes()
-		}else if !cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(big.NewInt(int64(cs.Height))) && cs.Height==cs.Epoch.EndBlock{
+		}else if !cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(cs.chainConfig.ChildSd2mcWhenEpochEndsBlock) && cs.Height==cs.Epoch.EndBlock{
 			cs.logger.Info("cs.Epoch.GetNextEpoch 700>>>>>>>>>>>>>>>>>>>>>: %v",ethBlock.String())
 			cs.logger.Info("cs.Epoch.GetNextEpoch 701>>>>>>>>>>>>>>>>>>>>>: %v",ethBlock.Header().String())
 			cs.logger.Info("cs.Epoch.GetNextEpoch 702>>>>>>>>>>>>>>>>>>>>>: %v",ethBlock.Extra())
