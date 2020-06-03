@@ -502,8 +502,6 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	}
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
-	header.UncleHash = types.TendermintNilUncleHash
-
 	sb.logger.Info("Tendermint (backend) Finalize, add epochInfo start>>>>>>>>>>>>>>>>>>>>>>: %v")
 
 	// Assemble and return the final block for sealing
