@@ -41,7 +41,8 @@ var (
 	MainnetSd2mcV1MainBlock = big.NewInt(11824000)
 	TestnetSd2mcV1MainBlock = big.NewInt(40)
 
-	ChildSd2mcWhenEpochEndsBlock = big.NewInt(40)
+	MainnetSd2mcWhenEpochEndsBlock = big.NewInt(40)
+	TestnetSd2mcWhenEpochEndsBlock = big.NewInt(40)
 )
 
 var (
@@ -63,7 +64,7 @@ var (
 		Child0OutOfStorageBlock:      big.NewInt(13930000),
 		ExtractRewardMainBlock:       MainnetExtractRewardMainBlock,
 		Sd2mcV1Block:                 MainnetSd2mcV1MainBlock,
-		ChildSd2mcWhenEpochEndsBlock: ChildSd2mcWhenEpochEndsBlock,
+		ChildSd2mcWhenEpochEndsBlock: MainnetSd2mcWhenEpochEndsBlock,
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -88,7 +89,7 @@ var (
 		Child0OutOfStorageBlock:    big.NewInt(10),
 		ExtractRewardMainBlock:     TestnetExtractRewardMainBlock,
 		Sd2mcV1Block:               TestnetSd2mcV1MainBlock,
-		ChildSd2mcWhenEpochEndsBlock: ChildSd2mcWhenEpochEndsBlock,
+		ChildSd2mcWhenEpochEndsBlock: TestnetSd2mcWhenEpochEndsBlock,
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
