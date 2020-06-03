@@ -487,15 +487,16 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
 		})
-		epochInfo:=epoch.GetNextEpoch();
-		if epochInfo !=nil {
-			epochInfo.Validators.Validators[0].VotingPower=new(big.Int).Add(epochInfo.Validators.Validators[0].VotingPower,big.NewInt(4))
-			header.Extra = epochInfo.Bytes()
-			sb.logger.Info("Tendermint (backend) Finalize, add epochInfo end header>>>>>>>>>>>>>>>>>>>>>>: %v", header.String())
-			sb.logger.Info("Tendermint (backend) Finalize, add epochInfo end>>>>>>>>>>>>>>>>>>>>>>: %v", epochInfo.String())
-			sb.logger.Info("Tendermint (backend) Finalize, add epochInfo Validators end>>>>>>>>>>>>>>>>>>>>>>: %v", epochInfo.Validators.String())
-			sb.logger.Info("Tendermint (backend) Finalize, add epochInfo Bytes end>>>>>>>>>>>>>>>>>>>>>>: %v", epochInfo.Bytes())
+		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber){
+			epochInfo:=epoch.GetNextEpoch();
+			if epochInfo !=nil {
+				header.Extra = epochInfo.Bytes()
+				sb.logger.Info("Tendermint (backend) Finalize, add epochInfo end header>>>>>>>>>>>>>>>>>>>>>>: %v", header.String())
+				sb.logger.Info("Tendermint (backend) Finalize, add epochInfo end>>>>>>>>>>>>>>>>>>>>>>: %v", epochInfo.String())
+				sb.logger.Info("Tendermint (backend) Finalize, add epochInfo Validators end>>>>>>>>>>>>>>>>>>>>>>: %v", epochInfo.Validators.String())
+				sb.logger.Info("Tendermint (backend) Finalize, add epochInfo Bytes end>>>>>>>>>>>>>>>>>>>>>>: %v", epochInfo.Bytes())
 
+			}
 		}
 
 	}
