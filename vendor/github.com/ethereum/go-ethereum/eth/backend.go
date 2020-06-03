@@ -141,12 +141,14 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		}
 		chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
 		chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
+		chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 	case "testnet":
 		if chainConfig.OutOfStorageBlock == nil {
 			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
 		}
 		chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
 		chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
+		chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 	case "child_0":
 		if (chainConfig.HashTimeLockContract == common.Address{}) {
 			if isTestnet {
