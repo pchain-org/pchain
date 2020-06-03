@@ -1123,7 +1123,7 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 			cs.logger.Info("cs.Epoch.GetNextEpoch StartBlock%>>>>>>>>>>>>>>>>>>>>>", cs.Epoch)
 			epochBytes = cs.Epoch.Bytes()
 
-		}else if !cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(cs.chainConfig.ChildSd2mcWhenEpochEndsBlock) && cs.Height==cs.Epoch.EndBlock{
+		}else if cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(cs.getMainBlock()) && cs.Height==cs.Epoch.EndBlock{
 			cs.logger.Info("cs.Epoch.GetNextEpoch 700>>>>>>>>>>>>>>>>>>>>>: %v",ethBlock.String())
 			cs.logger.Info("cs.Epoch.GetNextEpoch 701>>>>>>>>>>>>>>>>>>>>>: %v",ethBlock.Header().String())
 			cs.logger.Info("cs.Epoch.GetNextEpoch 702>>>>>>>>>>>>>>>>>>>>>: %v",ethBlock.Extra())
@@ -1263,7 +1263,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 				return
 			}
 		}
-	} else if cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(big.NewInt(int64(cs.Height))) && cs.Height == cs.Epoch.EndBlock {
+	} else if cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(cs.getMainBlock()) && cs.Height == cs.Epoch.EndBlock {
 		if cs.Height == cs.blockFromMiner.Number().Uint64() {
 			selfEpochBytes := cs.blockFromMiner.Header().Extra
 			proposedEpochBytes := cs.ProposalBlock.TdmExtra.EpochBytes
