@@ -301,10 +301,20 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 		// Refund Deposit to PendingRefund if deposit > 0
 		if depositProxiedBalance.Sign() > 0 {
 			allRefund = false
-			//Calculate the refunding amount user canceled by oneself before
-			refunded := state.GetPendingRefundBalanceByUser(from, key)
-			//Add the rest to refunding balance
-			state.AddPendingRefundBalanceByUser(from, key, new(big.Int).Sub(depositProxiedBalance, refunded))
+
+			if bc.Config().PChainId == "pchain" || bc.Config().PChainId == "testnet" {
+				mainChainHeight := bc.CurrentHeader().Number
+			} else {
+				mainChainHeight := bc.CurrentHeader().MainChainNumber
+			}
+			if !bc.Config().IsChildSd2mcWhenEpochEndsBlock(mainChainHeight) {
+				state.AddPendingRefundBalanceByUser(from, key, depositProxiedBalance)
+			} else {
+				//Calculate the refunding amount user canceled by oneself before
+				refunded := state.GetPendingRefundBalanceByUser(from, key)
+				//Add the rest to refunding balance
+				state.AddPendingRefundBalanceByUser(from, key, new(big.Int).Sub(depositProxiedBalance, refunded))
+			}
 			// TODO Add Pending Refund Set, Commit the Refund Set
 			state.MarkDelegateAddressRefund(from)
 		}
