@@ -41,7 +41,7 @@ var (
 	MainnetSd2mcV1MainBlock = big.NewInt(11824000)
 	TestnetSd2mcV1MainBlock = big.NewInt(40)
 
-	MainnetSd2mcWhenEpochEndsBlock = big.NewInt(40)
+	MainnetSd2mcWhenEpochEndsBlock = big.NewInt(14486667)
 	TestnetSd2mcWhenEpochEndsBlock = big.NewInt(40)
 )
 
