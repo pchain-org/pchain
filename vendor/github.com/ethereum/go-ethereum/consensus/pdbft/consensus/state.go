@@ -1109,25 +1109,18 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 		if cs.Height == cs.Epoch.GetRevealVoteEndHeight()+2 {
 			// Save the next epoch data into block and tell the main chain
 			nextEp := cs.Epoch.GetNextEpoch()
-			cs.logger.Info("cs.Epoch.GetNextEpoch 95%>>>>>>>>>>>>>>>>>>>>>", nextEp.String())
 			if nextEp == nil {
 				panic("missing next epoch after reveal vote")
 			}
 			epochBytes = nextEp.Bytes()
-			cs.logger.Info("cs.Epoch.GetNextEpoch 95% epochBytes 0>>>>>>>>>>>>>>>>>>: %v", common.Bytes2Hex(epochBytes))
-			cs.logger.Info("cs.Epoch.GetNextEpoch 95% epochBytes 1>>>>>>>>>>>>>>>>>>: %v", epochBytes)
 
 		} else if cs.Height == cs.Epoch.StartBlock || cs.Height == 1 {
 			// We're save the epoch data into block so that it'll be sent to the main chain.
 			// When block height equal to first block of Chain or Epoch
-			cs.logger.Info("cs.Epoch.GetNextEpoch StartBlock%>>>>>>>>>>>>>>>>>>>>>", cs.Epoch)
 			epochBytes = cs.Epoch.Bytes()
 
 		}else if cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(cs.getMainBlock()) && cs.Height==cs.Epoch.EndBlock{
-			cs.logger.Info("cs.Epoch.GetNextEpoch 700>>>>>>>>>>>>>>>>>>>>>: %v",ethBlock.String())
-			cs.logger.Info("cs.Epoch.GetNextEpoch 701>>>>>>>>>>>>>>>>>>>>>: %v",ethBlock.Header().String())
-			cs.logger.Info("cs.Epoch.GetNextEpoch 702>>>>>>>>>>>>>>>>>>>>>: %v",ethBlock.Extra())
-			cs.logger.Info("cs.Epoch.GetNextEpoch 703>>>>>>>>>>>>>>>>>>>>>: %v",common.Bytes2Hex(ethBlock.Header().Extra))
+			//At the end block of epoch, save epoch data into block, epcoh data is taken from herder
 			epochBytes=cs.blockFromMiner.Header().Extra
 
 		} else {
@@ -1136,9 +1129,6 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 				lastHeight := cs.backend.ChainReader().CurrentBlock().Number().Uint64()
 				lastBlockTime := time.Unix(int64(cs.backend.ChainReader().CurrentBlock().Time()), 0)
 				epochBytes = cs.Epoch.ProposeNextEpoch(lastHeight, lastBlockTime).Bytes()
-				cs.logger.Info("cs.Epoch.GetNextEpoch else%>>>>>>>>>>>>>>>>>>>>>", cs.Epoch.ProposeNextEpoch(lastHeight, lastBlockTime))
-				cs.logger.Info("cs.Epoch.GetNextEpoch else epochBytes 0>>>>>>>>>>>>>>>>>>: %v", common.Bytes2Hex(epochBytes))
-				cs.logger.Info("cs.Epoch.GetNextEpoch else epochBytes 1>>>>>>>>>>>>>>>>>>: %v", epochBytes)
 
 			}
 		}

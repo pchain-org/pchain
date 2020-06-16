@@ -491,19 +491,12 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 			epochInfo:=epoch.GetNextEpoch();
 			if epochInfo !=nil {
 				header.Extra = epochInfo.Bytes()
-				sb.logger.Info("Tendermint (backend) Finalize, add epochInfo end header>>>>>>>>>>>>>>>>>>>>>>: %v", header.String())
-				sb.logger.Info("Tendermint (backend) Finalize, add epochInfo end>>>>>>>>>>>>>>>>>>>>>>: %v", epochInfo.String())
-				sb.logger.Info("Tendermint (backend) Finalize, add epochInfo Validators end>>>>>>>>>>>>>>>>>>>>>>: %v", epochInfo.Validators.String())
-				sb.logger.Info("Tendermint (backend) Finalize, add epochInfo Bytes end>>>>>>>>>>>>>>>>>>>>>>: %v", epochInfo.Bytes())
-
 			}
 		}
 
 	}
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
-	sb.logger.Info("Tendermint (backend) Finalize, add epochInfo start>>>>>>>>>>>>>>>>>>>>>>: %v")
-
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts), nil
 }
@@ -516,16 +509,12 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 
 	// update the block header timestamp and signature and propose the block to core engine
 	header := block.Header()
-	sb.logger.Info("Seal>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>/e",header.String())
-
 	number := header.Number.Uint64()
 	parent := chain.GetHeader(header.ParentHash, number-1)
 	if parent == nil {
 		return nil, consensus.ErrUnknownAncestor
 	}
 	block, err := sb.updateBlock(parent, block)
-	sb.logger.Info("Seal block>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>/e",block.String())
-
 	if err != nil {
 		return nil, err
 	}
