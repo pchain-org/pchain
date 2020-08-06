@@ -44,8 +44,8 @@ var (
 	MainnetSd2mcWhenEpochEndsBlock = big.NewInt(14486667)
 	TestnetSd2mcWhenEpochEndsBlock = big.NewInt(40)
 
-	MainnetValidateHashTimeLockContract = big.NewInt(16000000)
-	TestnetValidateHashTimeLockContract = big.NewInt(9785000)
+	MainnetValidateHTLCBlock = big.NewInt(16000000)
+	TestnetValidateHTLCBlock = big.NewInt(9785000)
 
 )
 
@@ -69,7 +69,7 @@ var (
 		ExtractRewardMainBlock:       MainnetExtractRewardMainBlock,
 		Sd2mcV1Block:                 MainnetSd2mcV1MainBlock,
 		ChildSd2mcWhenEpochEndsBlock: MainnetSd2mcWhenEpochEndsBlock,
-		ValidateHashTimeLockContract: MainnetValidateHashTimeLockContract,
+		ValidateHTLCBlock: MainnetValidateHTLCBlock,
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -96,7 +96,7 @@ var (
 		ExtractRewardMainBlock:     TestnetExtractRewardMainBlock,
 		Sd2mcV1Block:               TestnetSd2mcV1MainBlock,
 		ChildSd2mcWhenEpochEndsBlock: TestnetSd2mcWhenEpochEndsBlock,
-		ValidateHashTimeLockContract: TestnetValidateHashTimeLockContract,
+		ValidateHTLCBlock: TestnetValidateHTLCBlock,
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -199,7 +199,7 @@ type ChainConfig struct {
 	Child0HashTimeLockContract   common.Address
 	Child0OutOfStorageBlock      *big.Int
 	ChildSd2mcWhenEpochEndsBlock *big.Int
-	ValidateHashTimeLockContract *big.Int
+	ValidateHTLCBlock *big.Int
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
@@ -382,8 +382,8 @@ func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {
 	return false
 }
 
-func (c *ChainConfig)NeedValidateHashTimeLockContract(mainBlockNumber *big.Int) bool {
-	return isForked(c.ValidateHashTimeLockContract, mainBlockNumber)
+func (c *ChainConfig)CeaseValidateHashTimeLockContract(mainBlockNumber *big.Int) bool {
+	return isForked(c.ValidateHTLCBlock, mainBlockNumber)
 }
 
 
