@@ -74,7 +74,7 @@ If you want to know more about our Command Line Options,please consult our
 
 ```
 $ pchain version
-//1.3.3
+//1.3.4
 ```
 
 ### Sync and run testnet

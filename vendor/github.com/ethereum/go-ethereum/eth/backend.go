@@ -142,6 +142,8 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
 		chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
 		chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
+		chainConfig.ValidateHashTimeLockContract = params.MainnetChainConfig.ValidateHashTimeLockContract
+
 	case "testnet":
 		if chainConfig.OutOfStorageBlock == nil {
 			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
@@ -149,6 +151,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
 		chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
 		chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
+		chainConfig.ValidateHashTimeLockContract = params.TestnetChainConfig.ValidateHashTimeLockContract
 	case "child_0":
 		if (chainConfig.HashTimeLockContract == common.Address{}) {
 			if isTestnet {
@@ -162,11 +165,14 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
 			chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
+			chainConfig.ValidateHashTimeLockContract = params.TestnetChainConfig.ValidateHashTimeLockContract
 		} else {
 			chainConfig.OutOfStorageBlock      = params.MainnetChainConfig.Child0OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
 			chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
+			chainConfig.ValidateHashTimeLockContract = params.MainnetChainConfig.ValidateHashTimeLockContract
+
 		}
 	default:
 		if isTestnet {
@@ -174,11 +180,14 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
 			chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
+			chainConfig.ValidateHashTimeLockContract = params.TestnetChainConfig.ValidateHashTimeLockContract
 		} else {
 			chainConfig.OutOfStorageBlock      = params.MainnetChainConfig.OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
 			chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
+			chainConfig.ValidateHashTimeLockContract = params.MainnetChainConfig.ValidateHashTimeLockContract
+
 		}
 	}
 
