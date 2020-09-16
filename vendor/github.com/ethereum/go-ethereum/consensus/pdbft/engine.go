@@ -480,18 +480,23 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
-	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(header.Number.Uint64(), state,
+	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
 										sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
 										selfRetrieveReward); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
 		})
-	}
+		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber){
+			epochInfo:=epoch.GetNextEpoch();
+			if epochInfo !=nil {
+				header.Extra = epochInfo.Bytes()
+			}
+		}
 
+	}
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
-
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts), nil
 }
@@ -500,7 +505,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 // seal place on top.
 func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (interface{}, error) {
 
-	sb.logger.Info("Tendermint (backend) Seal, add logic here")
+	sb.logger.Info("/e")
 
 	// update the block header timestamp and signature and propose the block to core engine
 	header := block.Header()
@@ -702,8 +707,10 @@ func prepareExtra(header *types.Header, vals []common.Address) ([]byte, error) {
 func writeSeal(h *types.Header, seal []byte) error {
 
 	//logger.Info("Tendermint (backend) writeSeal, add logic here")
-	payload := types.MagicExtra
-	h.Extra = payload
+	if h.Extra==nil{
+		payload := types.MagicExtra
+		h.Extra = payload
+	}
 	return nil
 }
 

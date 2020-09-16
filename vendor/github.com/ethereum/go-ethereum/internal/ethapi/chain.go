@@ -820,7 +820,6 @@ func setBlockRewardValidation(from common.Address, tx *types.Transaction, cch co
 	return &args, nil
 }
 
-
 func wfmcValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
 	signer := types.NewEIP155Signer(tx.ChainId())
@@ -969,7 +968,7 @@ func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.Cros
 func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
 
 	if err := wfmcValidateCbV1(tx, state, cch); err != nil {
-		return err;
+		return err
 	}
 
 	from, _ := types.Sender(types.NewEIP155Signer(tx.ChainId()), tx)

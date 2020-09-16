@@ -38,8 +38,15 @@ var (
 	TestnetExtractRewardMainBlock = big.NewInt(2550000)
 
 	//use SaveData2MainBlock v1; which reports epoch/tx3 to main block
-	MainnetSd2mcV1MainBlock = big.NewInt(1111111111)
-	TestnetSd2mcV1MainBlock = big.NewInt(11)
+	MainnetSd2mcV1MainBlock = big.NewInt(11824000)
+	TestnetSd2mcV1MainBlock = big.NewInt(40)
+
+	MainnetSd2mcWhenEpochEndsBlock = big.NewInt(14486667)
+	TestnetSd2mcWhenEpochEndsBlock = big.NewInt(40)
+
+	MainnetValidateHTLCBlock = big.NewInt(16000000)
+	TestnetValidateHTLCBlock = big.NewInt(9785000)
+
 )
 
 var (
@@ -54,13 +61,16 @@ var (
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
 		//ByzantiumBlock:      big.NewInt(4370000),
-		ByzantiumBlock:             big.NewInt(0), //let's start from 1 block
-		ConstantinopleBlock:        nil,
-		Child0HashTimeLockContract: common.HexToAddress("0x18c496af47eb1c0946f64a25d3f589f71934bf3d"),
-		OutOfStorageBlock:          big.NewInt(5890000),
-		Child0OutOfStorageBlock:    big.NewInt(13930000),
-		ExtractRewardMainBlock:     MainnetExtractRewardMainBlock,
-		Sd2mcV1Block:               MainnetSd2mcV1MainBlock,
+		ByzantiumBlock:               big.NewInt(0), //let's start from 1 block
+		ConstantinopleBlock:          nil,
+		Child0HashTimeLockContract:   common.HexToAddress("0x18c496af47eb1c0946f64a25d3f589f71934bf3d"),
+		OutOfStorageBlock:            big.NewInt(5890000),
+		Child0OutOfStorageBlock:      big.NewInt(13930000),
+		ExtractRewardMainBlock:       MainnetExtractRewardMainBlock,
+		Sd2mcV1Block:                 MainnetSd2mcV1MainBlock,
+		ChildSd2mcWhenEpochEndsBlock: MainnetSd2mcWhenEpochEndsBlock,
+		ValidateHTLCBlock: MainnetValidateHTLCBlock,
+
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -85,6 +95,9 @@ var (
 		Child0OutOfStorageBlock:    big.NewInt(10),
 		ExtractRewardMainBlock:     TestnetExtractRewardMainBlock,
 		Sd2mcV1Block:               TestnetSd2mcV1MainBlock,
+		ChildSd2mcWhenEpochEndsBlock: TestnetSd2mcWhenEpochEndsBlock,
+		ValidateHTLCBlock: TestnetValidateHTLCBlock,
+
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -134,16 +147,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, new(EthashConfig), nil, nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil,nil,new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, nil,nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, new(EthashConfig), nil, nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, nil,new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -177,14 +190,16 @@ type ChainConfig struct {
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
 	// PCHAIN HF
-	HashTimeLockContract common.Address `json:"htlc,omitempty"`     // Hash Time Lock Contract Address
-	OutOfStorageBlock    *big.Int       `json:"oosBlock,omitempty"` // Out of storage HF block
-	ExtractRewardMainBlock *big.Int     `json:"erBlock,omitempty"` // Extract reward HF block
-	Sd2mcV1Block  *big.Int              `json:"sd2mcV1Block, omitempty"`
+	HashTimeLockContract   common.Address `json:"htlc,omitempty"`     // Hash Time Lock Contract Address
+	OutOfStorageBlock      *big.Int       `json:"oosBlock,omitempty"` // Out of storage HF block
+	ExtractRewardMainBlock *big.Int       `json:"erBlock,omitempty"`  // Extract reward HF block
+	Sd2mcV1Block           *big.Int       `json:"sd2mcV1Block, omitempty"`
 
 	// For default setup propose
-	Child0HashTimeLockContract common.Address
-	Child0OutOfStorageBlock    *big.Int
+	Child0HashTimeLockContract   common.Address
+	Child0OutOfStorageBlock      *big.Int
+	ChildSd2mcWhenEpochEndsBlock *big.Int
+	ValidateHTLCBlock *big.Int
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
@@ -342,27 +357,35 @@ func (c *ChainConfig) IsSelfRetrieveReward(mainBlockNumber *big.Int) bool {
 }
 
 func (c *ChainConfig) IsSd2mcV1(mainBlockNumber *big.Int) bool {
-return isForked(c.Sd2mcV1Block, mainBlockNumber)
+	return isForked(c.Sd2mcV1Block, mainBlockNumber)
+}
+
+func (c *ChainConfig)IsChildSd2mcWhenEpochEndsBlock(mainBlockNumber *big.Int) bool {
+	return isForked(c.ChildSd2mcWhenEpochEndsBlock, mainBlockNumber)
 }
 
 func IsSelfRetrieveReward(mainChainId string, mainBlockNumber *big.Int) bool {
 	if mainChainId == MainnetChainConfig.PChainId {
 		return isForked(MainnetExtractRewardMainBlock, mainBlockNumber)
-	} else if mainChainId == TestnetChainConfig.PChainId{
+	} else if mainChainId == TestnetChainConfig.PChainId {
 		return isForked(TestnetExtractRewardMainBlock, mainBlockNumber)
 	}
 	return false
 }
 
-
 func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {
 	if mainChainId == MainnetChainConfig.PChainId {
 		return isForked(MainnetSd2mcV1MainBlock, mainBlockNumber)
-	} else if mainChainId == TestnetChainConfig.PChainId{
+	} else if mainChainId == TestnetChainConfig.PChainId {
 		return isForked(TestnetSd2mcV1MainBlock, mainBlockNumber)
 	}
 	return false
 }
+
+func (c *ChainConfig)CeaseValidateHashTimeLockContract(mainBlockNumber *big.Int) bool {
+	return isForked(c.ValidateHTLCBlock, mainBlockNumber)
+}
+
 
 // Check whether is on main chain or not
 func (c *ChainConfig) IsMainChain() bool {

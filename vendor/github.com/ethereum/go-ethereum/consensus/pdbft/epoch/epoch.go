@@ -349,7 +349,7 @@ func (epoch *Epoch) GetPreviousEpoch() *Epoch {
 	return epoch.previousEpoch
 }
 
-func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB, 
+func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *state.StateDB,
 			outsideReward, selfRetrieveReward bool) (bool, *tmTypes.ValidatorSet, error) {
 
 	log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
@@ -387,8 +387,16 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB,
 				state.ForEachProxied(refundAddress, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
 					if pendingRefundBalance.Sign() > 0 {
 						// Refund Pending Refund
+
+						//Due to the bug before, modified 33b28ce6d3316eba8115e22b3863a685d3d33eff refunding amount mandatorily to avoid the negative number error
+						if height == 26536499 && pchainId == "child_0" && state.GetDelegateBalance(key).Cmp(pendingRefundBalance) < 0 && key == common.HexToAddress("33b28ce6d3316eba8115e22b3863a685d3d33eff"){
+							state.SubPendingRefundBalanceByUser(refundAddress, key, pendingRefundBalance)
+							pendingRefundBalance = new(big.Int).Div(pendingRefundBalance, big.NewInt(2))
+							log.Infof("Modified address 33b28ce6d3316eba8115e22b3863a685d3d33eff refunding amount, now is %s", pendingRefundBalance.String())
+						}else {
+							state.SubPendingRefundBalanceByUser(refundAddress, key, pendingRefundBalance)
+						}
 						state.SubDepositProxiedBalanceByUser(refundAddress, key, pendingRefundBalance)
-						state.SubPendingRefundBalanceByUser(refundAddress, key, pendingRefundBalance)
 						state.SubDelegateBalance(key, pendingRefundBalance)
 						state.AddBalance(key, pendingRefundBalance)
 					}
@@ -417,8 +425,11 @@ func (epoch *Epoch) ShouldEnterNewEpoch(height uint64, state *state.StateDB,
 				}
 			}
 
+
 			// Update Validators with vote
 			refunds, err := updateEpochValidatorSet(newValidators, epoch.nextEpoch.validatorVoteSet)
+
+
 			if err != nil {
 				epoch.logger.Warn("Error changing validator set", "error", err)
 				return false, nil, err
@@ -530,7 +541,6 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 	// Refund List will be vaildators contain from Vote (exit validator or less amount than previous amount) and Knockout after sort by amount
 	var refund []*tmTypes.RefundValidatorAmount
 	oldValSize, newValSize := validators.Size(), 0
-
 	// Process the Vote if vote set not empty
 	if !voteSet.IsEmpty() {
 		// Process the Votes and merge into the Validator Set
@@ -541,9 +551,11 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 			}
 
 			_, validator := validators.GetByAddress(v.Address[:])
+
 			if validator == nil {
 				// Add the new validator
 				added := validators.Add(tmTypes.NewValidator(v.Address[:], v.PubKey, v.Amount))
+
 				if !added {
 					return nil, fmt.Errorf("Failed to add new validator %x with voting power %d", v.Address, v.Amount)
 				}
@@ -552,6 +564,7 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 				refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: validator.VotingPower, Voteout: false})
 				// Remove the Validator
 				_, removed := validators.Remove(validator.Address)
+
 				if !removed {
 					return nil, fmt.Errorf("Failed to remove validator %x", validator.Address)
 				}
@@ -587,6 +600,7 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 		}
 	}
 
+
 	// If actual size of Validators greater than Determine Validator Size
 	// then sort the Validators with VotingPower and return the most top Validators
 	if validators.Size() > valSize {
@@ -606,6 +620,7 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 		}
 
 		validators.Validators = validators.Validators[:valSize]
+
 	}
 
 	return refund, nil

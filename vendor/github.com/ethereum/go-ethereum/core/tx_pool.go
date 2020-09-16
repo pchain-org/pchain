@@ -552,6 +552,8 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 	return txs
 }
 
+
+
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
@@ -582,13 +584,25 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
 		return ErrNonceTooLow
 	}
-	if !pool.chainconfig.IsHashTimeLockWithdraw(pool.chain.CurrentBlock().Number(), tx.To(), tx.Data()) {
-		// Transactor should have enough funds to cover the costs
-		// cost == V + GP * GL
+	//Verify HTLC transactions and prevent the sending of 0 gas fee contract transactions
+	mainBlockNumber :=pool.chain.CurrentBlock().Number()
+	if !pool.chainconfig.IsMainChain(){
+		mainBlockNumber =pool.chain.CurrentBlock().Header().MainChainNumber;
+	}
+	if !pool.chainconfig.CeaseValidateHashTimeLockContract(mainBlockNumber){
+		if !pool.chainconfig.IsHashTimeLockWithdraw(pool.chain.CurrentBlock().Number(), tx.To(), tx.Data()) {
+			// Transactor should have enough funds to cover the costs
+			// cost == V + GP * GL
+			if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+				return ErrInsufficientFunds
+			}
+		}
+	}else{
 		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 			return ErrInsufficientFunds
 		}
 	}
+
 	// Not allow contract creation on PChain Main Chain
 	if pool.chainconfig.IsMainChain() && tx.To() == nil {
 		return ErrNoContractOnMainChain
