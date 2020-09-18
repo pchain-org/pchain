@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/pchain/p2p"
@@ -21,7 +20,6 @@ import (
 	"gopkg.in/urfave/cli.v1"
 	"io/ioutil"
 	"net"
-	"os"
 	"path"
 	"strconv"
 	"sync"
@@ -148,12 +146,7 @@ func (cm *ChainManager) InitCrossChainHelper() {
 		port := cm.ctx.GlobalInt(utils.RPCPortFlag.Name)
 		url := net.JoinHostPort(host, strconv.Itoa(port))
 		url = "http://" + url + "/" + chainId
-		client, err := ethclient.Dial(url)
-		if err != nil {
-			log.Errorf("can't connect to %s, err: %v, exit", url, err)
-			os.Exit(0)
-		}
-		cm.cch.client = client
+		cm.cch.mainChainUrl = url
 	}
 }
 

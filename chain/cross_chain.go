@@ -14,7 +14,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -36,9 +35,8 @@ type CrossChainHelper struct {
 	mtx             sync.Mutex
 	chainInfoDB     dbm.DB
 	localTX3CacheDB ethdb.Database
-	//the client does only connect to main chain
-	client      *ethclient.Client
-	mainChainId string
+	mainChainUrl    string
+	mainChainId     string
 }
 
 func (cch *CrossChainHelper) GetMutex() *sync.Mutex {
@@ -49,8 +47,8 @@ func (cch *CrossChainHelper) GetChainInfoDB() dbm.DB {
 	return cch.chainInfoDB
 }
 
-func (cch *CrossChainHelper) GetClient() *ethclient.Client {
-	return cch.client
+func (cch *CrossChainHelper) GetMainChainUrl() string {
+	return cch.mainChainUrl
 }
 
 func (cch *CrossChainHelper) GetMainChainId() string {
@@ -682,8 +680,8 @@ func (cch *CrossChainHelper) VerifyChildChainProofDataV1(proofData *types.ChildC
 			}
 
 			valSet = ep.Validators
-			fmt.Println("ep>>>>>>>>>>>>>>>>>>>>", ep.String(), ep.Validators.String())
-			fmt.Println("tdmextra>>>>>>>>>>>>>>>>>>", tdmExtra.String())
+			log.Debugf("ep>>>>>>>>>>>>>>>>>>>> Ep: %v, Validators: %v", ep.String(), ep.Validators.String())
+			log.Debugf("tdmextra>>>>>>>>>>>>>>>>>> tdmExtra: %v", tdmExtra.String())
 		} else {
 			_, tdmGenesis := core.LoadChainGenesis(cch.chainInfoDB, chainId)
 			if tdmGenesis == nil {
