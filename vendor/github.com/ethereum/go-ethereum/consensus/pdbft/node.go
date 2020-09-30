@@ -110,10 +110,10 @@ func (n *Node) OnStart() error {
 	// Start the Consensus Reactor for this Chain
 	_, err = n.consensusReactor.Start()
 	if err != nil {
+		n.evsw.Stop()
 		n.logger.Errorf("Failed to start Consensus Reactor. Error: %v", err)
 		return err
 	}
-	n.consensusReactor.AfterStart()
 
 	return nil
 }
