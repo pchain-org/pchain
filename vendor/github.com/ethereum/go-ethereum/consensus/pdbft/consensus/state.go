@@ -2,36 +2,29 @@ package consensus
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"reflect"
-	"sync"
-	"time"
-
-	"context"
-
-	//	"github.com/ethereum/go-ethereum/common"
 	consss "github.com/ethereum/go-ethereum/consensus"
 	ep "github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	sm "github.com/ethereum/go-ethereum/consensus/pdbft/state"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	pabi "github.com/pchain/abi"
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
-	//	"github.com/ethereum/go-ethereum/crypto"
-	"crypto/ecdsa"
-	"crypto/sha256"
-	//"encoding/binary"
-	"github.com/ethereum/go-ethereum/crypto"
 	tmdcrypto "github.com/tendermint/go-crypto"
 	"math/big"
-	//"github.com/pchain/chain"
+	"reflect"
+	"sync"
+	"time"
 )
 
 const ROUND_NOT_PROPOSED int = 0
@@ -323,7 +316,7 @@ type ConsensusState struct {
 	doPrevote      func(height uint64, round int)
 	setProposal    func(proposal *types.Proposal) error
 
-	done chan struct{}
+	wg   sync.WaitGroup
 
 	blockFromMiner *ethTypes.Block
 	backend        Backend
@@ -338,8 +331,6 @@ func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.C
 	cs := &ConsensusState{
 		chainConfig:      chainConfig,
 		cch:              cch,
-		peerMsgQueue:     make(chan msgInfo, msgQueueSize),
-		internalMsgQueue: make(chan msgInfo, msgQueueSize),
 		timeoutTicker:    NewTimeoutTicker(backend.GetLogger()),
 		timeoutParams:    InitTimeoutParamsFromConfig(config),
 		//done:             make(chan struct{}),
@@ -471,6 +462,20 @@ func (cs *ConsensusState) proposerByRound(round int) *VRFProposer {
 				idx = (idx + 1) % cs.Validators.Size()
 			}
 
+
+			idx = curProposer
+
+			//if current proposer was also last vrf proposer, but not voted within last height
+			//just skip the proposer within this height
+			if lastProposer >= 0 &&
+				curProposer == lastProposer &&
+				cs.state.TdmExtra != nil &&
+				cs.state.TdmExtra.SeenCommit != nil &&
+				cs.state.TdmExtra.SeenCommit.BitArray != nil &&
+				!cs.state.TdmExtra.SeenCommit.BitArray.GetIndex(uint64(curProposer)) {
+				idx = (idx + 1) % cs.Validators.Size()
+			}
+
 			cs.vrfValIndex = idx
 		}
 
@@ -498,7 +503,13 @@ func (cs *ConsensusState) proposersByVRF() (lastProposer int, curProposer int) {
 
 	chainReader := cs.backend.ChainReader()
 	header := chainReader.CurrentHeader()
-	headerHash := header.Hash()
+	var headerHash common.Hash
+	if !cs.chainConfig.IsHeaderHashWithoutTimeBlock(cs.getMainBlock()) {
+		headerHash = header.Hash()
+	}else{
+		headerHash = header.HashWithoutTime()
+	}
+
 
 	curProposer = cs.proposerByVRF(headerHash, cs.Validators.Validators)
 
@@ -581,7 +592,8 @@ func (cs *ConsensusState) LoadCommit(height uint64) *types.Commit {
 
 func (cs *ConsensusState) OnStart() error {
 
-	cs.done = make(chan struct{})
+	cs.peerMsgQueue = make(chan msgInfo, msgQueueSize)
+	cs.internalMsgQueue = make(chan msgInfo, msgQueueSize)
 
 	// NOTE: we will get a build up of garbage go routines
 	//  firing on the tockChan until the receiveRoutine is started
@@ -600,14 +612,14 @@ func (cs *ConsensusState) OnStart() error {
 
 func (cs *ConsensusState) OnStop() {
 
-	cs.BaseService.OnStop()
 	cs.timeoutTicker.Stop()
-}
 
-// NOTE: be sure to Stop() the event switch and drain
-// any event channels or this may deadlock
-func (cs *ConsensusState) Wait() {
-	<-cs.done
+	close(cs.peerMsgQueue)
+	close(cs.internalMsgQueue)
+
+	cs.logger.Infof("ConsensusState wait")
+	cs.wg.Wait()
+	cs.logger.Infof("ConsensusState wait over")
 }
 
 //------------------------------------------------------------
@@ -725,6 +737,13 @@ func (cs *ConsensusState) newStep() {
 // It keeps the RoundState and is the only thing that updates it.
 // Updates (state transitions) happen on timeouts, complete proposals, and 2/3 majorities
 func (cs *ConsensusState) receiveRoutine(maxSteps int) {
+
+	cs.wg.Add(1)
+	defer func() {
+		cs.wg.Done()
+		cs.logger.Infof("ConsensusState done one routine")
+	}()
+
 	for {
 		if maxSteps > 0 {
 			if cs.nSteps >= maxSteps {
@@ -738,23 +757,33 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 
 		select {
 		case mi = <-cs.peerMsgQueue:
+			if !cs.IsRunning() {
+				cs.logger.Infof("ConsensusState peerMsgQueue, but need stop or not running, just return")
+				return
+			}
 			// handles proposals, block parts, votes
 			// may generate internal events (votes, complete proposals, 2/3 majorities)
 			rs := cs.RoundState
 			cs.handleMsg(mi, rs)
 		case mi = <-cs.internalMsgQueue:
+
+			if !cs.IsRunning() {
+				cs.logger.Infof("ConsensusState internalMsgQueue, but need stop or not running, just return")
+				return
+			}
 			// handles proposals, block parts, votes
 			rs := cs.RoundState
 			cs.handleMsg(mi, rs)
 		case ti := <-cs.timeoutTicker.Chan(): // tockChan:
+			if !cs.IsRunning() {
+				cs.logger.Infof("ConsensusState timeoutTicker.Chan(), but need stop or not running, just return")
+				return
+			}
 			// if the timeout is relevant to the rs
 			// go to the next step
 			rs := cs.RoundState
 			cs.handleTimeout(ti, rs)
-		case <-cs.Quit:
 
-			close(cs.done)
-			return
 		}
 	}
 }
@@ -846,7 +875,7 @@ func (cs *ConsensusState) handleTimeout(ti timeoutInfo, rs RoundState) {
 		types.FireEventTimeoutWait(cs.evsw, cs.RoundStateEvent())
 		cs.enterNewRound(ti.Height, ti.Round+1)
 	default:
-		panic(Fmt("Invalid timeout step: %v", ti.Step))
+		cs.logger.Errorf("Invalid timeout step: %v", ti.Step)
 	}
 }
 
@@ -1008,7 +1037,8 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 			if cs.privValidator != nil && cs.IsProposer() {
 				cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
 				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
-				cs.saveBlockToMainChain(lastBlock, 1)
+				//save data in another routine to avoid stuck
+				go cs.saveBlockToMainChain(lastBlock, 1)
 				cs.state.TdmExtra.NeedToSave = false
 			}
 		}
@@ -2139,9 +2169,7 @@ func (cs *ConsensusState) ValidateTX4(b *types.TdmBlock) error {
 
 func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block, version int) {
 
-	client := cs.cch.GetClient()
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
-	//ctx := context.Background() // testing only!
+	mainChainUrl := cs.cch.GetMainChainUrl()
 
 	bs := []byte{}
 	if version == 0 {
@@ -2170,63 +2198,45 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block, version in
 	}
 	cs.logger.Infof("saveDataToMainChain proof data length: %d", len(bs))
 
-	number, err := client.BlockNumber(ctx)
-	if err != nil {
-		cs.logger.Error("saveDataToMainChain: failed to get BlockNumber at the beginning.", "err", err)
-		return
-	}
-
 	// We use BLS Consensus PrivateKey to sign the digest data
-	var prv *ecdsa.PrivateKey
 	if prvValidator, ok := cs.privValidator.(*types.PrivValidator); ok {
-		prv, err = crypto.ToECDSA(prvValidator.PrivKey.(tmdcrypto.BLSPrivKey).Bytes())
+		prv, err := crypto.ToECDSA(prvValidator.PrivKey.(tmdcrypto.BLSPrivKey).Bytes())
 		if err != nil {
 			cs.logger.Error("saveDataToMainChain: failed to get PrivateKey", "err", err)
 			return
 		}
-	} else {
-		panic("saveDataToMainChain: unexpected privValidator type")
-	}
-	hash, err := client.SendDataToMainChain(ctx, bs, prv, cs.cch.GetMainChainId())
-	if err != nil {
-		cs.logger.Error("saveDataToMainChain(rpc) failed", "err", err)
-		return
-	} else {
-		cs.logger.Infof("saveDataToMainChain(rpc) success, hash: %x", hash)
-	}
 
-	//we wait for 3 blocks, if not write to main chain, just return
-	curNumber := number
-	for new(big.Int).Sub(curNumber, number).Int64() < 3 {
-
-		tmpNumber, err := client.BlockNumber(ctx)
+		hash, err := ethclient.SendDataToMainChain(mainChainUrl, bs, prv, cs.cch.GetMainChainId())
 		if err != nil {
-			cs.logger.Error("saveDataToMainChain: failed to get BlockNumber, abort to wait for 3 blocks", "err", err)
+			cs.logger.Error("saveDataToMainChain(rpc) failed", "err", err)
 			return
+		} else {
+			cs.logger.Error("saveDataToMainChain(rpc) success", "hash", hash)
 		}
 
-		if tmpNumber.Cmp(curNumber) > 0 {
-			_, isPending, err := client.TransactionByHash(ctx, hash)
+		//we wait for 15 seconds, if not write to main chain, just return
+		seconds := 0
+		for ; seconds < 15;  {
+			_, isPending, err := ethclient.WrpTransactionByHash(mainChainUrl, hash)
 			if !isPending && err == nil {
-				cs.logger.Info("saveDataToMainChain: tx packaged in block in main chain")
+				cs.logger.Error("saveDataToMainChain: tx packaged in block in main chain")
 				return
 			}
 
-			curNumber = tmpNumber
-		} else {
-			// we don't want to make too many rpc calls
-			// TODO: estimate the right interval
-			time.Sleep(1 * time.Second)
+			time.Sleep(3 * time.Second)
+			seconds += 3
 		}
-	}
 
-	cs.logger.Error("saveDataToMainChain: tx not packaged in any block after 3 blocks in main chain")
+		cs.logger.Error("saveDataToMainChain: tx not packaged within 15 seconds in main chain, stop tracking")
+
+	} else {
+		panic("saveDataToMainChain: unexpected privValidator type")
+	}
 }
 
 func (cs *ConsensusState) broadcastTX3ProofDataToMainChain(block *ethTypes.Block) {
-	client := cs.cch.GetClient()
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
-	//ctx := context.Background() // testing only!
+
+	mainChainUrl := cs.cch.GetMainChainUrl()
 
 	proofData, err := ethTypes.NewTX3ProofData(block)
 	if err != nil {
@@ -2241,7 +2251,7 @@ func (cs *ConsensusState) broadcastTX3ProofDataToMainChain(block *ethTypes.Block
 	}
 	cs.logger.Infof("broadcastTX3ProofDataToMainChain proof data length: %d", len(bs))
 
-	err = client.BroadcastDataToMainChain(ctx, cs.state.TdmExtra.ChainID, bs)
+	err = ethclient.BroadcastDataToMainChain(mainChainUrl, cs.state.TdmExtra.ChainID, bs)
 	if err != nil {
 		cs.logger.Error("broadcastTX3ProofDataToMainChain(rpc) failed", "err", err)
 		return

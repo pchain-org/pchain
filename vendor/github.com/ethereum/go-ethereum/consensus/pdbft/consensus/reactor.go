@@ -40,6 +40,7 @@ type ConsensusReactor struct {
 	evsw       types.EventSwitch
 	peerStates sync.Map // map[string]*PeerState
 	logger     log.Logger
+	wg	       sync.WaitGroup
 }
 
 func NewConsensusReactor(consensusState *ConsensusState) *ConsensusReactor {
@@ -68,8 +69,11 @@ func (conR *ConsensusReactor) OnStart() error {
 	// conR.catchupValidator(val, ok)
 	_, err := conR.conS.Start()
 	if err != nil {
+		conR.logger.Errorf("ConsensusReactor) Start with error %v", err)
 		return err
 	}
+
+	conR.startPeerRoutine()
 
 	return nil
 }
@@ -88,6 +92,10 @@ func (conR *ConsensusReactor) AfterStart() {
 func (conR *ConsensusReactor) OnStop() {
 	conR.BaseService.OnStop()
 	conR.conS.Stop()
+
+	conR.logger.Infof("ConsensusReactor wait")
+	conR.wg.Wait()
+	conR.logger.Infof("ConsensusReactor wait over")
 }
 
 // Implements Reactor
@@ -401,6 +409,13 @@ func (conR *ConsensusReactor) sendNewRoundStepMessages(peer consensus.Peer) {
 }
 
 func (conR *ConsensusReactor) gossipDataRoutine(peer consensus.Peer, ps *PeerState) {
+
+	conR.wg.Add(1)
+	defer func() {
+		conR.wg.Done()
+		conR.logger.Infof("ConsensusReactor done one routine ")
+	}()
+
 	id := peer.GetKey()
 	conR.logger.Infof("gossipDataRoutine start for peer %v", id)
 
@@ -489,6 +504,13 @@ OUTER_LOOP:
 }
 
 func (conR *ConsensusReactor) gossipVotesRoutine(peer consensus.Peer, ps *PeerState) {
+
+	conR.wg.Add(1)
+	defer func() {
+		conR.wg.Done()
+		conR.logger.Infof("ConsensusReactor done one routine ")
+	}()
+
 	// Simple hack to throttle logs upon sleep.
 	var sleeping = 0
 	id := peer.GetKey()
@@ -509,8 +531,6 @@ OUTER_LOOP:
 		if !conR.IsRunning() {
 			conR.logger.Infof("Consensus reactor is not running, stopping gossipVotesRoutine for peer %v", peer)
 			return
-			//time.Sleep(peerGossipSleepDuration)
-			//continue OUTER_LOOP
 		}
 
 		rs := conR.conS.GetRoundState()

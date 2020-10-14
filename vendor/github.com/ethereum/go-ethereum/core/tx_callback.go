@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethclient"
 	pabi "github.com/pchain/abi"
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
@@ -26,7 +25,7 @@ type TX3LocalCache interface {
 
 type CrossChainHelper interface {
 	GetMutex() *sync.Mutex
-	GetClient() *ethclient.Client
+	GetMainChainUrl() string
 	GetMainChainId() string
 	GetChainInfoDB() dbm.DB
 

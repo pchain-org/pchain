@@ -20,6 +20,8 @@ import (
 const (
 	OFFICIAL_MINIMUM_VALIDATORS = 1
 	OFFICIAL_MINIMUM_DEPOSIT    = "100000000000000000000000" // 100,000 * e18
+	REFUND_CHAIN_CREATION_FEE_BLOCK  = big.NewInt(10000000)
+
 )
 
 type CoreChainInfo struct {
@@ -428,12 +430,13 @@ func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) 
 				stateDB.SubChildChainDepositBalance(jv.Address, v.ChainID, jv.DepositAmount)
 				stateDB.AddBalance(jv.Address, jv.DepositAmount)
 			}
-
-			officialMinimumDeposit := math.MustParseBig256(OFFICIAL_MINIMUM_DEPOSIT)
-			stateDB.AddBalance(cci.Owner, officialMinimumDeposit)
-			stateDB.SubChainBalance(cci.Owner, officialMinimumDeposit)
-			if stateDB.GetChainBalance(cci.Owner).Sign() != 0 {
-				log.Error("the chain balance is not 0 when create chain failed, watch out!!!")
+			if  height > REFUND_CHAIN_CREATION_FEE_BLOCK {
+				officialMinimumDeposit := math.MustParseBig256(OFFICIAL_MINIMUM_DEPOSIT)
+				stateDB.AddBalance(cci.Owner, officialMinimumDeposit)
+				stateDB.SubChainBalance(cci.Owner, officialMinimumDeposit)
+				if stateDB.GetChainBalance(cci.Owner).Sign() != 0 {
+					log.Error("the chain balance is not 0 when create chain failed, watch out!!!")
+				}
 			}
 
 			// Add the Child Chain Id to Remove List, to be removed after the consensus
