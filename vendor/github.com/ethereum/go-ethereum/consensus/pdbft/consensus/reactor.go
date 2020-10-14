@@ -78,16 +78,7 @@ func (conR *ConsensusReactor) OnStart() error {
 	return nil
 }
 
-func (conR *ConsensusReactor) AfterStart() {
 
-	// if there were peers added before start, start routines for them
-	//wait at most 5 seconds, then start peer routings anyway
-	for i:=0; i<waitReactorTimes && !conR.IsRunning(); i++ {
-		log.Infof("(conR *ConsensusReactor) AfterStart(), wait %v times for conR running", i)
-		time.Sleep(100 * time.Millisecond)
-	}
-	conR.startPeerRoutine()
-}
 
 func (conR *ConsensusReactor) OnStop() {
 	conR.BaseService.OnStop()

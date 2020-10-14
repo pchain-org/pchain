@@ -20,8 +20,6 @@ import (
 const (
 	OFFICIAL_MINIMUM_VALIDATORS = 1
 	OFFICIAL_MINIMUM_DEPOSIT    = "100000000000000000000000" // 100,000 * e18
-	REFUND_CHAIN_CREATION_FEE_BLOCK  = big.NewInt(10000000)
-
 )
 
 type CoreChainInfo struct {
@@ -74,6 +72,9 @@ const (
 )
 
 var allChainKey = []byte("AllChainID")
+
+var REFUND_CHAIN_CREATION_FEE_BLOCK  =big.NewInt(10000000)
+
 
 const specialSep = ";"
 
@@ -430,7 +431,7 @@ func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) 
 				stateDB.SubChildChainDepositBalance(jv.Address, v.ChainID, jv.DepositAmount)
 				stateDB.AddBalance(jv.Address, jv.DepositAmount)
 			}
-			if  height > REFUND_CHAIN_CREATION_FEE_BLOCK {
+			if  REFUND_CHAIN_CREATION_FEE_BLOCK.Cmp(height)<0 {
 				officialMinimumDeposit := math.MustParseBig256(OFFICIAL_MINIMUM_DEPOSIT)
 				stateDB.AddBalance(cci.Owner, officialMinimumDeposit)
 				stateDB.SubChainBalance(cci.Owner, officialMinimumDeposit)

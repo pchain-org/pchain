@@ -462,20 +462,6 @@ func (cs *ConsensusState) proposerByRound(round int) *VRFProposer {
 				idx = (idx + 1) % cs.Validators.Size()
 			}
 
-
-			idx = curProposer
-
-			//if current proposer was also last vrf proposer, but not voted within last height
-			//just skip the proposer within this height
-			if lastProposer >= 0 &&
-				curProposer == lastProposer &&
-				cs.state.TdmExtra != nil &&
-				cs.state.TdmExtra.SeenCommit != nil &&
-				cs.state.TdmExtra.SeenCommit.BitArray != nil &&
-				!cs.state.TdmExtra.SeenCommit.BitArray.GetIndex(uint64(curProposer)) {
-				idx = (idx + 1) % cs.Validators.Size()
-			}
-
 			cs.vrfValIndex = idx
 		}
 
