@@ -143,6 +143,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
 		chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 		chainConfig.ValidateHTLCBlock = params.MainnetChainConfig.ValidateHTLCBlock
+		chainConfig.HeaderHashWithoutTimeBlock = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
 
 	case "testnet":
 		if chainConfig.OutOfStorageBlock == nil {
@@ -152,6 +153,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
 		chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 		chainConfig.ValidateHTLCBlock = params.TestnetChainConfig.ValidateHTLCBlock
+		chainConfig.HeaderHashWithoutTimeBlock = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
 	case "child_0":
 		if (chainConfig.HashTimeLockContract == common.Address{}) {
 			if isTestnet {
@@ -166,12 +168,14 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock = params.TestnetChainConfig.ValidateHTLCBlock
+			chainConfig.HeaderHashWithoutTimeBlock = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
 		} else {
 			chainConfig.OutOfStorageBlock      = params.MainnetChainConfig.Child0OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
 			chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock = params.MainnetChainConfig.ValidateHTLCBlock
+			chainConfig.HeaderHashWithoutTimeBlock = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
 
 		}
 	default:
@@ -181,12 +185,14 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.Sd2mcV1Block           = params.TestnetChainConfig.Sd2mcV1Block
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock = params.TestnetChainConfig.ValidateHTLCBlock
+			chainConfig.HeaderHashWithoutTimeBlock = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
 		} else {
 			chainConfig.OutOfStorageBlock      = params.MainnetChainConfig.OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
 			chainConfig.Sd2mcV1Block           = params.MainnetChainConfig.Sd2mcV1Block
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock = params.MainnetChainConfig.ValidateHTLCBlock
+			chainConfig.HeaderHashWithoutTimeBlock = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
 
 		}
 	}

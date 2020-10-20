@@ -35,3 +35,13 @@ func TendermintFilteredHeader(h *Header, keepSeal bool) *Header {
 	newHeader.Extra = payload
 	return newHeader
 }
+
+// TendermintFilteredHeader returns a filtered header which some information (like seal, committed seals)
+// are clean to fulfill the Tendermint hash rules. It returns nil if the extra-data cannot be
+// decoded/encoded by rlp.
+func TendermintFilteredHeaderWithoutTime(h *Header, keepSeal bool) *Header {
+	newHeader := CopyWithoutTimeHeader(h)
+	payload := MagicExtra
+	newHeader.Extra = payload
+	return newHeader
+}

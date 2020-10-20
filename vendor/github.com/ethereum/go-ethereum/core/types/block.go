@@ -125,6 +125,28 @@ func (h *Header) Hash() common.Hash {
 	return rlpHash(h)
 }
 
+// Hash returns the block hash of the header, which is simply the keccak256 hash of its
+// RLP encoding.
+func (h *Header) HashWithoutTime() common.Hash {
+	// If the mix digest is equivalent to the predefined Istanbul digest, use Istanbul
+	// specific hash calculation.
+	if h.MixDigest == IstanbulDigest {
+		// Seal is reserved in extra-data. To prove block is signed by the proposer.
+		if istanbulHeader := IstanbulFilteredHeader(h, true); istanbulHeader != nil {
+			return rlpHash(istanbulHeader)
+		}
+	}
+	// If the mix digest is equivalent to the predefined Tendermint digest, use Tendermint
+	// specific hash calculation.
+	if h.MixDigest == TendermintDigest {
+		// Seal is reserved in extra-data. To prove block is signed by the proposer.
+		if tdmHeader := TendermintFilteredHeaderWithoutTime(h, true); tdmHeader != nil {
+			return rlpHash(tdmHeader)
+		}
+	}
+	return rlpHash(h)
+}
+
 // HashNoNonce returns the hash which is used as input for the proof-of-work search.
 func (h *Header) HashNoNonce() common.Hash {
 	return rlpHash([]interface{}{
@@ -278,6 +300,25 @@ func CopyHeader(h *Header) *Header {
 	}
 	return &cpy
 }
+
+// CopyHeader creates a deep copy of a block header to prevent side effects from
+// modifying a header variable.
+// Without time
+func CopyWithoutTimeHeader(h *Header) *Header {
+	cpy := *h
+	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
+		cpy.Difficulty.Set(h.Difficulty)
+	}
+	if cpy.Number = new(big.Int); h.Number != nil {
+		cpy.Number.Set(h.Number)
+	}
+	if len(h.Extra) > 0 {
+		cpy.Extra = make([]byte, len(h.Extra))
+		copy(cpy.Extra, h.Extra)
+	}
+	return &cpy
+}
+
 
 // DecodeRLP decodes the Ethereum
 func (b *Block) DecodeRLP(s *rlp.Stream) error {

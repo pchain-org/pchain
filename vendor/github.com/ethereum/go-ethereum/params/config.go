@@ -47,6 +47,9 @@ var (
 	MainnetValidateHTLCBlock = big.NewInt(16000000)
 	TestnetValidateHTLCBlock = big.NewInt(9785000)
 
+	MainnetHeaderHashWithoutTimeBlock=big.NewInt(17160000)
+	TestnetHeaderHashWithoutTimeBlock=big.NewInt(40)
+
 )
 
 var (
@@ -70,6 +73,7 @@ var (
 		Sd2mcV1Block:                 MainnetSd2mcV1MainBlock,
 		ChildSd2mcWhenEpochEndsBlock: MainnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock: MainnetValidateHTLCBlock,
+		HeaderHashWithoutTimeBlock: MainnetHeaderHashWithoutTimeBlock,
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -97,6 +101,8 @@ var (
 		Sd2mcV1Block:               TestnetSd2mcV1MainBlock,
 		ChildSd2mcWhenEpochEndsBlock: TestnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock: TestnetValidateHTLCBlock,
+		HeaderHashWithoutTimeBlock: TestnetHeaderHashWithoutTimeBlock,
+
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -147,16 +153,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil,nil,new(EthashConfig), nil, nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil,nil,nil,new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, nil,nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, nil,nil,nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, nil,new(EthashConfig), nil, nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, nil,nil,new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -200,6 +206,8 @@ type ChainConfig struct {
 	Child0OutOfStorageBlock      *big.Int
 	ChildSd2mcWhenEpochEndsBlock *big.Int
 	ValidateHTLCBlock *big.Int
+	HeaderHashWithoutTimeBlock *big.Int
+
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
@@ -385,6 +393,12 @@ func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {
 func (c *ChainConfig)CeaseValidateHashTimeLockContract(mainBlockNumber *big.Int) bool {
 	return isForked(c.ValidateHTLCBlock, mainBlockNumber)
 }
+
+
+func (c *ChainConfig)IsHeaderHashWithoutTimeBlock(mainBlockNumber *big.Int) bool {
+	return isForked(c.HeaderHashWithoutTimeBlock, mainBlockNumber)
+}
+
 
 
 // Check whether is on main chain or not
