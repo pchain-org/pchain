@@ -476,13 +476,20 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 	selfRetrieveReward := consensus.IsSelfRetrieveReward(sb.GetEpoch(), chain, header)
 
+	mainBlock := header.Number
+	if !sb.chainConfig.IsMainChain() {
+		mainBlock = header.MainChainNumber
+	}
+
+	markProposedInEpoch := sb.chainConfig.IsMarkProposedInEpoch(mainBlock)
+
 	// Calculate the rewards
-	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
+	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward, markProposedInEpoch)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
 										sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
-										selfRetrieveReward); ok {
+										selfRetrieveReward, markProposedInEpoch); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
@@ -493,8 +500,8 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 				header.Extra = epochInfo.Bytes()
 			}
 		}
-
 	}
+
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
 	// Assemble and return the final block for sealing
@@ -730,7 +737,7 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 //
 // If the coinbase is Candidate, divide the rewards by weight
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch,
-						totalGasFee *big.Int, selfRetrieveReward bool) {
+						totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
 	if config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId {
@@ -852,6 +859,16 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 				state.SubRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
 			}
 		}
+	}
+
+	if markProposedInEpoch {
+
+		_, err := state.GetProposalStartInEpoch()
+		if err != nil {
+			state.MarkProposalStartInEpoch(ep.Number)
+		}
+
+		state.MarkProposedInEpoch(header.Coinbase, ep.Number)
 	}
 }
 

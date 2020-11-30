@@ -875,19 +875,21 @@ func (db *Database) accumulate(hash common.Hash, reachable map[common.Hash]struc
 var rewardPrefix = []byte("w")
 var rewardExtractPrefix = []byte("extrRwd-epoch-")
 var oosLastBlockKey = []byte("oos-last-block")
+var proposedInEpochPrefix = []byte("proposed-in-epoch-")
+var startMarkProposalInEpochPrefix = []byte("sp-in-epoch-")
 
-func encodeEpochNumber(number uint64) []byte {
+func encodeUint64(number uint64) []byte {
 	enc := make([]byte, 8)
 	binary.BigEndian.PutUint64(enc, number)
 	return enc
 }
 
-func decodeEpochNumber(raw []byte) uint64 {
+func decodeUint64(raw []byte) uint64 {
 	return binary.BigEndian.Uint64(raw)
 }
 
 func (db *Database) GetEpochReward(address common.Address, epoch uint64) *big.Int {
-	reward, _ := db.diskdb.Get(append(append(rewardPrefix, address.Bytes()...), encodeEpochNumber(epoch)...))
+	reward, _ := db.diskdb.Get(append(append(rewardPrefix, address.Bytes()...), encodeUint64(epoch)...))
 	if len(reward) == 0 {
 		return big.NewInt(0)
 	}
@@ -900,7 +902,7 @@ func (db *Database) GetAllEpochReward(address common.Address) map[uint64]*big.In
 
 	result := make(map[uint64]*big.Int)
 	for it.Next() {
-		epoch := decodeEpochNumber(it.Key()[21:])
+		epoch := decodeUint64(it.Key()[21:])
 		reward := new(big.Int).SetBytes(it.Value())
 		result[epoch] = reward
 	}
@@ -908,7 +910,7 @@ func (db *Database) GetAllEpochReward(address common.Address) map[uint64]*big.In
 }
 
 func (db *Database) WriteEpochRewardExtracted(address common.Address, epoch uint64) error {
-	return db.diskdb.Put(append(rewardExtractPrefix, address.Bytes()...), encodeEpochNumber(epoch))
+	return db.diskdb.Put(append(rewardExtractPrefix, address.Bytes()...), encodeUint64(epoch))
 }
 
 func (db *Database) GetEpochRewardExtracted(address common.Address) (uint64, error) {
@@ -919,7 +921,7 @@ func (db *Database) GetEpochRewardExtracted(address common.Address) (uint64, err
 		return 0xffffffffffffffff, err
 	}
 
-	return decodeEpochNumber(epochBytes), nil
+	return decodeUint64(epochBytes), nil
 }
 
 func (db *Database) ReadOOSLastBlock() (*big.Int, error) {
@@ -934,4 +936,33 @@ func (db *Database) ReadOOSLastBlock() (*big.Int, error) {
 
 func (db *Database) WriteOOSLastBlock(blockNumber *big.Int) error {
 	return db.diskdb.Put(oosLastBlockKey, blockNumber.Bytes())
+}
+
+func (db *Database) MarkProposedInEpoch(address common.Address, epoch uint64) error {
+	return db.diskdb.Put(append(
+		append(proposedInEpochPrefix, address.Bytes()...), encodeUint64(epoch)...),
+		encodeUint64(1))
+}
+
+func (db *Database) CheckProposedInEpoch(address common.Address, epoch uint64) bool {
+	_, err := db.diskdb.Get(append(append(proposedInEpochPrefix, address.Bytes()...), encodeUint64(epoch)...))
+	if err != nil {
+		return false
+	}
+	return true
+}
+
+func (db *Database) MarkProposalStartInEpoch(epoch uint64) error {
+	return db.diskdb.Put(startMarkProposalInEpochPrefix, encodeUint64(epoch))
+}
+
+func (db *Database) GetProposalStartInEpoch() (uint64, error) {
+
+	epochBytes, err := db.diskdb.Get(startMarkProposalInEpochPrefix)
+
+	if err != nil {
+		return 0xffffffffffffffff, err
+	}
+
+	return decodeUint64(epochBytes), nil
 }

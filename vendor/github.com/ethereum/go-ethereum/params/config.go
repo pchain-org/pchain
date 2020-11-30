@@ -47,9 +47,11 @@ var (
 	MainnetValidateHTLCBlock = big.NewInt(16000000)
 	TestnetValidateHTLCBlock = big.NewInt(9785000)
 
-	MainnetHeaderHashWithoutTimeBlock=big.NewInt(17160000)
-	TestnetHeaderHashWithoutTimeBlock=big.NewInt(40)
+	MainnetHeaderHashWithoutTimeBlock = big.NewInt(17160000)
+	TestnetHeaderHashWithoutTimeBlock = big.NewInt(40)
 
+	MainnetMarkProposedInEpochMainBlock = big.NewInt(20000000)
+	TestnetMarkProposedInEpochMainBlock = big.NewInt(40)
 )
 
 var (
@@ -74,6 +76,7 @@ var (
 		ChildSd2mcWhenEpochEndsBlock: MainnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock: MainnetValidateHTLCBlock,
 		HeaderHashWithoutTimeBlock: MainnetHeaderHashWithoutTimeBlock,
+		MarkProposedInEpochMainBlock: MainnetMarkProposedInEpochMainBlock,
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -102,7 +105,7 @@ var (
 		ChildSd2mcWhenEpochEndsBlock: TestnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock: TestnetValidateHTLCBlock,
 		HeaderHashWithoutTimeBlock: TestnetHeaderHashWithoutTimeBlock,
-
+		MarkProposedInEpochMainBlock: TestnetMarkProposedInEpochMainBlock,
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -153,16 +156,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil,nil,nil,new(EthashConfig), nil, nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil,nil,nil, nil, new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, nil,nil,nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, nil,nil,nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, nil,nil,new(EthashConfig), nil, nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, nil,nil,nil, new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -207,7 +210,7 @@ type ChainConfig struct {
 	ChildSd2mcWhenEpochEndsBlock *big.Int
 	ValidateHTLCBlock *big.Int
 	HeaderHashWithoutTimeBlock *big.Int
-
+	MarkProposedInEpochMainBlock *big.Int
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
@@ -394,11 +397,13 @@ func (c *ChainConfig)CeaseValidateHashTimeLockContract(mainBlockNumber *big.Int)
 	return isForked(c.ValidateHTLCBlock, mainBlockNumber)
 }
 
-
 func (c *ChainConfig)IsHeaderHashWithoutTimeBlock(mainBlockNumber *big.Int) bool {
 	return isForked(c.HeaderHashWithoutTimeBlock, mainBlockNumber)
 }
 
+func (c *ChainConfig) IsMarkProposedInEpoch(mainBlockNumber *big.Int) bool {
+	return isForked(c.MarkProposedInEpochMainBlock, mainBlockNumber)
+}
 
 
 // Check whether is on main chain or not

@@ -113,11 +113,21 @@ func autoStartMining(bc *core.BlockChain, block *ethTypes.Block) {
 	currentEpoch := eng.GetEpoch()
 	// After Reveal Vote End stage, we should able to calculate the new validator
 	if block.NumberU64() == currentEpoch.GetRevealVoteEndHeight()+1 {
+
+		mainBlock := bc.CurrentBlock().Number()
+		if !bc.Config().IsMainChain() {
+			mainBlock = bc.CurrentBlock().Header().MainChainNumber
+		}
+
+		markProposedInEpoch := bc.Config().IsMarkProposedInEpoch(mainBlock)
+
 		// Re-Calculate the next epoch validators
 		nextEp := currentEpoch.GetNextEpoch()
 		state, _ := bc.State()
+		epochNo := currentEpoch.Number
 		nextValidators := currentEpoch.Validators.Copy()
-		dryrunErr := ep.DryRunUpdateEpochValidatorSet(state, nextValidators, nextEp.GetEpochValidatorVoteSet())
+		dryrunErr := ep.DryRunUpdateEpochValidatorSet(state, epochNo, nextValidators,
+			nextEp.GetEpochValidatorVoteSet(), markProposedInEpoch)
 		if dryrunErr != nil {
 			panic("can not update the validator set base on the vote, error: " + dryrunErr.Error())
 		}

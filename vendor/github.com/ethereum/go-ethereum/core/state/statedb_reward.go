@@ -311,5 +311,24 @@ func (self *StateDB) commitChildChainRewardPerBlock() {
 }
 
 // Child Chain Reward Per Block
-
 var childChainRewardPerBlockKey = []byte("RewardPerBlock")
+
+// ----- Mark if one address proposed in one specific epoch
+func (self *StateDB)MarkProposedInEpoch(address common.Address, epoch uint64) error {
+
+	return self.db.TrieDB().MarkProposedInEpoch(address, epoch)
+}
+
+func (self *StateDB) CheckProposedInEpoch(address common.Address, epoch uint64) bool {
+
+	return self.db.TrieDB().CheckProposedInEpoch(address, epoch)
+}
+
+
+func (self *StateDB) MarkProposalStartInEpoch(epoch uint64) error {
+	return self.db.TrieDB().MarkProposalStartInEpoch(epoch)
+}
+
+func (self *StateDB) GetProposalStartInEpoch() (uint64, error) {
+	return self.db.TrieDB().GetProposalStartInEpoch()
+}

@@ -122,8 +122,16 @@ func (api *API) GetNextEpochValidators() ([]*tdmTypes.EpochValidator, error) {
 			return nil, err
 		}
 
+		mainBlock := api.chain.CurrentBlock().Number()
+		if !api.chain.Config().IsMainChain() {
+			mainBlock = api.chain.CurrentBlock().Header().MainChainNumber
+		}
+
+		markProposedInEpoch := api.chain.Config().IsMarkProposedInEpoch(mainBlock)
+
 		nextValidators := ep.Validators.Copy()
-		err = epoch.DryRunUpdateEpochValidatorSet(state, nextValidators, nextEp.GetEpochValidatorVoteSet())
+		err = epoch.DryRunUpdateEpochValidatorSet(state, ep.Number, nextValidators,
+			nextEp.GetEpochValidatorVoteSet(), markProposedInEpoch)
 		if err != nil {
 			return nil, err
 		}
