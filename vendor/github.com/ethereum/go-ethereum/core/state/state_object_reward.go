@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"math/big"
 )
@@ -49,6 +50,12 @@ func (c *stateObject) SubRewardBalance(amount *big.Int) {
 }
 
 func (self *stateObject) SetRewardBalance(amount *big.Int) {
+
+	if amount.Sign() < 0 {
+		log.Infof("!!!amount is negative, not support yet, make it 0 by force")
+		amount = big.NewInt(0)
+	}
+
 	self.db.journal = append(self.db.journal, rewardBalanceChange{
 		account: &self.address,
 		prev:    new(big.Int).Set(self.data.RewardBalance),
