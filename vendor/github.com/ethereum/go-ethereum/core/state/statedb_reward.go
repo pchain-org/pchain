@@ -120,13 +120,13 @@ func (self *StateDB) ClearOutsideReward() {
 	self.rewardOutsideSet = make(map[common.Address]Reward)
 }
 
-func (self *StateDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64) *big.Int {
+func (self *StateDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64) *big.Int {
 	if rewardset, exist := self.rewardOutsideSet[addr]; exist {
 		if rewardbalance, rewardexist := rewardset[epochNo]; rewardexist {
 			return rewardbalance
 		}
 	}
-	rb := self.db.TrieDB().GetEpochReward(addr, epochNo)
+	rb := self.db.TrieDB().GetEpochReward(addr, epochNo, height)
 	// if 0 epoch reward, try to read from trie
 	if rb.Sign() == 0 {
 		rb = self.GetRewardBalanceByEpochNumber(addr, epochNo)
@@ -135,8 +135,8 @@ func (self *StateDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, e
 	return rb
 }
 
-func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, amount *big.Int) {
-	currentRewardBalance := self.GetOutsideRewardBalanceByEpochNumber(addr, epochNo)
+func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+	currentRewardBalance := self.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height)
 	newReward := new(big.Int).Add(currentRewardBalance, amount)
 	if rs, exist := self.rewardOutsideSet[addr]; exist {
 		rs[epochNo] = newReward
@@ -148,8 +148,8 @@ func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, e
 	self.AddRewardBalance(addr, amount)
 }
 
-func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, amount *big.Int) {
-	currentRewardBalance := self.GetOutsideRewardBalanceByEpochNumber(addr, epochNo)
+func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+	currentRewardBalance := self.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height)
 	newReward := new(big.Int).Sub(currentRewardBalance, amount)
 	if rs, exist := self.rewardOutsideSet[addr]; exist {
 		rs[epochNo] = newReward
@@ -161,13 +161,8 @@ func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, e
 	self.SubRewardBalance(addr, amount)
 }
 
-
-func (self *StateDB) GetEpochReward(address common.Address, epoch uint64) *big.Int {
-	return self.db.TrieDB().GetEpochReward(address, epoch)
-}
-
-func (self *StateDB) GetAllEpochReward(address common.Address) map[uint64]*big.Int {
-	return self.db.TrieDB().GetAllEpochReward(address)
+func (self *StateDB) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int {
+	return self.db.TrieDB().GetAllEpochReward(address, height)
 }
 
 func (self *StateDB) GetExtractRewardSet() map[common.Address]uint64 {

@@ -19,6 +19,7 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -424,22 +425,81 @@ func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 	return a
 }
 
-func ReadReward(db ethdb.Reader, address common.Address, epoch uint64) *big.Int {
-	reward, _ := db.Get(rewardKey(address, epoch))
+func ReadReward(db ethdb.Database, address common.Address, epoch uint64) *big.Int {
+	reward, _ := db.Get(common.RewardKey(address, epoch))
 	if len(reward) == 0 {
 		return big.NewInt(0)
 	}
 	return new(big.Int).SetBytes(reward)
 }
 
-func WriteReward(db ethdb.Writer, address common.Address, epoch uint64, reward *big.Int) {
+//fill {height, reward} to current obrArray - OneBlockReward Array - with following rules:
+//1 if there is empty(invalid)/equal/bigger item, fill it with {height, reward}, and mark other items with bigger height to invalid
+//2 if there no empty(invalid) item, find one with smallest height, fill it with {height, reward}
+//the OBR_SIZE is 5 now, so the implemetation is just iterate all items, if it is bigger, could consider sorting
+func WriteReward(db ethdb.Database, address common.Address, epoch uint64, height uint64, reward *big.Int) {
+	/*
 	if err := db.Put(rewardKey(address, epoch), reward.Bytes()); err != nil {
+		log.Crit("Failed to store epoch reward", "err", err)
+	}
+	*/
+	oriReward, _ := db.Get(common.RewardKey(address, epoch))
+	obr := common.OBRArray{}
+	for i:=0; i<common.OBR_SIZE; i++ {
+		obr.ObrArray[i].Height = common.INV_HEIGHT
+		obr.ObrArray[i].Reward = big.NewInt(0)
+	}
+
+	err := errors.New("")
+	if len(oriReward) != 0 {
+		obr, err = common.Bytes2OBRArray(oriReward)
+		if err != nil {
+			obr.ObrArray[0].Height = common.DFLT_START
+			obr.ObrArray[0].Reward = new(big.Int).SetBytes(oriReward)
+		}
+	}
+
+	minIndex := 0
+	minHeight := uint64(common.INV_HEIGHT)
+	settled := false
+	for i:=0; i<common.OBR_SIZE; i++ {
+		key := obr.ObrArray[i].Height
+		if key >= height {
+			if !settled {
+				obr.ObrArray[i].Height = height
+				obr.ObrArray[i].Reward = reward
+				settled = true
+			} else if key != common.INV_HEIGHT{
+				obr.ObrArray[i].Height = common.INV_HEIGHT
+				obr.ObrArray[i].Reward = big.NewInt(0)
+			}
+		} else {
+			if minHeight == common.INV_HEIGHT || key < minHeight {
+				minIndex = i
+				minHeight = key
+			}
+		}
+	}
+
+	if !settled {
+		obr.ObrArray[minIndex].Height = height
+		obr.ObrArray[minIndex].Reward = reward
+	}
+
+	rewardBytes, err := common.OBRArray2Bytes(obr)
+	if err != nil {
+		log.Crit("Failed to convert epoch reward", "err", err)
+	}
+
+	if err := db.Put(common.RewardKey(address, epoch), rewardBytes); err != nil {
 		log.Crit("Failed to store epoch reward", "err", err)
 	}
 }
 
+/*
 func DeleteReward(db ethdb.Writer, address common.Address, epoch uint64) {
 	if err := db.Delete(rewardKey(address, epoch)); err != nil {
 		log.Crit("Failed to delete epoch reward", "err", err)
 	}
 }
+*/
