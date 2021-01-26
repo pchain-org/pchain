@@ -351,16 +351,17 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 		from := derivedAddressFromTx(tx)
 
+		height := bc.CurrentBlock().NumberU64() + 1
+
 		epoch := tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
 		currentEpochNumber := epoch.Number
 		noExtractMark := false
-		extractEpochNumber, err := state.GetEpochRewardExtracted(from)
+		extractEpochNumber, err := state.GetEpochRewardExtracted(from, height-1)
 		if err != nil {
 			noExtractMark = true
 		}
 		maxExtractEpochNumber := uint64(0)
-
-		height := bc.CurrentBlock().NumberU64() + 1
+		
 		rewards := state.GetAllEpochReward(from, height-1)
 
 		log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)

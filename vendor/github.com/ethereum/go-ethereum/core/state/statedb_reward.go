@@ -177,12 +177,12 @@ func (self *StateDB) MarkEpochRewardExtracted(address common.Address, epoch uint
 	self.extractRewardSet[address] = epoch
 }
 
-func (self *StateDB) GetEpochRewardExtracted(address common.Address) (uint64, error) {
-	return self.db.TrieDB().GetEpochRewardExtracted(address)
+func (self *StateDB) GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error) {
+	return self.db.TrieDB().GetEpochRewardExtracted(address, height)
 }
 
-func (self *StateDB) WriteEpochRewardExtracted(address common.Address, epoch uint64) error {
-	return self.db.TrieDB().WriteEpochRewardExtracted(address, epoch)
+func (self *StateDB) WriteEpochRewardExtracted(address common.Address, epoch uint64, height uint64) error {
+	return self.db.TrieDB().WriteEpochRewardExtracted(address, epoch, height)
 }
 
 

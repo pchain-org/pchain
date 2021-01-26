@@ -29,8 +29,11 @@ func RewardKey(address Address, epochNo uint64) []byte {
 }
 
 
-const OBR_SIZE = 5
 const INV_HEIGHT = 0xffffffffffffffff
+const INV_EPOCH  = 0xffffffffffffffff
+const NONE_REWARD = 0
+
+const OBR_SIZE = 5	//OneBlockReward size - the number of cached epoch reward
 const DFLT_START = 10
 type OneBlockReward struct {
 	Height uint64
@@ -47,13 +50,30 @@ func OBRArray2Bytes(obrArray OBRArray) ([]byte, error) {
 
 func Bytes2OBRArray(byteArray []byte) (OBRArray, error) {
 	obrArray := OBRArray{}
-	for i:=0; i<OBR_SIZE; i++ {
-		obrArray.ObrArray[i].Height = INV_HEIGHT
-		obrArray.ObrArray[i].Reward = big.NewInt(0)
-	}
-
 	if err := rlp.DecodeBytes(byteArray, &obrArray); err != nil {
 		return obrArray, err
 	}
 	return obrArray, nil
+}
+
+const XTR_SIZE = 5 //XTR_SIZE size - the number of cached extrRwd operations
+type OneExtracReward struct {
+	Height  uint64
+	Epoch   uint64
+}
+
+type XTRArray struct {
+	XtrArray [XTR_SIZE]OneExtracReward
+}
+
+func XTRArray2Bytes(xtrArray XTRArray) ([]byte, error) {
+	return rlp.EncodeToBytes(xtrArray)
+}
+
+func Bytes2XTRArray(byteArray []byte) (XTRArray, error) {
+	xtrArray := XTRArray{}
+	if err := rlp.DecodeBytes(byteArray, &xtrArray); err != nil {
+		return xtrArray, err
+	}
+	return xtrArray, nil
 }

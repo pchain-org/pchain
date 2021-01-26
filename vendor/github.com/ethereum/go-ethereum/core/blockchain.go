@@ -1010,7 +1010,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	if selfRetrieveReward {
 		extractRewardSet := state.GetExtractRewardSet()
 		for addr, epoch := range extractRewardSet {
-			state.WriteEpochRewardExtracted(addr, epoch)
+			state.WriteEpochRewardExtracted(addr, epoch, block.NumberU64())
 		}
 		state.ClearExtractRewardSet()
 	}

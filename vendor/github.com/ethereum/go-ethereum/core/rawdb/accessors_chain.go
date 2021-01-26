@@ -444,11 +444,9 @@ func WriteReward(db ethdb.Database, address common.Address, epoch uint64, height
 	}
 	*/
 	oriReward, _ := db.Get(common.RewardKey(address, epoch))
+
 	obr := common.OBRArray{}
-	for i:=0; i<common.OBR_SIZE; i++ {
-		obr.ObrArray[i].Height = common.INV_HEIGHT
-		obr.ObrArray[i].Reward = big.NewInt(0)
-	}
+	initIndex := 0
 
 	err := errors.New("")
 	if len(oriReward) != 0 {
@@ -456,7 +454,15 @@ func WriteReward(db ethdb.Database, address common.Address, epoch uint64, height
 		if err != nil {
 			obr.ObrArray[0].Height = common.DFLT_START
 			obr.ObrArray[0].Reward = new(big.Int).SetBytes(oriReward)
+			initIndex = 1
+		} else {
+			initIndex = common.OBR_SIZE
 		}
+	}
+
+	for i:=initIndex; i<common.OBR_SIZE; i++ {
+		obr.ObrArray[i].Height = common.INV_HEIGHT
+		obr.ObrArray[i].Reward = big.NewInt(common.NONE_REWARD)
 	}
 
 	minIndex := 0
@@ -471,7 +477,7 @@ func WriteReward(db ethdb.Database, address common.Address, epoch uint64, height
 				settled = true
 			} else if key != common.INV_HEIGHT{
 				obr.ObrArray[i].Height = common.INV_HEIGHT
-				obr.ObrArray[i].Reward = big.NewInt(0)
+				obr.ObrArray[i].Reward = big.NewInt(common.NONE_REWARD)
 			}
 		} else {
 			if minHeight == common.INV_HEIGHT || key < minHeight {
