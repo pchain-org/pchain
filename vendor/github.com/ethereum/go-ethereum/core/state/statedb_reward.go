@@ -120,12 +120,24 @@ func (self *StateDB) ClearOutsideReward() {
 	self.rewardOutsideSet = make(map[common.Address]Reward)
 }
 
+//if there is a cache in memory, then return it; or return the lastest value from older block(height-1)
 func (self *StateDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64) *big.Int {
 	if rewardset, exist := self.rewardOutsideSet[addr]; exist {
 		if rewardbalance, rewardexist := rewardset[epochNo]; rewardexist {
 			return rewardbalance
 		}
 	}
+	rb := self.db.TrieDB().GetEpochReward(addr, epochNo, height-1)
+	// if 0 epoch reward, try to read from trie
+	if rb.Sign() == 0 {
+		rb = self.GetRewardBalanceByEpochNumber(addr, epochNo)
+	}
+
+	return rb
+}
+
+//get value from db directly; this will ignore current runtime-context
+func (self *StateDB) GetOutsideRewardBalanceByEpochNumberFromDB(addr common.Address, epochNo uint64, height uint64) *big.Int {
 	rb := self.db.TrieDB().GetEpochReward(addr, epochNo, height)
 	// if 0 epoch reward, try to read from trie
 	if rb.Sign() == 0 {
@@ -161,7 +173,22 @@ func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, e
 	self.SubRewardBalance(addr, amount)
 }
 
+//if there is a cache in memory, then take it; or use the lastest value from older block(height-1)
 func (self *StateDB) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int {
+
+	//read value from lastest block
+	result := self.GetAllEpochRewardFromDB(address, height-1)
+
+	//refresh result with lastest value
+	for epoch, reward := range self.rewardOutsideSet[address] {
+		result[epoch] = reward
+	}
+
+	return result
+}
+
+//get value from db directly; this will ignore current runtime-context
+func (self *StateDB) GetAllEpochRewardFromDB(address common.Address, height uint64) map[uint64]*big.Int {
 	return self.db.TrieDB().GetAllEpochReward(address, height)
 }
 
@@ -177,7 +204,17 @@ func (self *StateDB) MarkEpochRewardExtracted(address common.Address, epoch uint
 	self.extractRewardSet[address] = epoch
 }
 
+//if there is a cache in memory, then return it; or return the lastest value from older block(height-1)
 func (self *StateDB) GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error) {
+	if epoch, exist := self.extractRewardSet[address]; exist {
+		return epoch, nil
+	} else {
+		return self.db.TrieDB().GetEpochRewardExtracted(address, height-1)
+	}
+}
+
+//get value from db directly; this will ignore current runtime-context
+func (self *StateDB) GetEpochRewardExtractedFromDB(address common.Address, height uint64) (uint64, error) {
 	return self.db.TrieDB().GetEpochRewardExtracted(address, height)
 }
 

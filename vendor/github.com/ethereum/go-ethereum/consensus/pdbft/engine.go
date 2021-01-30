@@ -841,7 +841,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			diff := new(big.Int).Sub(delegateReward, totalIndividualReward)
 			if outsideReward {
 				if !rollbackCatchup {
-					state.AddOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, height-1, diff)
+					state.AddOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, height, diff)
 				} else {
 					state.AddRewardBalance(header.Coinbase, diff)
 				}
@@ -853,7 +853,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			diff := new(big.Int).Sub(totalIndividualReward, delegateReward)
 			if outsideReward {
 				if !rollbackCatchup {
-					state.SubOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, height-1, diff)
+					state.SubOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, height, diff)
 				} else {
 					state.SubRewardBalance(header.Coinbase, diff)
 				}
@@ -882,7 +882,7 @@ func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber 
 		if i == epochNumber+11 {
 			if outsideReward {
 				if !rollbackCatchup {
-					state.AddOutsideRewardBalanceByEpochNumber(addr, i, height-1, lastEpochReward)
+					state.AddOutsideRewardBalanceByEpochNumber(addr, i, height, lastEpochReward)
 				} else {
 					state.AddRewardBalance(addr, lastEpochReward)
 				}
@@ -892,7 +892,7 @@ func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber 
 		} else {
 			if outsideReward {
 				if !rollbackCatchup {
-					state.AddOutsideRewardBalanceByEpochNumber(addr, i, height-1, epochReward)
+					state.AddOutsideRewardBalanceByEpochNumber(addr, i, height, epochReward)
 				} else {
 					state.AddRewardBalance(addr, epochReward)
 				}
