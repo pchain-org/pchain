@@ -993,6 +993,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 				//if rewardAmount.Sign() == 0 {
 				//	rawdb.DeleteReward(bc.db, addr, epoch)
 				//} else {
+				    //this happends in 13311677 in mainchain, make it go through the catchup
+					if rewardAmount.Sign() < 0 && block.NumberU64() == 13311677 {
+						log.Errorf("!!!should dig it, rewardAmount for %x is %v", addr, rewardAmount)
+						rewardAmount = rewardAmount.Abs(rewardAmount)
+					}
 					rawdb.WriteReward(bc.db, addr, epoch, block.NumberU64(), rewardAmount)
 				//}
 			}

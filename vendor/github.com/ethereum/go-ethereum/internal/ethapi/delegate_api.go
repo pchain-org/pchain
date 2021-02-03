@@ -351,34 +351,79 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 		from := derivedAddressFromTx(tx)
 
-		height := bc.CurrentBlock().NumberU64() + 1
+		curBlockHeight := bc.CurrentBlock().NumberU64()
+		height := curBlockHeight + 1
+		heightBI := big.NewInt(0).SetUint64(height)
+		ispatch := bc.Config().IsSelfRetrieveRewardPatch(heightBI, bc.CurrentBlock().Header().MainChainNumber)
+		if !ispatch {
+			epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
+			currentEpochNumber := epoch.Number
+			noExtractMark := false
+			extractEpochNumber, err := state.GetEpochRewardExtractedFromDB(from, curBlockHeight)
+			if err != nil {
+				noExtractMark = true
+			}
+			maxExtractEpochNumber := uint64(0)
 
-		epoch := tdm.GetEpoch().GetEpochByBlockNumber(bc.CurrentBlock().NumberU64())
-		currentEpochNumber := epoch.Number
-		noExtractMark := false
-		extractEpochNumber, err := state.GetEpochRewardExtracted(from, height)
-		if err != nil {
-			noExtractMark = true
-		}
-		maxExtractEpochNumber := uint64(0)
-		
-		rewards := state.GetAllEpochReward(from, height)
+			rewards := state.GetAllEpochRewardFromDB(from, curBlockHeight)
 
-		log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
-		log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
+			log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
+			log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
 
-		//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
-		for epNumber, reward := range rewards{
-			if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
-				state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
-				state.AddBalance(from, reward)
+			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
+			for epNumber, reward := range rewards{
+				if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
+					state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
+					state.AddBalance(from, reward)
 
-				if maxExtractEpochNumber < epNumber {
-					maxExtractEpochNumber = epNumber
-					state.MarkEpochRewardExtracted(from, maxExtractEpochNumber)
+					if maxExtractEpochNumber < epNumber {
+						maxExtractEpochNumber = epNumber
+						state.MarkEpochRewardExtracted(from, maxExtractEpochNumber)
+					}
+				}
+			}
+		} else {
+
+			//extrRwd is after OutOfStorage feature, so need not check for IsOutOfStorage()
+			rollbackCatchup := false
+			lastBlock, err := state.ReadOOSLastBlock();
+			if err == nil && heightBI.Cmp(lastBlock) <= 0 {
+				rollbackCatchup = true
+			}
+
+			epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
+			currentEpochNumber := epoch.Number
+			noExtractMark := false
+			extractEpochNumber, err := state.GetEpochRewardExtracted(from, height)
+			if err != nil {
+				noExtractMark = true
+			}
+			maxExtractEpochNumber := uint64(0)
+
+			rewards := state.GetAllEpochReward(from, height)
+
+			log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
+			log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
+
+			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
+			for epNumber, reward := range rewards{
+				if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
+
+					if !rollbackCatchup {
+						state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
+					} else {
+						state.SubRewardBalance(from, reward)
+					}
+					state.AddBalance(from, reward)
+
+					if maxExtractEpochNumber < epNumber {
+						maxExtractEpochNumber = epNumber
+						state.MarkEpochRewardExtracted(from, maxExtractEpochNumber)
+					}
 				}
 			}
 		}
+		
 	}
 
 	return nil

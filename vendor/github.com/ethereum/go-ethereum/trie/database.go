@@ -927,12 +927,14 @@ func (db *Database) GetEpochRewardExtracted(address common.Address, height uint6
 	}
 
 	if len(epochBytes) == 0 {
+		log.Errorf("data error, no epoch for reward_extract readed")
 		return common.INV_EPOCH, nil
 	} else {
 		xtrArray, err := common.Bytes2XTRArray(epochBytes)
 		if err == nil {
 			closestIndex := 0
 			closestHeight := uint64(common.INV_HEIGHT)
+			hasInvalidKey := false
 			for i:=0; i<common.XTR_SIZE; i++ {
 				key := xtrArray.XtrArray[i].Height
 				if key == height {
@@ -942,6 +944,8 @@ func (db *Database) GetEpochRewardExtracted(address common.Address, height uint6
 						closestIndex = i
 						closestHeight = key
 					}
+				} else if key == common.INV_HEIGHT {
+					hasInvalidKey = true
 				}
 			}
 
@@ -949,7 +953,14 @@ func (db *Database) GetEpochRewardExtracted(address common.Address, height uint6
 				return xtrArray.XtrArray[closestIndex].Epoch, nil
 			}
 
-			return common.INV_EPOCH, nil
+			if !hasInvalidKey {
+				log.Crit("data error, no epoch for reward_extract readed; " +
+					"if it is during rollback, need to catchup from 0 block or restore from a snapshot")
+				return common.INV_EPOCH, nil
+			} else {
+				return common.INV_EPOCH, errors.New("no Extract Mark yet")
+			}
+
 		}
 
 		return common.DecodeUint64(epochBytes), nil

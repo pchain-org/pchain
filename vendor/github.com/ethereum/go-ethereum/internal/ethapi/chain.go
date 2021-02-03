@@ -705,7 +705,7 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	if !isSd2mc {
 		return wfmcApplyCb(tx, state, ops, cch, mining)
 	} else {
-		return wfmcApplyCbV1(tx, state, ops, cch)
+		return wfmcApplyCbV1(tx, state, ops, cch, mining)
 	}
 }
 
@@ -930,8 +930,38 @@ func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.Cros
 		return fmt.Errorf("tx %x already used in the main chain", args.TxHash)
 	}
 
-	// Notice: there's validation logic for tx3 here.
-	{
+	// Notice: there's no validation logic for tx3 here.
+
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
+	if chainInfo == nil {
+		return errors.New("chain id not exist")
+	} else if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
+		return errors.New("no enough balance to withdraw")
+	}
+
+	return nil
+}
+
+//for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
+func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+
+	signer := types.NewEIP155Signer(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.WithdrawFromMainChainArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+		return err
+	}
+
+	if state.HasTX3(from, args.TxHash) {
+		return fmt.Errorf("tx %x already used in the main chain", args.TxHash)
+	}
+
+	if mining {
 		wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
 		if wfccTx == nil {
 			return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
@@ -954,29 +984,6 @@ func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.Cros
 		}
 	}
 
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
-	if chainInfo == nil {
-		return errors.New("chain id not exist")
-	} else if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
-		return errors.New("no enough balance to withdraw")
-	}
-
-	return nil
-}
-
-//for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
-func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper) error {
-
-	if err := wfmcValidateCbV1(tx, state, cch); err != nil {
-		return err
-	}
-
-	from, _ := types.Sender(types.NewEIP155Signer(tx.ChainId()), tx)
-	var args pabi.WithdrawFromMainChainArgs
-	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
-		return err
-	}
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 
 	// mark from -> tx3 on the main chain (to indicate tx3's used).

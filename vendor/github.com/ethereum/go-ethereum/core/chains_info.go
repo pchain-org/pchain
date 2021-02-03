@@ -73,7 +73,7 @@ const (
 
 var allChainKey = []byte("AllChainID")
 
-var REFUND_CHAIN_CREATION_FEE_BLOCK  =big.NewInt(10000000)
+var REFUND_CHAIN_CREATION_FEE_BLOCK  =big.NewInt(10000001)
 
 
 const specialSep = ";"
