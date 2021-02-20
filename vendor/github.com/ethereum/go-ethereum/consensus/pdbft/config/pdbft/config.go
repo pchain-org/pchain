@@ -81,7 +81,6 @@ func GetConfig(rootDir, chainId string) cfg.Config {
 	mapConfig.SetDefault("pex_reactor", false)    // enable for peer exchange
 	mapConfig.SetDefault("priv_validator_file", filepath.Join(rootDir, chainId, "priv_validator.json"))
 	mapConfig.SetDefault("priv_validator_file_root", filepath.Join(rootDir, chainId, "priv_validator"))
-	mapConfig.SetDefault("db_backend", "leveldb")
 	mapConfig.SetDefault("db_dir", filepath.Join(rootDir, chainId, defaultDataDir))
 	//mapConfig.SetDefault("rpc_laddr", "tcp://0.0.0.0:46657")
 	//mapConfig.SetDefault("rpc_laddr", calcRpcAddr())
@@ -126,7 +125,6 @@ moniker = "__MONIKER__"
 node_laddr = "tcp://0.0.0.0:46656"
 seeds = ""
 fast_sync = true
-db_backend = "leveldb"
 #rpc_laddr = "tcp://0.0.0.0:46657"
 `
 

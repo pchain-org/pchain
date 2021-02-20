@@ -50,7 +50,6 @@ func (c *stateObject) SubRewardBalance(amount *big.Int) {
 }
 
 func (self *stateObject) SetRewardBalance(amount *big.Int) {
-
 	if amount.Sign() < 0 {
 		log.Infof("!!!amount is negative, not support yet, make it 0 by force")
 		amount = big.NewInt(0)
@@ -61,6 +60,8 @@ func (self *stateObject) SetRewardBalance(amount *big.Int) {
 		prev:    new(big.Int).Set(self.data.RewardBalance),
 	})
 	self.setRewardBalance(amount)
+
+
 }
 
 func (self *stateObject) setRewardBalance(amount *big.Int) {

@@ -37,6 +37,9 @@ var (
 	MainnetExtractRewardMainBlock = big.NewInt(9383000)
 	TestnetExtractRewardMainBlock = big.NewInt(2550000)
 
+	MainnetExtractRewardPatchMainBlock = big.NewInt(21000000)
+	TestnetExtractRewardPatchMainBlock = big.NewInt(2550000)
+
 	//use SaveData2MainBlock v1; which reports epoch/tx3 to main block
 	MainnetSd2mcV1MainBlock = big.NewInt(11824000)
 	TestnetSd2mcV1MainBlock = big.NewInt(40)
@@ -70,6 +73,7 @@ var (
 		OutOfStorageBlock:            big.NewInt(5890000),
 		Child0OutOfStorageBlock:      big.NewInt(13930000),
 		ExtractRewardMainBlock:       MainnetExtractRewardMainBlock,
+		ExtractRewardPatchMainBlock:  MainnetExtractRewardPatchMainBlock,
 		Sd2mcV1Block:                 MainnetSd2mcV1MainBlock,
 		ChildSd2mcWhenEpochEndsBlock: MainnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock: MainnetValidateHTLCBlock,
@@ -98,11 +102,11 @@ var (
 		OutOfStorageBlock:          big.NewInt(10),
 		Child0OutOfStorageBlock:    big.NewInt(10),
 		ExtractRewardMainBlock:     TestnetExtractRewardMainBlock,
+		ExtractRewardPatchMainBlock:TestnetExtractRewardPatchMainBlock,
 		Sd2mcV1Block:               TestnetSd2mcV1MainBlock,
 		ChildSd2mcWhenEpochEndsBlock: TestnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock: TestnetValidateHTLCBlock,
 		HeaderHashWithoutTimeBlock: TestnetHeaderHashWithoutTimeBlock,
-
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -153,16 +157,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil,nil,nil,new(EthashConfig), nil, nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil,nil,nil, nil, new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, nil,nil,nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil,nil,nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, common.Address{}, nil, nil, nil,nil,new(EthashConfig), nil, nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil,nil,nil, new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -195,11 +199,12 @@ type ChainConfig struct {
 	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
 
-	// PCHAIN HF
-	HashTimeLockContract   common.Address `json:"htlc,omitempty"`     // Hash Time Lock Contract Address
-	OutOfStorageBlock      *big.Int       `json:"oosBlock,omitempty"` // Out of storage HF block
-	ExtractRewardMainBlock *big.Int       `json:"erBlock,omitempty"`  // Extract reward HF block
-	Sd2mcV1Block           *big.Int       `json:"sd2mcV1Block, omitempty"`
+	// PCHAIN HordFork
+	HashTimeLockContract   common.Address      `json:"htlc,omitempty"`     // Hash Time Lock Contract Address
+	OutOfStorageBlock      *big.Int            `json:"oosBlock,omitempty"` // Out of storage HardFork block
+	ExtractRewardMainBlock *big.Int            `json:"erBlock,omitempty"`  // Extract reward HardFork block
+	ExtractRewardPatchMainBlock *big.Int       `json:"erPatchBlock,omitempty"`  // Extract reward Patch HardFork block
+	Sd2mcV1Block           *big.Int            `json:"sd2mcV1Block, omitempty"`
 
 	// For default setup propose
 	Child0HashTimeLockContract   common.Address
@@ -207,7 +212,7 @@ type ChainConfig struct {
 	ChildSd2mcWhenEpochEndsBlock *big.Int
 	ValidateHTLCBlock *big.Int
 	HeaderHashWithoutTimeBlock *big.Int
-
+	MarkProposedInEpochMainBlock *big.Int
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
@@ -381,6 +386,15 @@ func IsSelfRetrieveReward(mainChainId string, mainBlockNumber *big.Int) bool {
 	return false
 }
 
+func (c *ChainConfig)IsSelfRetrieveRewardPatch(blockNumber, mainBlockNumber *big.Int) bool {
+	if c.IsMainChain() {
+		return isForked(c.ExtractRewardPatchMainBlock, blockNumber)
+	} else {
+		return isForked(c.ExtractRewardPatchMainBlock, mainBlockNumber)
+	}
+	return false
+}
+
 func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {
 	if mainChainId == MainnetChainConfig.PChainId {
 		return isForked(MainnetSd2mcV1MainBlock, mainBlockNumber)
@@ -394,11 +408,9 @@ func (c *ChainConfig)CeaseValidateHashTimeLockContract(mainBlockNumber *big.Int)
 	return isForked(c.ValidateHTLCBlock, mainBlockNumber)
 }
 
-
 func (c *ChainConfig)IsHeaderHashWithoutTimeBlock(mainBlockNumber *big.Int) bool {
 	return isForked(c.HeaderHashWithoutTimeBlock, mainBlockNumber)
 }
-
 
 
 // Check whether is on main chain or not

@@ -1,6 +1,7 @@
 package db
 
 import . "github.com/tendermint/go-common"
+import 	"sync"
 
 type DB interface {
 	Get([]byte) []byte
@@ -42,6 +43,7 @@ const (
 type dbCreator func(name string, dir string) (DB, error)
 
 var backends = map[string]dbCreator{}
+var db_mtx sync.Mutex
 
 func registerDBCreator(backend string, creator dbCreator, force bool) {
 	_, ok := backends[backend]
@@ -52,6 +54,9 @@ func registerDBCreator(backend string, creator dbCreator, force bool) {
 }
 
 func NewDB(name string, backend string, dir string) DB {
+	db_mtx.Lock()
+	defer db_mtx.Unlock()
+
 	db, err := backends[backend](name, dir)
 	if err != nil {
 		PanicSanity(Fmt("Error initializing DB: %v", err))

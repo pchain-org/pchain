@@ -42,7 +42,7 @@ func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.Ch
 	}
 
 	// Initial Epoch
-	epochDB := dbm.NewDB("epoch", config.GetString("db_backend"), config.GetString("db_dir"))
+	epochDB := dbm.NewDB("epoch", "leveldb", config.GetString("db_dir"))
 	ep := epoch.InitEpoch(epochDB, genDoc, backend.logger)
 
 	// We should start mine if we are in the ValidatorSet

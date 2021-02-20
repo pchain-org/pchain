@@ -58,7 +58,6 @@ here are the deployment steps:
 		node_laddr = "tcp://0.0.0.0:46656"
 		seeds = "10.104.107.82:46656"
 		fast_sync = true
-		db_backend = "leveldb"
 		log_level = "notice"
 
    4.3) copy A's /home/ubuntu/.pchain/genesis.json to B's /home/ubuntu/.pchain/, make their genesis.json keep the same,

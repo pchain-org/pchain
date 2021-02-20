@@ -59,7 +59,7 @@ var (
 	// Chain index prefixes (use `i` + single byte to avoid mixing data types).
 	BloomBitsIndexPrefix = []byte("iB") // BloomBitsIndexPrefix is the data table of a chain indexer to track its progress
 
-	rewardPrefix = []byte("w") // rewardPrefix + address + num (uint64 big endian) -> reward value
+	//rewardPrefix = []byte("w") // rewardPrefix + address + num (uint64 big endian) -> reward value
 
 	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
@@ -139,7 +139,7 @@ func preimageKey(hash common.Hash) []byte {
 func configKey(hash common.Hash) []byte {
 	return append(configPrefix, hash.Bytes()...)
 }
-
-func rewardKey(address common.Address, epochNo uint64) []byte {
-	return append(append(rewardPrefix, address.Bytes()...), encodeBlockNumber(epochNo)...)
-}
+//
+//func rewardKey(address common.Address, epochNo uint64) []byte {
+//	return append(append(rewardPrefix, address.Bytes()...), encodeBlockNumber(epochNo)...)
+//}
