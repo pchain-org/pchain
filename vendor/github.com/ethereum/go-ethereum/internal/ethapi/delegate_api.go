@@ -373,7 +373,6 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
 			for epNumber, reward := range rewards{
 				if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
-					log.Info(reward.String())
 					state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
 					state.AddBalance(from, reward)
 
