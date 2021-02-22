@@ -423,12 +423,11 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 				}
 			}
 		}
-		
+
 	}
 
 	return nil
 }
-
 
 // Validation
 

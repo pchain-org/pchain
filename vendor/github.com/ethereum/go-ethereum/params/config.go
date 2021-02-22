@@ -37,7 +37,7 @@ var (
 	MainnetExtractRewardMainBlock = big.NewInt(9383000)
 	TestnetExtractRewardMainBlock = big.NewInt(2550000)
 
-	MainnetExtractRewardPatchMainBlock = big.NewInt(20201738)
+	MainnetExtractRewardPatchMainBlock = big.NewInt(20970000)
 	TestnetExtractRewardPatchMainBlock = big.NewInt(2550000)
 
 	//use SaveData2MainBlock v1; which reports epoch/tx3 to main block

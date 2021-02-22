@@ -990,16 +990,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		outsideReward := state.GetOutsideReward()
 		for addr, reward := range outsideReward {
 			for epoch, rewardAmount := range reward {
-				//if rewardAmount.Sign() == 0 {
-				//	rawdb.DeleteReward(bc.db, addr, epoch)
-				//} else {
-				    //this happends in 13311677 in mainchain, make it go through the catchup
-					if rewardAmount.Sign() < 0 && block.NumberU64() == 13311677 {
-						log.Errorf("!!!should dig it, rewardAmount for %x is %v", addr, rewardAmount)
-						rewardAmount = rewardAmount.Abs(rewardAmount)
-					}
-					rawdb.WriteReward(bc.db, addr, epoch, block.NumberU64(), rewardAmount)
-				//}
+				if rewardAmount.Sign() < 0 && ((bc.chainConfig.PChainId== "pchain" && block.NumberU64() == 13311677) || (bc.chainConfig.PChainId=="child_0" && block.NumberU64()==22094435))  {
+					log.Errorf("!!!should dig it, rewardAmount for %x is %v", addr, rewardAmount)
+					rewardAmount = rewardAmount.Abs(rewardAmount)
+				}
+				rawdb.WriteReward(bc.db, addr, epoch, block.NumberU64(), rewardAmount)
 			}
 		}
 		state.ClearOutsideReward()
@@ -1016,6 +1011,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		extractRewardSet := state.GetExtractRewardSet()
 		for addr, epoch := range extractRewardSet {
 			state.WriteEpochRewardExtracted(addr, epoch, block.NumberU64())
+
 		}
 		state.ClearExtractRewardSet()
 	}

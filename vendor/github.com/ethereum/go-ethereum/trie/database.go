@@ -918,6 +918,71 @@ func (db *Database) GetAllEpochReward(address common.Address, height uint64) map
 	return result
 }
 
+func (db *Database) WriteEpochRewardExtracted(address common.Address, epoch uint64, height uint64) error {
+
+	oriEpoch, _ := db.diskdb.Get(append(common.RewardExtractPrefix, address.Bytes()...))
+
+	xtr := common.XTRArray{}
+	initIndex := 0
+
+	err := errors.New("")
+	if len(oriEpoch) != 0 {
+		xtr, err = common.Bytes2XTRArray(oriEpoch)
+		if err != nil {
+			xtr.XtrArray[0].Height = common.DFLT_START
+			xtr.XtrArray[0].Epoch = common.DecodeUint64(oriEpoch)
+			initIndex = 1
+		} else {
+			initIndex = common.XTR_SIZE
+		}
+	}
+
+	for i:=initIndex; i<common.XTR_SIZE; i++ {
+		xtr.XtrArray[i].Height = common.INV_HEIGHT
+		xtr.XtrArray[i].Epoch = common.INV_EPOCH
+	}
+
+	minIndex := 0
+	minHeight := uint64(common.INV_HEIGHT)
+	settled := false
+	for i:=0; i<common.XTR_SIZE; i++ {
+		key := xtr.XtrArray[i].Height
+		if key >= height {
+			if !settled {
+				xtr.XtrArray[i].Height = height
+				xtr.XtrArray[i].Epoch = epoch
+				settled = true
+			} else if key != common.INV_HEIGHT{
+				xtr.XtrArray[i].Height = common.INV_HEIGHT
+				xtr.XtrArray[i].Epoch = common.INV_EPOCH
+			}
+		} else {
+			if minHeight == common.INV_HEIGHT || key < minHeight {
+				minIndex = i
+				minHeight = key
+			}
+		}
+	}
+
+	if !settled {
+		xtr.XtrArray[minIndex].Height = height
+		xtr.XtrArray[minIndex].Epoch = epoch
+	}
+
+	epochBytes, err := common.XTRArray2Bytes(xtr)
+	if err != nil {
+		log.Crit("Failed to convert extract_reward", "err", err)
+		return err
+	}
+
+	if err := db.diskdb.Put(append(common.RewardExtractPrefix, address.Bytes()...), epochBytes); err != nil {
+		log.Crit("Failed to store extract_reward", "err", err)
+		return err
+	}
+
+	return nil
+}
+
 func (db *Database) GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error) {
 
 	epochBytes, err := db.diskdb.Get(append(common.RewardExtractPrefix, address.Bytes()...))
@@ -965,72 +1030,6 @@ func (db *Database) GetEpochRewardExtracted(address common.Address, height uint6
 
 		return common.DecodeUint64(epochBytes), nil
 	}
-}
-
-
-func (db *Database) WriteEpochRewardExtracted(address common.Address, epoch uint64, height uint64) error {
-
-	oriEpoch, _ := db.diskdb.Get(append(common.RewardExtractPrefix, address.Bytes()...))
-
-	xtr := common.XTRArray{}
-	initIndex := 0
-	
-	err := errors.New("")
-	if len(oriEpoch) != 0 {
-		xtr, err = common.Bytes2XTRArray(oriEpoch)
-		if err != nil {
-			xtr.XtrArray[0].Height = common.DFLT_START
-			xtr.XtrArray[0].Epoch = common.DecodeUint64(oriEpoch)
-			initIndex = 1
-		} else {
-			initIndex = common.XTR_SIZE
-		}
-	}
-	
-	for i:=initIndex; i<common.XTR_SIZE; i++ {
-		xtr.XtrArray[i].Height = common.INV_HEIGHT
-		xtr.XtrArray[i].Epoch = common.INV_EPOCH
-	}
-
-	minIndex := 0
-	minHeight := uint64(common.INV_HEIGHT)
-	settled := false
-	for i:=0; i<common.XTR_SIZE; i++ {
-		key := xtr.XtrArray[i].Height
-		if key >= height {
-			if !settled {
-				xtr.XtrArray[i].Height = height
-				xtr.XtrArray[i].Epoch = epoch
-				settled = true
-			} else if key != common.INV_HEIGHT{
-				xtr.XtrArray[i].Height = common.INV_HEIGHT
-				xtr.XtrArray[i].Epoch = common.INV_EPOCH
-			}
-		} else {
-			if minHeight == common.INV_HEIGHT || key < minHeight {
-				minIndex = i
-				minHeight = key
-			}
-		}
-	}
-
-	if !settled {
-		xtr.XtrArray[minIndex].Height = height
-		xtr.XtrArray[minIndex].Epoch = epoch
-	}
-
-	epochBytes, err := common.XTRArray2Bytes(xtr)
-	if err != nil {
-		log.Crit("Failed to convert extract_reward", "err", err)
-		return err
-	}
-
-	if err := db.diskdb.Put(append(common.RewardExtractPrefix, address.Bytes()...), epochBytes); err != nil {
-		log.Crit("Failed to store extract_reward", "err", err)
-		return err
-	}
-	
-	return nil
 }
 
 func (db *Database) ReadOOSLastBlock() (*big.Int, error) {

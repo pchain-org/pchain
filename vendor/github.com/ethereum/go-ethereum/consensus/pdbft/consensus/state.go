@@ -489,7 +489,13 @@ func (cs *ConsensusState) proposersByVRF() (lastProposer int, curProposer int) {
 
 	chainReader := cs.backend.ChainReader()
 	header := chainReader.CurrentHeader()
-	headerHash := header.Hash()
+	var headerHash common.Hash
+	if !cs.chainConfig.IsHeaderHashWithoutTimeBlock(cs.getMainBlock()) {
+		headerHash = header.Hash()
+	}else{
+		headerHash = header.HashWithoutTime()
+	}
+
 
 	curProposer = cs.proposerByVRF(headerHash, cs.Validators.Validators)
 
@@ -746,6 +752,7 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 			rs := cs.RoundState
 			cs.handleMsg(mi, rs)
 		case mi = <-cs.internalMsgQueue:
+
 			if !cs.IsRunning() {
 				cs.logger.Infof("ConsensusState internalMsgQueue, but need stop or not running, just return")
 				return
@@ -762,6 +769,7 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 			// go to the next step
 			rs := cs.RoundState
 			cs.handleTimeout(ti, rs)
+
 		}
 	}
 }

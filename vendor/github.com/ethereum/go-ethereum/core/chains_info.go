@@ -431,6 +431,7 @@ func GetChildChainForLaunch(db dbm.DB, height *big.Int, stateDB *state.StateDB) 
 				stateDB.SubChildChainDepositBalance(jv.Address, v.ChainID, jv.DepositAmount)
 				stateDB.AddBalance(jv.Address, jv.DepositAmount)
 			}
+			log.Infof("what the mean",REFUND_CHAIN_CREATION_FEE_BLOCK.Cmp(height))
 			if  REFUND_CHAIN_CREATION_FEE_BLOCK.Cmp(height)<0 {
 				officialMinimumDeposit := math.MustParseBig256(OFFICIAL_MINIMUM_DEPOSIT)
 				stateDB.AddBalance(cci.Owner, officialMinimumDeposit)

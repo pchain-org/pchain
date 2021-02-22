@@ -127,7 +127,7 @@ func (self *StateDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, e
 			return rewardbalance
 		}
 	}
-	rb := self.db.TrieDB().GetEpochReward(addr, epochNo, height-1)
+	rb := self.db.TrieDB().GetEpochReward(addr, epochNo,height-1)
 	// if 0 epoch reward, try to read from trie
 	if rb.Sign() == 0 {
 		rb = self.GetRewardBalanceByEpochNumber(addr, epochNo)
@@ -173,9 +173,12 @@ func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, e
 	self.SubRewardBalance(addr, amount)
 }
 
-//if there is a cache in memory, then take it; or use the lastest value from older block(height-1)
-func (self *StateDB) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int {
 
+//func (self *StateDB) GetEpochReward(address common.Address, epoch uint64) *big.Int {
+//	return self.db.TrieDB().GetEpochReward(address, epoch)
+//}
+
+func (self *StateDB) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int {
 	//read value from lastest block
 	result := self.GetAllEpochRewardFromDB(address, height-1)
 
@@ -209,7 +212,7 @@ func (self *StateDB) GetEpochRewardExtracted(address common.Address, height uint
 	if epoch, exist := self.extractRewardSet[address]; exist {
 		return epoch, nil
 	} else {
-		return self.db.TrieDB().GetEpochRewardExtracted(address, height-1)
+		return self.GetEpochRewardExtractedFromDB(address, height-1)
 	}
 }
 
@@ -218,10 +221,10 @@ func (self *StateDB) GetEpochRewardExtractedFromDB(address common.Address, heigh
 	return self.db.TrieDB().GetEpochRewardExtracted(address, height)
 }
 
+
 func (self *StateDB) WriteEpochRewardExtracted(address common.Address, epoch uint64, height uint64) error {
 	return self.db.TrieDB().WriteEpochRewardExtracted(address, epoch, height)
 }
-
 
 //record candidate's last proposed block which brings reward
 func (self *StateDB) ReadOOSLastBlock() (*big.Int, error) {

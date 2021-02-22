@@ -19,9 +19,8 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"math/big"
-
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -444,9 +443,9 @@ func WriteReward(db ethdb.Database, address common.Address, epoch uint64, height
 	}
 	*/
 	oriReward, _ := db.Get(common.RewardKey(address, epoch))
-
 	obr := common.OBRArray{}
 	initIndex := 0
+
 
 	err := errors.New("")
 	if len(oriReward) != 0 {
@@ -455,11 +454,10 @@ func WriteReward(db ethdb.Database, address common.Address, epoch uint64, height
 			obr.ObrArray[0].Height = common.DFLT_START
 			obr.ObrArray[0].Reward = new(big.Int).SetBytes(oriReward)
 			initIndex = 1
-		} else {
+		}else {
 			initIndex = common.OBR_SIZE
 		}
 	}
-
 	for i:=initIndex; i<common.OBR_SIZE; i++ {
 		obr.ObrArray[i].Height = common.INV_HEIGHT
 		obr.ObrArray[i].Reward = big.NewInt(common.NONE_REWARD)
@@ -478,6 +476,7 @@ func WriteReward(db ethdb.Database, address common.Address, epoch uint64, height
 			} else if key != common.INV_HEIGHT{
 				obr.ObrArray[i].Height = common.INV_HEIGHT
 				obr.ObrArray[i].Reward = big.NewInt(common.NONE_REWARD)
+
 			}
 		} else {
 			if minHeight == common.INV_HEIGHT || key < minHeight {
@@ -502,10 +501,9 @@ func WriteReward(db ethdb.Database, address common.Address, epoch uint64, height
 	}
 }
 
-/*
-func DeleteReward(db ethdb.Writer, address common.Address, epoch uint64) {
-	if err := db.Delete(rewardKey(address, epoch)); err != nil {
-		log.Crit("Failed to delete epoch reward", "err", err)
-	}
-}
-*/
+//
+//func DeleteReward(db ethdb.Writer, address common.Address, epoch uint64) {
+//	if err := db.Delete(rewardKey(address, epoch)); err != nil {
+//		log.Crit("Failed to delete epoch reward", "err", err)
+//	}
+//}

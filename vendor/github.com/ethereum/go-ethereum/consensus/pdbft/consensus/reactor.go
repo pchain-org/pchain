@@ -78,6 +78,8 @@ func (conR *ConsensusReactor) OnStart() error {
 	return nil
 }
 
+
+
 func (conR *ConsensusReactor) OnStop() {
 	conR.BaseService.OnStop()
 	conR.conS.Stop()
