@@ -1,4 +1,4 @@
-welcome to our lastest [instruction](https://pliangroup.gitbook.io/plian/).
+A full wiki with everything you need to know about Pchain is here:[Pchain Wiki](https://pliangroup.gitbook.io/plian/).
 ## Pchain
 
 [中文README](https://github.com/pchain-org/pchain/wiki/README_CN)
