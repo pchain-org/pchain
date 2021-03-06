@@ -1,4 +1,7 @@
 A full wiki with everything you need to know about Pchain is here: [Pchain Wiki](https://pliangroup.gitbook.io/plian/).
+
+[Chinese (中文) Wiki](https://pchaindocscn.readthedocs.io/)
+
 ## Pchain
 
 [中文README](https://github.com/pchain-org/pchain/wiki/README_CN)
