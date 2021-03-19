@@ -167,6 +167,10 @@ func (epoch *Epoch) GetEpochValidatorVoteSet() *EpochValidatorVoteSet {
 	return epoch.validatorVoteSet
 }
 
+func (epoch *Epoch) SetEpochValidatorVoteSet(validatorVoteSet *EpochValidatorVoteSet) {
+	epoch.validatorVoteSet = validatorVoteSet
+}
+
 func (epoch *Epoch) GetRewardScheme() *RewardScheme {
 	return epoch.rs
 }
@@ -474,6 +478,36 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 					state.SubDepositBalance(r.Address, depositBalance)
 					state.AddBalance(r.Address, depositBalance)
 				}
+			}
+
+			if markProposedInEpoch {
+				nextEp := epoch.nextEpoch
+
+				oldVoteSet := nextEp.GetEpochValidatorVoteSet()
+				newVoteSet := NewEpochValidatorVoteSet()
+
+				nextEp.Validators = newValidators
+				for _, v := range newValidators.Validators {
+					vAddr := common.BytesToAddress(v.Address)
+					v.VotingPower = new(big.Int).Add(state.GetDepositBalance(vAddr), state.GetTotalDepositProxiedBalance(vAddr))
+
+					vote, exist := oldVoteSet.GetVoteByAddress(vAddr)
+					if !exist {
+						// Create a new Hash Vote
+						vote = &EpochValidatorVote{
+							Address:  vAddr,
+							PubKey:   v.PubKey,
+							Amount:   v.VotingPower,
+						}
+						log.Errorf("this should not happen, for all validator were saved in voteset")
+					}
+					newVoteSet.StoreVote(vote)
+				}
+				nextEp.SetEpochValidatorVoteSet(newVoteSet)
+
+				nextEp.Save()
+				// Save the VoteSet
+				SaveEpochVoteSet(epoch.GetDB(), nextEp.Number, newVoteSet)
 			}
 
 			return true, newValidators, nil
