@@ -196,6 +196,11 @@ func (b *EthApiBackend) ProtocolVersion() int {
 	return b.eth.EthVersion()
 }
 
+func (b *EthApiBackend) ChainId() *big.Int {
+	localChainID := b.eth.ChainConfig().PChainId
+	return types.GetPublicChainID(localChainID)
+}
+
 func (b *EthApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	return b.gpo.SuggestPrice(ctx)
 }
@@ -239,6 +244,6 @@ func (b *EthApiBackend) BroadcastTX3ProofData(proofData *types.TX3ProofData) {
 	b.eth.protocolManager.BroadcastTX3ProofData(proofData.Header.Hash(), proofData)
 }
 
-func (b *EthApiBackend) Engine()  consensus.Engine {
+func (b *EthApiBackend) Engine() consensus.Engine {
 	return b.eth.Engine()
 }

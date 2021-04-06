@@ -225,7 +225,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		config:      config,
 		chainconfig: chainconfig,
 		chain:       chain,
-		signer:      types.NewEIP155Signer(chainconfig.ChainId),
+		signer:      types.NewEIP155Signer(chainconfig.ChainId, chainconfig.PChainId),
 		pending:     make(map[common.Address]*txList),
 		queue:       make(map[common.Address]*txList),
 		beats:       make(map[common.Address]time.Time),
@@ -552,8 +552,6 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 	return txs
 }
 
-
-
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
@@ -585,11 +583,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrNonceTooLow
 	}
 	//Verify HTLC transactions and prevent the sending of 0 gas fee contract transactions
-	mainBlockNumber :=pool.chain.CurrentBlock().Number()
-	if !pool.chainconfig.IsMainChain(){
-		mainBlockNumber =pool.chain.CurrentBlock().Header().MainChainNumber;
+	mainBlockNumber := pool.chain.CurrentBlock().Number()
+	if !pool.chainconfig.IsMainChain() {
+		mainBlockNumber = pool.chain.CurrentBlock().Header().MainChainNumber
 	}
-	if !pool.chainconfig.CeaseValidateHashTimeLockContract(mainBlockNumber){
+	if !pool.chainconfig.CeaseValidateHashTimeLockContract(mainBlockNumber) {
 		if !pool.chainconfig.IsHashTimeLockWithdraw(pool.chain.CurrentBlock().Number(), tx.To(), tx.Data()) {
 			// Transactor should have enough funds to cover the costs
 			// cost == V + GP * GL
@@ -597,7 +595,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 				return ErrInsufficientFunds
 			}
 		}
-	}else{
+	} else {
 		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 			return ErrInsufficientFunds
 		}

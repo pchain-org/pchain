@@ -41,6 +41,7 @@ type Backend interface {
 	// General Ethereum API
 	Downloader() *downloader.Downloader
 	ProtocolVersion() int
+	ChainId() *big.Int
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	ChainDb() ethdb.Database
 	EventMux() *event.TypeMux
@@ -75,7 +76,7 @@ type Backend interface {
 	GetInnerAPIBridge() InnerAPIBridge
 	GetCrossChainHelper() core.CrossChainHelper
 
-	Engine()  consensus.Engine
+	Engine() consensus.Engine
 
 	BroadcastTX3ProofData(proofData *types.TX3ProofData)
 }
