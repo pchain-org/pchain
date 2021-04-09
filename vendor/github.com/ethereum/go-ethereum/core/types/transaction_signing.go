@@ -296,6 +296,10 @@ func deriveChainId(v *big.Int) *big.Int {
 }
 
 func GetPublicChainID(chainId *big.Int) *big.Int {
+	start, end := 22, 25
 	bs := chainId.Bytes()
-	return new(big.Int).SetBytes(bs[22:25])
+	if len(bs) <= end-start {
+		return chainId
+	}
+	return new(big.Int).SetBytes(bs[start:end])
 }
