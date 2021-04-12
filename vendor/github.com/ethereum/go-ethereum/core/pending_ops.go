@@ -50,10 +50,36 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 			if !op.NewValidators.HasAddress(eng.PrivateValidator().Bytes()) && eng.IsStarted() {
 				bc.PostChainEvents([]interface{}{StopMiningEvent{}}, nil)
 			}
+
+			curBlock := bc.CurrentBlock()
+			state, _ := bc.StateAt(curBlock.Root())
+			if eng.CheckAndRefreshVotingPowerForValidators(state, nextEp) {
+				nextEp.Save()
+			}
 			eng.SetEpoch(nextEp)
 			cch.ChangeValidators(op.ChainId) //must after eng.SetEpoch(nextEp), it uses epoch just set
 		}
 		return err
+	case *types.DelegateV1OP:
+		eng := bc.engine.(consensus.Tendermint)
+		ep := eng.GetEpoch()
+		if _, val := ep.Validators.GetByAddress(op.Validator.Bytes()); val != nil {
+			val.VotingPower = op.VotingPower
+			ep.Validators.Update(val)
+			ep.Save()
+			eng.SetEpoch(ep)
+		}
+		return nil
+	case *types.CancelDelegateV1Op:
+		eng := bc.engine.(consensus.Tendermint)
+		ep := eng.GetEpoch()
+		if _, val := ep.Validators.GetByAddress(op.Validator.Bytes()); val != nil {
+			val.VotingPower = op.VotingPower
+			ep.Validators.Update(val)
+			ep.Save()
+			eng.SetEpoch(ep)
+		}
+		return nil
 	default:
 		return fmt.Errorf("unknown op: %v", op)
 	}

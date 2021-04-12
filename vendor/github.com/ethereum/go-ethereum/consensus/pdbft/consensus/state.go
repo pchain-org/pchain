@@ -355,6 +355,12 @@ func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.C
 //----------------------------------------
 // Public interface
 
+func (cs *ConsensusState) SetEpoch(ep *ep.Epoch) {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+	cs.Epoch = ep
+}
+
 // SetEventSwitch implements events.Eventable
 func (cs *ConsensusState) SetEventSwitch(evsw types.EventSwitch) {
 	cs.evsw = evsw

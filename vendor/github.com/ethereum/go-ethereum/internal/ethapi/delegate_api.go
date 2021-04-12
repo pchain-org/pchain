@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"math/big"
@@ -164,6 +165,14 @@ func init() {
 	core.RegisterValidateCb(pabi.CancelDelegate, cdel_ValidateCb)
 	core.RegisterApplyCb(pabi.CancelDelegate, cdel_ApplyCb)
 
+	// Instantly Delegate; for main chain only
+	core.RegisterValidateCb(pabi.DelegateV1, del_ValidateCbV1)
+	core.RegisterApplyCb(pabi.DelegateV1, del_ApplyCbV1)
+
+	// Instantly Cancel Delegate; for main chain only
+	core.RegisterValidateCb(pabi.CancelDelegateV1, cdel_ValidateCbV1)
+	core.RegisterApplyCb(pabi.CancelDelegateV1, cdel_ApplyCbV1)
+
 	// Candidate
 	core.RegisterValidateCb(pabi.Candidate, appcdd_ValidateCb)
 	core.RegisterApplyCb(pabi.Candidate, appcdd_ApplyCb)
@@ -240,6 +249,116 @@ func cdel_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 	state.SubProxiedBalanceByUser(args.Candidate, from, immediatelyRefund)
 	state.SubDelegateBalance(from, immediatelyRefund)
 	state.AddBalance(from, immediatelyRefund)
+
+	return nil
+}
+
+
+func del_ValidateCbV1(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
+	from := derivedAddressFromTx(tx)
+	_, verror := delegateValidationV1(from, tx, state, bc)
+	if verror != nil {
+		return verror
+	}
+	return nil
+}
+
+func del_ApplyCbV1(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+	// Validate first
+	from := derivedAddressFromTx(tx)
+	args, verror := delegateValidationV1(from, tx, state, bc)
+	if verror != nil {
+		return verror
+	}
+
+	// Do job
+	amount := tx.Value()
+	// Move Balance to delegate balance
+	state.SubBalance(from, amount)
+	state.AddDelegateBalance(from, amount)
+	// Add Balance to Candidate's Deposit Proxied Balance directly
+	state.AddDepositProxiedBalanceByUser(args.Candidate, from, amount)
+
+	height := bc.CurrentBlock().NumberU64() + 1
+	var ep *epoch.Epoch
+	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(height)
+	}
+	if ep.Validators.HasAddress(args.Candidate.Bytes()) &&
+		height != ep.EndBlock/*let epoch.ShouldEnterNewEpoch() handle the last block of one epoch*/ {
+
+		op := types.DelegateV1OP{
+			Validator:   args.Candidate,
+			VotingPower: new(big.Int).Add(state.GetDepositBalance(args.Candidate), state.GetTotalDepositProxiedBalance(args.Candidate)),
+		}
+
+		if ok := ops.Append(&op); !ok {
+			return fmt.Errorf("pending ops conflict: %v", op)
+		}
+	}
+	
+	
+	return nil
+}
+
+
+func cdel_ValidateCbV1(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) error {
+	from := derivedAddressFromTx(tx)
+	_, verror := cancelDelegateValidationV1(from, tx, state, bc)
+	if verror != nil {
+		return verror
+	}
+	return nil
+}
+
+func cdel_ApplyCbV1(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+	// Validate first
+	from := derivedAddressFromTx(tx)
+	args, verror := cancelDelegateValidationV1(from, tx, state, bc)
+	if verror != nil {
+		return verror
+	}
+
+	// Apply Logic
+	// if request amount < proxied amount, refund it immediately
+	// otherwise, refund the proxied amount, and put the rest to pending refund balance
+	proxiedBalance := state.GetProxiedBalanceByUser(args.Candidate, from)
+	var immediatelyRefund, restRefund *big.Int
+	if args.Amount.Cmp(proxiedBalance) <= 0 {
+		immediatelyRefund = args.Amount
+	} else {
+		immediatelyRefund = proxiedBalance
+		restRefund = new(big.Int).Sub(args.Amount, proxiedBalance)
+	}
+
+	state.SubProxiedBalanceByUser(args.Candidate, from, immediatelyRefund)
+	state.SubDelegateBalance(from, immediatelyRefund)
+	state.AddBalance(from, immediatelyRefund)
+
+	if restRefund.Sign() == 1 {
+		state.SubDepositProxiedBalanceByUser(args.Candidate, from, restRefund)
+		state.SubDelegateBalance(from, restRefund)
+		state.AddBalance(from, restRefund)
+	}
+
+	height := bc.CurrentBlock().NumberU64() + 1
+	var ep *epoch.Epoch
+	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
+		ep = tdm.GetEpoch().GetEpochByBlockNumber(height)
+	}
+
+	if ep.Validators.HasAddress(args.Candidate.Bytes()) &&
+		height != ep.EndBlock/*let epoch.ShouldEnterNewEpoch() handle the last block of one epoch*/ {
+
+		op := types.CancelDelegateV1Op{
+			Validator:   args.Candidate,
+			VotingPower: new(big.Int).Add(state.GetDepositBalance(args.Candidate), state.GetTotalDepositProxiedBalance(args.Candidate)),
+		}
+
+		if ok := ops.Append(&op); !ok {
+			return fmt.Errorf("pending ops conflict: %v", op)
+		}
+	}
 
 	return nil
 }
@@ -430,8 +549,34 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 }
 
 // Validation
-
 func delegateValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.DelegateArgs, error) {
+
+	args, err := _delegateValidation(from, tx, state, bc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check Epoch Height
+	if err = checkEpochInNormalStage(bc); err != nil {
+		return nil, err
+	}
+
+	return args, nil
+}
+
+func delegateValidationV1(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.DelegateArgs, error) {
+
+	cch := bc.GetCrossChainHelper()
+	
+	if !params.IsInstantDelegation(cch.GetMainChainId(), cch.GetHeightFromMainChain()) {
+		return nil, errors.New("not reach fork block yet")
+	}
+	
+	return _delegateValidation(from, tx, state, bc)
+}
+
+
+func _delegateValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.DelegateArgs, error) {
 	// Check minimum delegate amount
 	if tx.Value().Cmp(minimumDelegationAmount) < 0 {
 		return nil, core.ErrDelegateAmount
@@ -444,7 +589,8 @@ func delegateValidation(from common.Address, tx *types.Transaction, state *state
 	}
 
 	// Check Candidate
-	if !state.IsCandidate(args.Candidate) {
+	if !state.IsCandidate(args.Candidate) /*|| from == args.Candidate */ {
+		log.Errorf("args.Candidate is not candidate or from == args.Candidate %x", from)
 		return nil, core.ErrNotCandidate
 	}
 
@@ -469,14 +615,41 @@ func delegateValidation(from common.Address, tx *types.Transaction, state *state
 		}
 	}
 
-	// Check Epoch Height
-	if err := checkEpochInNormalStage(bc); err != nil {
-		return nil, err
-	}
 	return &args, nil
 }
 
 func cancelDelegateValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.CancelDelegateArgs, error) {
+
+	args, err := _cancelDelegateValidation(from, tx, state, bc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check Epoch Height
+	if err := checkEpochInNormalStage(bc); err != nil {
+		return nil, err
+	}
+
+	return args, nil
+}
+
+func cancelDelegateValidationV1(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.CancelDelegateArgs, error) {
+	
+	cch := bc.GetCrossChainHelper()
+
+	if !params.IsInstantDelegation(cch.GetMainChainId(), cch.GetHeightFromMainChain()) {
+		return nil, errors.New("not reach fork block yet")
+	}
+
+	args, err := _cancelDelegateValidation(from, tx, state, bc)
+	if err != nil {
+		return nil, err
+	}
+
+	return args, nil
+}
+
+func _cancelDelegateValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.CancelDelegateArgs, error) {
 
 	var args pabi.CancelDelegateArgs
 	data := tx.Data()

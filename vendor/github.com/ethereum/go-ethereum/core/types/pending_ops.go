@@ -139,3 +139,32 @@ func (op *RevealVoteOp) Conflict(op1 PendingOp) bool {
 func (op *RevealVoteOp) String() string {
 	return fmt.Sprintf("RevealVote")
 }
+
+
+// DelegateV1 op
+type DelegateV1OP struct {
+	Validator   common.Address
+	VotingPower *big.Int
+}
+
+func (op *DelegateV1OP) Conflict(op1 PendingOp) bool {
+	return false
+}
+
+func (op *DelegateV1OP) String() string {
+	return fmt.Sprintf("DelegateV1")
+}
+
+// CancelDeleateV1 op
+type CancelDelegateV1Op struct {
+	Validator   common.Address
+	VotingPower *big.Int
+}
+
+func (op *CancelDelegateV1Op) Conflict(op1 PendingOp) bool {
+	return false
+}
+
+func (op *CancelDelegateV1Op) String() string {
+	return fmt.Sprintf("CancelDelegateV1")
+}

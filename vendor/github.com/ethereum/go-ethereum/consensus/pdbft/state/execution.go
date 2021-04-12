@@ -6,10 +6,15 @@ import (
 
 	//"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
 	ep "github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+
+	"math/big"
 )
 
 //--------------------------------------------------
@@ -62,8 +67,9 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 //-----------------------------------------------------------------------------
 
 func init() {
-	core.RegisterInsertBlockCb("UpdateLocalEpoch", updateLocalEpoch)
-	core.RegisterInsertBlockCb("AutoStartMining", autoStartMining)
+	core.RegisterInsertBlockCb("UpdateLocalEpoch",  updateLocalEpoch)
+	core.RegisterInsertBlockCb("AutoStartMining",   autoStartMining)
+	core.RegisterInsertBlockCb("AdjustVotingPower", adjustVotingPower)
 }
 
 func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
@@ -127,5 +133,35 @@ func autoStartMining(bc *core.BlockChain, block *ethTypes.Block) {
 		if nextValidators.HasAddress(eng.PrivateValidator().Bytes()) && !eng.IsStarted() {
 			bc.PostChainEvents([]interface{}{core.StartMiningEvent{}}, nil)
 		}
+	}
+}
+
+func adjustVotingPower(bc *core.BlockChain, block *ethTypes.Block) {
+
+	eng := bc.Engine().(consensus.Tendermint)
+	curEpoch := eng.GetEpoch()
+
+	state, err := bc.StateAt(block.Root())
+	if err != nil {
+		log.Errorf("this should not happen, state should have stored the block")
+		return
+	}
+
+	mainBlock := block.Number()
+	if !bc.Config().IsMainChain() {
+		mainBlock = block.Header().MainChainNumber
+	}
+
+	//check and adjust all validator's voting power just before MainnetInstantDelegateBlock
+	if mainBlock == new(big.Int).Sub(params.MainnetInstantDelegateBlock, new(big.Int).SetUint64(1)) {
+
+		validators := curEpoch.Validators.Validators
+		for _, v := range  validators{
+
+			vAddr := common.BytesToAddress(v.Address)
+			v.VotingPower = new(big.Int).Add(state.GetDepositBalance(vAddr), state.GetTotalDepositProxiedBalance(vAddr))
+		}
+
+		curEpoch.Save()
 	}
 }

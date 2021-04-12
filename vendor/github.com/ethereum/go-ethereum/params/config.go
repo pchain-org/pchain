@@ -53,6 +53,9 @@ var (
 	MainnetHeaderHashWithoutTimeBlock=big.NewInt(17160000)
 	TestnetHeaderHashWithoutTimeBlock=big.NewInt(40)
 
+	MainnetInstantDelegateBlock=big.NewInt(30000000)
+	TestnetInstantDelegateBlock=big.NewInt(3000000)
+
 )
 
 var (
@@ -421,6 +424,15 @@ func (c *ChainConfig) IsMainChain() bool {
 // Check provided chain id is on main chain or not
 func IsMainChain(chainId string) bool {
 	return chainId == MainnetChainConfig.PChainId || chainId == TestnetChainConfig.PChainId
+}
+
+func IsInstantDelegation(mainChainId string, mainBlockNumber *big.Int) bool {
+	if mainChainId == MainnetChainConfig.PChainId {
+		return isForked(MainnetInstantDelegateBlock, mainBlockNumber)
+	} else if mainChainId == TestnetChainConfig.PChainId {
+		return isForked(TestnetInstantDelegateBlock, mainBlockNumber)
+	}
+	return false
 }
 
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).

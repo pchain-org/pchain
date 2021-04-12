@@ -476,6 +476,12 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 	selfRetrieveReward := consensus.IsSelfRetrieveReward(sb.GetEpoch(), chain, header)
 
+	mainBlock := header.Number
+	if !sb.chainConfig.IsMainChain() {
+		mainBlock = header.MainChainNumber
+	}
+
+	instantDelegate := params.IsInstantDelegation(sb.chainConfig.PChainId, mainBlock)
 
 	// Calculate the rewards
 	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
@@ -483,7 +489,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
 										sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
-										selfRetrieveReward); ok {
+										selfRetrieveReward, instantDelegate); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
@@ -661,7 +667,12 @@ func (sb *backend) GetEpoch() *epoch.Epoch {
 
 // SetEpoch Set Epoch to Tendermint Engine
 func (sb *backend) SetEpoch(ep *epoch.Epoch) {
-	sb.core.consensusState.Epoch = ep
+	sb.core.consensusState.SetEpoch(ep)
+}
+
+func (sb *backend) CheckAndRefreshVotingPowerForValidators(state *state.StateDB, ep *epoch.Epoch) bool{
+	//"compile error for check"
+	return true
 }
 
 // Return the private validator address of consensus

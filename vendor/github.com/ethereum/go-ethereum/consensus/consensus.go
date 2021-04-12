@@ -184,6 +184,9 @@ type Tendermint interface {
 
 	SetEpoch(ep *epoch.Epoch)
 
+	//check if need refresh validator's total voting power; true means it needs
+	CheckAndRefreshVotingPowerForValidators(state *state.StateDB, ep *epoch.Epoch) bool
+
 	PrivateValidator() common.Address
 
 	// VerifyHeader checks whether a header conforms to the consensus rules of a given engine.

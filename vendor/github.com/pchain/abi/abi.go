@@ -25,13 +25,15 @@ var (
 	SaveDataToMainChain    = FunctionType{6, true, true, false}
 	SetBlockReward         = FunctionType{7, true, false, true}
 	// Non-Cross Chain Function
-	VoteNextEpoch   = FunctionType{10, false, true, true}
-	RevealVote      = FunctionType{11, false, true, true}
-	Delegate        = FunctionType{12, false, true, true}
-	CancelDelegate  = FunctionType{13, false, true, true}
-	Candidate       = FunctionType{14, false, true, true}
-	CancelCandidate = FunctionType{15, false, true, true}
-	ExtractReward   = FunctionType{16, false, true, true}
+	VoteNextEpoch    = FunctionType{10, false, true, true}
+	RevealVote       = FunctionType{11, false, true, true}
+	Delegate         = FunctionType{12, false, true, true}
+	CancelDelegate   = FunctionType{13, false, true, true}
+	Candidate        = FunctionType{14, false, true, true}
+	CancelCandidate  = FunctionType{15, false, true, true}
+	ExtractReward    = FunctionType{16, false, true, true}
+	DelegateV1       = FunctionType{17, false, true, true}
+	CancelDelegateV1 = FunctionType{18, false, true, true}
 	// Unknown
 	Unknown = FunctionType{-1, false, false, false}
 )
