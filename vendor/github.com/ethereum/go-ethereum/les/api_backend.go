@@ -172,6 +172,11 @@ func (b *LesApiBackend) ProtocolVersion() int {
 	return b.eth.LesVersion() + 10000
 }
 
+func (b *LesApiBackend) ChainId() *big.Int {
+	localChainID := b.eth.chainConfig.ChainId
+	return types.GetPublicChainID(localChainID)
+}
+
 func (b *LesApiBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	return b.gpo.SuggestPrice(ctx)
 }
@@ -218,6 +223,6 @@ func (b *LesApiBackend) BroadcastTX3ProofData(proofData *types.TX3ProofData) {
 	panic("not supported")
 }
 
-func (b *LesApiBackend) Engine() consensus.Engine{
+func (b *LesApiBackend) Engine() consensus.Engine {
 	panic("not supported")
 }
