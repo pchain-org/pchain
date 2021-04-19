@@ -148,10 +148,20 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 	if !tx.Protected() {
 		return common.Address{}, ErrInvalidSigner
 	}
-	if tx.ChainId().Cmp(s.chainId) != 0 {
-		return common.Address{}, ErrInvalidChainId
+	var V *big.Int
+	if tx.ChainId().BitLen() <= 32 { // tx from ethereum tool
+		publicChainId := GetPublicChainID(s.chainId)
+		if tx.ChainId().Cmp(publicChainId) != 0 {
+			return common.Address{}, ErrInvalidChainId
+		}
+		publicChainIdMul := new(big.Int).Mul(publicChainId, big.NewInt(2))
+		V = new(big.Int).Sub(tx.data.V, publicChainIdMul)
+	} else { // tx from pchain tool
+		if tx.ChainId().Cmp(s.chainId) != 0 {
+			return common.Address{}, ErrInvalidChainId
+		}
+		V = new(big.Int).Sub(tx.data.V, s.chainIdMul)
 	}
-	V := new(big.Int).Sub(tx.data.V, s.chainIdMul)
 	V.Sub(V, big8)
 	return recoverPlain(s.Hash(tx), tx.data.R, tx.data.S, V, true)
 }
@@ -173,6 +183,12 @@ func (s EIP155Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
+	var chainIdPublic *big.Int
+	if tx.ChainId().BitLen() <= 32 {
+		chainIdPublic = GetPublicChainID(s.chainId)
+	} else {
+		chainIdPublic = s.chainId
+	}
 	return rlpHash([]interface{}{
 		tx.data.AccountNonce,
 		tx.data.Price,
@@ -180,7 +196,7 @@ func (s EIP155Signer) Hash(tx *Transaction) common.Hash {
 		tx.data.Recipient,
 		tx.data.Amount,
 		tx.data.Payload,
-		s.chainId, uint(0), uint(0),
+		chainIdPublic, uint(0), uint(0),
 	})
 }
 
@@ -277,4 +293,13 @@ func deriveChainId(v *big.Int) *big.Int {
 	}
 	v = new(big.Int).Sub(v, big.NewInt(35))
 	return v.Div(v, big.NewInt(2))
+}
+
+func GetPublicChainID(chainId *big.Int) *big.Int {
+	start, end := 22, 25
+	bs := chainId.Bytes()
+	if len(bs) <= end-start {
+		return chainId
+	}
+	return new(big.Int).SetBytes(bs[start:end])
 }

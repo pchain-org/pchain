@@ -71,6 +71,11 @@ func (s *PublicEthereumAPI) ProtocolVersion() hexutil.Uint {
 	return hexutil.Uint(s.b.ProtocolVersion())
 }
 
+// ChainId is the EIP-155 replay-protection chain id for the current ethereum chain config.
+func (s *PublicEthereumAPI) ChainId() (hexutil.Uint64, error) {
+	return (hexutil.Uint64)(s.b.ChainId().Uint64()), nil
+}
+
 // Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
 // yet received the latest block headers from its pears. In case it is synchronizing:
 // - startingBlock: block number this node started to synchronise from
@@ -545,7 +550,7 @@ func (s *PublicBlockChainAPI) GetFullBalance(ctx context.Context, address common
 
 		outsideReward := s.b.ChainConfig().IsOutOfStorage(header.Number, header.MainChainNumber)
 		if outsideReward {
-			r := state.Database().TrieDB().GetAllEpochReward(address,uint64(blockNr))
+			r := state.Database().TrieDB().GetAllEpochReward(address, uint64(blockNr))
 			for k, v := range r {
 				reward_detail[EpochLabel(k)] = (*hexutil.Big)(v)
 			}
