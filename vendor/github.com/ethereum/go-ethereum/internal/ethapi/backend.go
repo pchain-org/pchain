@@ -84,13 +84,14 @@ func GetAPIs(apiBackend Backend, solcPath string) []rpc.API {
 	compiler := makeCompilerAPIs(solcPath)
 	nonceLock := new(AddrLocker)
 	txapi := NewPublicTransactionPoolAPI(apiBackend, nonceLock)
-	apiBackend.SetInnerAPIBridge(&APIBridge{txapi: txapi})
+	peapi := NewPublicEthereumAPI(apiBackend)
+	apiBackend.SetInnerAPIBridge(&InnerAPIBridgeImp{txapi: txapi, peapi: peapi})
 
 	all := []rpc.API{
 		{
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   NewPublicEthereumAPI(apiBackend),
+			Service:   peapi,
 			Public:    true,
 		}, {
 			Namespace: "eth",

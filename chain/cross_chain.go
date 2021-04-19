@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/bridge"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -295,6 +296,11 @@ func (cch *CrossChainHelper) GetEpochFromMainChain() (string, *epoch.Epoch) {
 		ep = tdm.GetEpoch()
 	}
 	return ethereum.ChainConfig().PChainId, ep
+}
+
+func (cch *CrossChainHelper) GetApiBridgeFromMainChain() bridge.APIBridge {
+	ethereum := MustGetEthereumFromNode(chainMgr.mainChain.EthNode)
+	return &MainChainAPIBridge{ethereum}
 }
 
 func (cch *CrossChainHelper) ChangeValidators(chainId string) {

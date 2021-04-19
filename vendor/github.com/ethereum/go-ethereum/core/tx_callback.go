@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/bridge"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -42,6 +43,7 @@ type CrossChainHelper interface {
 	GetHeightFromMainChain() *big.Int
 	GetEpochFromMainChain() (string, *epoch.Epoch)
 	GetTxFromMainChain(txHash common.Hash) *types.Transaction
+	GetApiBridgeFromMainChain() bridge.APIBridge
 
 	ChangeValidators(chainId string)
 

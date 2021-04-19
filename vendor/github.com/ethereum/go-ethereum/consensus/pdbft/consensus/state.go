@@ -2,6 +2,8 @@ package consensus
 
 import (
 	"bytes"
+	"context"
+	"crypto/ecdsa"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -17,11 +19,13 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	tmdcrypto "github.com/tendermint/go-crypto"
 	"math/big"
+	"math/rand"
 	"reflect"
 	"sync"
 	"time"
@@ -2155,8 +2159,6 @@ func (cs *ConsensusState) ValidateTX4(b *types.TdmBlock) error {
 
 func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block, version int) {
 
-	mainChainUrl := cs.cch.GetMainChainUrl()
-
 	bs := []byte{}
 	if version == 0 {
 		proofData, err := ethTypes.NewChildChainProofData(block)
@@ -2192,7 +2194,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block, version in
 			return
 		}
 
-		hash, err := ethclient.SendDataToMainChain(mainChainUrl, bs, prv, cs.cch.GetMainChainId())
+		hash, err := cs.SendDataToMainChain(bs, prv, cs.cch.GetMainChainId())
 		if err != nil {
 			cs.logger.Error("saveDataToMainChain(rpc) failed", "err", err)
 			return
@@ -2203,7 +2205,9 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block, version in
 		//we wait for 15 seconds, if not write to main chain, just return
 		seconds := 0
 		for ; seconds < 15;  {
-			_, isPending, err := ethclient.WrpTransactionByHash(mainChainUrl, hash)
+
+			ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+			isPending, err := cs.cch.GetApiBridgeFromMainChain().GetTransactionByHash(ctx, hash)
 			if !isPending && err == nil {
 				cs.logger.Error("saveDataToMainChain: tx packaged in block in main chain")
 				return
@@ -2242,4 +2246,101 @@ func (cs *ConsensusState) broadcastTX3ProofDataToMainChain(block *ethTypes.Block
 		cs.logger.Error("broadcastTX3ProofDataToMainChain(rpc) failed", "err", err)
 		return
 	}
+}
+
+
+// SendDataToMainChain send epoch data to main chain through eth_sendRawTransaction
+func (cs *ConsensusState) SendDataToMainChain(data []byte, prv *ecdsa.PrivateKey, mainChainId string) (common.Hash, error) {
+
+	// data
+	bs, err := pabi.ChainABI.Pack(pabi.SaveDataToMainChain.String(), data)
+	if err != nil {
+		log.Errorf("SendDataToMainChain, pack err: %v", err)
+		return common.Hash{}, err
+	}
+
+	account := crypto.PubkeyToAddress(prv.PublicKey)
+
+	// tx signer for the main chain
+	digest := crypto.Keccak256([]byte(mainChainId))
+	signer := ethTypes.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
+
+	var hash = common.Hash{}
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	apiBridge := cs.cch.GetApiBridgeFromMainChain()
+	
+	err = retry(3, time.Second*3, func() error {
+		// gasPrice
+		gasPrice, err := apiBridge.GasPrice(ctx)
+		if err != nil {
+			log.Errorf("SendDataToMainChain, WrpSuggestGasPrice err: %v", err)
+			return err
+		}
+
+		// nonce, fetch the nonce first, if we get nonce too low error, we will manually add the value until the error gone
+		nonce, err := apiBridge.GetTransactionCount(ctx, account, rpc.LatestBlockNumber)
+		if err != nil {
+			log.Errorf("SendDataToMainChain, WrpNonceAt err: %v", err)
+			return err
+		}
+
+		// tx
+		tx := ethTypes.NewTransaction(uint64(*nonce), pabi.ChainContractMagicAddr, nil, 0, gasPrice.ToInt(), bs)
+
+		// sign the tx
+		signedTx, err := ethTypes.SignTx(tx, signer, prv)
+		if err != nil {
+			log.Errorf("SendDataToMainChain, SignTx err: %v", err)
+			return  err
+		}
+
+		// eth_sendRawTransaction
+		txData, err := rlp.EncodeToBytes(signedTx)
+		if err != nil {
+			return err
+		}
+
+		hash, err = apiBridge.SendRawTransaction(ctx, txData)
+		if err != nil {
+			log.Errorf("SendDataToMainChain, WrpSendTransaction err: %v", err)
+			return err
+		}
+		nonce, err = apiBridge.GetTransactionCount(ctx, account, rpc.PendingBlockNumber)
+
+		return nil
+	})
+
+	if err != nil {
+		log.Errorf("SendDataToMainChain, 3 times of failure, last err: %v", err)
+	} else {
+		log.Errorf("SendDataToMainChain, succeeded with hash: %v", hash)
+	}
+
+	return hash, err
+}
+
+
+//attemps: this parameter means the total amount of operations
+func retry(attemps int, sleep time.Duration, fn func() error) error {
+
+	for ; attemps > 0; {
+
+		err := fn()
+		if err == nil {
+			return nil
+		}
+
+		attemps --
+		if attemps == 0 {
+			return err
+		}
+
+		// Add some randomness to prevent creating a Thundering Herd
+		jitter := time.Duration(rand.Int63n(int64(sleep)))
+		sleep = sleep + jitter/2
+
+		time.Sleep(sleep)
+	}
+
+	return nil
 }
