@@ -857,6 +857,15 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'getNextEpochValidators',
 			call: 'tdm_getNextEpochValidators'
+		}),new web3._extend.Method({
+			name: 'getCurrentEpochNumberOfChildChain',
+			call: 'tdm_getCurrentEpochNumberOfChildChain',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getEpochOfChildChain',
+			call: 'tdm_getEpochOfChildChain',
+			params: 2
 		})
 	],
 	properties:

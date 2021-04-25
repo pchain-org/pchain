@@ -168,6 +168,10 @@ func (n *Node) ConsensusReactor() *consensus.ConsensusReactor {
 	return n.consensusReactor
 }
 
+func (n *Node) CrossChainHelper() core.CrossChainHelper {
+	return n.cch
+}
+
 func (n *Node) EventSwitch() types.EventSwitch {
 	return n.evsw
 }
