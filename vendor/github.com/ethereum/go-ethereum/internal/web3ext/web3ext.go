@@ -869,7 +869,12 @@ web3._extend({
 		})
 	],
 	properties:
-	[]
+	[
+		new web3._extend.Property({
+			name: 'peers',
+			getter: 'tdm_peers'
+		})
+	]
 });
 `
 

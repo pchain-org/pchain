@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 )
@@ -220,4 +221,10 @@ func (api *API) GetEpochOfChildChain(chainId string, num hexutil.Uint64) (*tdmTy
 		RevealEndBlock:   hexutil.Uint64(resultEpoch.GetRevealVoteEndHeight()),
 		Validators:       validators,
 	}, nil
+}
+
+// Peers retrieves all the information we know about each individual peer at the
+// protocol granularity for the specific chain.
+func (api *API) Peers() ([]*p2p.PeerInfo, error) {
+	return api.tendermint.core.consensusReactor.PeersInfo(), nil
 }

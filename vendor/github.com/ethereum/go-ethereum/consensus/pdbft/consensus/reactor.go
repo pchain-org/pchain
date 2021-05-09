@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
 	"reflect"
 	"sync"
 	"time"
@@ -140,6 +141,32 @@ func (conR *ConsensusReactor) RemovePeer(peer consensus.Peer, reason interface{}
 		ps.Disconnect()
 	}
 	conR.peerStates.Delete(peer.GetKey())
+}
+
+func (conR *ConsensusReactor) PeersInfo() []*p2p.PeerInfo {
+
+	// Gather all the generic and sub-protocol specific infos
+	infos := make([]*p2p.PeerInfo, 0)
+	conR.peerStates.Range(func(_, val interface{}) bool{
+
+		peer := val.(*PeerState).Peer.P2PPeer()
+		if peer != nil {
+			infos = append(infos, peer.Info())
+			return true
+		}
+
+		return true
+	})
+
+	// Sort the result array alphabetically by node identifier
+	for i := 0; i < len(infos); i++ {
+		for j := i + 1; j < len(infos); j++ {
+			if infos[i].ID > infos[j].ID {
+				infos[i], infos[j] = infos[j], infos[i]
+			}
+		}
+	}
+	return infos
 }
 
 func (conR *ConsensusReactor) startPeerRoutine() {
