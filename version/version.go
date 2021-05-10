@@ -7,7 +7,7 @@ import (
 const (
 	Major = 1  // Major version component of the current release
 	Minor = 3  // Minor version component of the current release
-	Patch = 7  // Patch version component of the current release
+	Patch = 8  // Patch version component of the current release
 	Meta  = "" // Version metadata to append to the version string
 )
 
