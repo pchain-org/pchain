@@ -113,7 +113,7 @@ One of the quickest ways to get Pchain up and running on your machine is by usin
 ```
 docker run -d --name pchain-node -v ~/pchain/.pchain:/.pchain \
            -p 6969:6969 -p 30308:30308 \
-           pchain/client-go --datadir=/.pchain
+           plian/pchain --datadir=/.pchain
 ```
 This will start pchain just as the above command does. It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports.
 
