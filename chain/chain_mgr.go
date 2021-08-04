@@ -57,6 +57,14 @@ func GetCMInstance(ctx *cli.Context) *ChainManager {
 	return chainMgr
 }
 
+func (cm *ChainManager) GetMainChain() *Chain {
+	return cm.mainChain
+}
+
+func (cm *ChainManager) GetChildChains() map[string]*Chain {
+	return cm.childChains
+}
+
 func (cm *ChainManager) GetNodeID() string {
 	return cm.server.Server().NodeInfo().ID
 }
@@ -71,7 +79,7 @@ func (cm *ChainManager) LoadMainChain(ctx *cli.Context) error {
 	if ctx.GlobalBool(utils.TestnetFlag.Name) {
 		chainId = TestnetChain
 	}
-	cm.mainChain = LoadMainChain(cm.ctx, chainId)
+	cm.mainChain = LoadChain(cm.ctx, chainId)
 	if cm.mainChain == nil {
 		return errors.New("Load main chain failed")
 	}
@@ -79,7 +87,7 @@ func (cm *ChainManager) LoadMainChain(ctx *cli.Context) error {
 	return nil
 }
 
-func (cm *ChainManager) LoadChains(childIds []string) error {
+func (cm *ChainManager) LoadChildChains(childIds []string) error {
 
 	childChainIds := core.GetChildChainIds(cm.cch.chainInfoDB)
 	log.Infof("Before Load Child Chains, childChainIds is %v, len is %d", childChainIds, len(childChainIds))
@@ -117,7 +125,7 @@ func (cm *ChainManager) LoadChains(childIds []string) error {
 	log.Infof("Start to Load Child Chain - %v", readyToLoadChains)
 
 	for chainId := range readyToLoadChains {
-		chain := LoadChildChain(cm.ctx, chainId)
+		chain := LoadChain(cm.ctx, chainId)
 		if chain == nil {
 			log.Errorf("Load Child Chain - %s Failed.", chainId)
 			continue
@@ -130,7 +138,7 @@ func (cm *ChainManager) LoadChains(childIds []string) error {
 }
 
 func (cm *ChainManager) InitCrossChainHelper() {
-		cm.cch.chainInfoDB = dbm.NewDB("chaininfo", "leveldb",
+	cm.cch.chainInfoDB = dbm.NewDB("chaininfo", "leveldb",
 		cm.ctx.GlobalString(utils.DataDirFlag.Name))
 	cm.cch.localTX3CacheDB, _ = rawdb.NewLevelDBDatabase(path.Join(cm.ctx.GlobalString(utils.DataDirFlag.Name), "tx3cache"), 0, 0, "pchain/db/tx3/")
 
@@ -180,7 +188,7 @@ func (cm *ChainManager) StartMainChain() error {
 	return err
 }
 
-func (cm *ChainManager) StartChains() error {
+func (cm *ChainManager) StartChildChains() error {
 
 	for _, chain := range cm.childChains {
 		// Start each Chain
@@ -353,7 +361,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		return
 	}
 
-	chain := LoadChildChain(cm.ctx, chainId)
+	chain := LoadChain(cm.ctx, chainId)
 	if chain == nil {
 		log.Errorf("Child Chain %v load failed!", chainId)
 		return
@@ -423,7 +431,7 @@ func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainIn
 
 func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool {
 	var ethereum *eth.Ethereum
-	cm.mainChain.EthNode.Service(&ethereum)
+	cm.mainChain.EthNode.ServiceRegistered(&ethereum)
 
 	var localEtherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"sync"
 	"time"
 
@@ -58,6 +57,13 @@ var secureKeyPrefix = []byte("secure-key-")
 // secureKeyLength is the length of the above prefix + 32byte hash.
 const secureKeyLength = 11 + 32
 
+
+// used to handle the raw data when it is retrieving from db
+type Snapshot interface {
+	Handle(key, value []byte) //action on key/value bytes from source db
+}
+
+
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
@@ -87,6 +93,8 @@ type Database struct {
 
 	dirtiesSize   common.StorageSize // Storage size of the dirty node cache (exc. flushlist)
 	preimagesSize common.StorageSize // Storage size of the preimages cache
+
+	snapshot	Snapshot		// snapshot helps to handle key/value when accessing raw data from db
 
 	lock sync.RWMutex
 }
@@ -308,6 +316,30 @@ func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int) *Database {
 	}
 }
 
+// NewDatabaseWithCache creates a new trie database to store ephemeral trie content
+// before its written out to disk or garbage collected. It also acts as a read cache
+// for nodes loaded from disk.
+func NewDatabaseWithCacheSnapShot(diskdb ethdb.KeyValueStore, cache int, sn Snapshot) *Database {
+	var cleans *bigcache.BigCache
+	if cache > 0 {
+		cleans, _ = bigcache.NewBigCache(bigcache.Config{
+			Shards:             1024,
+			LifeWindow:         time.Hour,
+			MaxEntriesInWindow: cache * 1024,
+			MaxEntrySize:       512,
+			HardMaxCacheSize:   cache,
+			Hasher:             trienodeHasher{},
+		})
+	}
+	return &Database{
+		diskdb:    diskdb,
+		cleans:    cleans,
+		dirties:   map[common.Hash]*cachedNode{{}: {}},
+		preimages: make(map[common.Hash][]byte),
+		snapshot:  sn,
+	}
+}
+
 // DiskDB retrieves the persistent storage backing the trie database.
 func (db *Database) DiskDB() ethdb.Reader {
 	return db.diskdb
@@ -391,6 +423,11 @@ func (db *Database) node(hash common.Hash) node {
 	if err != nil || enc == nil {
 		return nil
 	}
+
+	if db.snapshot != nil {
+		db.snapshot.Handle(hash[:], enc)
+	}
+
 	if db.cleans != nil {
 		db.cleans.Set(string(hash[:]), enc)
 		memcacheCleanMissMeter.Mark(1)
@@ -425,6 +462,11 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// Content unavailable in memory, attempt to retrieve from disk
 	enc, err := db.diskdb.Get(hash[:])
 	if err == nil && enc != nil {
+
+		if db.snapshot != nil {
+			db.snapshot.Handle(hash[:], enc)
+		}
+
 		if db.cleans != nil {
 			db.cleans.Set(string(hash[:]), enc)
 			memcacheCleanMissMeter.Mark(1)
@@ -870,184 +912,4 @@ func (db *Database) accumulate(hash common.Hash, reachable map[common.Hash]struc
 	for _, child := range node.childs() {
 		db.accumulate(child, reachable)
 	}
-}
-
-
-func (db *Database) GetEpochReward(address common.Address, epoch uint64, height uint64) *big.Int {
-	reward, _ := db.diskdb.Get(append(append(common.RewardPrefix, address.Bytes()...), common.EncodeUint64(epoch)...))
-	if len(reward) == 0 {
-		return big.NewInt(0)
-	} else {
-		obrArray, err := common.Bytes2OBRArray(reward)
-		if err == nil {
-			closestIndex := 0
-			closestHeight := uint64(common.INV_HEIGHT)
-			for i:=0; i<common.OBR_SIZE; i++ {
-				key := obrArray.ObrArray[i].Height
-				if key == height {
-					return obrArray.ObrArray[i].Reward
-				} else if key < height {
-					if closestHeight == common.INV_HEIGHT || key > closestHeight {
-						closestIndex = i
-						closestHeight = key
-					}
-				}
-			}
-
-			if closestHeight != common.INV_HEIGHT {
-				return obrArray.ObrArray[closestIndex].Reward
-			}
-
-			return big.NewInt(0)
-		}
-
-		return new(big.Int).SetBytes(reward)
-	}
-}
-
-func (db *Database) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int {
-	it := db.diskdb.NewIteratorWithPrefix(append(common.RewardPrefix, address.Bytes()...))
-	defer it.Release()
-
-	result := make(map[uint64]*big.Int)
-	for it.Next() {
-		epoch := common.DecodeUint64(it.Key()[21:])
-		reward := db.GetEpochReward(address, epoch, height)
-		result[epoch] = reward
-	}
-	return result
-}
-
-func (db *Database) WriteEpochRewardExtracted(address common.Address, epoch uint64, height uint64) error {
-
-	oriEpoch, _ := db.diskdb.Get(append(common.RewardExtractPrefix, address.Bytes()...))
-
-	xtr := common.XTRArray{}
-	initIndex := 0
-
-	err := errors.New("")
-	if len(oriEpoch) != 0 {
-		xtr, err = common.Bytes2XTRArray(oriEpoch)
-		if err != nil {
-			xtr.XtrArray[0].Height = common.DFLT_START
-			xtr.XtrArray[0].Epoch = common.DecodeUint64(oriEpoch)
-			initIndex = 1
-		} else {
-			initIndex = common.XTR_SIZE
-		}
-	}
-
-	for i:=initIndex; i<common.XTR_SIZE; i++ {
-		xtr.XtrArray[i].Height = common.INV_HEIGHT
-		xtr.XtrArray[i].Epoch = common.INV_EPOCH
-	}
-
-	minIndex := 0
-	minHeight := uint64(common.INV_HEIGHT)
-	settled := false
-	for i:=0; i<common.XTR_SIZE; i++ {
-		key := xtr.XtrArray[i].Height
-		if key >= height {
-			if !settled {
-				xtr.XtrArray[i].Height = height
-				xtr.XtrArray[i].Epoch = epoch
-				settled = true
-			} else if key != common.INV_HEIGHT{
-				xtr.XtrArray[i].Height = common.INV_HEIGHT
-				xtr.XtrArray[i].Epoch = common.INV_EPOCH
-			}
-		} else {
-			if minHeight == common.INV_HEIGHT || key < minHeight {
-				minIndex = i
-				minHeight = key
-			}
-		}
-	}
-
-	if !settled {
-		xtr.XtrArray[minIndex].Height = height
-		xtr.XtrArray[minIndex].Epoch = epoch
-	}
-
-	epochBytes, err := common.XTRArray2Bytes(xtr)
-	if err != nil {
-		log.Crit("Failed to convert extract_reward", "err", err)
-		return err
-	}
-
-	if err := db.diskdb.Put(append(common.RewardExtractPrefix, address.Bytes()...), epochBytes); err != nil {
-		log.Crit("Failed to store extract_reward", "err", err)
-		return err
-	}
-
-	return nil
-}
-
-func (db *Database) GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error) {
-
-	epochBytes, err := db.diskdb.Get(append(common.RewardExtractPrefix, address.Bytes()...))
-
-	if err != nil {
-		return common.INV_EPOCH, err
-	}
-
-	if len(epochBytes) == 0 {
-		log.Errorf("data error, no epoch for reward_extract readed")
-		return common.INV_EPOCH, nil
-	} else {
-		xtrArray, err := common.Bytes2XTRArray(epochBytes)
-		if err == nil {
-			closestIndex := 0
-			closestHeight := uint64(common.INV_HEIGHT)
-			hasInvalidKey := false
-			for i:=0; i<common.XTR_SIZE; i++ {
-				key := xtrArray.XtrArray[i].Height
-				if key == height {
-					return xtrArray.XtrArray[i].Epoch, nil
-				} else if key < height {
-					if closestHeight == common.INV_HEIGHT || key > closestHeight {
-						closestIndex = i
-						closestHeight = key
-					}
-				} else if key == common.INV_HEIGHT {
-					hasInvalidKey = true
-				}
-			}
-
-			if closestHeight != common.INV_HEIGHT {
-				return xtrArray.XtrArray[closestIndex].Epoch, nil
-			}
-
-			if !hasInvalidKey {
-				log.Crit("data error, no epoch for reward_extract readed; " +
-					"if it is during rollback, need to catchup from 0 block or restore from a snapshot")
-				return common.INV_EPOCH, nil
-			} else {
-				return common.INV_EPOCH, errors.New("no Extract Mark yet")
-			}
-
-		}
-
-		return common.DecodeUint64(epochBytes), nil
-	}
-}
-
-func (db *Database) ReadOOSLastBlock() (*big.Int, error) {
-	blockBytes, err := db.diskdb.Get(common.OosLastBlockKey)
-
-	if err != nil {
-		return big.NewInt(-1), err
-	}
-
-	return new(big.Int).SetBytes(blockBytes), nil
-}
-
-func (db *Database) WriteOOSLastBlock(blockNumber *big.Int) error {
-	return db.diskdb.Put(common.OosLastBlockKey, blockNumber.Bytes())
-}
-
-func (db *Database) MarkProposedInEpoch(address common.Address, epoch uint64) error {
-	return db.diskdb.Put(append(
-		append(common.ProposedInEpochPrefix, address.Bytes()...), common.EncodeUint64(epoch)...),
-		common.EncodeUint64(1))
 }

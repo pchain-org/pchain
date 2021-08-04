@@ -17,6 +17,12 @@ var (
 		Value: utils.DirectoryString{"log"},
 	}
 
+	// Chain Flag
+	StringChainIdFlag = cli.StringFlag{
+		Name:  "strChainId",
+		Usage: "Specify one chain should be accessed. Ex: pchain, child-1,child-2",
+	}
+
 	// Child Chain Flag
 	ChildChainFlag = cli.StringFlag{
 		Name:  "childChain",

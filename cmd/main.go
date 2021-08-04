@@ -2,6 +2,12 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"runtime"
+	"time"
+
 	"github.com/ethereum/go-ethereum/bridge"
 	"github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -12,11 +18,6 @@ import (
 	"github.com/pchain/chain"
 	"github.com/pchain/version"
 	"gopkg.in/urfave/cli.v1"
-	"os"
-	"path"
-	"path/filepath"
-	"runtime"
-	"time"
 )
 
 const (
@@ -75,9 +76,27 @@ func main() {
 			Description: "Generate priv_validator.json for address",
 		},
 
+		{
+			Action:    utils.MigrateFlags(dumpCmd),
+			Name:      "dump",
+			Usage:     "Dump a specific block from storage",
+			ArgsUsage: "[<blockHash> | <blockNum>]...",
+			Flags: []cli.Flag{
+				utils.DataDirFlag,
+				StringChainIdFlag,
+				//utils.CacheFlag,
+				//utils.LightModeFlag,
+			},
+			Category: "BLOCKCHAIN COMMANDS",
+			Description: `
+The arguments are interpreted as block numbers or hashes.
+Use "ethereum dump 0" to dump the genesis block.`,
+		},
+
 		// See consolecmd.go:
 		//gethmain.ConsoleCommand,
 		gethmain.AttachCommand,
+
 		//gethmain.JavascriptCommand,
 		gethmain.ImportChainCommand,
 		gethmain.ExportChainCommand,
@@ -87,6 +106,7 @@ func main() {
 
 		//walletCommand,
 		accountCommand,
+		snapshotCommand,
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 
@@ -240,6 +260,7 @@ func newCliApp(version, usage string) *cli.App {
 		utils.PerfTestFlag,
 
 		LogDirFlag,
+		StringChainIdFlag,
 		ChildChainFlag,
 
 		/*

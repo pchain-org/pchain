@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -323,6 +324,11 @@ func (self *StateDB) HasTX3(a common.Address, txHash common.Hash) bool {
 // Database retrieves the low level database supporting the lower level trie ops.
 func (self *StateDB) Database() Database {
 	return self.db
+}
+
+// Database retrieves the low level database supporting the lower level trie ops.
+func (self *StateDB) EthDatabase() ethdb.Database {
+	return self.db.TrieDB().DiskDB().(ethdb.Database)
 }
 
 // StorageTrie returns the storage trie of an account.

@@ -25,39 +25,17 @@ type Chain struct {
 	EthNode *eth.Node
 }
 
-func LoadMainChain(ctx *cli.Context, chainId string) *Chain {
+func LoadChain(ctx *cli.Context, chainId string) *Chain {
 
-	chain := &Chain{Id: chainId}
-	config := GetTendermintConfig(chainId, ctx)
-	chain.Config = config
+	log.Infof("now load chain: %s", chainId)
 
-	//always start ethereum
-	log.Info("ethereum.MakeSystemNode")
-	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, GetCMInstance(ctx).cch)
-	chain.EthNode = stack
-
-	return chain
-}
-
-func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
-
-	log.Infof("now load child: %s", chainId)
-
-	//chainDir := ChainDir(ctx, chainId)
-	//empty, err := cmn.IsDirEmpty(chainDir)
-	//log.Infof("chainDir is : %s, empty is %v", chainDir, empty)
-	//if empty || err != nil {
-	//	log.Errorf("directory %s not exist or with error %v", chainDir, err)
-	//	return nil
-	//}
 	chain := &Chain{Id: chainId}
 	config := GetTendermintConfig(chainId, ctx)
 	chain.Config = config
 
 	//always start ethereum
 	log.Infof("chainId: %s, ethereum.MakeSystemNode", chainId)
-	cch := GetCMInstance(ctx).cch
-	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, cch)
+	stack := ethereum.MakeSystemNode(chainId, version.Version, ctx, GetCMInstance(ctx).cch)
 	if stack == nil {
 		return nil
 	} else {

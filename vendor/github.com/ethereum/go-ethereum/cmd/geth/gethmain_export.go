@@ -7,6 +7,7 @@ import (
 
 //var ConsoleCommand = consoleCommand
 var AttachCommand = attachCommand
+var DumpCommand = dumpCommand
 
 //var JavascriptCommand = javascriptCommand
 

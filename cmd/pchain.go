@@ -53,14 +53,14 @@ func pchainCmd(ctx *cli.Context) error {
 	err = chainMgr.StartMainChain()
 
 	// Load Child Chain
-	err = chainMgr.LoadChains(requestChildChain)
+	err = chainMgr.LoadChildChains(requestChildChain)
 	if err != nil {
 		log.Errorf("Load Child Chains failed. %v", err)
 		return err
 	}
 
 	// Start Child Chain
-	err = chainMgr.StartChains()
+	err = chainMgr.StartChildChains()
 	if err != nil {
 		log.Error("start chains failed")
 		return err

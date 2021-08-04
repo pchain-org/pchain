@@ -11,6 +11,35 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 )
 
+// Store the Delegate Refund Set
+var refundSetKey = []byte("DelegateRefundSet")
+type DelegateRefundSet map[common.Address]struct{}
+
+func (set DelegateRefundSet) EncodeRLP(w io.Writer) error {
+	var list []common.Address
+	for addr := range set {
+		list = append(list, addr)
+	}
+	sort.Slice(list, func(i, j int) bool {
+		return bytes.Compare(list[i].Bytes(), list[j].Bytes()) == 1
+	})
+	return rlp.Encode(w, list)
+}
+
+func (set *DelegateRefundSet) DecodeRLP(s *rlp.Stream) error {
+	var list []common.Address
+	if err := s.Decode(&list); err != nil {
+		return err
+	}
+	refundSet := make(DelegateRefundSet, len(list))
+	for _, addr := range list {
+		refundSet[addr] = struct{}{}
+	}
+	*set = refundSet
+	return nil
+}
+
+
 // ----- DelegateBalance
 
 // GetDelegateBalance Retrieve the delegate balance from the given address or 0 if object not found
@@ -350,32 +379,3 @@ func (self *StateDB) ClearDelegateRefundSet() {
 	self.delegateRefundSetDirty = false
 }
 
-// Store the Delegate Refund Set
-
-var refundSetKey = []byte("DelegateRefundSet")
-
-type DelegateRefundSet map[common.Address]struct{}
-
-func (set DelegateRefundSet) EncodeRLP(w io.Writer) error {
-	var list []common.Address
-	for addr := range set {
-		list = append(list, addr)
-	}
-	sort.Slice(list, func(i, j int) bool {
-		return bytes.Compare(list[i].Bytes(), list[j].Bytes()) == 1
-	})
-	return rlp.Encode(w, list)
-}
-
-func (set *DelegateRefundSet) DecodeRLP(s *rlp.Stream) error {
-	var list []common.Address
-	if err := s.Decode(&list); err != nil {
-		return err
-	}
-	refundSet := make(DelegateRefundSet, len(list))
-	for _, addr := range list {
-		refundSet[addr] = struct{}{}
-	}
-	*set = refundSet
-	return nil
-}

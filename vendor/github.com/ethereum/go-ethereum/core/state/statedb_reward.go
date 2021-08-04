@@ -4,12 +4,47 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"io"
 	"math/big"
 	"sort"
 )
+
+
+// Store the Reward Address Set
+var rewardSetKey = []byte("RewardSet")
+// Child Chain Reward Per Block
+var childChainRewardPerBlockKey = []byte("RewardPerBlock")
+
+
+type RewardSet map[common.Address]struct{}
+
+func (set RewardSet) EncodeRLP(w io.Writer) error {
+	var list []common.Address
+	for addr := range set {
+		list = append(list, addr)
+	}
+	sort.Slice(list, func(i, j int) bool {
+		return bytes.Compare(list[i].Bytes(), list[j].Bytes()) == 1
+	})
+	return rlp.Encode(w, list)
+}
+
+func (set *RewardSet) DecodeRLP(s *rlp.Stream) error {
+	var list []common.Address
+	if err := s.Decode(&list); err != nil {
+		return err
+	}
+	rewardSet := make(RewardSet, len(list))
+	for _, addr := range list {
+		rewardSet[addr] = struct{}{}
+	}
+	*set = rewardSet
+	return nil
+}
+
 
 // ----- RewardBalance (Total)
 
@@ -127,7 +162,8 @@ func (self *StateDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, e
 			return rewardbalance
 		}
 	}
-	rb := self.db.TrieDB().GetEpochReward(addr, epochNo,height-1)
+
+	rb := rawdb.GetEpochReward(self.EthDatabase(), addr, epochNo,height-1)
 	// if 0 epoch reward, try to read from trie
 	if rb.Sign() == 0 {
 		rb = self.GetRewardBalanceByEpochNumber(addr, epochNo)
@@ -138,7 +174,7 @@ func (self *StateDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, e
 
 //get value from db directly; this will ignore current runtime-context
 func (self *StateDB) GetOutsideRewardBalanceByEpochNumberFromDB(addr common.Address, epochNo uint64, height uint64) *big.Int {
-	rb := self.db.TrieDB().GetEpochReward(addr, epochNo, height)
+	rb := rawdb.GetEpochReward(self.EthDatabase(), addr, epochNo, height)
 	// if 0 epoch reward, try to read from trie
 	if rb.Sign() == 0 {
 		rb = self.GetRewardBalanceByEpochNumber(addr, epochNo)
@@ -192,7 +228,7 @@ func (self *StateDB) GetAllEpochReward(address common.Address, height uint64) ma
 
 //get value from db directly; this will ignore current runtime-context
 func (self *StateDB) GetAllEpochRewardFromDB(address common.Address, height uint64) map[uint64]*big.Int {
-	return self.db.TrieDB().GetAllEpochReward(address, height)
+	return rawdb.GetAllEpochReward(self.EthDatabase(), address, height)
 }
 
 func (self *StateDB) GetExtractRewardSet() map[common.Address]uint64 {
@@ -218,25 +254,23 @@ func (self *StateDB) GetEpochRewardExtracted(address common.Address, height uint
 
 //get value from db directly; this will ignore current runtime-context
 func (self *StateDB) GetEpochRewardExtractedFromDB(address common.Address, height uint64) (uint64, error) {
-	return self.db.TrieDB().GetEpochRewardExtracted(address, height)
+	return rawdb.GetEpochRewardExtracted(self.EthDatabase(), address, height)
 }
 
-
 func (self *StateDB) WriteEpochRewardExtracted(address common.Address, epoch uint64, height uint64) error {
-	return self.db.TrieDB().WriteEpochRewardExtracted(address, epoch, height)
+	return rawdb.WriteEpochRewardExtracted(self.EthDatabase(), address, epoch, height)
 }
 
 //record candidate's last proposed block which brings reward
 func (self *StateDB) ReadOOSLastBlock() (*big.Int, error) {
-	return self.db.TrieDB().ReadOOSLastBlock()
+	return rawdb.ReadOOSLastBlock(self.EthDatabase())
 }
 
 func (self *StateDB) WriteOOSLastBlock(blockNumber *big.Int) error {
-	return self.db.TrieDB().WriteOOSLastBlock(blockNumber)
+	return rawdb.WriteOOSLastBlock(self.EthDatabase(), blockNumber)
 }
 
 // ----- Reward Set
-
 // MarkAddressReward adds the specified object to the dirty map to avoid
 func (self *StateDB) MarkAddressReward(addr common.Address) {
 	if _, exist := self.GetRewardSet()[addr]; !exist {
@@ -279,35 +313,6 @@ func (self *StateDB) ClearRewardSetByAddress(addr common.Address) {
 	self.rewardSetDirty = true
 }
 
-// Store the Reward Address Set
-
-var rewardSetKey = []byte("RewardSet")
-
-type RewardSet map[common.Address]struct{}
-
-func (set RewardSet) EncodeRLP(w io.Writer) error {
-	var list []common.Address
-	for addr := range set {
-		list = append(list, addr)
-	}
-	sort.Slice(list, func(i, j int) bool {
-		return bytes.Compare(list[i].Bytes(), list[j].Bytes()) == 1
-	})
-	return rlp.Encode(w, list)
-}
-
-func (set *RewardSet) DecodeRLP(s *rlp.Stream) error {
-	var list []common.Address
-	if err := s.Decode(&list); err != nil {
-		return err
-	}
-	rewardSet := make(RewardSet, len(list))
-	for _, addr := range list {
-		rewardSet[addr] = struct{}{}
-	}
-	*set = rewardSet
-	return nil
-}
 
 // ----- Child Chain Reward Per Block
 
@@ -345,6 +350,3 @@ func (self *StateDB) commitChildChainRewardPerBlock() {
 	self.setError(self.trie.TryUpdate(childChainRewardPerBlockKey, data))
 }
 
-// Child Chain Reward Per Block
-
-var childChainRewardPerBlockKey = []byte("RewardPerBlock")
