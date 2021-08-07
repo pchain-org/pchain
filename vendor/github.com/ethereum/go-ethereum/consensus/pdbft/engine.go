@@ -478,7 +478,9 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 
 	// Calculate the rewards
-	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
+	if err := accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward); err != nil {
+		return nil, err
+	}
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
@@ -731,7 +733,7 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 //
 // If the coinbase is Candidate, divide the rewards by weight
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch,
-						totalGasFee *big.Int, selfRetrieveReward bool) {
+						totalGasFee *big.Int, selfRetrieveReward bool) error {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
 	if config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId {
@@ -820,7 +822,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	if delegateReward != nil && delegateReward.Sign() > 0 {
 		totalIndividualReward := big.NewInt(0)
 		// Split the reward based on Weight stack
-		state.ForEachProxied(header.Coinbase, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
+		err := state.ForEachProxied(header.Coinbase, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
 			if depositProxiedBalance.Sign() == 1 {
 				// deposit * delegateReward / total deposit
 				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
@@ -829,6 +831,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			}
 			return true
 		})
+		if err != nil {
+			return err
+		}
+
 		// Recheck the Total Individual Reward, Float the difference
 		cmp := delegateReward.Cmp(totalIndividualReward)
 		if cmp == 1 {
@@ -857,6 +863,8 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			}
 		}
 	}
+
+	return nil
 }
 
 func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64,height uint64, reward *big.Int,

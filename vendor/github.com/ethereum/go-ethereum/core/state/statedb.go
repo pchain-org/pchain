@@ -18,6 +18,7 @@
 package state
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -489,6 +490,7 @@ func (self *StateDB) getStateObject(addr common.Address) (stateObject *stateObje
 	// Load the object from the database.
 	enc, err := self.trie.TryGet(addr[:])
 	if len(enc) == 0 {
+		log.Error("Failed to get state object", "addr", addr, "err", err)
 		self.setError(err)
 		return nil
 	}
@@ -613,12 +615,17 @@ func (db *StateDB) ForEachTX3(addr common.Address, cb func(tx3 common.Hash) bool
 	}
 }
 
-func (db *StateDB) ForEachProxied(addr common.Address, cb func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool) {
+func (db *StateDB) ForEachProxied(addr common.Address, cb func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool) error {
 	so := db.getStateObject(addr)
 	if so == nil {
-		return
+		return errors.New(fmt.Sprintf("no object found for addr: %x", addr))
 	}
-	it := trie.NewIterator(so.getProxiedTrie(db.db).NodeIterator(nil))
+
+	proxiedTire := so.getProxiedTrie(db.db)
+	if so.dbErr != nil {
+		return so.dbErr
+	}
+	it := trie.NewIterator(proxiedTire.NodeIterator(nil))
 	for it.Next() {
 		key := common.BytesToAddress(db.trie.GetKey(it.Key))
 		if value, dirty := so.dirtyProxied[key]; dirty {
@@ -629,6 +636,8 @@ func (db *StateDB) ForEachProxied(addr common.Address, cb func(key common.Addres
 		rlp.DecodeBytes(it.Value, &apb)
 		cb(key, apb.ProxiedBalance, apb.DepositProxiedBalance, apb.PendingRefundBalance)
 	}
+
+	return nil
 }
 
 // Copy creates a deep, independent copy of the state.

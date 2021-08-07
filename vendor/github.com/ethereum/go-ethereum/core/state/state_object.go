@@ -106,6 +106,10 @@ type stateObject struct {
 	onDirty   func(addr common.Address) // Callback method to mark a state object newly dirty
 }
 
+func (s *stateObject) Account() *Account {
+	return &s.data
+}
+
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
 	return s.data.Nonce == 0 && s.data.Balance.Sign() == 0 && bytes.Equal(s.data.CodeHash, emptyCodeHash) && s.data.DepositBalance.Sign() == 0 && len(s.data.ChildChainDepositBalance) == 0 && s.data.ChainBalance.Sign() == 0 && s.data.DelegateBalance.Sign() == 0 && s.data.ProxiedBalance.Sign() == 0 && s.data.DepositProxiedBalance.Sign() == 0 && s.data.PendingRefundBalance.Sign() == 0
@@ -138,6 +142,48 @@ type Account struct {
 	RewardBalance *big.Int    // the accumulative reward balance for this account
 	RewardRoot    common.Hash // merkle root of the Reward trie
 
+}
+
+func (acc *Account) String() string {
+	return fmt.Sprintf("RewardScheme : {\n"+
+		"Nonce : %v,\n"+
+		"Balance : %v,\n"+
+		"DepositBalance : %v,\n"+
+		"ChildChainDepositBalance : %v,\n"+
+		"ChainBalance : %v,\n"+
+		"Root : %x,\n"+
+		"TX1Root : %x,\n"+
+		"TX3Root : %x,\n"+
+		"CodeHash : %x,\n"+
+		"DelegateBalance : %v,\n"+
+		"ProxiedBalance : %v,\n"+
+		"DepositProxiedBalance : %v,\n"+
+		"PendingRefundBalance : %v,\n"+
+		"ProxiedRoot : %x,\n"+
+		"Candidate : %v,\n"+
+		"Commission : %v,\n"+
+		"RewardBalance : %v,\n"+
+		"RewardRoot : %x,\n"+
+		"}",
+		acc.Nonce,//                    uint64
+		acc.Balance,//                  *big.Int                    // for normal user
+		acc.DepositBalance,//           *big.Int                    // for validator, can not be consumed
+		acc.ChildChainDepositBalance,// []*childChainDepositBalance // only valid in main chain for child chain validator before child chain launch, can not be consumed
+		acc.ChainBalance,//             *big.Int                    // only valid in main chain for child chain owner, can not be consumed
+		acc.Root,//                     common.Hash                 // merkle root of the storage trie
+		acc.TX1Root,//                  common.Hash                 // merkle root of the TX1 trie
+		acc.TX3Root,//                  common.Hash                 // merkle root of the TX3 trie
+		acc.CodeHash,//                 []byte
+		acc.DelegateBalance,//       *big.Int    // the accumulative balance which this account delegate the Balance to other user
+		acc.ProxiedBalance,//        *big.Int    // the accumulative balance which other user delegate to this account (this balance can be revoked, can be deposit for validator)
+		acc.DepositProxiedBalance,// *big.Int    // the deposit proxied balance for validator which come from ProxiedBalance (this balance can not be revoked)
+		acc.PendingRefundBalance,//  *big.Int    // the accumulative balance which other user try to cancel their delegate balance (this balance will be refund to user's address after epoch end)
+		acc.ProxiedRoot,//           common.Hash // merkle root of the Proxied trie
+		acc.Candidate,//  bool  // flag for Account, true indicate the account has been applied for the Delegation Candidate
+		acc.Commission,// uint8 // commission percentage of Delegation Candidate (0-100)
+		acc.RewardBalance,// *big.Int    // the accumulative reward balance for this account
+		acc.RewardRoot,//    common.Hash // merkle root of the Reward trie
+	)
 }
 
 // newObject creates a state object.

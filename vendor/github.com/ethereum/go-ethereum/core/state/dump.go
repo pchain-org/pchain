@@ -345,6 +345,12 @@ func (self *StateDB) DoSnapshot(sn trie.Snapshot) error {
 		//RefundAccounts: make([]string, 0),
 	}
 
+	soCount := 0
+	backLen := 0
+	content := fmt.Sprintf("%v state object copied", soCount)
+	replacePrint(backLen, content)
+	backLen = len(content)
+	
 	it := trie.NewIterator(self.trie.NodeIterator(nil))
 	for it.Next() {
 
@@ -451,9 +457,26 @@ func (self *StateDB) DoSnapshot(sn trie.Snapshot) error {
 				}
 			}
 		}
+
+		soCount ++
+		content = fmt.Sprintf("%v state object copied", soCount)
+		replacePrint(backLen, content)
+		backLen = len(content)
 	}
 
+	fmt.Println("")
+
 	return nil
+}
+
+func replacePrint(backlen int, content string) {
+
+	backString := ""
+	for i:=0; i<backlen; i++ {
+		backString += "\b"
+	}
+	fmt.Print(backString)
+	fmt.Print(content)
 }
 
 //for debug; to check if doing snapshot for the specific strAddr

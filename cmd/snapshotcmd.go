@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"errors"
+	"fmt"
 	gethmain "github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -16,12 +18,17 @@ import (
 	"gopkg.in/urfave/cli.v1"
 	"math/big"
 	"os"
+	"strings"
 	"time"
 )
 
 var chaindataDbName = "chaindata"
 var snapshotDbName = "snapshot"
 var backupDbName = "chaindata.bk"
+
+var chaindataFullFilename = chaindataDbName
+var snapshotFullFilename = snapshotDbName
+var backupFullFilename = backupDbName
 
 var (
 	snapshotCommand = cli.Command{
@@ -35,105 +42,134 @@ var (
 		Category: "CHAIN/DATA COMMANDS",
 		Description: `
 Make a snapshot of one chain.
-the snapshot will contain the latest block, the transactions in the 
-latest block, the latest state of this chain. the tx3/tx4/epoch 
-information will keep the same.
+the snapshot will contain the latest block, the latest state of this chain;
+transactions/receipts will not be contained. 
+the tx3/tx4/epoch information will keep the same.
 This command is to reduce the data-size of one chain to the minimum,
 it will be helpful when one node just wants to run with minimum size
-with no need to history data. this could extremely save validator's disk 
-.`,
+with no need for history data. this could extremely save validator's disk.`,
 	}
 )
 
 func snapshot(ctx *cli.Context) error {
 
+	//make the log only output the error
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+	ctx.GlobalSet("verbosity", "1") //0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail
+
 	if ctx == nil {
-		log.Error("oh, ctx is null, how pchain works?")
+		log.Errorf("ctx is null, pchain does not work")
 		return nil
 	}
 
 	chainId := ctx.GlobalString(StringChainIdFlag.Name)
-	chain := chain.LoadChain(ctx, chainId)
-	if chain == nil {
+	fmt.Printf("loading chain: %v\n", chainId)
+	pchain := chain.LoadChain(ctx, chainId)
+	if pchain == nil {
 		log.Errorf("Load Chain '%s' failed.", chainId)
 		return nil
 	}
+	fmt.Printf("done.\n")
 
-	if err := doSnapshot(ctx, chain); err != nil {
+	var ethereum *eth.Ethereum
+	pchain.EthNode.ServiceRegistered(&ethereum)
+	if ethereum == nil {
+		log.Errorf("copyLastestData(), ethereum is nil")
+		return errors.New("ethereum is nil")
+	}
+	chain := ethereum.BlockChain()
+
+	if !continueWork(chain.CurrentBlock().NumberU64()) {
+		os.Exit(0)
+	}
+
+	if err := doSnapshot(ctx, chainId, chain); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func doSnapshot(ctx *cli.Context, chain *chain.Chain) error {
+func doSnapshot(ctx *cli.Context, chainId string, chain *core.BlockChain) error {
 
-	log.Infof("doSnapshot %v", chain.Id)
-
-	// Make sure no inconsistent state is leaked during insertion
-	var ethereum *eth.Ethereum
-	chain.EthNode.ServiceRegistered(&ethereum)
-	if ethereum == nil {
-		log.Errorf("copyLastestData(), ethereum is nil")
-		return errors.New("ethereum is nil")
-	}
-	bc := ethereum.BlockChain()
-
-	dstDiskDb, dstStateDb, err := prepareDestinationDb(ctx, chain.Id)
+	dstDiskDb, dstStateDb, err := prepareDestinationDb(ctx, chainId)
 	if err != nil {
-		log.Infof("err :%v", err)
+		log.Errorf("err :%v", err)
 		return err
 	}
 
 	//1. copy the start-block and end-block of all epoch
-	if err := copyEpochEndpointBlock(ctx, bc, dstDiskDb); err != nil {
-		log.Infof("err :%v", err)
+	fmt.Printf("start copying epoch blocks... ")
+	if err := copyEpochEndpointBlock(ctx, chain, dstDiskDb); err != nil {
+		log.Errorf("err :%v", err)
 		return err
 	}
+	fmt.Println("done.")
 
 	//2. copy the lastest block
-	if err := copyLastBlock(ctx, bc, dstDiskDb); err != nil {
-		log.Infof("err :%v", err)
+	fmt.Println("start copying last block")
+	if err := copyLastBlock(ctx, chain, dstDiskDb); err != nil {
+		log.Errorf("err :%v", err)
 		return err
 	}
+	fmt.Println("done.")
 
 	//3. copy out_of_storage rewards
-	if err := copyOutOfStorage(ctx, bc, dstDiskDb); err != nil {
-		log.Infof("err :%v", err)
+	fmt.Println("start copying out of storage rewards")
+	if err := copyOutOfStorage(ctx, chain, dstDiskDb); err != nil {
+		log.Errorf("err :%v", err)
 		return err
 	}
+	fmt.Println("done.")
 
 	//4. copy preimages which map hash to address
-	if err := copyPreimage(ctx, bc, dstDiskDb); err != nil {
-		log.Infof("err :%v", err)
+	fmt.Printf("start copying preimages... ")
+	if err := copyPreimage(ctx, chain, dstDiskDb); err != nil {
+		log.Errorf("err :%v", err)
 		return err
 	}
+	fmt.Println("done.")
 
 	//5. copy diverse properties
-	if err := copyDiverseProperties(ctx, bc, dstDiskDb); err != nil {
-		log.Infof("err :%v", err)
+	fmt.Println("start copying diverse properties")
+	if err := copyDiverseProperties(ctx, chain, dstDiskDb); err != nil {
+		log.Errorf("err :%v", err)
 		return err
 	}
+	fmt.Println("done.")
 
 	//6. copy the lastest state
 	//to snap the state, close source diskdb and reload root to make snapshot
-	stateDb, _ := bc.State()
+	stateDb, _ := chain.State()
 	srcDiskDb := stateDb.Database().TrieDB().DiskDB().(ethdb.Database)
 	srcDiskDb.Close()
 
-	if err := copyLastState(ctx, chain.Id, bc.CurrentBlock().Root(), dstDiskDb, dstStateDb); err != nil {
-		log.Infof("err :%v", err)
+	fmt.Printf("start copying last state... ")
+	if err := copyLastState(ctx, chainId, chain.CurrentBlock().Root(), dstDiskDb, dstStateDb); err != nil {
+		log.Errorf("err :%v", err)
 		return err
 	}
+	fmt.Println("done.")
 
 	//backup old db and move snapshot db as current db
 	dstDiskDb.Close()
 
 	//7. finally, backup original data and turn snapshot on
-	if err := switchDirectory(ctx, chain); err != nil {
-		log.Infof("err :%v", err)
+	fmt.Println("start backup and replace database directory")
+	if err := switchDirectory(ctx, chainId); err != nil {
+		log.Errorf("err :%v", err)
 		return err
 	}
+	fmt.Println("done.")
+	fmt.Println("")
+
+	fmt.Printf("now the new snapshoted database is under %v,\n"+
+		"the old database before snapshot is backuped under %v,\n"+
+		"make sure the snapshoted database do work before deleting old database,\n"+
+		"enjoy the new journey!\n",
+		chaindataFullFilename,
+		backupFullFilename)
+
 	return nil
 }
 
@@ -142,6 +178,12 @@ func copyEpochEndpointBlock(ctx *cli.Context, bc *core.BlockChain, dstDiskDb eth
 
 	tdm := bc.Engine().(consensus.Tendermint)
 	currentEpoch := tdm.GetEpoch()
+
+	epochCount := 0
+	backLen := 0
+	content := fmt.Sprintf("%v epochs copied", epochCount)
+	replacePrint(backLen, content)
+	backLen = len(content)
 
 	epoch := currentEpoch
 	for epoch != nil {
@@ -153,11 +195,13 @@ func copyEpochEndpointBlock(ctx *cli.Context, bc *core.BlockChain, dstDiskDb eth
 		copyCommonBlock(ctx, epoch.StartBlock, bc, dstDiskDb)
 
 		epoch = epoch.GetPreviousEpoch()
-
-		if epoch == nil {
-			log.Info("epoch endpoint blocks copied over")
-		}
+		epochCount++
+		content = fmt.Sprintf("%v epochs copied", epochCount)
+		replacePrint(backLen, content)
+		backLen = len(content)
 	}
+
+	fmt.Println("")
 
 	return nil
 }
@@ -280,6 +324,12 @@ func copyPreimage(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Databas
 	it := srcDiskDb.NewIteratorWithPrefix(rawdb.PreimagePrefix)
 	defer it.Release()
 
+	preimageCount := 0
+	backLen := 0
+	content := fmt.Sprintf("%v preimges copied", preimageCount)
+	replacePrint(backLen, content)
+	backLen = len(content)
+
 	for it.Next() {
 		if len(it.Key()) < len(rawdb.PreimagePrefix)+common.HashLength {
 			return errors.New("RewardExtractPrefix key length is shorter than 21, no address included")
@@ -287,7 +337,13 @@ func copyPreimage(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Databas
 		if err := dstDiskDb.Put(it.Key(), it.Value()); err != nil {
 			return err
 		}
+		preimageCount++
+		content = fmt.Sprintf("%v preimges copied", preimageCount)
+		replacePrint(backLen, content)
+		backLen = len(content)
 	}
+
+	fmt.Println("")
 
 	return nil
 }
@@ -318,12 +374,10 @@ type Snapshot struct {
 func (sn *Snapshot) Handle(key, value []byte) {
 
 	sn.diskDb.Put(key, value)
-	//log.Infof("snapshot put key %x", key)
 }
 
 func copyLastState(ctx *cli.Context, chainId string, root common.Hash, dstDiskDb ethdb.Database, dstStateDb *state.StateDB) error {
 
-	log.Infof("copyLastState, hash: %v", root.String())
 	sn := &Snapshot{
 		diskDb:  dstDiskDb,
 		stateDb: dstStateDb,
@@ -403,13 +457,13 @@ func prepareDestinationDb(ctx *cli.Context, chainId string) (ethdb.Database, *st
 	return diskDb, stateDb, nil
 }
 
-func switchDirectory(ctx *cli.Context, chain *chain.Chain) error {
+func switchDirectory(ctx *cli.Context, chainId string) error {
 
-	_, cfg := gethmain.MakeConfigNode(ctx, chain.Id)
+	_, cfg := gethmain.MakeConfigNode(ctx, chainId)
 	nodeConfig := cfg.Node
-	chaindataFullFilename := nodeConfig.ResolvePath(chaindataDbName)
-	snapshotFullFilename := nodeConfig.ResolvePath(snapshotDbName)
-	backupFullFilename := nodeConfig.ResolvePath(backupDbName)
+	chaindataFullFilename = nodeConfig.ResolvePath(chaindataDbName)
+	snapshotFullFilename = nodeConfig.ResolvePath(snapshotDbName)
+	backupFullFilename = nodeConfig.ResolvePath(backupDbName)
 
 	if err := os.Rename(chaindataFullFilename, backupFullFilename); err != nil {
 		return err
@@ -420,4 +474,28 @@ func switchDirectory(ctx *cli.Context, chain *chain.Chain) error {
 	}
 
 	return nil
+}
+
+func continueWork(block uint64) bool {
+	fmt.Printf("snapshot the data with block: %v, continue?(Y/n)", block)
+	input := bufio.NewScanner(os.Stdin)
+	if input.Scan() {
+		text := input.Text()
+		if strings.EqualFold(text, "y") || strings.EqualFold(text, "yes") {
+			return true
+		} else {
+			return false
+		}
+	}
+	return false
+}
+
+func replacePrint(backlen int, content string) {
+
+	backString := ""
+	for i := 0; i < backlen; i++ {
+		backString += "\b"
+	}
+	fmt.Print(backString)
+	fmt.Print(content)
 }
