@@ -133,3 +133,19 @@ For a full guide on how to set up and become a validator node on the Pchain Netw
 
 To learn how to delegate your PI to validators to receive rewards, read [How To Delegate or Stake](https://pliangroup.gitbook.io/plian/using-the-blockchain/delegating-or-staking)
 
+### How To Do snapshot With This Branch
+
+the command format is 
+```
+./pchain snapshot --datadir the_data_directory --strChainId the_specific_chain_name
+```
+
+For example, to snapshot the main chain 
+```
+./pchain snapshot --datadir ~/code/blockdata/.pchain --strChainId pchain
+```
+
+to snapshot the fisrt official child chain
+```
+./pchain snapshot --datadir ~/code/blockdata/.pchain --strChainId child_0
+```
