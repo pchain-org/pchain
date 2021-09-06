@@ -85,7 +85,7 @@ $ pchain version
 If you want to test your smart contract, it's better to deploy it on testnet first. 
 You can follow [this guide](https://pliangroup.gitbook.io/plian/using-the-blockchain/advanced-features/how-to-sync-and-run-testnet) to run pchain's testnet.
 
-You can [Get free tPI](https://testnet.pchain.org/vfaucet.html) from our testnet.
+You can [Get free tPI](https://testnet.plian.org/faucet.html) from our testnet.
 
 ### Full Node On The Pchain Main Network
 
