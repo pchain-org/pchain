@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/hashicorp/golang-lru"
 	"github.com/tendermint/go-wire"
 	"math/big"
@@ -438,7 +439,7 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	//}
 
 	// Add Main Chain Height if running on Child Chain
-	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId && sb.chainConfig.PChainId != params.TestnetChainConfig.PChainId {
+	if sb.chainConfig.PChainID != params.MainnetChainConfig.PChainID && sb.chainConfig.PChainID != params.TestnetChainConfig.PChainID {
 		header.MainChainNumber = sb.core.cch.GetHeightFromMainChain()
 	}
 
@@ -456,7 +457,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	sb.logger.Debugf("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
 	// Check if any Child Chain need to be launch and Update their account balance accordingly
-	if sb.chainConfig.PChainId == params.MainnetChainConfig.PChainId || sb.chainConfig.PChainId == params.TestnetChainConfig.PChainId {
+	if sb.chainConfig.PChainID == params.MainnetChainConfig.PChainID || sb.chainConfig.PChainID == params.TestnetChainConfig.PChainID {
 		// Check the Child Chain Start
 		readyId, updateBytes, removedId := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
 		if len(readyId) > 0 || updateBytes != nil || len(removedId) > 0 {
@@ -481,11 +482,11 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
-	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
+	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainID, header.Number.Uint64(), state,
 										sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
 										selfRetrieveReward); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
-			ChainId:       sb.chainConfig.PChainId,
+			ChainID:       sb.chainConfig.PChainID,
 			NewValidators: newValidators,
 		})
 		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber){
@@ -499,7 +500,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts), nil
+	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
 }
 
 // Seal generates a new block for the given input block with the local miner's
@@ -734,7 +735,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 						totalGasFee *big.Int, selfRetrieveReward bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
-	if config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId {
+	if config.PChainID == params.MainnetChainConfig.PChainID || config.PChainID == params.TestnetChainConfig.PChainID {
 		// Main Chain
 
 		// Coinbase Reward   = 80% of Total Reward

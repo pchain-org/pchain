@@ -553,7 +553,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	go s.loopForMiningEvent()
 
 	// Start the Data Reduction
-	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0"{
+	if s.config.PruneStateData && s.chainConfig.PChainID == "child_0"{
 		go s.StartScanAndPrune(0)
 	}
 

@@ -302,7 +302,7 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 		if depositProxiedBalance.Sign() > 0 {
 			allRefund = false
 			mainChainHeight := bc.CurrentHeader().Number
-			if bc.Config().PChainId != "pchain" && bc.Config().PChainId != "testnet" {
+			if bc.Config().PChainID != "pchain" && bc.Config().PChainID != "testnet" {
 				mainChainHeight = bc.CurrentHeader().MainChainNumber
 			}
 			if !bc.Config().IsChildSd2mcWhenEpochEndsBlock(mainChainHeight) {
@@ -587,7 +587,7 @@ func cancelCandidateValidation(from common.Address, tx *types.Transaction, state
 
 // Common
 func derivedAddressFromTx(tx *types.Transaction) (from common.Address) {
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.NewEIP155Signer(tx.ChainID())
 	from, _ = types.Sender(signer, tx)
 	return
 }

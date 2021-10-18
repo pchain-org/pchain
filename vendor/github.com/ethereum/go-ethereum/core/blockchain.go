@@ -208,6 +208,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	return bc, nil
 }
 
+// GetVMConfig returns the block chain VM config.
+func (bc *BlockChain) GetVMConfig() *vm.Config {
+	return &bc.vmConfig
+}
+
 func (bc *BlockChain) getProcInterrupt() bool {
 	return atomic.LoadInt32(&bc.procInterrupt) == 1
 }
@@ -990,7 +995,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		outsideReward := state.GetOutsideReward()
 		for addr, reward := range outsideReward {
 			for epoch, rewardAmount := range reward {
-				if rewardAmount.Sign() < 0 && ((bc.chainConfig.PChainId== "pchain" && block.NumberU64() == 13311677) || (bc.chainConfig.PChainId=="child_0" && block.NumberU64()==22094435))  {
+				if rewardAmount.Sign() < 0 && ((bc.chainConfig.PChainID== "pchain" && block.NumberU64() == 13311677) || (bc.chainConfig.PChainID=="child_0" && block.NumberU64()==22094435))  {
 					log.Errorf("!!!should dig it, rewardAmount for %x is %v", addr, rewardAmount)
 					rewardAmount = rewardAmount.Abs(rewardAmount)
 				}
@@ -1765,6 +1770,11 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 // it if present.
 func (bc *BlockChain) HasHeader(hash common.Hash, number uint64) bool {
 	return bc.hc.HasHeader(hash, number)
+}
+
+// GetCanonicalHash returns the canonical hash for a given block number
+func (bc *BlockChain) GetCanonicalHash(number uint64) common.Hash {
+	return bc.hc.GetCanonicalHash(number)
 }
 
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given

@@ -89,7 +89,7 @@ type RefundValidatorAmount struct {
 
 // SwitchEpoch op
 type SwitchEpochOp struct {
-	ChainId string
+	ChainID string
 	NewValidators *ValidatorSet
 }
 
@@ -102,5 +102,5 @@ func (op *SwitchEpochOp) Conflict(op1 ethTypes.PendingOp) bool {
 }
 
 func (op *SwitchEpochOp) String() string {
-	return fmt.Sprintf("SwitchEpochOp - ChainId:%v, New Validators: %v", op.ChainId, op.NewValidators)
+	return fmt.Sprintf("SwitchEpochOp - ChainId:%v, New Validators: %v", op.ChainID, op.NewValidators)
 }

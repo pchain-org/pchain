@@ -20,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 	pabi "github.com/pchain/abi"
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
@@ -1003,7 +1004,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		// Note!!! This will BLOCK the WHOLE consensus stack since it blocks receiveRoutine.
 		// TODO: what if there're more than one round for a height? 'saveBlockToMainChain' would be called more than once
 		if cs.state.TdmExtra.NeedToSave &&
-			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
+			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainID && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainID) {
 			if cs.privValidator != nil && cs.IsProposer() {
 				cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
 				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
@@ -1013,7 +1014,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		}
 
 		if cs.state.TdmExtra.NeedToBroadcast &&
-			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
+			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainID && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainID) {
 			if cs.privValidator != nil && cs.IsProposer() {
 				cs.logger.Infof("enterPropose: broadcastTX3ProofDataToMainChain height: %v", cs.state.TdmExtra.Height)
 				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
@@ -1023,7 +1024,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		}
 	} else {
 		if cs.state.TdmExtra.NeedToSave &&
-			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
+			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainID && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainID) {
 			if cs.privValidator != nil && cs.IsProposer() {
 				cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
 				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
@@ -1547,7 +1548,7 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 		block.TdmExtra.SeenCommitHash = seenCommit.Hash()
 
 		// update 'NeedToSave' field here
-		if block.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && block.TdmExtra.ChainID != params.TestnetChainConfig.PChainId {
+		if block.TdmExtra.ChainID != params.MainnetChainConfig.PChainID && block.TdmExtra.ChainID != params.TestnetChainConfig.PChainID {
 			// check epoch
 			if len(block.TdmExtra.EpochBytes) > 0 {
 				block.TdmExtra.NeedToSave = true
@@ -1608,14 +1609,14 @@ func (cs *ConsensusState) defaultSetProposal(proposal *types.Proposal) error {
 
 	if proposal.Round == cs.Round {
 		// Verify signature
-		if !cs.GetProposer().PubKey.VerifyBytes(types.SignBytes(cs.chainConfig.PChainId, proposal), proposal.Signature) {
+		if !cs.GetProposer().PubKey.VerifyBytes(types.SignBytes(cs.chainConfig.PChainID, proposal), proposal.Signature) {
 			return ErrInvalidProposalSignature
 		}
 
 	} else /*proposal.Round < cs.Round*/ {
 
 		// Verify signature
-		if !cs.proposerByRound(proposal.Round).Proposer.PubKey.VerifyBytes(types.SignBytes(cs.chainConfig.PChainId, proposal), proposal.Signature) {
+		if !cs.proposerByRound(proposal.Round).Proposer.PubKey.VerifyBytes(types.SignBytes(cs.chainConfig.PChainID, proposal), proposal.Signature) {
 			return ErrInvalidProposalSignature
 		}
 
@@ -2112,7 +2113,7 @@ func (cs *ConsensusState) GetTX3ProofDataForTx4(block *ethTypes.Block) []*ethTyp
 					continue
 				}
 
-				proof := cs.cch.GetTX3ProofData(args.ChainId, args.TxHash)
+				proof := cs.cch.GetTX3ProofData(args.ChainID, args.TxHash)
 				if proof != nil {
 					tx3ProofData = append(tx3ProofData, proof)
 				}
@@ -2173,7 +2174,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block, version in
 		}
 
 	} else {
-		proofData, err := ethTypes.NewChildChainProofDataV1(block)
+		proofData, err := newChildChainProofDataV1(block)
 		if err != nil {
 			cs.logger.Error("saveDataToMainChain: failed to create proof data", "block", block, "err", err)
 			return
@@ -2228,7 +2229,7 @@ func (cs *ConsensusState) broadcastTX3ProofDataToMainChain(block *ethTypes.Block
 
 	mainChainUrl := cs.cch.GetMainChainUrl()
 
-	proofData, err := ethTypes.NewTX3ProofData(block)
+	proofData, err := newTX3ProofData(block)
 	if err != nil {
 		cs.logger.Error("broadcastTX3ProofDataToMainChain: failed to create proof data", "block", block, "err", err)
 		return
@@ -2319,6 +2320,87 @@ func (cs *ConsensusState) SendDataToMainChain(data []byte, prv *ecdsa.PrivateKey
 	return hash, err
 }
 
+
+func newTX3ProofData(block *ethTypes.Block) (*ethTypes.TX3ProofData, error) {
+	ret := &ethTypes.TX3ProofData{
+		Header: block.Header(),
+	}
+
+	txs := block.Transactions()
+	// build the Trie (see derive_sha.go)
+	keybuf := new(bytes.Buffer)
+	trie := new(trie.Trie)
+	for i := 0; i < txs.Len(); i++ {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(i))
+		trie.Update(keybuf.Bytes(), txs.GetRlp(i))
+	}
+	// do the Merkle Proof for the specific tx
+	for i, tx := range txs {
+		if pabi.IsPChainContractAddr(tx.To()) {
+			data := tx.Data()
+			function, err := pabi.FunctionTypeFromId(data[:4])
+			if err != nil {
+				continue
+			}
+
+			if function == pabi.WithdrawFromChildChain {
+				kvSet := ethTypes.MakeBSKeyValueSet()
+				keybuf.Reset()
+				rlp.Encode(keybuf, uint(i))
+				if err := trie.Prove(keybuf.Bytes(), 0, kvSet); err != nil {
+					return nil, err
+				}
+
+				ret.TxIndexs = append(ret.TxIndexs, uint(i))
+				ret.TxProofs = append(ret.TxProofs, kvSet)
+			}
+		}
+	}
+
+	return ret, nil
+}
+
+func newChildChainProofDataV1(block *ethTypes.Block) (*ethTypes.ChildChainProofDataV1, error) {
+
+	ret := &ethTypes.ChildChainProofDataV1{
+		Header: block.Header(),
+	}
+
+	txs := block.Transactions()
+	// build the Trie (see derive_sha.go)
+	keybuf := new(bytes.Buffer)
+	trie := new(trie.Trie)
+	for i := 0; i < txs.Len(); i++ {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(i))
+		trie.Update(keybuf.Bytes(), txs.GetRlp(i))
+	}
+	// do the Merkle Proof for the specific tx
+	for i, tx := range txs {
+		if pabi.IsPChainContractAddr(tx.To()) {
+			data := tx.Data()
+			function, err := pabi.FunctionTypeFromId(data[:4])
+			if err != nil {
+				continue
+			}
+
+			if function == pabi.WithdrawFromChildChain {
+				kvSet := ethTypes.MakeBSKeyValueSet()
+				keybuf.Reset()
+				rlp.Encode(keybuf, uint(i))
+				if err := trie.Prove(keybuf.Bytes(), 0, kvSet); err != nil {
+					return nil, err
+				}
+
+				ret.TxIndexs = append(ret.TxIndexs, uint(i))
+				ret.TxProofs = append(ret.TxProofs, kvSet)
+			}
+		}
+	}
+
+	return ret, nil
+}
 
 //attemps: this parameter means the total amount of operations
 func retry(attemps int, sleep time.Duration, fn func() error) error {

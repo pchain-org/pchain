@@ -47,7 +47,7 @@ type ConsensusReactor struct {
 func NewConsensusReactor(consensusState *ConsensusState) *ConsensusReactor {
 	conR := &ConsensusReactor{
 		conS:    consensusState,
-		ChainId: consensusState.chainConfig.PChainId,
+		ChainId: consensusState.chainConfig.PChainID,
 		logger:  consensusState.backend.GetLogger(),
 	}
 
@@ -212,7 +212,7 @@ func (conR *ConsensusReactor) Receive(chID uint64, src consensus.Peer, msgBytes 
 		conR.AddPeer(src)
 		ps = src.GetPeerState().(*PeerState)
 	}
-	//ps := src.Data.Get(conR.ChainId + "." + types.PeerStateKey).(*PeerState)
+	//ps := src.Data.Get(conR.ChainID + "." + types.PeerStateKey).(*PeerState)
 
 	switch chID {
 	case StateChannel:

@@ -24,11 +24,12 @@ func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMon
 	}
 	msg := st.msg
 	sender := st.from() // err checked in preCheck
-	homestead := st.evm.ChainConfig().IsHomestead(st.evm.BlockNumber)
+	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockNumber)
+	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockNumber)
 	contractCreation := msg.To() == nil
 
 	// Pay intrinsic gas
-	gas, err := IntrinsicGas(st.data, contractCreation, homestead)
+	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, istanbul)
 	if err != nil {
 		return nil, 0, nil, false, err
 	}
@@ -61,7 +62,7 @@ func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMon
 	}
 	st.refundGas()
 
-	if st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.BlockNumber, msg.To(), st.data) {
+	if st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.Context.BlockNumber, msg.To(), st.data) {
 		usedMoney = big.NewInt(0)
 	} else {
 		//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))

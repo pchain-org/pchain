@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -193,6 +194,7 @@ func (self *worker) pending() (*types.Block, *state.StateDB) {
 			self.current.txs,
 			nil,
 			self.current.receipts,
+			new(trie.Trie),
 		), self.current.state.Copy()
 	}
 	return self.current.Block, self.current.state.Copy()
@@ -208,6 +210,7 @@ func (self *worker) pendingBlock() *types.Block {
 			self.current.txs,
 			nil,
 			self.current.receipts,
+			new(trie.Trie),
 		)
 	}
 	return self.current.Block
@@ -313,7 +316,7 @@ func (self *worker) mainLoop() {
 				self.currentMu.Lock()
 				acc, _ := types.Sender(self.current.signer, ev.Tx)
 				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
-				txset := types.NewTransactionsByPriceAndNonce(self.current.signer, txs)
+				txset := types.NewTransactionsByPriceAndNonce(self.current.signer, txs, self.current.header.BaseFee)
 
 				self.commitTransactionsEx(txset, self.coinbase, big.NewInt(0), self.cch)
 				self.currentMu.Unlock()
@@ -459,7 +462,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		return err
 	}
 	work := &Work{
-		signer:    types.NewEIP155Signer(self.config.ChainId),
+		signer:    types.NewEIP155Signer(self.config.ChainID),
 		state:     state,
 		ancestors: set.New(),
 		family:    set.New(),
@@ -562,7 +565,7 @@ func (self *worker) commitNewWork() {
 	}
 
 	totalUsedMoney := big.NewInt(0)
-	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
+	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending, header.BaseFee)
 	//work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
 	rmTxs := self.commitTransactionsEx(txs, self.coinbase, totalUsedMoney, self.cch)
 
@@ -653,7 +656,7 @@ func (w *worker) commitTransactionsEx(txs *types.TransactionsByPriceAndNonce, co
 		}
 
 		// Start executing the transaction
-		w.current.state.Prepare(tx.Hash(), common.Hash{}, w.current.tcount)
+		w.current.state.Prepare(tx.Hash(), w.current.tcount)
 
 		logs, err := w.commitTransactionEx(tx, coinbase, gp, totalUsedMoney, cch)
 		switch err {

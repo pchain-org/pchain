@@ -194,7 +194,7 @@ func (w *trezorDriver) trezorSign(derivationPath []uint32, tx *types.Transaction
 	}
 	if chainID != nil { // EIP-155 transaction, set chain ID explicitly (only 32 bit is supported!?)
 		id := uint32(chainID.Int64())
-		request.ChainId = &id
+		request.ChainID = &id
 	}
 	// Send the initiation message and stream content until a signature is returned
 	response := new(trezor.EthereumTxRequest)

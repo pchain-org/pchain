@@ -22,7 +22,7 @@ func New(chainConfig *params.ChainConfig, cliCtx *cli.Context,
 	//recentMessages, _ := lru.NewARC(inmemoryPeers)
 	//knownMessages, _ := lru.NewARC(inmemoryMessages)
 
-	config := GetTendermintConfig(chainConfig.PChainId, cliCtx)
+	config := GetTendermintConfig(chainConfig.PChainID, cliCtx)
 
 	backend := &backend{
 		//config:           config,

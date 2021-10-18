@@ -27,7 +27,7 @@ type CoreChainInfo struct {
 
 	// Common Info
 	Owner   common.Address
-	ChainId string
+	ChainID string
 
 	// Setup Info
 	MinValidators    uint16
@@ -131,13 +131,13 @@ func SaveChainInfo(db dbm.DB, ci *ChainInfo) error {
 	}
 
 	if ci.Epoch != nil {
-		err = saveEpoch(db, ci.Epoch, ci.ChainId)
+		err = saveEpoch(db, ci.Epoch, ci.ChainID)
 		if err != nil {
 			return err
 		}
 	}
 
-	saveId(db, ci.ChainId)
+	saveId(db, ci.ChainID)
 
 	return nil
 }
@@ -191,7 +191,7 @@ func loadCoreChainInfo(db dbm.DB, chainId string) *CoreChainInfo {
 
 func saveCoreChainInfo(db dbm.DB, cci *CoreChainInfo) error {
 
-	db.SetSync(calcCoreChainInfoKey(cci.ChainId), wire.BinaryBytes(*cci))
+	db.SetSync(calcCoreChainInfoKey(cci.ChainID), wire.BinaryBytes(*cci))
 	return nil
 }
 
@@ -235,7 +235,7 @@ func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
 			for {
 				number ++
 
-				ep := loadEpoch(ci.db, number, ci.ChainId)
+				ep := loadEpoch(ci.db, number, ci.ChainID)
 				if ep == nil {
 					return nil
 				}
@@ -252,7 +252,7 @@ func (ci *ChainInfo) GetEpochByBlockNumber(blockNumber uint64) *ep.Epoch {
 				}
 				number--
 
-				ep := loadEpoch(ci.db, number, ci.ChainId)
+				ep := loadEpoch(ci.db, number, ci.ChainID)
 				if ep == nil {
 					return nil
 				}
@@ -389,7 +389,7 @@ func storePendingChildChainData(db dbm.DB, cci *CoreChainInfo, create bool) {
 	defer pendingChainMtx.Unlock()
 
 	// store the data
-	db.SetSync(calcPendingChainInfoKey(cci.ChainId), wire.BinaryBytes(*cci))
+	db.SetSync(calcPendingChainInfoKey(cci.ChainID), wire.BinaryBytes(*cci))
 
 	if create {
 		// index the data
@@ -400,12 +400,12 @@ func storePendingChildChainData(db dbm.DB, cci *CoreChainInfo, create bool) {
 		}
 		// Check if chain id has been added already
 		for _, v := range idx {
-			if v.ChainID == cci.ChainId {
+			if v.ChainID == cci.ChainID {
 				return
 			}
 		}
 		// Pass the check, add the key to idx
-		idx = append(idx, pendingIdxData{cci.ChainId, cci.StartBlock, cci.EndBlock})
+		idx = append(idx, pendingIdxData{cci.ChainID, cci.StartBlock, cci.EndBlock})
 		db.SetSync(pendingChainIndexKey, wire.BinaryBytes(idx))
 	}
 }

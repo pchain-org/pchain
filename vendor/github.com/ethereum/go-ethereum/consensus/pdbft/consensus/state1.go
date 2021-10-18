@@ -46,7 +46,7 @@ func (cs *ConsensusState) InitState(epoch *ep.Epoch) *sm.State {
 	state.TdmExtra, _ = cs.LoadLastTendermintExtra()
 	if state.TdmExtra == nil { //means it it the first block
 
-		state = sm.MakeGenesisState( /*stateDB, */ cs.chainConfig.PChainId, cs.logger)
+		state = sm.MakeGenesisState( /*stateDB, */ cs.chainConfig.PChainID, cs.logger)
 		//state.Save()
 
 		if state.TdmExtra.EpochNumber != uint64(epoch.Number) {
@@ -108,8 +108,8 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	// RoundState fields
 	cs.updateRoundStep(0, RoundStepNewHeight)
 	//cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
-	if state.TdmExtra.ChainID == params.MainnetChainConfig.PChainId ||
-		state.TdmExtra.ChainID == params.TestnetChainConfig.PChainId {
+	if state.TdmExtra.ChainID == params.MainnetChainConfig.PChainID ||
+		state.TdmExtra.ChainID == params.TestnetChainConfig.PChainID {
 
 		cs.StartTime = cs.timeoutParams.Commit(time.Now())
 
@@ -125,8 +125,8 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	// Reset fields based on state.
 	_, validators, _ := state.GetValidators()
 	cs.Validators = validators
-	cs.Votes = NewHeightVoteSet(cs.chainConfig.PChainId, height, validators, cs.logger)
-	cs.VoteSignAggr = NewHeightVoteSignAggr(cs.chainConfig.PChainId, height, validators, cs.logger)
+	cs.Votes = NewHeightVoteSet(cs.chainConfig.PChainID, height, validators, cs.logger)
+	cs.VoteSignAggr = NewHeightVoteSignAggr(cs.chainConfig.PChainID, height, validators, cs.logger)
 
 	cs.vrfValIndex = -1
 	cs.pastRoundStates = make(map[int]int)
