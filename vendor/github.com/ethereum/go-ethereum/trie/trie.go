@@ -427,11 +427,9 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 	if t.root == nil {
 		return hashNode(emptyRoot.Bytes()), nil, nil
 	}
-	// If the number of changes is below 100, we let one thread handle it
-	h := newHasher(false)
+	h := newHasher(onleaf)
 	defer returnHasherToPool(h)
-	hashed, cached := h.hash(t.root, true)
-	return hashed, cached, nil
+	return h.hash(t.root, db, true)
 }
 
 // Reset drops the referenced root node and cleans all internal state.
