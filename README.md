@@ -133,3 +133,10 @@ For a full guide on how to set up and become a validator node on the Pchain Netw
 
 To learn how to delegate your PI to validators to receive rewards, read [How To Delegate or Stake](https://pliangroup.gitbook.io/plian/using-the-blockchain/delegating-or-staking)
 
+### Evm Catchup
+
+This branch is to catch up the latest evm from geth.
+
+geth version: [release/1.10.9](https://github.com/ethereum/go-ethereum/releases/tag/v1.10.9)
+
+solc version: [0.8.9](https://github.com/ethereum/solidity/releases/tag/v0.8.9)
