@@ -135,7 +135,7 @@ To learn how to delegate your PI to validators to receive rewards, read [How To 
 
 ### Evm Catchup
 
-This branch is to catch up the latest evm from geth.
+This branch is to catch up the latest evm from geth. To compile this branch, need **go1.13**
 
 geth version: [release/1.10.9](https://github.com/ethereum/go-ethereum/releases/tag/v1.10.9)
 
