@@ -627,10 +627,12 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		}
 	}
 
+	/*
 	// Not allow contract creation on PChain Main Chain
 	if pool.chainconfig.IsMainChain() && tx.To() == nil {
 		return ErrNoContractOnMainChain
 	}
+	*/
 
 	if !pabi.IsPChainContractAddr(tx.To()) {
 		// Ensure the transaction has more gas than the basic tx fee.
