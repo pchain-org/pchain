@@ -20,12 +20,11 @@ import (
 func applyTransactionEx(msg types.Message, config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, ops *types.PendingOps, header *types.Header,
 	tx *types.Transaction, usedGas *uint64, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper, mining bool, evm *vm.EVM) (*types.Receipt, uint64, error) {
 
-	/*
 	// Not allow contract creation on PChain Main Chain
 	if config.IsMainChain() && tx.To() == nil {
 		return nil, 0, ErrNoContractOnMainChain
 	}
-	*/
+
 	blockNumber := header.Number
 	blockHash := header.Hash()
 
