@@ -62,8 +62,8 @@ var (
 	MainnetBerlinBlock = big.NewInt(10000000000)
 	TestnetBerlinBlock = big.NewInt(10000000000)
 
-	MainnetLondonBlock = big.NewInt(10000000000)
-	TestnetLondonBlock = big.NewInt(10000000000)
+	MainnetLondonBlock *big.Int = nil
+	TestnetLondonBlock *big.Int = nil
 )
 
 var (

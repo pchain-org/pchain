@@ -520,6 +520,14 @@ func (self *worker) commitNewWork() {
 		Extra:      self.extra,
 		Time:       big.NewInt(tstamp),
 	}
+	// Set baseFee and GasLimit if we are on an EIP-1559 chain
+	if self.config.IsLondon(header.Number) {
+		header.BaseFee = misc.CalcBaseFee(self.config, parent.Header())
+		if !self.config.IsLondon(parent.Number()) {
+			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
+			header.GasLimit = core.CalcGasLimit(parent, parentGasLimit, self.gasCeil)
+		}
+	}
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if self.isRunning() {
 		if self.coinbase == (common.Address{}) {

@@ -128,7 +128,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	}
 
 	isMainChain := params.IsMainChain(ctx.ChainId())
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithDefault(chainDb, config.Genesis, isMainChain, isTestnet)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithDefault(chainDb, config.Genesis, isMainChain, isTestnet, nil)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -145,6 +145,9 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig.ChildSd2mcWhenEpochEndsBlock  = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 		chainConfig.ValidateHTLCBlock             = params.MainnetChainConfig.ValidateHTLCBlock
 		chainConfig.HeaderHashWithoutTimeBlock    = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
+		chainConfig.MuirGlacierBlock              = params.MainnetChainConfig.MuirGlacierBlock
+		chainConfig.BerlinBlock                   = params.MainnetChainConfig.BerlinBlock
+		chainConfig.LondonBlock                   = params.MainnetChainConfig.LondonBlock
 	case "testnet":
 		if chainConfig.OutOfStorageBlock == nil {
 			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
@@ -155,6 +158,9 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig.ChildSd2mcWhenEpochEndsBlock  = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 		chainConfig.ValidateHTLCBlock             = params.TestnetChainConfig.ValidateHTLCBlock
 		chainConfig.HeaderHashWithoutTimeBlock    = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
+		chainConfig.MuirGlacierBlock              = params.TestnetChainConfig.MuirGlacierBlock
+		chainConfig.BerlinBlock                   = params.TestnetChainConfig.BerlinBlock
+		chainConfig.LondonBlock                   = params.TestnetChainConfig.LondonBlock
 	case "child_0":
 		if (chainConfig.HashTimeLockContract == common.Address{}) {
 			if isTestnet {
@@ -171,6 +177,9 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock            = params.TestnetChainConfig.ValidateHTLCBlock
 			chainConfig.HeaderHashWithoutTimeBlock   = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
+			chainConfig.MuirGlacierBlock             = params.TestnetChainConfig.MuirGlacierBlock
+			chainConfig.BerlinBlock                  = params.TestnetChainConfig.BerlinBlock
+			chainConfig.LondonBlock                  = params.TestnetChainConfig.LondonBlock
 		} else {
 			chainConfig.OutOfStorageBlock            = params.MainnetChainConfig.Child0OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock       = params.MainnetChainConfig.ExtractRewardMainBlock
@@ -179,6 +188,9 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock            = params.MainnetChainConfig.ValidateHTLCBlock
 			chainConfig.HeaderHashWithoutTimeBlock   = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
+			chainConfig.MuirGlacierBlock             = params.MainnetChainConfig.MuirGlacierBlock
+			chainConfig.BerlinBlock                  = params.MainnetChainConfig.BerlinBlock
+			chainConfig.LondonBlock                  = params.MainnetChainConfig.LondonBlock
 		}
 	default:
 		if isTestnet {
@@ -189,6 +201,9 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock            = params.TestnetChainConfig.ValidateHTLCBlock
 			chainConfig.HeaderHashWithoutTimeBlock   = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
+			chainConfig.MuirGlacierBlock             = params.TestnetChainConfig.MuirGlacierBlock
+			chainConfig.BerlinBlock                  = params.TestnetChainConfig.BerlinBlock
+			chainConfig.LondonBlock                  = params.TestnetChainConfig.LondonBlock
 		} else {
 			chainConfig.OutOfStorageBlock            = params.MainnetChainConfig.OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock       = params.MainnetChainConfig.ExtractRewardMainBlock
@@ -197,6 +212,9 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock            = params.MainnetChainConfig.ValidateHTLCBlock
 			chainConfig.HeaderHashWithoutTimeBlock   = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
+			chainConfig.MuirGlacierBlock             = params.MainnetChainConfig.MuirGlacierBlock
+			chainConfig.BerlinBlock                  = params.MainnetChainConfig.BerlinBlock
+			chainConfig.LondonBlock                  = params.MainnetChainConfig.LondonBlock
 		}
 	}
 

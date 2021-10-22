@@ -69,6 +69,7 @@ type TxPool struct {
 
 	homestead bool
 	istanbul  bool
+	eip2718  bool // Fork indicator whether we are in the eip2718 stage.
 }
 
 // TxRelayBackend provides an interface to the mechanism that forwards transacions
@@ -312,6 +313,7 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	pool.relay.NewHead(pool.head, m, r)
 	pool.homestead = pool.config.IsHomestead(head.Number)
 	pool.homestead = pool.config.IsIstanbul(head.Number)
+	pool.eip2718 = pool.config.IsBerlin(head.Number)
 	pool.signer = types.MakeSigner(pool.config, head.Number)
 }
 

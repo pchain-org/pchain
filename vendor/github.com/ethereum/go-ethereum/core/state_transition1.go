@@ -1,8 +1,10 @@
 package core
 
 import (
+	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 )
 
@@ -26,6 +28,7 @@ func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMon
 	sender := st.from() // err checked in preCheck
 	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockNumber)
 	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockNumber)
+	london := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber)
 	contractCreation := msg.To() == nil
 
 	// Pay intrinsic gas
@@ -60,13 +63,24 @@ func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMon
 			return nil, 0, nil, false, vmerr
 		}
 	}
-	st.refundGas()
+
+	if !london {
+		// Before EIP-3529: refunds were capped to gasUsed / 2
+		st.refundGas(params.RefundQuotient)
+	} else {
+		// After EIP-3529: refunds are capped to gasUsed / 5
+		st.refundGas(params.RefundQuotientEIP3529)
+	}
 
 	if st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.Context.BlockNumber, msg.To(), st.data) {
 		usedMoney = big.NewInt(0)
 	} else {
 		//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
-		usedMoney = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
+		effectiveTip := st.gasPrice
+		if london {
+			effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
+		}
+		usedMoney = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
 	}
 
 	return ret, st.gasUsed(), usedMoney, vmerr != nil, err
