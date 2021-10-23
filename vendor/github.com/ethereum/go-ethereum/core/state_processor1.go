@@ -103,14 +103,20 @@ func applyTransactionEx(msg types.Message, config *params.ChainConfig, bc *Block
 
 		from := msg.From()
 		// Make sure this transaction's nonce is correct
-		if msg.CheckNonce() {
-			nonce := statedb.GetNonce(from)
-			if nonce < msg.Nonce() {
-				log.Info("ApplyTransactionEx() abort due to nonce too high")
-				return nil, 0, ErrNonceTooHigh
-			} else if nonce > msg.Nonce() {
-				log.Info("ApplyTransactionEx() abort due to nonce too low")
-				return nil, 0, ErrNonceTooLow
+		if !msg.IsFake() {
+			// Make sure this transaction's nonce is correct.
+			stNonce := statedb.GetNonce(msg.From())
+			if msgNonce := msg.Nonce(); stNonce < msgNonce {
+				return nil, 0, fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooHigh,
+					msg.From().Hex(), msgNonce, stNonce)
+			} else if stNonce > msgNonce {
+				return nil, 0, fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
+					msg.From().Hex(), msgNonce, stNonce)
+			}
+			// Make sure the sender is an EOA
+			if codeHash := statedb.GetCodeHash(msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
+				return nil, 0, fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
+					msg.From().Hex(), codeHash)
 			}
 		}
 

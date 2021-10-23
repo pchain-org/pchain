@@ -508,3 +508,9 @@ func (lc *LightChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 func (lc *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return lc.scope.Track(new(event.Feed).Subscribe(ch))
 }
+
+// SubscribePendingLogs starts delivering logs from pending transactions
+// to the given channel.
+func (lc *LightChain) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
+	return lc.scope.Track(new(event.Feed).Subscribe(ch))
+}

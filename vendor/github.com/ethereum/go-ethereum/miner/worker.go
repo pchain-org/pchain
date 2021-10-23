@@ -97,6 +97,9 @@ type worker struct {
 	eth    Backend
 	chain  *core.BlockChain
 
+	// Feeds
+	pendingLogsFeed event.Feed
+
 	gasFloor uint64
 	gasCeil  uint64
 

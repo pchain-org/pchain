@@ -608,6 +608,12 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if pool.currentState.GetNonce(from) > tx.Nonce() {
 		return ErrNonceTooLow
 	}
+
+	// Not allow contract creation on PChain Main Chain
+	if pool.chainconfig.IsMainChain() && tx.To() == nil {
+		return ErrNoContractOnMainChain
+	}
+
 	//Verify HTLC transactions and prevent the sending of 0 gas fee contract transactions
 	mainBlockNumber := pool.chain.CurrentBlock().Number()
 	if !pool.chainconfig.IsMainChain() {
@@ -625,11 +631,6 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 			return ErrInsufficientFunds
 		}
-	}
-
-	// Not allow contract creation on PChain Main Chain
-	if pool.chainconfig.IsMainChain() && tx.To() == nil {
-		return ErrNoContractOnMainChain
 	}
 
 	if !pabi.IsPChainContractAddr(tx.To()) {

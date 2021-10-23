@@ -149,7 +149,7 @@ type callmsg struct {
 	types.Message
 }
 
-func (callmsg) CheckNonce() bool { return false }
+func (callmsg) IsFake() bool { return true }
 
 func odrContractCall(ctx context.Context, db ethdb.Database, bc *core.BlockChain, lc *LightChain, bhash common.Hash) ([]byte, error) {
 	data := common.Hex2Bytes("60CD26850000000000000000000000000000000000000000000000000000000000000000")
