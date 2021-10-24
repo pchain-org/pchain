@@ -77,6 +77,10 @@ var (
 	// ErrCommission is returned if the request Commission value not between 0 and 100
 	ErrCommission = errors.New("commission percentage (between 0 and 100) out of range")
 
+	// ErrInsufficientFundsForTransfer is returned if the transaction sender doesn't
+	// have enough funds for transfer(topmost call only).
+	ErrInsufficientFundsForTransfer = errors.New("insufficient funds for transfer")
+
 	// Vote Error
 	// ErrVoteAmountTooLow is returned if the vote amount less than proxied delegation amount
 	ErrVoteAmountTooLow = errors.New("vote amount too low")

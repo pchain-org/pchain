@@ -127,7 +127,7 @@ func SetupGenesisBlockWithDefault(db ethdb.Database, genesis *Genesis, isMainCha
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.Root, state.NewDatabaseWithConfig(db, nil)); err != nil {
+	if _, err := state.New(header.Root, state.NewDatabaseWithCache(db, 0)); err != nil {
 		if genesis == nil {
 			log.Info("Writing default main-net genesis block")
 			if isTestnet {

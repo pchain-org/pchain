@@ -125,17 +125,6 @@ func NewDatabaseWithCache(db ethdb.Database, cache int) Database {
 	}
 }
 
-// NewDatabaseWithConfig creates a backing store for state. The returned database
-// is safe for concurrent use and retains a lot of collapsed RLP trie nodes in a
-// large memory cache.
-func NewDatabaseWithConfig(db ethdb.Database, config *trie.Config) Database {
-	csc, _ := lru.New(codeSizeCacheSize)
-	return &cachingDB{
-		db:            trie.NewDatabaseWithConfig(db, config),
-		codeSizeCache: csc,
-	}
-}
-
 type cachingDB struct {
 	db            *trie.Database
 	codeSizeCache *lru.Cache
