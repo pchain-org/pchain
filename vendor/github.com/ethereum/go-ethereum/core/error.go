@@ -16,9 +16,21 @@
 
 package core
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/ethereum/go-ethereum/core/types"
+)
 
 var (
+	// ErrNonceTooLow is returned if the nonce of a transaction is lower than the
+	// one present in the local chain.
+	ErrNonceTooLow = errors.New("nonce too low")
+
+	// ErrNonceTooHigh is returned if the nonce of a transaction is higher than the
+	// next one expected based on the local chain.
+	ErrNonceTooHigh = errors.New("nonce too high")
+
 	// ErrKnownBlock is returned when a block to import is already known locally.
 	ErrKnownBlock = errors.New("block already known")
 
@@ -26,12 +38,16 @@ var (
 	// by a transaction is higher than what's left in the block.
 	ErrGasLimitReached = errors.New("gas limit reached")
 
+	// ErrInsufficientFunds is returned if the total cost of executing a transaction
+	// is higher than the balance of the user's account.
+	ErrInsufficientFunds = errors.New("insufficient funds for gas * price + value")
+
+	// ErrIntrinsicGas is returned if the transaction is specified to use less gas
+	// than required to start the invocation.
+	ErrIntrinsicGas = errors.New("intrinsic gas too low")
+
 	// ErrBlacklistedHash is returned if a block to import is on the blacklist.
 	ErrBlacklistedHash = errors.New("blacklisted hash")
-
-	// ErrNonceTooHigh is returned if the nonce of a transaction is higher than the
-	// next one expected based on the local chain.
-	ErrNonceTooHigh = errors.New("nonce too high")
 
 	// ErrNoContractOnMainChain is returned if the contract creation tx has been submit to PChain main chain
 	ErrNoContractOnMainChain = errors.New("no contract creation on main chain")
@@ -96,6 +112,10 @@ var (
 
 	// ErrNotAllowedInChildChain is returned if the transaction with child flag = false be sent to child chain
 	ErrNotAllowedInChildChain = errors.New("transaction not allowed in child chain")
+
+	// ErrTxTypeNotSupported is returned if a transaction is not supported in the
+	// current network configuration.
+	ErrTxTypeNotSupported = types.ErrTxTypeNotSupported
 
 	// ErrTipAboveFeeCap is a sanity error to ensure no one is able to specify a
 	// transaction with a tip higher than the total fee cap.
