@@ -34,14 +34,17 @@ var (
 	MainnetGenesisHash = common.HexToHash("0x5b0937e8c6189a45637f0eeb5d2c62b3794e08b695d1f3e339122c80ff7404e3") // Mainnet genesis hash to enforce below configs on
 	TestnetGenesisHash = common.HexToHash("0x5b0937e8c6189a45637f0eeb5d2c62b3794e08b695d1f3e339122c80ff7404e3") // Testnet genesis hash to enforce below configs on
 
+	MainnetOutOfStorageBlock = big.NewInt(5890000)
+	TestnetOutOfStorageBlock = big.NewInt(10)
+
+	MainnetChild0OutOfStorageBlock = big.NewInt(13930000)
+	TestnetChild0OutOfStorageBlock = big.NewInt(10)
+
 	//From epoch after this block, delegators need to query/retrieve his/her reward by RPC APIs.
 	// Note: it does not work exactly from this block, it works from the next epoch
 	//       and this number is the main chain block number
 	MainnetExtractRewardMainBlock = big.NewInt(9383000)
-	TestnetExtractRewardMainBlock = big.NewInt(2550000)
-
-	MainnetExtractRewardPatchMainBlock = big.NewInt(20970000)
-	TestnetExtractRewardPatchMainBlock = big.NewInt(2550000)
+	TestnetExtractRewardMainBlock = big.NewInt(40)
 
 	//use SaveData2MainBlock v1; which reports epoch/tx3 to main block
 	MainnetSd2mcV1MainBlock = big.NewInt(11824000)
@@ -51,10 +54,13 @@ var (
 	TestnetSd2mcWhenEpochEndsBlock = big.NewInt(40)
 
 	MainnetValidateHTLCBlock = big.NewInt(16000000)
-	TestnetValidateHTLCBlock = big.NewInt(9785000)
+	TestnetValidateHTLCBlock = big.NewInt(40)
 
 	MainnetHeaderHashWithoutTimeBlock = big.NewInt(17160000)
 	TestnetHeaderHashWithoutTimeBlock = big.NewInt(40)
+
+	MainnetExtractRewardPatchMainBlock = big.NewInt(20970000)
+	TestnetExtractRewardPatchMainBlock = big.NewInt(40)
 
 	MainnetMuirGlacierBlock = big.NewInt(10000000000)
 	TestnetMuirGlacierBlock = big.NewInt(10000000000)
@@ -86,8 +92,8 @@ var (
 		BerlinBlock:                  MainnetBerlinBlock,
 		LondonBlock:                  MainnetLondonBlock,
 		Child0HashTimeLockContract:   common.HexToAddress("0x18c496af47eb1c0946f64a25d3f589f71934bf3d"),
-		OutOfStorageBlock:            big.NewInt(5890000),
-		Child0OutOfStorageBlock:      big.NewInt(13930000),
+		OutOfStorageBlock:            MainnetOutOfStorageBlock,
+		Child0OutOfStorageBlock:      MainnetChild0OutOfStorageBlock,
 		ExtractRewardMainBlock:       MainnetExtractRewardMainBlock,
 		ExtractRewardPatchMainBlock:  MainnetExtractRewardPatchMainBlock,
 		Sd2mcV1Block:                 MainnetSd2mcV1MainBlock,
@@ -120,8 +126,8 @@ var (
 		BerlinBlock:                TestnetBerlinBlock,
 		LondonBlock:                TestnetLondonBlock,
 		Child0HashTimeLockContract: common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
-		OutOfStorageBlock:          big.NewInt(10),
-		Child0OutOfStorageBlock:    big.NewInt(10),
+		OutOfStorageBlock:          TestnetOutOfStorageBlock,
+		Child0OutOfStorageBlock:    TestnetChild0OutOfStorageBlock,
 		ExtractRewardMainBlock:     TestnetExtractRewardMainBlock,
 		Sd2mcV1Block:               TestnetSd2mcV1MainBlock,
 		Tendermint: &TendermintConfig{
