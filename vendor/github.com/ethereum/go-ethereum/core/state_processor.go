@@ -106,7 +106,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	evm.Reset(txContext, statedb)
 
 	// Apply the transaction to the current state (included in the env).
-	_, gas, failed, err := ApplyMessage(evm, msg, gp)
+	result, err := ApplyMessage(evm, msg, gp)
 	if err != nil {
 		return nil, err
 	}
@@ -118,18 +118,18 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 	} else {
 		root = statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
 	}
-	*usedGas += gas
+	*usedGas += result.UsedGas
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used
 	// by the tx.
 	receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
-	if failed {
+	if result.Failed() {
 		receipt.Status = types.ReceiptStatusFailed
 	} else {
 		receipt.Status = types.ReceiptStatusSuccessful
 	}
 	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = gas
+	receipt.GasUsed = result.UsedGas
 
 	// If the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {

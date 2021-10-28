@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -754,15 +755,15 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 	return nil
 }
 
-func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNr rpc.BlockNumber, overrides *StateOverride, timeout time.Duration) ([]byte, uint64, bool, error) {
+func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNr rpc.BlockNumber, overrides *StateOverride, timeout time.Duration) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
 	state, header, err := b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
-		return nil, 0, false, err
+		return nil, err
 	}
 	if err := overrides.Apply(state); err != nil {
-		return nil, 0, false, err
+		return nil, err
 	}
 	// Setup context so it may be cancelled the call has completed
 	// or, in case of unmetered gas, setup a context with a timeout.
@@ -779,11 +780,11 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNr rpc.Bl
 	// Get a new instance of the EVM.
 	msg, err := args.ToMessage(b.RPCGasCap(), header.BaseFee)
 	if err != nil {
-		return nil, 0, false, err
+		return nil, err
 	}
 	evm, vmError, err := b.GetEVM(ctx, msg, state, header, &vm.Config{NoBaseFee: true})
 	if err != nil {
-		return nil, 0, false, err
+		return nil, err
 	}
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
@@ -794,29 +795,63 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNr rpc.Bl
 
 	// Execute the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
-	res, gas, failed, err := core.ApplyMessage(evm, msg, gp)
+	result, err := core.ApplyMessage(evm, msg, gp)
 	if err := vmError(); err != nil {
-		return nil, 0, false, err
+		return nil, err
 	}
 
 	// If the timer caused an abort, return an appropriate error message
 	if evm.Cancelled() {
-		return nil, 0, false, fmt.Errorf("execution aborted (timeout = %v)", timeout)
+		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
 	}
 	if err != nil {
-		return res, 0, false, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
+		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
 	}
-	return res, gas, failed, err
+	return result, err
+}
+
+func newRevertError(result *core.ExecutionResult) *revertError {
+	reason, errUnpack := abi.UnpackRevert(result.Revert())
+	err := errors.New("execution reverted")
+	if errUnpack == nil {
+		err = fmt.Errorf("execution reverted: %v", reason)
+	}
+	return &revertError{
+		error:  err,
+		reason: hexutil.Encode(result.Revert()),
+	}
+}
+
+// revertError is an API error that encompassas an EVM revertal with JSON error
+// code and a binary data blob.
+type revertError struct {
+	error
+	reason string // revert reason hex encoded
+}
+
+// ErrorCode returns the JSON error code for a revertal.
+// See: https://github.com/ethereum/wiki/wiki/JSON-RPC-Error-Codes-Improvement-Proposal
+func (e *revertError) ErrorCode() int {
+	return 3
+}
+
+// ErrorData returns the hex encoded revert reason.
+func (e *revertError) ErrorData() interface{} {
+	return e.reason
 }
 
 // Call executes the given transaction on the state for the given block number.
 // It doesn't make and changes in the state/blockchain and is useful to execute and retrieve values.
 func (s *PublicBlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNr rpc.BlockNumber, overrides *StateOverride) (hexutil.Bytes, error) {
-	result, _, _, err := DoCall(ctx, s.b, args, blockNr, overrides, 5*time.Second)
+	result, err := DoCall(ctx, s.b, args, blockNr, overrides, 5*time.Second)
 	if err != nil {
 		return nil, err
 	}
-	return (hexutil.Bytes)(result), err
+	// If the result contains a revert reason, try to unpack and return it.
+	if len(result.Revert()) > 0 {
+		return nil, newRevertError(result)
+	}
+	return result.Return(), result.Err
 }
 
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
@@ -890,19 +925,30 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	cap = hi
 
 	// Create a helper to check if a gas allowance results in an executable transaction
-	executable := func(gas uint64) (bool) {
+	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		_, _, failed, err := DoCall(ctx, b, args, rpc.PendingBlockNumber, nil, 0)
-		if err != nil || failed {
-			return false
+		result, err := DoCall(ctx, b, args, rpc.PendingBlockNumber, nil, 0)
+		if err != nil {
+			if errors.Is(err, core.ErrIntrinsicGas) {
+				return true, nil, nil // Special case, raise gas limit
+			}
+			return true, nil, err // Bail out
 		}
-		return true
+		return result.Failed(), result, nil
 	}
 	// Execute the binary search and hone in on an executable gas limit
 	for lo+1 < hi {
 		mid := (hi + lo) / 2
-		if !executable(mid) {
+		failed, _, err := executable(mid)
+
+		// If the error is not nil(consensus error), it means the provided message
+		// call or transaction will never be accepted no matter how much gas it is
+		// assigned. Return the error directly, don't struggle any more.
+		if err != nil {
+			return 0, err
+		}
+		if failed {
 			lo = mid
 		} else {
 			hi = mid
@@ -910,8 +956,19 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	// Reject the transaction as invalid if it still fails at the highest allowance
 	if hi == cap {
-		if !executable(hi) {
-			return 0, fmt.Errorf("gas required exceeds allowance or always failing transaction")
+		failed, result, err := executable(hi)
+		if err != nil {
+			return 0, err
+		}
+		if failed {
+			if result != nil && result.Err != vm.ErrOutOfGas {
+				if len(result.Revert()) > 0 {
+					return 0, newRevertError(result)
+				}
+				return 0, result.Err
+			}
+			// Otherwise, the specified gas cap is too low
+			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
 		}
 	}
 	return hexutil.Uint64(hi), nil
@@ -1219,12 +1276,12 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, err
 		}
-		_, gasUsed, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
+		res, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()))
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}
 		if tracer.Equal(prevTracer) {
-			return accessList, gasUsed, nil, nil
+			return accessList, res.UsedGas, res.Err, nil
 		}
 		prevTracer = tracer
 	}

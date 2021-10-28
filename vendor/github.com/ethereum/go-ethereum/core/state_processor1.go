@@ -39,7 +39,7 @@ func applyTransactionEx(msg types.Message, config *params.ChainConfig, bc *Block
 		//log.Debugf("ApplyTransactionEx 2\n")
 
 		// Apply the transaction to the current state (included in the env).
-		_, gas, money, failed, err := ApplyMessageEx(evm, msg, gp)
+		result, money, err := ApplyMessageEx(evm, msg, gp)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -53,13 +53,13 @@ func applyTransactionEx(msg types.Message, config *params.ChainConfig, bc *Block
 			//log.Debugf("ApplyTransactionEx(), is not byzantium\n")
 			root = statedb.IntermediateRoot(false).Bytes()
 		}
-		*usedGas += gas
+		*usedGas += result.UsedGas
 		totalUsedMoney.Add(totalUsedMoney, money)
 
 		// Create a new receipt for the transaction, storing the intermediate root and gas used
 		// by the tx.
 		receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
-		if failed {
+		if result.Failed() {
 			receipt.Status = types.ReceiptStatusFailed
 		} else {
 			receipt.Status = types.ReceiptStatusSuccessful
@@ -67,7 +67,7 @@ func applyTransactionEx(msg types.Message, config *params.ChainConfig, bc *Block
 		//log.Debugf("ApplyTransactionEx，new receipt with (root,failed,*usedGas) = (%v,%v,%v)\n", root, failed, *usedGas)
 		receipt.TxHash = tx.Hash()
 		//log.Debugf("ApplyTransactionEx，new receipt with txhash %v\n", receipt.TxHash)
-		receipt.GasUsed = gas
+		receipt.GasUsed = result.UsedGas
 		//log.Debugf("ApplyTransactionEx，new receipt with gas %v\n", receipt.GasUsed)
 		// If the transaction created a contract, store the creation address in the receipt.
 		if msg.To() == nil {
@@ -82,7 +82,7 @@ func applyTransactionEx(msg types.Message, config *params.ChainConfig, bc *Block
 		receipt.TransactionIndex = uint(statedb.TxIndex())
 		//log.Debugf("ApplyTransactionEx，new receipt with receipt.Bloom %v\n", receipt.Bloom)
 		//log.Debugf("ApplyTransactionEx 4\n")
-		return receipt, gas, err
+		return receipt, result.UsedGas, err
 
 	} else {
 
