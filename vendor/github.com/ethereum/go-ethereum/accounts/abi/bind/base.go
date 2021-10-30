@@ -193,7 +193,10 @@ func (c *BoundContract) Call(opts *CallOpts, results *[]interface{}, method stri
 			}
 		}
 	}
-	if err != nil {
+
+	if len(*results) == 0 {
+		res, err := c.abi.Unpack(method, output)
+		*results = res
 		return err
 	}
 	res := *results

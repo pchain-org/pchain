@@ -575,7 +575,7 @@ func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transac
 		return errors.New("invalid TX4: wrong function")
 	}
 
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -605,7 +605,7 @@ func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transac
 
 	var tx3Args pabi.WithdrawFromChildChainArgs
 	tx3Data := tx3.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&tx3Args, pabi.WithdrawFromChildChain.String(), tx3Data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&tx3Args, pabi.WithdrawFromChildChain.String(), tx3Data[4:]); err != nil {
 		return err
 	}
 

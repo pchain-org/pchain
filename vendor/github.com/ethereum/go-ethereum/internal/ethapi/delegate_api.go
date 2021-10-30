@@ -439,7 +439,7 @@ func delegateValidation(from common.Address, tx *types.Transaction, state *state
 
 	var args pabi.DelegateArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.Delegate.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.Delegate.String(), data[4:]); err != nil {
 		return nil, err
 	}
 
@@ -480,7 +480,7 @@ func cancelDelegateValidation(from common.Address, tx *types.Transaction, state 
 
 	var args pabi.CancelDelegateArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CancelDelegate.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.CancelDelegate.String(), data[4:]); err != nil {
 		return nil, err
 	}
 
@@ -536,7 +536,7 @@ func candidateValidation(from common.Address, tx *types.Transaction, state *stat
 
 	var args pabi.CandidateArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.Candidate.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.Candidate.String(), data[4:]); err != nil {
 		return nil, err
 	}
 

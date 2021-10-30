@@ -183,7 +183,7 @@ func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChai
 func voteNextEpochValidation(tx *types.Transaction, bc *core.BlockChain) (*pabi.VoteNextEpochArgs, error) {
 	var args pabi.VoteNextEpochArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.VoteNextEpoch.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.VoteNextEpoch.String(), data[4:]); err != nil {
 		return nil, err
 	}
 
@@ -198,7 +198,7 @@ func voteNextEpochValidation(tx *types.Transaction, bc *core.BlockChain) (*pabi.
 func revealVoteValidation(from common.Address, tx *types.Transaction, state *state.StateDB, bc *core.BlockChain) (*pabi.RevealVoteArgs, error) {
 	var args pabi.RevealVoteArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.RevealVote.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.RevealVote.String(), data[4:]); err != nil {
 		return nil, err
 	}
 

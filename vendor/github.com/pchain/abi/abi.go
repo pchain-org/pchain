@@ -1,10 +1,12 @@
 package abi
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
+	"fmt"
 	"math/big"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type FunctionType struct {
@@ -462,4 +464,20 @@ func FunctionTypeFromId(sigdata []byte) (FunctionType, error) {
 	}
 
 	return StringToFunctionType(m.Name), nil
+}
+
+// UnpackMethodInputs output in v according to the abi specification
+func UnpackMethodInputs(v interface{}, name string, input []byte) (error) {
+	if len(input) == 0 {
+		return fmt.Errorf("abi: unmarshalling empty output")
+	}
+	if method, ok := ChainABI.Methods[name]; ok {
+		unpacked, err := method.Inputs.Unpack(input)
+		if err != nil {
+			return err
+		}
+		method.Inputs.Copy(v, unpacked)
+		return err
+	}
+	return fmt.Errorf("abi: could not locate named method or event")
 }

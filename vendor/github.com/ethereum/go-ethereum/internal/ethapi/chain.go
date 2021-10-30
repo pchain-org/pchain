@@ -405,7 +405,7 @@ func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 
 	var args pabi.CreateChildChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CreateChildChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.CreateChildChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -431,7 +431,7 @@ func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 
 	var args pabi.CreateChildChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CreateChildChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.CreateChildChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -468,7 +468,7 @@ func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 
 	var args pabi.JoinChildChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.JoinChildChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.JoinChildChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -489,7 +489,7 @@ func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 
 	var args pabi.JoinChildChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.JoinChildChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.JoinChildChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -523,7 +523,7 @@ func dimc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 
 	var args pabi.DepositInMainChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.DepositInMainChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.DepositInMainChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -545,7 +545,7 @@ func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 
 	var args pabi.DepositInMainChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.DepositInMainChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.DepositInMainChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -576,7 +576,7 @@ func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 
 	var args pabi.DepositInChildChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.DepositInChildChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.DepositInChildChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -597,7 +597,7 @@ func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 
 	var dimcArgs pabi.DepositInMainChainArgs
 	dimcData := dimcTx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&dimcArgs, pabi.DepositInMainChain.String(), dimcData[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&dimcArgs, pabi.DepositInMainChain.String(), dimcData[4:]); err != nil {
 		return err
 	}
 
@@ -618,7 +618,7 @@ func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 
 	var args pabi.DepositInChildChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.DepositInChildChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.DepositInChildChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -639,7 +639,7 @@ func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 
 	var dimcArgs pabi.DepositInMainChainArgs
 	dimcData := dimcTx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&dimcArgs, pabi.DepositInMainChain.String(), dimcData[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&dimcArgs, pabi.DepositInMainChain.String(), dimcData[4:]); err != nil {
 		return err
 	}
 
@@ -659,7 +659,7 @@ func wfcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 
 	var args pabi.WithdrawFromChildChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromChildChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.WithdrawFromChildChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -676,7 +676,7 @@ func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 
 	var args pabi.WithdrawFromChildChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromChildChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.WithdrawFromChildChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -713,7 +713,7 @@ func sd2mc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cros
 
 	var bs []byte
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&bs, pabi.SaveDataToMainChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&bs, pabi.SaveDataToMainChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -732,7 +732,7 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 
 	var bs []byte
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&bs, pabi.SaveDataToMainChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&bs, pabi.SaveDataToMainChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -804,7 +804,7 @@ func setBlockRewardValidation(from common.Address, tx *types.Transaction, cch co
 
 	var args pabi.SetBlockRewardArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.SetBlockReward.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.SetBlockReward.String(), data[4:]); err != nil {
 		return nil, err
 	}
 
@@ -830,7 +830,7 @@ func wfmcValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 
 	var args pabi.WithdrawFromMainChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -862,7 +862,7 @@ func wfmcApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 
 	var args pabi.WithdrawFromMainChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
 		return core.ErrInvalidTx4
 		//return err
 	}
@@ -887,7 +887,7 @@ func wfmcApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 
 		var wfccArgs pabi.WithdrawFromChildChainArgs
 		wfccData := wfccTx.Data()
-		if err := pabi.ChainABI.UnpackMethodInputs(&wfccArgs, pabi.WithdrawFromChildChain.String(), wfccData[4:]); err != nil {
+		if err := pabi.UnpackMethodInputs(&wfccArgs, pabi.WithdrawFromChildChain.String(), wfccData[4:]); err != nil {
 			return core.ErrInvalidTx4
 			//return err
 		}
@@ -922,7 +922,7 @@ func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.Cros
 
 	var args pabi.WithdrawFromMainChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -953,7 +953,7 @@ func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 
 	var args pabi.WithdrawFromMainChainArgs
 	data := tx.Data()
-	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+	if err := pabi.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
 		return err
 	}
 
@@ -975,7 +975,7 @@ func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 
 		var wfccArgs pabi.WithdrawFromChildChainArgs
 		wfccData := wfccTx.Data()
-		if err := pabi.ChainABI.UnpackMethodInputs(&wfccArgs, pabi.WithdrawFromChildChain.String(), wfccData[4:]); err != nil {
+		if err := pabi.UnpackMethodInputs(&wfccArgs, pabi.WithdrawFromChildChain.String(), wfccData[4:]); err != nil {
 			return err
 		}
 

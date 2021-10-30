@@ -2109,7 +2109,7 @@ func (cs *ConsensusState) GetTX3ProofDataForTx4(block *ethTypes.Block) []*ethTyp
 			if function == pabi.WithdrawFromMainChain {
 				var args pabi.WithdrawFromMainChainArgs
 				data := tx.Data()
-				if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
+				if err := pabi.UnpackMethodInputs(&args, pabi.WithdrawFromMainChain.String(), data[4:]); err != nil {
 					continue
 				}
 
