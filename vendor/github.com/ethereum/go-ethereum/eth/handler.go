@@ -86,8 +86,8 @@ type ProtocolManager struct {
 
 	SubProtocols []p2p.Protocol
 
-	txCh          chan core.TxPreEvent
-	txSub         event.Subscription
+	txsCh         chan core.NewTxsEvent
+	txsSub        event.Subscription
 
 	tx3PrfDtCh    chan core.Tx3ProofDataEvent
 	tx3PrfDtFeed  event.Feed
@@ -233,8 +233,8 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.maxPeers = maxPeers
 
 	// broadcast transactions
-	pm.txCh = make(chan core.TxPreEvent, txChanSize)
-	pm.txSub = pm.txpool.SubscribeTxPreEvent(pm.txCh)
+	pm.txsCh = make(chan core.NewTxsEvent, txChanSize)
+	pm.txsSub = pm.txpool.SubscribeNewTxsEvent(pm.txsCh)
 	go pm.txBroadcastLoop()
 
 	pm.tx3PrfDtCh = make(chan core.Tx3ProofDataEvent, tx3PrfDtChainSize)
@@ -253,7 +253,7 @@ func (pm *ProtocolManager) Start(maxPeers int) {
 func (pm *ProtocolManager) Stop() {
 	pm.logger.Info("Stopping Ethereum protocol")
 
-	pm.txSub.Unsubscribe()         // quits txBroadcastLoop
+	pm.txsSub.Unsubscribe()         // quits txBroadcastLoop
 	pm.tx3PrfDtSub.Unsubscribe()   // quits tx3PrfDtBroadcastLoop
 	pm.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
 
@@ -869,16 +869,21 @@ func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 	}
 }
 
-// BroadcastTx will propagate a transaction to all peers which are not known to
+
+// BroadcastTransactions will propagate a batch of transactions
+// - To a square root of all peers
+// - And, separately, as announcements to all peers which are not known to
 // already have the given transaction.
-func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) {
-	// Broadcast transaction to a batch of peers not knowing about it
-	peers := pm.peers.PeersWithoutTx(hash)
-	//FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
-	for _, peer := range peers {
-		peer.SendTransactions(types.Transactions{tx})
+func (pm *ProtocolManager) BroadcastTransactions(txs types.Transactions) {
+	// Broadcast transactions to a batch of peers not knowing about it
+	for _, tx := range txs {
+		peers := pm.peers.PeersWithoutTx(tx.Hash())
+		//FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
+		for _, peer := range peers {
+			peer.SendTransactions(types.Transactions{tx})
+		}
+		pm.logger.Trace("Broadcast transaction", "hash", tx.Hash(), "recipients", len(peers))
 	}
-	pm.logger.Trace("Broadcast transaction", "hash", hash, "recipients", len(peers))
 }
 
 // BroadcastTX3ProofData will propagate a TX3ProofData to all peers which are not known to
@@ -960,11 +965,10 @@ func (self *ProtocolManager) minedBroadcastLoop() {
 func (self *ProtocolManager) txBroadcastLoop() {
 	for {
 		select {
-		case event := <-self.txCh:
-			self.BroadcastTx(event.Tx.Hash(), event.Tx)
-
+		case event := <-self.txsCh:
+			self.BroadcastTransactions(event.Txs)
 		// Err() channel will be closed when unsubscribing.
-		case <-self.txSub.Err():
+		case <-self.txsSub.Err():
 			return
 		}
 	}

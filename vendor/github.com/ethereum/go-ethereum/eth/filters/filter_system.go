@@ -88,7 +88,7 @@ type EventSystem struct {
 	lastHead  *types.Header
 
 	// Subscriptions
-	txPreSub       event.Subscription // Subscription for new transaction event
+	txsSub         event.Subscription // Subscription for new transaction event
 	logsSub        event.Subscription // Subscription for new log event
 	rmLogsSub      event.Subscription // Subscription for removed log event
 	pendingLogsSub event.Subscription // Subscription for pending log event
@@ -97,7 +97,7 @@ type EventSystem struct {
 	// Channels
 	install       chan *subscription         // install filter for event notification
 	uninstall     chan *subscription         // remove filter for event notification
-	txPreCh       chan core.TxPreEvent      // Channel to receive new transactions event
+	txsCh         chan core.NewTxsEvent      // Channel to receive new transactions event
 	logsCh        chan []*types.Log          // Channel to receive new log event
 	pendingLogsCh chan []*types.Log          // Channel to receive new log event
 	rmLogsCh      chan core.RemovedLogsEvent // Channel to receive removed log event
@@ -116,7 +116,7 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 		lightMode:     lightMode,
 		install:       make(chan *subscription),
 		uninstall:     make(chan *subscription),
-		txPreCh:       make(chan core.TxPreEvent, txChanSize),
+		txsCh:         make(chan core.NewTxsEvent, txChanSize),
 		logsCh:        make(chan []*types.Log, logsChanSize),
 		rmLogsCh:      make(chan core.RemovedLogsEvent, rmLogsChanSize),
 		pendingLogsCh: make(chan []*types.Log, logsChanSize),
@@ -124,14 +124,14 @@ func NewEventSystem(backend Backend, lightMode bool) *EventSystem {
 	}
 
 	// Subscribe events
-	m.txPreSub = m.backend.SubscribeTxPreEvent(m.txPreCh)
+	m.txsSub = m.backend.SubscribeNewTxsEvent(m.txsCh)
 	m.logsSub = m.backend.SubscribeLogsEvent(m.logsCh)
 	m.rmLogsSub = m.backend.SubscribeRemovedLogsEvent(m.rmLogsCh)
 	m.chainSub = m.backend.SubscribeChainEvent(m.chainCh)
 	m.pendingLogsSub = m.backend.SubscribePendingLogsEvent(m.pendingLogsCh)
 
 	// Make sure none of the subscriptions are empty
-	if m.txPreSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
+	if m.txsSub == nil || m.logsSub == nil || m.rmLogsSub == nil || m.chainSub == nil || m.pendingLogsSub == nil {
 		log.Crit("Subscribe for event system failed")
 	}
 
@@ -341,10 +341,11 @@ func (es *EventSystem) handleRemovedLogs(filters filterIndex, ev core.RemovedLog
 	}
 }
 
-func (es *EventSystem) handleTxsEvent(filters filterIndex, ev core.TxPreEvent) {
-	hashes := make([]common.Hash, 0, 1)
-	hashes = append(hashes, ev.Tx.Hash())
-
+func (es *EventSystem) handleTxsEvent(filters filterIndex, ev core.NewTxsEvent) {
+	hashes := make([]common.Hash, 0, len(ev.Txs))
+	for _, tx := range ev.Txs {
+		hashes = append(hashes, tx.Hash())
+	}
 	for _, f := range filters[PendingTransactionsSubscription] {
 		f.hashes <- hashes
 	}
@@ -442,7 +443,7 @@ func (es *EventSystem) lightFilterLogs(header *types.Header, addresses []common.
 func (es *EventSystem) eventLoop() {
 	// Ensure all subscriptions get cleaned up
 	defer func() {
-		es.txPreSub.Unsubscribe()
+		es.txsSub.Unsubscribe()
 		es.logsSub.Unsubscribe()
 		es.rmLogsSub.Unsubscribe()
 		es.pendingLogsSub.Unsubscribe()
@@ -456,7 +457,7 @@ func (es *EventSystem) eventLoop() {
 
 	for {
 		select {
-		case ev := <-es.txPreCh:
+		case ev := <-es.txsCh:
 			es.handleTxsEvent(index, ev)
 		case ev := <-es.logsCh:
 			es.handleLogs(index, ev)
@@ -488,7 +489,7 @@ func (es *EventSystem) eventLoop() {
 			close(f.err)
 
 		// System stopped
-		case <-es.txPreSub.Err():
+		case <-es.txsSub.Err():
 			return
 		case <-es.logsSub.Err():
 			return

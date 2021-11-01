@@ -234,7 +234,7 @@ func (b *EthApiBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 }
 
 func (b *EthApiBackend) GetPoolTransactions() (types.Transactions, error) {
-	pending, err := b.eth.txPool.Pending()
+	pending, err := b.eth.txPool.Pending(false)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +250,7 @@ func (b *EthApiBackend) GetPoolTransaction(hash common.Hash) *types.Transaction 
 }
 
 func (b *EthApiBackend) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	return b.eth.txPool.State().GetNonce(addr), nil
+	return b.eth.txPool.Nonce(addr), nil
 }
 
 func (b *EthApiBackend) Stats() (pending int, queued int) {
@@ -261,9 +261,10 @@ func (b *EthApiBackend) TxPoolContent() (map[common.Address]types.Transactions, 
 	return b.eth.TxPool().Content()
 }
 
-func (b *EthApiBackend) SubscribeTxPreEvent(ch chan<- core.TxPreEvent) event.Subscription {
-	return b.eth.TxPool().SubscribeTxPreEvent(ch)
+func (b *EthApiBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
+	return b.eth.TxPool().SubscribeNewTxsEvent(ch)
 }
+
 
 func (b *EthApiBackend) Downloader() *downloader.Downloader {
 	return b.eth.Downloader()
