@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -48,7 +49,7 @@ import (
 )
 
 type LightEthereum struct {
-	config *eth.Config
+	config *ethconfig.Config
 
 	odr         *LesOdr
 	relay       *LesTxRelay
@@ -84,7 +85,7 @@ type LightEthereum struct {
 	wg sync.WaitGroup
 }
 
-func New(ctx *node.ServiceContext, config *eth.Config, cch core.CrossChainHelper, logger log.Logger) (*LightEthereum, error) {
+func New(ctx *node.ServiceContext, config *ethconfig.Config, cch core.CrossChainHelper, logger log.Logger) (*LightEthereum, error) {
 	chainDb, err := ctx.OpenDatabase("lightchaindata", config.DatabaseCache, config.DatabaseHandles, "eth/db/chaindata/")
 	if err != nil {
 		return nil, err

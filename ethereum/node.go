@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -51,7 +52,7 @@ func MakeSystemNode(chainId, version string, ctx *cli.Context, cch core.CrossCha
 }
 
 // registerEthService adds an Ethereum client to the stack.
-func registerEthService(stack *node.Node, cfg *eth.Config, cliCtx *cli.Context, cch core.CrossChainHelper) {
+func registerEthService(stack *node.Node, cfg *ethconfig.Config, cliCtx *cli.Context, cch core.CrossChainHelper) {
 	var err error
 	if cfg.SyncMode == downloader.LightSync {
 		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {

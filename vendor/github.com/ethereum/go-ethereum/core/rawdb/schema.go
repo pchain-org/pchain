@@ -29,6 +29,9 @@ var (
 	// databaseVerisionKey tracks the current database version.
 	databaseVerisionKey = []byte("DatabaseVersion")
 
+	// badBlockKey tracks the list of bad blocks seen by local
+	badBlockKey = []byte("InvalidBlock")
+	
 	// headHeaderKey tracks the latest know header's hash.
 	headHeaderKey = []byte("LastHeader")
 

@@ -38,8 +38,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -67,7 +69,7 @@ type LesServer interface {
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	config      *Config
+	config      *ethconfig.Config
 	chainConfig *params.ChainConfig
 
 	// Channel for shutting down the service
@@ -110,7 +112,7 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
+func New(ctx *node.ServiceContext, config *ethconfig.Config, cliCtx *cli.Context,
 	cch core.CrossChainHelper, logger log.Logger, isTestnet bool) (*Ethereum, error) {
 
 	if config.SyncMode == downloader.LightSync {
@@ -325,7 +327,7 @@ func makeExtraData(extra []byte) []byte {
 }
 
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
-func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig *params.ChainConfig, db ethdb.Database,
+func CreateConsensusEngine(ctx *node.ServiceContext, config *ethconfig.Config, chainConfig *params.ChainConfig, db ethdb.Database,
 	cliCtx *cli.Context, cch core.CrossChainHelper) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
@@ -421,6 +423,10 @@ func (s *Ethereum) APIs() []rpc.API {
 			Namespace: "debug",
 			Version:   "1.0",
 			Service:   NewPrivateDebugAPI(s.chainConfig, s),
+		}, {
+			Namespace: "debug",
+			Version:   "1.0",
+			Service:   tracers.NewAPI(s.ApiBackend),
 		}, {
 			Namespace: "net",
 			Version:   "1.0",
