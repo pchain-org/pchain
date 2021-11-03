@@ -154,7 +154,7 @@ func StringToFunctionType(s string) FunctionType {
 }
 
 type CreateChildChainArgs struct {
-	ChainID       string
+	ChainId       string
 	MinValidators    uint16
 	MinDepositAmount *big.Int
 	StartBlock       *big.Int
@@ -163,25 +163,25 @@ type CreateChildChainArgs struct {
 
 type JoinChildChainArgs struct {
 	PubKey    []byte
-	ChainID   string
+	ChainId   string
 	Signature []byte
 }
 
 type DepositInMainChainArgs struct {
-	ChainID string
+	ChainId string
 }
 
 type DepositInChildChainArgs struct {
-	ChainID string
+	ChainId string
 	TxHash  common.Hash
 }
 
 type WithdrawFromChildChainArgs struct {
-	ChainID string
+	ChainId string
 }
 
 type WithdrawFromMainChainArgs struct {
-	ChainID string
+	ChainId string
 	Amount     *big.Int
 	TxHash     common.Hash
 }
@@ -211,7 +211,7 @@ type CandidateArgs struct {
 }
 
 type SetBlockRewardArgs struct {
-	ChainID string
+	ChainId string
 	Reward  *big.Int
 }
 

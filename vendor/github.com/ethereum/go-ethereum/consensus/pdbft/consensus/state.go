@@ -2113,7 +2113,7 @@ func (cs *ConsensusState) GetTX3ProofDataForTx4(block *ethTypes.Block) []*ethTyp
 					continue
 				}
 
-				proof := cs.cch.GetTX3ProofData(args.ChainID, args.TxHash)
+				proof := cs.cch.GetTX3ProofData(args.ChainId, args.TxHash)
 				if proof != nil {
 					tx3ProofData = append(tx3ProofData, proof)
 				}

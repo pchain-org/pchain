@@ -610,7 +610,7 @@ func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transac
 	}
 
 	// Does TX3 & TX4 Match
-	if from != tx3From || args.ChainID != tx3Args.ChainID || args.Amount.Cmp(tx3.Value()) != 0 {
+	if from != tx3From || args.ChainId != tx3Args.ChainId || args.Amount.Cmp(tx3.Value()) != 0 {
 		return errors.New("params are not consistent with tx in child chain")
 	}
 

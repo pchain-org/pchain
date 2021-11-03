@@ -409,7 +409,7 @@ func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 		return err
 	}
 
-	if err := cch.CanCreateChildChain(from, args.ChainID, args.MinValidators, args.MinDepositAmount, tx.Value(), args.StartBlock, args.EndBlock); err != nil {
+	if err := cch.CanCreateChildChain(from, args.ChainId, args.MinValidators, args.MinDepositAmount, tx.Value(), args.StartBlock, args.EndBlock); err != nil {
 		return err
 	}
 
@@ -436,7 +436,7 @@ func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 	}
 
 	startupCost := tx.Value()
-	if err := cch.CanCreateChildChain(from, args.ChainID, args.MinValidators, args.MinDepositAmount, startupCost, args.StartBlock, args.EndBlock); err != nil {
+	if err := cch.CanCreateChildChain(from, args.ChainId, args.MinValidators, args.MinDepositAmount, startupCost, args.StartBlock, args.EndBlock); err != nil {
 		return err
 	}
 
@@ -446,7 +446,7 @@ func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 
 	op := types.CreateChildChainOp{
 		From:             from,
-		ChainID:          args.ChainID,
+		ChainID:          args.ChainId,
 		MinValidators:    args.MinValidators,
 		MinDepositAmount: args.MinDepositAmount,
 		StartBlock:       args.StartBlock,
@@ -472,7 +472,7 @@ func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 		return err
 	}
 
-	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainID, tx.Value(), args.Signature); err != nil {
+	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, tx.Value(), args.Signature); err != nil {
 		return err
 	}
 
@@ -495,7 +495,7 @@ func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 
 	amount := tx.Value()
 
-	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainID, amount, args.Signature); err != nil {
+	if err := cch.ValidateJoinChildChain(from, args.PubKey, args.ChainId, amount, args.Signature); err != nil {
 		return err
 	}
 
@@ -505,7 +505,7 @@ func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 	op := types.JoinChildChainOp{
 		From:          from,
 		PubKey:        pub,
-		ChainID:       args.ChainID,
+		ChainID:       args.ChainId,
 		DepositAmount: amount,
 	}
 	if ok := ops.Append(&op); !ok {
@@ -514,7 +514,7 @@ func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 
 	// Everything fine, Lock the Balance for this account
 	state.SubBalance(from, amount)
-	state.AddChildChainDepositBalance(from, args.ChainID, amount)
+	state.AddChildChainDepositBalance(from, args.ChainId, amount)
 
 	return nil
 }
@@ -527,9 +527,9 @@ func dimc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 		return err
 	}
 
-	running := core.CheckChildChainRunning(cch.GetChainInfoDB(), args.ChainID)
+	running := core.CheckChildChainRunning(cch.GetChainInfoDB(), args.ChainId)
 	if !running {
-		return fmt.Errorf("%s chain not running", args.ChainID)
+		return fmt.Errorf("%s chain not running", args.ChainId)
 	}
 
 	return nil
@@ -549,15 +549,15 @@ func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return err
 	}
 
-	running := core.CheckChildChainRunning(cch.GetChainInfoDB(), args.ChainID)
+	running := core.CheckChildChainRunning(cch.GetChainInfoDB(), args.ChainId)
 	if !running {
-		return fmt.Errorf("%s chain not running", args.ChainID)
+		return fmt.Errorf("%s chain not running", args.ChainId)
 	}
 
 	// mark from -> tx1 on the main chain (to find all tx1 when given 'from').
 	state.AddTX1(from, tx.Hash())
 
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainID)
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 
 	amount := tx.Value()
 	state.SubBalance(from, amount)
@@ -601,7 +601,7 @@ func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 		return err
 	}
 
-	if from != dimcFrom || args.ChainID != dimcArgs.ChainID {
+	if from != dimcFrom || args.ChainId != dimcArgs.ChainId {
 		return errors.New("params are not consistent with tx in main chain")
 	}
 
@@ -643,7 +643,7 @@ func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return err
 	}
 
-	if from != dimcFrom || args.ChainID != dimcArgs.ChainID {
+	if from != dimcFrom || args.ChainId != dimcArgs.ChainId {
 		return errors.New("params are not consistent with tx in main chain")
 	}
 
@@ -808,7 +808,7 @@ func setBlockRewardValidation(from common.Address, tx *types.Transaction, cch co
 		return nil, err
 	}
 
-	ci := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainID)
+	ci := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 	if ci == nil || ci.Owner != from {
 		return nil, core.ErrNotOwner
 	}
@@ -840,7 +840,7 @@ func wfmcValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 
 	// Notice: there's no validation logic for tx3 here.
 
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainID)
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 	if chainInfo == nil {
 		return errors.New("chain id not exist")
 	} else if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
@@ -873,9 +873,9 @@ func wfmcApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 	}
 
 	if mining { // validate only when mining.
-		wfccTx := cch.GetTX3(args.ChainID, args.TxHash)
+		wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
 		if wfccTx == nil {
-			return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainID)
+			return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
 		}
 
 		signer2 := types.NewEIP155Signer(wfccTx.ChainID())
@@ -892,12 +892,12 @@ func wfmcApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 			//return err
 		}
 
-		if from != wfccFrom || args.ChainID != wfccArgs.ChainID || args.Amount.Cmp(wfccTx.Value()) != 0 {
+		if from != wfccFrom || args.ChainId != wfccArgs.ChainId || args.Amount.Cmp(wfccTx.Value()) != 0 {
 			return core.ErrInvalidTx4
 		}
 	}
 
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainID)
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 	if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
 		return core.ErrInvalidTx4
 		//return errors.New("no enough balance to withdraw")
@@ -932,7 +932,7 @@ func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.Cros
 
 	// Notice: there's no validation logic for tx3 here.
 
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainID)
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 	if chainInfo == nil {
 		return errors.New("chain id not exist")
 	} else if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
@@ -962,9 +962,9 @@ func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 	}
 
 	if mining {
-		wfccTx := cch.GetTX3(args.ChainID, args.TxHash)
+		wfccTx := cch.GetTX3(args.ChainId, args.TxHash)
 		if wfccTx == nil {
-			return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainID)
+			return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
 		}
 
 		signer2 := types.NewEIP155Signer(wfccTx.ChainID())
@@ -979,12 +979,12 @@ func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 			return err
 		}
 
-		if from != wfccFrom || args.ChainID != wfccArgs.ChainID || args.Amount.Cmp(wfccTx.Value()) != 0 {
+		if from != wfccFrom || args.ChainId != wfccArgs.ChainId || args.Amount.Cmp(wfccTx.Value()) != 0 {
 			return core.ErrInvalidTx4
 		}
 	}
 
-	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainID)
+	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 
 	// mark from -> tx3 on the main chain (to indicate tx3's used).
 	state.AddTX3(from, args.TxHash)
