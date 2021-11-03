@@ -189,24 +189,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		}
 		return genesis.Config, block.Hash(), nil
 	}
-	// We have the genesis block in database(perhaps in ancient database)
-	// but the corresponding state is missing.
-	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.Root, state.NewDatabaseWithCache(db, 0)); err != nil {
-		if genesis == nil {
-			genesis = DefaultGenesisBlock()
-		}
-		// Ensure the stored genesis matches with the given one.
-		hash := genesis.ToBlock(nil).Hash()
-		if hash != stored {
-			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
-		}
-		block, err := genesis.Commit(db)
-		if err != nil {
-			return genesis.Config, hash, err
-		}
-		return genesis.Config, block.Hash(), nil
-	}
+
 	// Check whether the genesis block is already written.
 	if genesis != nil {
 		hash := genesis.ToBlock(nil).Hash()

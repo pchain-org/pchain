@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
@@ -124,29 +123,7 @@ func SetupGenesisBlockWithDefault(db ethdb.Database, genesis *Genesis, isMainCha
 		block, err := genesis.Commit(db)
 		return genesis.Config, block.Hash(), err
 	}
-	// We have the genesis block in database(perhaps in ancient database)
-	// but the corresponding state is missing.
-	header := rawdb.ReadHeader(db, stored, 0)
-	if _, err := state.New(header.Root, state.NewDatabaseWithCache(db, 0)); err != nil {
-		if genesis == nil {
-			log.Info("Writing default main-net genesis block")
-			if isTestnet {
-				genesis = DefaultGenesisBlockFromJson(DefaultTestnetGenesisJSON)
-			} else {
-				genesis = DefaultGenesisBlockFromJson(DefaultMainnetGenesisJSON)
-			}
-		}
-		// Ensure the stored genesis matches with the given one.
-		hash := genesis.ToBlock(nil).Hash()
-		if hash != stored {
-			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
-		}
-		block, err := genesis.Commit(db)
-		if err != nil {
-			return genesis.Config, hash, err
-		}
-		return genesis.Config, block.Hash(), nil
-	}
+
 	// Check whether the genesis block is already written.
 	if genesis != nil {
 		hash := genesis.ToBlock(nil).Hash()
