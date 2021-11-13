@@ -27,9 +27,9 @@ func (st *StateTransition) TransitionDbEx() (*ExecutionResult, *big.Int, error) 
 	}
 	msg := st.msg
 	sender := vm.AccountRef(msg.From())
-	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.BlockNumber)
-	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.BlockNumber)
-	london := st.evm.ChainConfig().IsLondon(st.evm.Context.BlockNumber)
+	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.MainChainNumber)
+	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.MainChainNumber)
+	london := st.evm.ChainConfig().IsLondon(st.evm.Context.MainChainNumber)
 	contractCreation := msg.To() == nil
 
 	// Pay intrinsic gas
@@ -49,7 +49,7 @@ func (st *StateTransition) TransitionDbEx() (*ExecutionResult, *big.Int, error) 
 	}
 
 	// Set up the initial access list.
-	if rules := st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber); rules.IsBerlin {
+	if rules := st.evm.ChainConfig().Rules(st.evm.Context.MainChainNumber); rules.IsBerlin {
 		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
 	}
 	var (
@@ -73,7 +73,7 @@ func (st *StateTransition) TransitionDbEx() (*ExecutionResult, *big.Int, error) 
 	}
 
 	usedMoney := big.NewInt(0)
-	if !st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.Context.BlockNumber, msg.To(), st.data) {
+	if !st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.Context.MainChainNumber, msg.To(), st.data) {
 		//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 		effectiveTip := st.gasPrice
 		if london {

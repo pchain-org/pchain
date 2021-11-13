@@ -62,11 +62,14 @@ var (
 	MainnetExtractRewardPatchMainBlock = big.NewInt(20970000)
 	TestnetExtractRewardPatchMainBlock = big.NewInt(40)
 
-	MainnetMuirGlacierBlock = big.NewInt(10000000000)
-	TestnetMuirGlacierBlock = big.NewInt(10000000000)
+	MainnetIstanbulBlock = big.NewInt(24195000)
+	TestnetIstanbulBlock = big.NewInt(40)
 
-	MainnetBerlinBlock = big.NewInt(10000000000)
-	TestnetBerlinBlock = big.NewInt(10000000000)
+	MainnetMuirGlacierBlock = big.NewInt(100000000000)
+	TestnetMuirGlacierBlock = big.NewInt(100000000000)
+
+	MainnetBerlinBlock = big.NewInt(100000000000)
+	TestnetBerlinBlock = big.NewInt(100000000000)
 
 	MainnetLondonBlock *big.Int = nil
 	TestnetLondonBlock *big.Int = nil
@@ -87,7 +90,7 @@ var (
 		ByzantiumBlock:               big.NewInt(0), //let's start from 1 block
 		ConstantinopleBlock:          big.NewInt(0),
 		PetersburgBlock:              big.NewInt(0),
-		IstanbulBlock:                big.NewInt(0),
+		IstanbulBlock:                MainnetIstanbulBlock,
 		MuirGlacierBlock:             MainnetMuirGlacierBlock,
 		BerlinBlock:                  MainnetBerlinBlock,
 		LondonBlock:                  MainnetLondonBlock,
@@ -109,27 +112,28 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the test network.
 	TestnetChainConfig = &ChainConfig{
-		PChainID:                   "testnet",
-		ChainID:                    big.NewInt(2),
-		HomesteadBlock:             big.NewInt(0),
-		DAOForkBlock:               nil,
-		DAOForkSupport:             true,
-		EIP150Block:                big.NewInt(0),
-		EIP150Hash:                 common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-		EIP155Block:                big.NewInt(10),
-		EIP158Block:                big.NewInt(10),
-		ByzantiumBlock:             big.NewInt(1700000),
-		ConstantinopleBlock:        big.NewInt(0),
-		PetersburgBlock:            big.NewInt(0),
-		IstanbulBlock:              big.NewInt(0),
-		MuirGlacierBlock:           TestnetMuirGlacierBlock,
-		BerlinBlock:                TestnetBerlinBlock,
-		LondonBlock:                TestnetLondonBlock,
-		Child0HashTimeLockContract: common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
-		OutOfStorageBlock:          TestnetOutOfStorageBlock,
-		Child0OutOfStorageBlock:    TestnetChild0OutOfStorageBlock,
-		ExtractRewardMainBlock:     TestnetExtractRewardMainBlock,
-		Sd2mcV1Block:               TestnetSd2mcV1MainBlock,
+		PChainID:                       "testnet",
+		ChainID:                        big.NewInt(2),
+		HomesteadBlock:                 big.NewInt(0),
+		DAOForkBlock:                   nil,
+		DAOForkSupport:                 true,
+		EIP150Block:                    big.NewInt(0),
+		EIP150Hash:                     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+		EIP155Block:                    big.NewInt(10),
+		EIP158Block:                    big.NewInt(10),
+		ByzantiumBlock:                 big.NewInt(1700000),
+		ConstantinopleBlock:            big.NewInt(0),
+		PetersburgBlock:                big.NewInt(0),
+		IstanbulBlock:                  TestnetIstanbulBlock,
+		MuirGlacierBlock:               TestnetMuirGlacierBlock,
+		BerlinBlock:                    TestnetBerlinBlock,
+		LondonBlock:                    TestnetLondonBlock,
+		Child0HashTimeLockContract:     common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
+		OutOfStorageBlock:              TestnetOutOfStorageBlock,
+		Child0OutOfStorageBlock:        TestnetChild0OutOfStorageBlock,
+		ExtractRewardMainBlock:         TestnetExtractRewardMainBlock,
+		ExtractRewardPatchMainBlock:    TestnetExtractRewardPatchMainBlock,
+		Sd2mcV1Block:                   TestnetSd2mcV1MainBlock,
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -355,8 +359,7 @@ func NewChildChainConfig(childChainID string) *ChainConfig {
 		EIP150Hash:     common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
-		//ByzantiumBlock:      big.NewInt(4370000),
-		ByzantiumBlock:      big.NewInt(0), //let's start from 1 block
+		ByzantiumBlock:      big.NewInt(0), //let's start from block 0
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
@@ -742,22 +745,24 @@ type Rules struct {
 }
 
 // Rules ensures c's ChainID is not nil.
-func (c *ChainConfig) Rules(num *big.Int) Rules {
+func (c *ChainConfig) Rules(mainchainNum *big.Int) Rules {
 	chainId := c.ChainID
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
-	return Rules{
+	rules := Rules{
 		ChainID:          new(big.Int).Set(chainId),
-		IsHomestead:      c.IsHomestead(num),
-		IsEIP150:         c.IsEIP150(num),
-		IsEIP155:         c.IsEIP155(num),
-		IsEIP158:         c.IsEIP158(num),
-		IsByzantium:      c.IsByzantium(num),
-		IsConstantinople: c.IsConstantinople(num),
-		IsPetersburg:     c.IsPetersburg(num),
-		IsIstanbul:       c.IsIstanbul(num),
-		IsBerlin:         c.IsBerlin(num),
-		IsLondon:         c.IsLondon(num),
+		IsHomestead:      c.IsHomestead(mainchainNum),
+		IsEIP150:         c.IsEIP150(mainchainNum),
+		IsEIP155:         c.IsEIP155(mainchainNum),
+		IsEIP158:         c.IsEIP158(mainchainNum),
+		IsByzantium:      c.IsByzantium(mainchainNum),
+		IsConstantinople: c.IsConstantinople(mainchainNum),
+		IsPetersburg:     c.IsPetersburg(mainchainNum),
+		IsIstanbul:       c.IsIstanbul(mainchainNum),
+		IsBerlin:         c.IsBerlin(mainchainNum),
+		IsLondon:         c.IsLondon(mainchainNum),
 	}
+
+	return rules
 }

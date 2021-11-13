@@ -69,12 +69,13 @@ type BlockContext struct {
 	GetHash GetHashFunc
 
 	// Block information
-	Coinbase    common.Address // Provides information for COINBASE
-	GasLimit    uint64         // Provides information for GASLIMIT
-	BlockNumber *big.Int       // Provides information for NUMBER
-	Time        *big.Int       // Provides information for TIME
-	Difficulty  *big.Int       // Provides information for DIFFICULTY
-	BaseFee     *big.Int       // Provides information for BASEFEE
+	Coinbase            common.Address // Provides information for COINBASE
+	GasLimit            uint64         // Provides information for GASLIMIT
+	BlockNumber         *big.Int       // Provides information for NUMBER
+	MainChainNumber     *big.Int       // Provides information for MAINCHAINNUMBER
+	Time                *big.Int       // Provides information for TIME
+	Difficulty          *big.Int       // Provides information for DIFFICULTY
+	BaseFee             *big.Int       // Provides information for BASEFEE
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -131,7 +132,7 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 		StateDB:     statedb,
 		Config:      config,
 		chainConfig: chainConfig,
-		chainRules:  chainConfig.Rules(blockCtx.BlockNumber),
+		chainRules:  chainConfig.Rules(blockCtx.MainChainNumber),
 	}
 	evm.interpreter = NewEVMInterpreter(evm, config)
 	return evm

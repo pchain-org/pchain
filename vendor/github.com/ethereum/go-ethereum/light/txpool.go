@@ -311,10 +311,11 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	txc, _ := pool.reorgOnNewHead(ctx, head)
 	m, r := txc.getLists()
 	pool.relay.NewHead(pool.head, m, r)
-	pool.homestead = pool.config.IsHomestead(head.Number)
-	pool.homestead = pool.config.IsIstanbul(head.Number)
-	pool.eip2718 = pool.config.IsBerlin(head.Number)
-	pool.signer = types.MakeSigner(pool.config, head.Number)
+	mainchainNumber := head.MainChainNumber
+	pool.homestead = pool.config.IsHomestead(mainchainNumber)
+	pool.homestead = pool.config.IsIstanbul(mainchainNumber)
+	pool.eip2718 = pool.config.IsBerlin(mainchainNumber)
+	pool.signer = types.MakeSigner(pool.config, mainchainNumber)
 }
 
 // Stop stops the light transaction pool

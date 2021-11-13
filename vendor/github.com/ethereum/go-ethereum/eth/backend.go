@@ -134,6 +134,11 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		return nil, genesisErr
 	}
 
+
+	//directly support corresponding instruction set
+	chainConfig.ConstantinopleBlock = big.NewInt(0)
+	chainConfig.PetersburgBlock     = big.NewInt(0)
+
 	// Update HTLC Hard Fork and Contract if any one blank
 	switch ctx.ChainId() {
 	case "pchain":
@@ -146,6 +151,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig.ChildSd2mcWhenEpochEndsBlock  = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 		chainConfig.ValidateHTLCBlock             = params.MainnetChainConfig.ValidateHTLCBlock
 		chainConfig.HeaderHashWithoutTimeBlock    = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
+		chainConfig.IstanbulBlock                 = params.MainnetChainConfig.IstanbulBlock
 		chainConfig.MuirGlacierBlock              = params.MainnetChainConfig.MuirGlacierBlock
 		chainConfig.BerlinBlock                   = params.MainnetChainConfig.BerlinBlock
 		chainConfig.LondonBlock                   = params.MainnetChainConfig.LondonBlock
@@ -159,6 +165,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig.ChildSd2mcWhenEpochEndsBlock  = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 		chainConfig.ValidateHTLCBlock             = params.TestnetChainConfig.ValidateHTLCBlock
 		chainConfig.HeaderHashWithoutTimeBlock    = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
+		chainConfig.IstanbulBlock                 = params.TestnetChainConfig.IstanbulBlock
 		chainConfig.MuirGlacierBlock              = params.TestnetChainConfig.MuirGlacierBlock
 		chainConfig.BerlinBlock                   = params.TestnetChainConfig.BerlinBlock
 		chainConfig.LondonBlock                   = params.TestnetChainConfig.LondonBlock
@@ -178,6 +185,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock            = params.TestnetChainConfig.ValidateHTLCBlock
 			chainConfig.HeaderHashWithoutTimeBlock   = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
+			chainConfig.IstanbulBlock                = params.TestnetChainConfig.IstanbulBlock
 			chainConfig.MuirGlacierBlock             = params.TestnetChainConfig.MuirGlacierBlock
 			chainConfig.BerlinBlock                  = params.TestnetChainConfig.BerlinBlock
 			chainConfig.LondonBlock                  = params.TestnetChainConfig.LondonBlock
@@ -189,6 +197,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock            = params.MainnetChainConfig.ValidateHTLCBlock
 			chainConfig.HeaderHashWithoutTimeBlock   = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
+			chainConfig.IstanbulBlock                = params.MainnetChainConfig.IstanbulBlock
 			chainConfig.MuirGlacierBlock             = params.MainnetChainConfig.MuirGlacierBlock
 			chainConfig.BerlinBlock                  = params.MainnetChainConfig.BerlinBlock
 			chainConfig.LondonBlock                  = params.MainnetChainConfig.LondonBlock
@@ -202,6 +211,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock            = params.TestnetChainConfig.ValidateHTLCBlock
 			chainConfig.HeaderHashWithoutTimeBlock   = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
+			chainConfig.IstanbulBlock                = params.TestnetChainConfig.IstanbulBlock
 			chainConfig.MuirGlacierBlock             = params.TestnetChainConfig.MuirGlacierBlock
 			chainConfig.BerlinBlock                  = params.TestnetChainConfig.BerlinBlock
 			chainConfig.LondonBlock                  = params.TestnetChainConfig.LondonBlock
@@ -213,16 +223,12 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock            = params.MainnetChainConfig.ValidateHTLCBlock
 			chainConfig.HeaderHashWithoutTimeBlock   = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
+			chainConfig.IstanbulBlock                = params.MainnetChainConfig.IstanbulBlock
 			chainConfig.MuirGlacierBlock             = params.MainnetChainConfig.MuirGlacierBlock
 			chainConfig.BerlinBlock                  = params.MainnetChainConfig.BerlinBlock
 			chainConfig.LondonBlock                  = params.MainnetChainConfig.LondonBlock
 		}
 	}
-
-	//directly support corresponding instruction set
-	chainConfig.ConstantinopleBlock = big.NewInt(0)
-	chainConfig.PetersburgBlock     = big.NewInt(0)
-	chainConfig.IstanbulBlock       = big.NewInt(0)
 
 	chainConfig.ChainLogger = logger
 	logger.Info("Initialised chain configuration", "config", chainConfig)

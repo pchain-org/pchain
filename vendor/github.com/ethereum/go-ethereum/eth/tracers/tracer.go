@@ -686,12 +686,12 @@ func (jst *Tracer) CaptureStart(env *vm.EVM, from common.Address, to common.Addr
 	jst.ctx["block"] = env.Context.BlockNumber.Uint64()
 	jst.dbWrapper.db = env.StateDB
 	// Update list of precompiles based on current block
-	rules := env.ChainConfig().Rules(env.Context.BlockNumber)
+	rules := env.ChainConfig().Rules(env.Context.MainChainNumber)
 	jst.activePrecompiles = vm.ActivePrecompiles(rules)
 
 	// Compute intrinsic gas
-	isHomestead := env.ChainConfig().IsHomestead(env.Context.BlockNumber)
-	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.BlockNumber)
+	isHomestead := env.ChainConfig().IsHomestead(env.Context.MainChainNumber)
+	isIstanbul := env.ChainConfig().IsIstanbul(env.Context.MainChainNumber)
 	intrinsicGas, err := core.IntrinsicGas(input, nil, jst.ctx["type"] == "CREATE", isHomestead, isIstanbul)
 	if err != nil {
 		return

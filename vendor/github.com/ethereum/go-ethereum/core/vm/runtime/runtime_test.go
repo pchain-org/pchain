@@ -63,6 +63,9 @@ func TestDefaults(t *testing.T) {
 	if cfg.BlockNumber == nil {
 		t.Error("expected block number to be non nil")
 	}
+	if cfg.MainChainNumber == nil {
+		t.Error("expected mainchain block number to be non nil")
+	}
 }
 
 func TestEVM(t *testing.T) {
@@ -174,6 +177,7 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		Time:        new(big.Int).SetUint64(0),
 		Coinbase:    common.Address{},
 		BlockNumber: new(big.Int).SetUint64(1),
+		MainChainNumber: new(big.Int).SetUint64(1),
 		ChainConfig: &params.ChainConfig{
 			ChainID:             big.NewInt(1),
 			HomesteadBlock:      new(big.Int),
@@ -295,8 +299,9 @@ func TestBlockhash(t *testing.T) {
 	input := common.Hex2Bytes("f8a8fd6d")
 	chain := &dummyChain{}
 	ret, _, err := Execute(data, input, &Config{
-		GetHashFn:   core.GetHashFn(header, chain),
-		BlockNumber: new(big.Int).Set(header.Number),
+		GetHashFn:       core.GetHashFn(header, chain),
+		BlockNumber:     new(big.Int).Set(header.Number),
+		MainChainNumber: new(big.Int).Set(header.Number),
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

@@ -32,21 +32,22 @@ import (
 // Config is a basic type specifying certain configuration flags for running
 // the EVM.
 type Config struct {
-	ChainConfig *params.ChainConfig
-	Difficulty  *big.Int
-	Origin      common.Address
-	Coinbase    common.Address
-	BlockNumber *big.Int
-	Time        *big.Int
-	GasLimit    uint64
-	GasPrice    *big.Int
-	Value       *big.Int
-	Debug       bool
-	EVMConfig   vm.Config
-	BaseFee     *big.Int
+	ChainConfig	    *params.ChainConfig
+	Difficulty      *big.Int
+	Origin          common.Address
+	Coinbase        common.Address
+	BlockNumber     *big.Int
+	MainChainNumber *big.Int
+	Time            *big.Int
+	GasLimit        uint64
+	GasPrice        *big.Int
+	Value           *big.Int
+	Debug           bool
+	EVMConfig       vm.Config
+	BaseFee         *big.Int
 
-	State     *state.StateDB
-	GetHashFn func(n uint64) common.Hash
+	State           *state.StateDB
+	GetHashFn       func(n uint64) common.Hash
 }
 
 // sets defaults on the config
@@ -89,6 +90,9 @@ func setDefaults(cfg *Config) {
 	if cfg.BlockNumber == nil {
 		cfg.BlockNumber = new(big.Int)
 	}
+	if cfg.MainChainNumber == nil {
+		cfg.MainChainNumber = new(big.Int)
+	}
 	if cfg.GetHashFn == nil {
 		cfg.GetHashFn = func(n uint64) common.Hash {
 			return common.BytesToHash(crypto.Keccak256([]byte(new(big.Int).SetUint64(n).String())))
@@ -118,7 +122,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		vmenv   = NewEnv(cfg)
 		sender  = vm.AccountRef(cfg.Origin)
 	)
-	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
+	if rules := cfg.ChainConfig.Rules(vmenv.Context.MainChainNumber); rules.IsBerlin {
 		cfg.State.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
 	}
 	cfg.State.CreateAccount(address)
@@ -150,7 +154,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		vmenv  = NewEnv(cfg)
 		sender = vm.AccountRef(cfg.Origin)
 	)
-	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
+	if rules := cfg.ChainConfig.Rules(vmenv.Context.MainChainNumber); rules.IsBerlin {
 		cfg.State.PrepareAccessList(cfg.Origin, nil, vm.ActivePrecompiles(rules), nil)
 	}
 	// Call the code with the given configuration.
@@ -176,7 +180,7 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 	sender := cfg.State.GetOrNewStateObject(cfg.Origin)
 	statedb := cfg.State
 
-	if rules := cfg.ChainConfig.Rules(vmenv.Context.BlockNumber); rules.IsBerlin {
+	if rules := cfg.ChainConfig.Rules(vmenv.Context.MainChainNumber); rules.IsBerlin {
 		statedb.PrepareAccessList(cfg.Origin, &address, vm.ActivePrecompiles(rules), nil)
 	}
 	// Call the code with the given configuration.
