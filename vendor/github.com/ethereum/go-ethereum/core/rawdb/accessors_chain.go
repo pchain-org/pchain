@@ -284,6 +284,44 @@ func DeleteTd(db ethdb.Writer, hash common.Hash, number uint64) {
 	}
 }
 
+// ReadRoot1RLP retrieves a block's total difficulty corresponding to the hash in RLP encoding.
+func ReadRoot1RLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+	data, _ := db.Get(headerRoot1Key(number, hash))
+	return data
+}
+
+// ReadRoot1 retrieves a block's Root1 corresponding to the hash.
+func ReadRoot1(db ethdb.Reader, hash common.Hash, number uint64) common.Hash {
+	data := ReadRoot1RLP(db, hash, number)
+	if len(data) == 0 {
+		return common.Hash{}
+	}
+	root1 := common.Hash{}
+	if err := rlp.Decode(bytes.NewReader(data), &root1); err != nil {
+		log.Error("Invalid block total Root1 RLP", "hash", hash, "err", err)
+		return common.Hash{}
+	}
+	return root1
+}
+
+// WriteRoot1 stores the Root1 of a block into the database.
+func WriteRoot1(db ethdb.Writer, hash common.Hash, number uint64, root1 common.Hash) {
+	data, err := rlp.EncodeToBytes(root1)
+	if err != nil {
+		log.Crit("Failed to RLP encode block Root1", "err", err)
+	}
+	if err := db.Put(headerRoot1Key(number, hash), data); err != nil {
+		log.Crit("Failed to store block Root1", "err", err)
+	}
+}
+
+// DeleteRoot1 removes all block Root1 data associated with a hash.
+func DeleteRoot1(db ethdb.Writer, hash common.Hash, number uint64) {
+	if err := db.Delete(headerRoot1Key(number, hash)); err != nil {
+		log.Crit("Failed to delete block Root1", "err", err)
+	}
+}
+
 // HasReceipts verifies the existence of all the transaction receipts belonging
 // to a block.
 func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {

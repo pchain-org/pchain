@@ -230,7 +230,9 @@ func (bc *BlockChain) loadLastState() error {
 		return bc.Reset()
 	}
 	// Make sure the state associated with the block is available
-	if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
+	//if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
+	root, root1 := bc.GetRoots(currentBlock.Header())
+	if _, err := state.NewFromRoots(root, root1, bc.stateCache); err != nil {
 		// Dangling block without a state associated, init from scratch
 		bc.logger.Warn("Head state missing, repairing chain", "number", currentBlock.Number(), "hash", currentBlock.Hash(), "err", err)
 		if err := bc.repair(&currentBlock); err != nil {
@@ -264,9 +266,13 @@ func (bc *BlockChain) loadLastState() error {
 	blockTd := bc.GetTd(currentBlock.Hash(), currentBlock.NumberU64())
 	fastTd := bc.GetTd(currentFastBlock.Hash(), currentFastBlock.NumberU64())
 
-	bc.logger.Info("Loaded most recent local header", "number", currentHeader.Number, "hash", currentHeader.Hash(), "td", headerTd)
-	bc.logger.Info("Loaded most recent local full block", "number", currentBlock.Number(), "hash", currentBlock.Hash(), "td", blockTd)
-	bc.logger.Info("Loaded most recent local fast block", "number", currentFastBlock.Number(), "hash", currentFastBlock.Hash(), "td", fastTd)
+	headerRoot1 := bc.GetRoot1(currentHeader.Hash(), currentHeader.Number.Uint64())
+	blockRoot1 := bc.GetRoot1(currentBlock.Hash(), currentBlock.NumberU64())
+	fastRoot1 := bc.GetRoot1(currentFastBlock.Hash(), currentFastBlock.NumberU64())
+
+	bc.logger.Info("Loaded most recent local header", "number", currentHeader.Number, "hash", currentHeader.Hash(), "td", headerTd, "root1", headerRoot1)
+	bc.logger.Info("Loaded most recent local full block", "number", currentBlock.Number(), "hash", currentBlock.Hash(), "td", blockTd, "root1", blockRoot1)
+	bc.logger.Info("Loaded most recent local fast block", "number", currentFastBlock.Number(), "hash", currentFastBlock.Hash(), "td", fastTd, "root1", fastRoot1)
 
 	return nil
 }
@@ -300,7 +306,9 @@ func (bc *BlockChain) SetHead(head uint64) error {
 		bc.currentBlock.Store(bc.GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64()))
 	}
 	if currentBlock := bc.CurrentBlock(); currentBlock != nil {
-		if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
+		//if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
+		root, root1 := bc.GetRoots(currentBlock.Header())
+		if _, err := state.NewFromRoots(root, root1, bc.stateCache); err != nil {
 			// Rewound state missing, rolled back to before pivot, reset to genesis
 			bc.currentBlock.Store(bc.genesisBlock)
 		}
@@ -374,12 +382,19 @@ func (bc *BlockChain) Processor() Processor {
 
 // State returns a new mutable state based on the current HEAD block.
 func (bc *BlockChain) State() (*state.StateDB, error) {
-	return bc.StateAt(bc.CurrentBlock().Root())
+	//return bc.StateAt(bc.CurrentBlock().Root())
+	return bc.StateAtHeader(bc.CurrentBlock().Header())
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
-func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, bc.stateCache)
+func (bc *BlockChain) StateAt___(root common.Hash) (*state.StateDB, error) {
+	return state.New___(root, bc.stateCache)
+}
+
+// StateAt returns a new mutable state based on a particular point in time.
+func (bc *BlockChain) StateAtHeader(header *types.Header) (*state.StateDB, error) {
+	root, root1 := bc.GetRoots(header)
+	return state.NewFromRoots(root, root1, bc.stateCache)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -427,7 +442,9 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 func (bc *BlockChain) repair(head **types.Block) error {
 	for {
 		// Abort if we've rewound to a head block that does have associated state
-		if _, err := state.New((*head).Root(), bc.stateCache); err == nil {
+		//if _, err := state.New((*head).Root(), bc.stateCache); err == nil {
+		root, root1 := bc.GetRoots((*head).Header())
+		if _, err := state.NewFromRoots(root, root1, bc.stateCache); err == nil {
 			bc.logger.Info("Rewound blockchain to past state", "number", (*head).Number(), "hash", (*head).Hash())
 			return nil
 		}
@@ -673,7 +690,9 @@ func (bc *BlockChain) ValidateBlock(block *types.Block) (*state.StateDB, types.R
 
 	var parent *types.Block
 	parent = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
-	state, err := state.New(parent.Root(), bc.stateCache)
+	//state, err := state.New(parent.Root(), bc.stateCache)
+	root, root1 := bc.GetRoots(parent.Header())
+	state, err := state.NewFromRoots(root, root1, bc.stateCache)
 	if err != nil {
 		log.Debugf("ValidateBlock-state.New return with error: %v", err)
 		return nil, nil, nil, err
@@ -985,6 +1004,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteBlock(bc.db, block)
 
 	// reward outside
+	/*
 	rewardOutside := bc.chainConfig.IsOutOfStorage(block.Number(), block.Header().MainChainNumber)
 	if rewardOutside {
 		outsideReward := state.GetOutsideReward()
@@ -1015,6 +1035,12 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		}
 		state.ClearExtractRewardSet()
 	}
+	*/
+
+	root1, err := state.GetState1DB().Commit(bc.chainConfig.IsEIP158(block.Number()))
+	if err := bc.hc.WriteRoot1(block.Hash(), block.NumberU64(), root1); err != nil {
+		return NonStatTy, err
+	}
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
@@ -1025,6 +1051,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	//we flush db within 5 blocks before/after epoch-switch to avoid rollback issues
 	FORCE_FULSH_WINDOW := uint64(5)
 	curBlockNumber := block.NumberU64()
+	tdm := bc.Engine().(consensus.Tendermint)
 	curEpoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
 	withinEpochSwitchWindow := (curBlockNumber < curEpoch.StartBlock + FORCE_FULSH_WINDOW || curBlockNumber > curEpoch.EndBlock - FORCE_FULSH_WINDOW)
 	FLUSH_BLOCKS_INTERVAL := uint64(5000) //flush per this count to reduce catch-up effort/blocks when rollback occurs
@@ -1032,7 +1059,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// If we're running an archive node, always flush
 	if withinEpochSwitchWindow || bc.cacheConfig.TrieDirtyDisabled || meetFlushBlockInterval{
-		if err := triedb.Commit(root, false); err != nil {
+		if err := triedb.CommitNodes([]common.Hash{root, root1}, false); err != nil {
 			return NonStatTy, err
 		}
 	} else {
@@ -1066,7 +1093,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
 					}
 					// Flush an entire trie and restart the counters
-					triedb.Commit(header.Root, true)
+					root1 := bc.GetRoot1(header.Hash(), header.Number.Uint64())
+					triedb.CommitNodes([]common.Hash{header.Root, root1}, true)
 					lastWrite = chosen
 					bc.gcproc = 0
 				}
@@ -1291,7 +1319,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.New(parent.Root, bc.stateCache)
+		
+		//statedb, err := state.New(parent.Root, bc.stateCache)
+		root, root1 := bc.GetRoots(parent)
+		statedb, err := state.NewFromRoots(root, root1, bc.stateCache)
 		if err != nil {
 			return it.index, events, coalescedLogs, err
 		}
@@ -1747,6 +1778,24 @@ func (bc *BlockChain) GetTd(hash common.Hash, number uint64) *big.Int {
 // database by hash, caching it if found.
 func (bc *BlockChain) GetTdByHash(hash common.Hash) *big.Int {
 	return bc.hc.GetTdByHash(hash)
+}
+
+// GetRoot1 retrieves a block's Root1 in the canonical chain from the
+// database by hash and number, caching it if found.
+func (bc *BlockChain) GetRoot1(hash common.Hash, number uint64) common.Hash {
+	return bc.hc.GetRoot1(hash, number)
+}
+
+// GetTdByHash retrieves a block's Root1 in the canonical chain from the
+// database by hash, caching it if found.
+func (bc *BlockChain) GetRoot1ByHash(hash common.Hash) common.Hash {
+	return bc.hc.GetRoot1ByHash(hash)
+}
+
+// GetRoots retrieves a block's Root and Root1 in the canonical chain from the
+// database, caching it if found.
+func (bc *BlockChain) GetRoots(header *types.Header) (common.Hash, common.Hash) {
+	return header.Root, bc.hc.GetRoot1(header.Hash(), header.Number.Uint64())
 }
 
 // GetHeader retrieves a block header from the database by hash and number,

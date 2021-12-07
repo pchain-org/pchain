@@ -454,7 +454,8 @@ func (self *worker) push(work *Work) {
 
 // makeCurrent creates a new environment for the current cycle.
 func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error {
-	state, err := self.chain.StateAt(parent.Root())
+	//state, err := self.chain.StateAt(parent.Root())
+	state, err := self.chain.StateAtHeader(parent.Header())
 	if err != nil {
 		return err
 	}

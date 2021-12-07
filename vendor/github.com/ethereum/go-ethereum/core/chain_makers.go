@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -216,7 +217,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		return nil, nil
 	}
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(db))
+		//statedb, err := state.New(parent.Root(), state.NewDatabase(db))
+		root := parent.Root()
+		root1 := rawdb.ReadRoot1(db, parent.Hash(), parent.NumberU64())
+		statedb, err := state.NewFromRoots(root, root1, state.NewDatabase(db))
 		if err != nil {
 			panic(err)
 		}

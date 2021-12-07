@@ -49,6 +49,9 @@ var (
 // * Contracts
 // * Accounts
 type StateDB struct {
+	
+	state1DB *State1DB
+	
 	db   Database
 	trie Trie
 
@@ -67,13 +70,6 @@ type StateDB struct {
 	// Cache of Child Chain Reward Per Block
 	childChainRewardPerBlock      *big.Int
 	childChainRewardPerBlockDirty bool
-
-	rewardOutsideSet map[common.Address]Reward //cache rewards of candidate&delegators for recording in diskdb
-	extractRewardSet map[common.Address]uint64 //cache rewards of different epochs when delegator does extract
-
-	//if there is rollback, the rewards stored in diskdb for 'out-of-storage' feature should not be added again
-	//remember the last block consistent with out-of-storage recording
-	oosLastBlock  *big.Int
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -100,12 +96,12 @@ type StateDB struct {
 }
 
 // Create a new state from a given trie
-func New(root common.Hash, db Database) (*StateDB, error) {
+func New___(root common.Hash, db Database) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
 	}
-
+	
 	return &StateDB{
 		db:                            db,
 		trie:                          tr,
@@ -117,12 +113,42 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		rewardSetDirty:                false,
 		childChainRewardPerBlock:      nil,
 		childChainRewardPerBlockDirty: false,
-		rewardOutsideSet:              make(map[common.Address]Reward),
-		extractRewardSet:              make(map[common.Address]uint64),
-		oosLastBlock:                  nil,
 		logs:                          make(map[common.Hash][]*types.Log),
 		preimages:                     make(map[common.Hash][]byte),
 	}, nil
+}
+
+//parameter root is from header, parameter root1 is from block
+func NewFromRoots(root, root1 common.Hash, db Database) (*StateDB, error) {
+	tr, err := db.OpenTrie(root)
+	if err != nil {
+		return nil, err
+	}
+	
+	state := &StateDB{
+		db:                            db,
+		trie:                          tr,
+		stateObjects:                  make(map[common.Address]*stateObject),
+		stateObjectsDirty:             make(map[common.Address]struct{}),
+		delegateRefundSet:             make(DelegateRefundSet),
+		delegateRefundSetDirty:        false,
+		rewardSet:                     make(RewardSet),
+		rewardSetDirty:                false,
+		childChainRewardPerBlock:      nil,
+		childChainRewardPerBlockDirty: false,
+		logs:                          make(map[common.Hash][]*types.Log),
+		preimages:                     make(map[common.Hash][]byte),
+	}
+
+	state1, err1 := NewState1DB(root1, state)
+	if  err1 != nil {
+		return nil, err1
+	}
+
+	state.state1DB = state1
+	state1.stateDB = state
+	
+	return state, nil
 }
 
 // setError remembers the first non-nil error it is called with.
@@ -149,9 +175,6 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.delegateRefundSet = make(DelegateRefundSet)
 	self.rewardSet = make(RewardSet)
 	self.childChainRewardPerBlock = nil
-	self.rewardOutsideSet = make(map[common.Address]Reward)
-	self.extractRewardSet = make(map[common.Address]uint64)
-	self.oosLastBlock     = nil
 	self.thash = common.Hash{}
 	self.bhash = common.Hash{}
 	self.txIndex = 0
@@ -398,6 +421,7 @@ func (self *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
 	}
+	self.state1DB.SetNonce(addr, nonce)
 }
 
 func (self *StateDB) SetCode(addr common.Address, code []byte) {
@@ -639,8 +663,6 @@ func (self *StateDB) Copy() *StateDB {
 		rewardSet:                     make(RewardSet, len(self.rewardSet)),
 		rewardSetDirty:                self.rewardSetDirty,
 		childChainRewardPerBlockDirty: self.childChainRewardPerBlockDirty,
-		rewardOutsideSet:              make(map[common.Address]Reward, len(self.rewardOutsideSet)),
-		extractRewardSet:              make(map[common.Address]uint64, len(self.extractRewardSet)),
 		refund:                        self.refund,
 		logs:                          make(map[common.Hash][]*types.Log, len(self.logs)),
 		logSize:                       self.logSize,
@@ -659,15 +681,6 @@ func (self *StateDB) Copy() *StateDB {
 	}
 	if self.childChainRewardPerBlock != nil {
 		state.childChainRewardPerBlock = new(big.Int).Set(self.childChainRewardPerBlock)
-	}
-	for addr := range self.rewardOutsideSet {
-		state.rewardOutsideSet[addr] = self.rewardOutsideSet[addr].Copy()
-	}
-	for addr := range self.extractRewardSet {
-		state.extractRewardSet[addr] = self.extractRewardSet[addr]
-	}
-	if self.oosLastBlock != nil {
-		state.oosLastBlock = new(big.Int).Set(self.oosLastBlock)
 	}
 	for hash, logs := range self.logs {
 		state.logs[hash] = make([]*types.Log, len(logs))
@@ -747,6 +760,8 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
+	
+	s.state1DB.Finalise(deleteEmptyObjects)
 }
 
 // IntermediateRoot computes the current root hash of the state trie.
@@ -882,4 +897,8 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		return nil
 	})
 	return root, err
+}
+
+func (s *StateDB) GetState1DB() *State1DB {
+	return s.state1DB
 }

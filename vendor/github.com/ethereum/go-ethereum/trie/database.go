@@ -743,6 +743,87 @@ func (db *Database) Commit(node common.Hash, report bool) error {
 	return nil
 }
 
+// Commit iterates over all the children of a particular node, writes them out
+// to disk, forcefully tearing down all references in both directions. As a side
+// effect, all pre-images accumulated up to this point are also written.
+//
+// Note, this method is a non-synchronized mutator. It is unsafe to call this
+// concurrently with other mutators.
+func (db *Database) CommitNodes(nodeArray []common.Hash, report bool) error {
+	// Create a database batch to flush persistent data out. It is important that
+	// outside code doesn't see an inconsistent state (referenced data removed from
+	// memory cache during commit but not yet in persistent storage). This is ensured
+	// by only uncaching existing data when the database write finalizes.
+	start := time.Now()
+	batch := db.diskdb.NewBatch()
+
+	// Move all of the accumulated preimages into a write batch
+	for hash, preimage := range db.preimages {
+		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
+			log.Error("Failed to commit preimage from trie database", "err", err)
+			return err
+		}
+		// If the batch is too large, flush to disk
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				return err
+			}
+			batch.Reset()
+		}
+	}
+	// Since we're going to replay trie node writes into the clean cache, flush out
+	// any batched pre-images before continuing.
+	if err := batch.Write(); err != nil {
+		return err
+	}
+	batch.Reset()
+
+	// Move the trie itself into the batch, flushing if enough data is accumulated
+	nodes, storage := len(db.dirties), db.dirtiesSize
+
+	for _, node := range nodeArray {
+		uncacher := &cleaner{db}
+		if err := db.commit(node, batch, uncacher); err != nil {
+			log.Error("Failed to commit trie from trie database", "err", err)
+			return err
+		}
+		// Trie mostly committed to disk, flush any batch leftovers
+		if err := batch.Write(); err != nil {
+			log.Error("Failed to write trie to disk", "err", err)
+			return err
+		}
+		
+		// Uncache any leftovers in the last batch
+		db.lock.Lock()
+		batch.Replay(uncacher)
+		db.lock.Unlock()
+
+		batch.Reset()
+	}
+
+
+	// Reset the storage counters and bumpd metrics
+	db.preimages = make(map[common.Hash][]byte)
+	db.preimagesSize = 0
+
+	memcacheCommitTimeTimer.Update(time.Since(start))
+	memcacheCommitSizeMeter.Mark(int64(storage - db.dirtiesSize))
+	memcacheCommitNodesMeter.Mark(int64(nodes - len(db.dirties)))
+
+	logger := log.Info
+	if !report {
+		logger = log.Debug
+	}
+	logger("Persisted trie from memory database", "nodes", nodes-len(db.dirties)+int(db.flushnodes), "size", storage-db.dirtiesSize+db.flushsize, "time", time.Since(start)+db.flushtime,
+		"gcnodes", db.gcnodes, "gcsize", db.gcsize, "gctime", db.gctime, "livenodes", len(db.dirties), "livesize", db.dirtiesSize)
+
+	// Reset the garbage collection statistics
+	db.gcnodes, db.gcsize, db.gctime = 0, 0, 0
+	db.flushnodes, db.flushsize, db.flushtime = 0, 0, 0
+
+	return nil
+}
+
 // commit is the private locked version of Commit.
 func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleaner) error {
 	// If the node does not exist, it's a previously committed node

@@ -41,6 +41,7 @@ const (
 	headerCacheLimit = 512
 	tdCacheLimit     = 1024
 	numberCacheLimit = 2048
+	root1CacheLimit  = 1024
 )
 
 // HeaderChain implements the basic block header chain logic that is shared by
@@ -60,6 +61,7 @@ type HeaderChain struct {
 	headerCache *lru.Cache // Cache for the most recent block headers
 	tdCache     *lru.Cache // Cache for the most recent block total difficulties
 	numberCache *lru.Cache // Cache for the most recent block numbers
+	root1Cache  *lru.Cache // Cache for the most recent block Root1
 
 	procInterrupt func() bool
 
@@ -75,6 +77,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 	headerCache, _ := lru.New(headerCacheLimit)
 	tdCache, _ := lru.New(tdCacheLimit)
 	numberCache, _ := lru.New(numberCacheLimit)
+	root1Cache, _ := lru.New(root1CacheLimit)
 
 	// Seed a fast but crypto originating random generator
 	seed, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
@@ -88,6 +91,7 @@ func NewHeaderChain(chainDb ethdb.Database, config *params.ChainConfig, engine c
 		headerCache:   headerCache,
 		tdCache:       tdCache,
 		numberCache:   numberCache,
+		root1Cache:    root1Cache,
 		procInterrupt: procInterrupt,
 		rand:          mrand.New(mrand.NewSource(seed.Int64())),
 		engine:        engine,
@@ -150,6 +154,12 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 	if err := hc.WriteTd(hash, number, externTd); err != nil {
 		log.Crit("Failed to write header total difficulty", "err", err)
 	}
+
+	root1 := hc.GetRoot1(hc.currentHeaderHash, hc.CurrentHeader().Number.Uint64())
+	if err := hc.WriteRoot1(hash, number, root1); err != nil {
+		log.Crit("Failed to write header Root1", "err", err)
+	}
+
 	rawdb.WriteHeader(hc.chainDb, header)
 
 	// If the total difficulty is higher than our known, add it to the canonical chain
@@ -349,6 +359,37 @@ func (hc *HeaderChain) WriteTd(hash common.Hash, number uint64, td *big.Int) err
 	return nil
 }
 
+// GetRoot1 retrieves a block's Root1 in the canonical chain from the
+// database by hash and number, caching it if found.
+func (hc *HeaderChain) GetRoot1(hash common.Hash, number uint64) common.Hash {
+	// Short circuit if the td's already in the cache, retrieve otherwise
+	if cached, ok := hc.root1Cache.Get(hash); ok {
+		return cached.(common.Hash)
+	}
+	root1 := rawdb.ReadRoot1(hc.chainDb, hash, number)
+	// Cache the found body for next time and return
+	hc.root1Cache.Add(hash, root1)
+	return root1
+}
+
+// GetRoot1ByHash retrieves a block's Root1 in the canonical chain from the
+// database by hash, caching it if found.
+func (hc *HeaderChain) GetRoot1ByHash(hash common.Hash) common.Hash {
+	number := hc.GetBlockNumber(hash)
+	if number == nil {
+		return common.Hash{}
+	}
+	return hc.GetRoot1(hash, *number)
+}
+
+// WriteRoot1 stores a block's Root1 into the database, also caching it
+// along the way.
+func (hc *HeaderChain) WriteRoot1(hash common.Hash, number uint64, root1 common.Hash) error {
+	rawdb.WriteRoot1(hc.chainDb, hash, number, root1)
+	hc.root1Cache.Add(hash, root1)
+	return nil
+}
+
 // GetHeader retrieves a block header from the database by hash and number,
 // caching it if found.
 func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header {
@@ -441,6 +482,7 @@ func (hc *HeaderChain) SetHead(head uint64, delFn DeleteCallback) {
 	hc.headerCache.Purge()
 	hc.tdCache.Purge()
 	hc.numberCache.Purge()
+	hc.root1Cache.Purge()
 
 	if hc.CurrentHeader() == nil {
 		hc.currentHeader.Store(hc.genesisHeader)

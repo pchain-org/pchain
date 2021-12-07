@@ -200,6 +200,12 @@ type Block struct {
 	// of the chain up to and including the block.
 	td *big.Int
 
+	// root1 is used to store the hash of the trie in StateDB1,
+	// which is to store epoch reward and operation of extracting
+	// reward. Root in Header is not easy to modify, so put it
+	// in Block
+	root1        common.Hash
+
 	// These fields are used by package eth to track
 	// inter-peer block relay.
 	ReceivedAt   time.Time
@@ -403,6 +409,8 @@ func (b *Block) Size() common.StorageSize {
 	b.size.Store(common.StorageSize(c))
 	return common.StorageSize(c)
 }
+
+func (b *Block) Root1() common.Hash        { return b.root1 }
 
 type writeCounter common.StorageSize
 

@@ -359,13 +359,15 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 			epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
 			currentEpochNumber := epoch.Number
 			noExtractMark := false
-			extractEpochNumber, err := state.GetEpochRewardExtractedFromDB(from, curBlockHeight)
+			//extractEpochNumber, err := state.GetEpochRewardExtractedFromDB(from, curBlockHeight)
+			extractEpochNumber, err := state.GetEpochRewardExtracted(from, curBlockHeight)
 			if err != nil {
 				noExtractMark = true
 			}
 			maxExtractEpochNumber := uint64(0)
 
-			rewards := state.GetAllEpochRewardFromDB(from, curBlockHeight)
+			//rewards := state.GetAllEpochRewardFromDB(from, curBlockHeight)
+			rewards := state.GetAllEpochReward(from, curBlockHeight)
 
 			log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
 			log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
@@ -378,18 +380,20 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 					if maxExtractEpochNumber < epNumber {
 						maxExtractEpochNumber = epNumber
-						state.MarkEpochRewardExtracted(from, maxExtractEpochNumber)
+						state.SetEpochRewardExtracted(from, maxExtractEpochNumber)
 					}
 				}
 			}
 		} else {
 
 			//extrRwd is after OutOfStorage feature, so need not check for IsOutOfStorage()
+			/*
 			rollbackCatchup := false
 			lastBlock, err := state.ReadOOSLastBlock();
 			if err == nil && heightBI.Cmp(lastBlock) <= 0 {
 				rollbackCatchup = true
 			}
+			*/
 
 			epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
 			currentEpochNumber := epoch.Number
@@ -409,16 +413,16 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 			for epNumber, reward := range rewards{
 				if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
 
-					if !rollbackCatchup {
+					//if !rollbackCatchup {
 						state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
-					} else {
+					//} else {
 						state.SubRewardBalance(from, reward)
-					}
+					//}
 					state.AddBalance(from, reward)
 
 					if maxExtractEpochNumber < epNumber {
 						maxExtractEpochNumber = epNumber
-						state.MarkEpochRewardExtracted(from, maxExtractEpochNumber)
+						state.SetEpochRewardExtracted(from, maxExtractEpochNumber)
 					}
 				}
 			}

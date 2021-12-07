@@ -503,7 +503,9 @@ func dump(ctx *cli.Context) error {
 			fmt.Println("{}")
 			utils.Fatalf("block not found")
 		} else {
-			state, err := state.New(block.Root(), state.NewDatabase(chainDb))
+			//state, err := state.New(block.Root(), state.NewDatabase(chainDb))
+			root, root1 := chain.GetRoots(block.Header())
+			state, err := state.NewFromRoots(root, root1, state.NewDatabase(chainDb))
 			if err != nil {
 				utils.Fatalf("could not create new state: %v", err)
 			}
@@ -543,7 +545,9 @@ func countBlockState(ctx *cli.Context) error {
 	bsize := block.Size()
 
 	root := block.Header().Root
-	statedb, _ := state.New(block.Root(), state.NewDatabase(chainDb))
+	//statedb, _ := state.New(block.Root(), state.NewDatabase(chainDb))
+	root1 := rawdb.ReadRoot1(chainDb, block.Hash(), block.NumberU64())
+	statedb, _ := state.NewFromRoots(root, root1, state.NewDatabase(chainDb))
 	accountTrie, _ := statedb.Database().OpenTrie(root)
 
 	count := CountSize{}

@@ -155,7 +155,9 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 			return nil, fmt.Errorf("parent block #%d not found", number-1)
 		}
 	}
-	statedb, err := state.New(start.Root(), database)
+	//statedb, err := state.New(start.Root(), database)
+	root, root1 := api.eth.blockchain.GetRoots(start.Header())
+	statedb, err := state.NewFromRoots(root, root1, database)
 	if err != nil {
 		// If the starting state is missing, allow some number of blocks to be reexecuted
 		reexec := defaultTraceReexec
@@ -168,7 +170,9 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 			if start == nil {
 				break
 			}
-			if statedb, err = state.New(start.Root(), database); err == nil {
+			//if statedb, err = state.New(start.Root(), database); err == nil {
+			root, root1 := api.eth.blockchain.GetRoots(start.Header())
+			if statedb, err = state.NewFromRoots(root, root1, database); err == nil {
 				break
 			}
 		}
@@ -598,7 +602,8 @@ func containsTx(block *types.Block, hash common.Hash) bool {
 // attempted to be reexecuted to generate the desired state.
 func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*state.StateDB, error) {
 	// If we have the state fully available, use that
-	statedb, err := api.eth.blockchain.StateAt(block.Root())
+	//statedb, err := api.eth.blockchain.StateAt(block.Root())
+	statedb, err := api.eth.blockchain.StateAtHeader(block.Header())
 	if err == nil {
 		return statedb, nil
 	}
@@ -611,7 +616,9 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 		if block == nil {
 			break
 		}
-		if statedb, err = state.New(block.Root(), database); err == nil {
+		//if statedb, err = state.New(block.Root(), database); err == nil {
+		root, root1 := api.eth.blockchain.GetRoots(block.Header())
+		if statedb, err = state.NewFromRoots(root, root1, database); err == nil {
 			break
 		}
 	}
