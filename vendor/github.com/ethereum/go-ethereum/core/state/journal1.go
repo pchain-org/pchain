@@ -40,30 +40,17 @@ type (
 	suicideState1ObjectChange struct {
 		account     *common.Address
 		prev        bool // whether account had already suicided
-		prevRewardRoot    common.Hash
-		prevExtractNumber uint64
-	}
-
-	suicideState1Change struct {
-		account     *common.Address
-		prev        bool // whether account had already suicided
-		prevRewardRoot   common.Hash
+		prevEpochReward   map[uint64]*big.Int
 		prevExtractNumber uint64
 	}
 
 	addState1LogChange struct {
 		txhash common.Hash
 	}
-
-	nonceState1Change struct {
-		account *common.Address
-		prev    uint64
-	}
 	
-	epochRewardBalanceState1Change struct {
+	epochRewardState1Change struct {
 		account  *common.Address
-		key      uint64
-		prevalue *big.Int
+		prev     map[uint64]*big.Int
 	}
 
 	extractNumberState1Change struct {
@@ -89,8 +76,8 @@ func (ch resetState1ObjectChange) undo(s *State1DB) {
 	s.setState1Object(ch.prev)
 }
 
-func (ch epochRewardBalanceState1Change) undo(s *State1DB) {
-	s.getState1Object(*ch.account).setEpochRewardBalance(ch.key, ch.prevalue)
+func (ch epochRewardState1Change) undo(s *State1DB) {
+	s.getState1Object(*ch.account).setEpochReward(ch.prev)
 }
 
 func (ch extractNumberState1Change) undo(s *State1DB) {
@@ -101,7 +88,7 @@ func (ch suicideState1ObjectChange) undo(s *State1DB) {
 	obj := s.getState1Object(*ch.account)
 	if obj != nil {
 		obj.suicided = ch.prev
-		obj.setRewardRoot(ch.prevRewardRoot)
+		obj.setEpochReward(ch.prevEpochReward)
 		obj.setExtractNumber(ch.prevExtractNumber)
 	}
 }
@@ -114,19 +101,6 @@ func (ch addState1LogChange) undo(s *State1DB) {
 		s.logs[ch.txhash] = logs[:len(logs)-1]
 	}
 	s.logSize--
-}
-
-func (ch nonceState1Change) undo(s *State1DB) {
-	s.getState1Object(*ch.account).setNonce(ch.prev)
-}
-
-func (ch suicideState1Change) undo(s *State1DB) {
-	obj := s.getState1Object(*ch.account)
-	if obj != nil {
-		obj.suicided = ch.prev
-		obj.setRewardRoot(ch.prevRewardRoot)
-		obj.setExtractNumber(ch.prevExtractNumber)
-	}
 }
 
 func (ch addState1PreimageChange) undo(s *State1DB) {

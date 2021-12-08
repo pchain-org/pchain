@@ -369,8 +369,8 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 			//rewards := state.GetAllEpochRewardFromDB(from, curBlockHeight)
 			rewards := state.GetAllEpochReward(from, curBlockHeight)
 
-			log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
-			log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
+			log.Infof("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
+			log.Infof("extrRwd_ApplyCb rewards is %v\n", rewards)
 
 			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
 			for epNumber, reward := range rewards{
@@ -406,8 +406,8 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 			rewards := state.GetAllEpochReward(from, height)
 
-			log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
-			log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
+			log.Infof("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
+			log.Infof("extrRwd_ApplyCb rewards is %v\n", rewards)
 
 			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
 			for epNumber, reward := range rewards{

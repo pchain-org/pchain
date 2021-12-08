@@ -421,7 +421,6 @@ func (self *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	if stateObject != nil {
 		stateObject.SetNonce(nonce)
 	}
-	self.state1DB.SetNonce(addr, nonce)
 }
 
 func (self *StateDB) SetCode(addr common.Address, code []byte) {

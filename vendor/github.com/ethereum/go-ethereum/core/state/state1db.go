@@ -19,6 +19,7 @@ package state
 
 import (
 	"fmt"
+	"math/big"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -44,8 +45,8 @@ type State1DB struct {
 	state1ObjectsDirty map[common.Address]struct{}
 
 	// Cache of Reward Set
-	rewardSet          RewardSet
-	rewardSetDirty     bool
+	//rewardSet          RewardSet
+	//rewardSetDirty     bool
 	
 	//rewardOutsideSet map[common.Address]Reward //cache rewards of candidate&delegators for recording in diskdb
 	//extractRewardSet map[common.Address]uint64 //cache rewards of different epochs when delegator does extract
@@ -185,15 +186,6 @@ func (self *State1DB) Empty(addr common.Address) bool {
 	return so == nil || so.empty()
 }
 
-func (self *State1DB) GetNonce(addr common.Address) uint64 {
-	state1Object := self.getState1Object(addr)
-	if state1Object != nil {
-		return state1Object.Nonce()
-	}
-
-	return 0
-}
-
 // TxIndex returns the current transaction index set by Prepare.
 func (self *State1DB) TxIndex() int {
 	return self.txIndex
@@ -218,13 +210,6 @@ func (self *State1DB) HasSuicided(addr common.Address) bool {
 	return false
 }
 
-func (self *State1DB) SetNonce(addr common.Address, nonce uint64) {
-	stateObject := self.GetOrNewState1Object(addr)
-	if stateObject != nil {
-		stateObject.SetNonce(nonce)
-	}
-}
-
 func (self *State1DB) SetEpochRewardExtracted(addr common.Address, extractNumber uint64) {
 	stateObject := self.GetOrNewState1Object(addr)
 	if stateObject != nil {
@@ -242,14 +227,14 @@ func (self *State1DB) Suicide(addr common.Address) bool {
 	if stateObject == nil {
 		return false
 	}
-	self.journal = append(self.journal, suicideState1Change{
+	self.journal = append(self.journal, suicideState1ObjectChange{
 		account:     &addr,
 		prev:        stateObject.suicided,
-		prevRewardRoot: stateObject.RewardRoot(),
+		prevEpochReward:   stateObject.EpochReward(),
 		prevExtractNumber: stateObject.ExtractNumber(),
 	})
 	stateObject.markSuicided()
-	stateObject.data.RewardRoot = common.Hash{}
+	stateObject.data.EpochReward = make(map[uint64]*big.Int)
 	stateObject.data.ExtractNumber = 0
 	return true
 }
@@ -326,7 +311,6 @@ func (self *State1DB) MarkState1ObjectDirty(addr common.Address) {
 func (self *State1DB) createState1Object(addr common.Address) (newobj, prev *state1Object) {
 	prev = self.getState1Object(addr)
 	newobj = newState1Object(self, addr, Account1{}, self.MarkState1ObjectDirty)
-	newobj.setNonce(0) // sets the object to dirty
 	if prev == nil {
 		self.journal = append(self.journal, createState1ObjectChange{account: &addr})
 	} else {
@@ -349,8 +333,8 @@ func (self *State1DB) createState1Object(addr common.Address) (newobj, prev *sta
 func (self *State1DB) CreateAccount1(addr common.Address) {
 	new, prev := self.createState1Object(addr)
 	if prev != nil {
-		new.setRewardRoot(prev.data.RewardRoot)
-		new.setExtractNumber(prev.data.ExtractNumber)
+		new.setEpochReward(prev.EpochReward())
+		new.setExtractNumber(prev.ExtractNumber())
 	}
 }
 
@@ -422,10 +406,9 @@ func (self *State1DB) GetRefund() uint64 {
 func (s *State1DB) Finalise(deleteEmptyObjects bool) {
 	for addr := range s.state1ObjectsDirty {
 		stateObject := s.state1Objects[addr]
-		if stateObject.suicided/* || (deleteEmptyObjects && stateObject.empty())*/ {
+		if stateObject.suicided || (deleteEmptyObjects && stateObject.empty()) {
 			s.deleteState1Object(stateObject)
 		} else {
-			stateObject.updateRewardRoot(s.db)
 			s.updateState1Object(stateObject)
 		}
 	}
@@ -485,15 +468,11 @@ func (s *State1DB) Commit(deleteEmptyObjects bool) (root common.Hash, err error)
 	for addr, stateObject := range s.state1Objects {
 		_, isDirty := s.state1ObjectsDirty[addr]
 		switch {
-		case stateObject.suicided/* || (isDirty && deleteEmptyObjects && stateObject.empty())*/:
+		case stateObject.suicided || (isDirty && deleteEmptyObjects && stateObject.empty()):
 			// If the object has been removed, don't bother syncing it
 			// and just mark it for deletion in the trie.
 			s.deleteState1Object(stateObject)
 		case isDirty:
-			// Write any Reward Balance changes in the state object to its reward trie.
-			if err := stateObject.CommitRewardTrie(s.db); err != nil {
-				return common.Hash{}, err
-			}
 			s.updateState1Object(stateObject)
 		}
 		delete(s.state1ObjectsDirty, addr)
@@ -504,9 +483,6 @@ func (s *State1DB) Commit(deleteEmptyObjects bool) (root common.Hash, err error)
 		var account Account1
 		if err := rlp.DecodeBytes(leaf, &account); err != nil {
 			return nil
-		}
-		if account.RewardRoot != emptyRoot {
-			s.db.TrieDB().Reference(account.RewardRoot, parent)
 		}
 		return nil
 	})

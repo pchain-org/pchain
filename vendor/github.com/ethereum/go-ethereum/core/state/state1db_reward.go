@@ -2,8 +2,6 @@ package state
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 	"math/big"
 )
 
@@ -67,19 +65,12 @@ func (db *State1DB) ForEachReward(addr common.Address, cb func(key uint64, rewar
 	if so == nil {
 		return
 	}
-	it := trie.NewIterator(so.getRewardTrie(db.db).NodeIterator(nil))
-	for it.Next() {
-		var key uint64
-		rlp.DecodeBytes(db.trie.GetKey(it.Key), &key)
-		if value, dirty := so.dirtyReward[key]; dirty {
-			cb(key, value)
-			continue
-		}
-		var value big.Int
-		rlp.DecodeBytes(it.Value, &value)
-		cb(key, &value)
+
+	for epoch, reward  := range so.data.EpochReward {
+		cb(epoch, reward)
 	}
 }
+
 /*
 func (self *State1DB) GetOutsideReward() map[common.Address]Reward {
 	return self.rewardOutsideSet
@@ -98,7 +89,7 @@ func (self *State1DB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, 
 	//}
 	stateObject := self.getState1Object(addr)
 	if stateObject != nil {
-		rewardBalance := stateObject.GetEpochRewardBalance(self.db, epochNo)
+		rewardBalance := stateObject.GetEpochRewardBalance(epochNo)
 		if rewardBalance != nil {
 			return rewardBalance
 		}
@@ -139,7 +130,7 @@ func (self *State1DB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, 
 	*/
 	
 	stateObject := self.GetOrNewState1Object(addr)
-	rs := stateObject.GetEpochRewardBalance(self.db, epochNo)
+	rs := stateObject.GetEpochRewardBalance(epochNo)
 	if rs == nil { //import all epoch rewards from statedb or diskdb
 		allRewards := self.stateDB.GetAllEpochReward(addr, height)
 		for epoch, reward := range allRewards {
@@ -167,7 +158,7 @@ func (self *State1DB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, 
 	if stateObject == nil {
 		stateObject, _ = self.createState1Object(addr)
 	}
-	rs := stateObject.GetEpochRewardBalance(self.db, epochNo)
+	rs := stateObject.GetEpochRewardBalance(epochNo)
 	if rs == nil { //import all epoch rewards from statedb or diskdb
 		allRewards := self.stateDB.GetAllEpochReward(addr, height)
 		for epoch, reward := range allRewards {
