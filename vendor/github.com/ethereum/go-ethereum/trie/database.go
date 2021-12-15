@@ -75,7 +75,7 @@ type Database struct {
 	newest  common.Hash                 // Newest tracked node, flush-list tail
 
 	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
-	seckeybuf [secureKeyLength]byte  // Ephemeral buffer for calculating preimage keys
+	//seckeybuf [secureKeyLength]byte  // Ephemeral buffer for calculating preimage keys
 
 	gctime  time.Duration      // Time spent on garbage collection since last commit
 	gcnodes uint64             // Nodes garbage collected since last commit
@@ -778,9 +778,6 @@ func (db *Database) CommitNodes(nodeArray []common.Hash, report bool) error {
 	}
 	batch.Reset()
 
-	// Move the trie itself into the batch, flushing if enough data is accumulated
-	nodes, storage := len(db.dirties), db.dirtiesSize
-
 	for _, node := range nodeArray {
 		uncacher := &cleaner{db}
 		if err := db.commit(node, batch, uncacher); err != nil {
@@ -801,14 +798,21 @@ func (db *Database) CommitNodes(nodeArray []common.Hash, report bool) error {
 		batch.Reset()
 	}
 
+	// Move the trie itself into the batch, flushing if enough data is accumulated
+	nodes, storage := len(db.dirties), db.dirtiesSize
+	memcacheCommitTimeTimer.Update(time.Since(start))
+	memcacheCommitSizeMeter.Mark(int64(storage - db.dirtiesSize))
+	memcacheCommitNodesMeter.Mark(int64(nodes - len(db.dirties)))
+
+	//the following 4 lines to make all nodes deprecated
+	db.dirties = map[common.Hash]*cachedNode{{}: {}}
+	db.dirtiesSize = 0
+	db.oldest = common.Hash{}
+	db.newest = common.Hash{}
 
 	// Reset the storage counters and bumpd metrics
 	db.preimages = make(map[common.Hash][]byte)
 	db.preimagesSize = 0
-
-	memcacheCommitTimeTimer.Update(time.Since(start))
-	memcacheCommitSizeMeter.Mark(int64(storage - db.dirtiesSize))
-	memcacheCommitNodesMeter.Mark(int64(nodes - len(db.dirties)))
 
 	logger := log.Info
 	if !report {

@@ -760,7 +760,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
 	
-	s.state1DB.Finalise(deleteEmptyObjects)
+	//s.state1DB.Finalise(deleteEmptyObjects)
 }
 
 // IntermediateRoot computes the current root hash of the state trie.

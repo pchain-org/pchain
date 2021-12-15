@@ -1,6 +1,7 @@
 package state
 
 import (
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 )
@@ -87,6 +88,7 @@ func (self *State1DB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, 
 	//		return rewardbalance
 	//	}
 	//}
+
 	stateObject := self.getState1Object(addr)
 	if stateObject != nil {
 		rewardBalance := stateObject.GetEpochRewardBalance(epochNo)
@@ -130,6 +132,8 @@ func (self *State1DB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, 
 	*/
 	
 	stateObject := self.GetOrNewState1Object(addr)
+	// TODO：here are some pi buried
+	/*
 	rs := stateObject.GetEpochRewardBalance(epochNo)
 	if rs == nil { //import all epoch rewards from statedb or diskdb
 		allRewards := self.stateDB.GetAllEpochReward(addr, height)
@@ -137,7 +141,8 @@ func (self *State1DB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, 
 			stateObject.SetEpochRewardBalance(self.db, epoch, reward)
 		}
 	}
-	stateObject.SetEpochRewardBalance(self.db, epochNo, newReward)
+	*/
+	stateObject.SetEpochRewardBalance(epochNo, newReward)
 
 	self.stateDB.AddRewardBalance(addr, amount)
 }
@@ -154,10 +159,9 @@ func (self *State1DB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, 
 	}
 	*/
 	
-	stateObject := self.getState1Object(addr)
-	if stateObject == nil {
-		stateObject, _ = self.createState1Object(addr)
-	}
+	stateObject := self.GetOrNewState1Object(addr)
+	// TODO：here are some pi buried
+	/*
 	rs := stateObject.GetEpochRewardBalance(epochNo)
 	if rs == nil { //import all epoch rewards from statedb or diskdb
 		allRewards := self.stateDB.GetAllEpochReward(addr, height)
@@ -165,12 +169,11 @@ func (self *State1DB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, 
 			stateObject.SetEpochRewardBalance(self.db, epoch, reward)
 		}
 	}
-	stateObject.SetEpochRewardBalance(self.db, epochNo, newReward)
-	
+	*/
+	stateObject.SetEpochRewardBalance(epochNo, newReward)
 	
 	self.stateDB.SubRewardBalance(addr, amount)
 }
-
 
 //func (self *StateDB) GetEpochReward(address common.Address, epoch uint64) *big.Int {
 //	return self.db.TrieDB().GetEpochReward(address, epoch)
@@ -178,17 +181,13 @@ func (self *State1DB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, 
 
 func (self *State1DB) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int {
 
-	result := make(map[uint64]*big.Int)
+	result := self.db.TrieDB().GetAllEpochReward(address, height-1)
 	self.ForEachReward(address, func(key uint64, rewardBalance *big.Int) bool {
 		result[key] = rewardBalance
 		return true
 	})
 
-	if len(result) != 0 {
-		return result
-	}
-
-	return self.db.TrieDB().GetAllEpochReward(address, height-1)
+	return result
 }
 /*
 //get value from db directly; this will ignore current runtime-context
@@ -210,24 +209,32 @@ func (self *State1DB) MarkEpochRewardExtracted(address common.Address, epoch uin
 */
 //if there is a cache in memory, then return it; or return the lastest value from older block(height-1)
 func (self *State1DB) GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error) {
+
 	stateObject := self.getState1Object(address)
 	if stateObject != nil {
-		return stateObject.ExtractNumber(), nil
+		extractNumber := stateObject.ExtractNumber()
+		if extractNumber == 0 {
+			if oldExtractNumber, err := self.db.TrieDB().GetEpochRewardExtracted(address, height-1); err == nil {
+				return oldExtractNumber, nil
+			}
+		}
+		return extractNumber, nil
 	}
 
-	return self.db.TrieDB().GetEpochRewardExtracted(address, height-1)
+	return 0, errors.New("no extract number found")
 }
+
 /*
 //get value from db directly; this will ignore current runtime-context
 func (self *State1DB) GetEpochRewardExtractedFromDB(address common.Address, height uint64) (uint64, error) {
 	return self.db.TrieDB().GetEpochRewardExtracted(address, height)
 }
-*/
+
 
 func (self *State1DB) WriteEpochRewardExtracted(address common.Address, epoch uint64, height uint64) error {
 	return self.db.TrieDB().WriteEpochRewardExtracted(address, epoch, height)
 }
-/*
+
 //record candidate's last proposed block which brings reward
 func (self *State1DB) ReadOOSLastBlock() (*big.Int, error) {
 	return self.db.TrieDB().ReadOOSLastBlock()

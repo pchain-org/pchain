@@ -10,9 +10,13 @@ func (self *state1Object) GetEpochRewardBalance(key uint64) *big.Int {
 }
 
 // SetEpochRewardBalance updates a value in Epoch Reward.
-func (self *state1Object) SetEpochRewardBalance(db Database, key uint64, rewardAmount *big.Int) {
+func (self *state1Object) SetEpochRewardBalance(key uint64, rewardAmount *big.Int) {
 	epochReward := self.EpochReward()
 	epochReward[key] = rewardAmount
+	if rewardAmount == nil || rewardAmount.Sign() == 0 {
+		delete(epochReward, key)
+	}
+
 	self.SetEpochReward(epochReward)
 }
 

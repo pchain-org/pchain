@@ -353,9 +353,9 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 		curBlockHeight := bc.CurrentBlock().NumberU64()
 		height := curBlockHeight + 1
-		heightBI := big.NewInt(0).SetUint64(height)
-		ispatch := bc.Config().IsSelfRetrieveRewardPatch(heightBI, bc.CurrentBlock().Header().MainChainNumber)
-		if !ispatch {
+		//heightBI := big.NewInt(0).SetUint64(height)
+		//ispatch := bc.Config().IsSelfRetrieveRewardPatch(heightBI, bc.CurrentBlock().Header().MainChainNumber)
+		/*if !ispatch {
 			epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
 			currentEpochNumber := epoch.Number
 			noExtractMark := false
@@ -387,7 +387,6 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 		} else {
 
 			//extrRwd is after OutOfStorage feature, so need not check for IsOutOfStorage()
-			/*
 			rollbackCatchup := false
 			lastBlock, err := state.ReadOOSLastBlock();
 			if err == nil && heightBI.Cmp(lastBlock) <= 0 {
@@ -397,16 +396,17 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 			epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
 			currentEpochNumber := epoch.Number
-			noExtractMark := false
 			extractEpochNumber, err := state.GetEpochRewardExtracted(from, height)
-			if err != nil {
+			noExtractMark := false
+			if extractEpochNumber == 0 || err != nil {
 				noExtractMark = true
 			}
 			maxExtractEpochNumber := uint64(0)
 
 			rewards := state.GetAllEpochReward(from, height)
+			extractEpochNumber, noExtractMark, rewards = patchStep1(bc.Config().PChainId, height, from, currentEpochNumber, extractEpochNumber, noExtractMark, rewards)
 
-			log.Infof("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
+			log.Infof("extrRwd_ApplyCb from， currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", from, currentEpochNumber, noExtractMark, extractEpochNumber)
 			log.Infof("extrRwd_ApplyCb rewards is %v\n", rewards)
 
 			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
@@ -416,7 +416,7 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 					//if !rollbackCatchup {
 						state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
 					//} else {
-						state.SubRewardBalance(from, reward)
+					//	state.SubRewardBalance(from, reward)
 					//}
 					state.AddBalance(from, reward)
 
@@ -426,8 +426,9 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 					}
 				}
 			}
-		}
 
+			patchStep2(bc.Config().PChainId, height, from, state)
+		//}
 	}
 
 	return nil
@@ -612,4 +613,71 @@ func checkEpochInNormalStage(bc *core.BlockChain) error {
 		return errors.New(fmt.Sprintf("you can't send this tx during this time, current height %v", height))
 	}
 	return nil
+}
+
+
+type patchStruct struct {
+	chainId            string
+	blockNumber        uint64
+	from               common.Address
+	extractEpochNumber uint64
+	noExtractMark      bool
+	rewards            map[uint64]*big.Int
+}
+
+func (ps *patchStruct) reset(chainId string, blockNumber uint64, from common.Address) {
+	if chainId != ps.chainId || blockNumber != ps.blockNumber || from != ps.from {
+		ps.chainId = ""
+		ps.blockNumber = 0
+		ps.from = common.Address{}
+		ps.extractEpochNumber = 0
+		ps.noExtractMark = false
+		ps.rewards = make(map[uint64]*big.Int)
+	}
+}
+
+var patchData = patchStruct {
+	chainId: "",
+	blockNumber: 0,
+	extractEpochNumber: 0,
+	noExtractMark:      false,
+	rewards:            make(map[uint64]*big.Int),
+}
+
+func patchStep1(chainId string, blockNumber uint64, from common.Address, currentEpochNumber, extractEpochNumber uint64,
+	noExtractMark bool, rewards map[uint64]*big.Int) (uint64, bool, map[uint64]*big.Int) {
+
+	patchData.reset(chainId, blockNumber, from)
+
+	if (chainId == "pchain" && blockNumber == 13311677 && from == common.HexToAddress("0x8be8a44943861279377a693b51c0703420087480")) ||
+		(chainId == "child_0" && blockNumber == 22094435 && from == common.HexToAddress("0xf5005b496dff7b1ba3ca06294f8f146c9afbe09d")) {
+
+		if len(patchData.rewards) == 0 {
+			patchData.chainId = chainId
+			patchData.blockNumber = blockNumber
+			patchData.from = from
+			patchData.extractEpochNumber = extractEpochNumber
+			patchData.noExtractMark = noExtractMark
+			patchData.rewards = rewards
+		}
+		return patchData.extractEpochNumber, patchData.noExtractMark, patchData.rewards
+	}
+
+	return extractEpochNumber, noExtractMark, rewards
+}
+
+
+func patchStep2(chainId string, blockNumber uint64, from common.Address, state *state.StateDB) {
+
+	if (chainId == "pchain" && blockNumber == 13311677 && from == common.HexToAddress("0x8be8a44943861279377a693b51c0703420087480")) ||
+		(chainId == "child_0" && blockNumber == 22094435 && from == common.HexToAddress("0xf5005b496dff7b1ba3ca06294f8f146c9afbe09d")) {
+
+		state1Object := state.GetState1DB().GetOrNewState1Object(from)
+		for epoch, reward := range state1Object.EpochReward() {
+			if reward.Sign() < 0 {
+				reward = reward.Abs(reward)
+				state1Object.SetEpochRewardBalance(epoch, reward)
+			}
+		}
+	}
 }

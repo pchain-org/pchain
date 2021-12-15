@@ -139,7 +139,6 @@ func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, e
 	self.state1DB.SubOutsideRewardBalanceByEpochNumber(addr, epochNo, height, amount)
 }
 
-
 //func (self *StateDB) GetEpochReward(address common.Address, epoch uint64) *big.Int {
 //	return self.db.TrieDB().GetEpochReward(address, epoch)
 //}
@@ -150,12 +149,14 @@ func (self *StateDB) GetAllEpochReward(address common.Address, height uint64) ma
 	if len(result) != 0 {
 		return result
 	}
-
+	// TODO：here are some pi buried
+	/*
 	result = make(map[uint64]*big.Int)
 	self.ForEachReward(address, func(key uint64, rewardBalance *big.Int) bool {
 		result[key] = rewardBalance
 		return true
 	})
+	*/
 	return result
 }
 
@@ -186,11 +187,11 @@ func (self *StateDB) GetEpochRewardExtracted(address common.Address, height uint
 func (self *StateDB) GetEpochRewardExtractedFromDB(address common.Address, height uint64) (uint64, error) {
 	return self.state1DB.GetEpochRewardExtractedFromDB(address, height)
 }
-*/
+
 func (self *StateDB) WriteEpochRewardExtracted(address common.Address, epoch uint64, height uint64) error {
 	return self.state1DB.WriteEpochRewardExtracted(address, epoch, height)
 }
-/*
+
 //record candidate's last proposed block which brings reward
 func (self *StateDB) ReadOOSLastBlock() (*big.Int, error) {
 	return self.state1DB.ReadOOSLastBlock()

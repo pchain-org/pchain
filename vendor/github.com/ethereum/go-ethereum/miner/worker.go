@@ -716,10 +716,12 @@ func (w *worker) commitTransactionsEx(txs *types.TransactionsByPriceAndNonce, co
 
 func (w *worker) commitTransactionEx(tx *types.Transaction, coinbase common.Address, gp *core.GasPool, totalUsedMoney *big.Int, cch core.CrossChainHelper) ([]*types.Log, error) {
 	snap := w.current.state.Snapshot()
+	snap1 := w.current.state.GetState1DB().Snapshot()
 
 	receipt, _, err := core.ApplyTransactionEx(w.config, w.chain, nil, gp, w.current.state, w.current.ops, w.current.header, tx, &w.current.header.GasUsed, totalUsedMoney, vm.Config{}, cch, true)
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
+		w.current.state.GetState1DB().RevertToSnapshot(snap1)
 		return nil, err
 	}
 

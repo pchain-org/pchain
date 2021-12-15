@@ -1054,7 +1054,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	tdm := bc.Engine().(consensus.Tendermint)
 	curEpoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
 	withinEpochSwitchWindow := (curBlockNumber < curEpoch.StartBlock + FORCE_FULSH_WINDOW || curBlockNumber > curEpoch.EndBlock - FORCE_FULSH_WINDOW)
-	FLUSH_BLOCKS_INTERVAL := uint64(20000) //flush per this count to reduce catch-up effort/blocks when rollback occurs
+	FLUSH_BLOCKS_INTERVAL := uint64(5000) //flush per this count to reduce catch-up effort/blocks when rollback occurs
 	meetFlushBlockInterval := (curBlockNumber % FLUSH_BLOCKS_INTERVAL == 0)
 
 	// If we're running an archive node, always flush

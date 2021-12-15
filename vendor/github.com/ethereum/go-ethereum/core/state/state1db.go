@@ -400,7 +400,7 @@ func (self *State1DB) RevertToSnapshot(revid int) {
 func (self *State1DB) GetRefund() uint64 {
 	return self.refund
 }
-
+/*
 // Finalise finalises the state by removing the self destructed objects
 // and clears the journal as well as the refunds.
 func (s *State1DB) Finalise(deleteEmptyObjects bool) {
@@ -424,7 +424,7 @@ func (s *State1DB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	s.Finalise(deleteEmptyObjects)
 	return s.trie.Hash()
 }
-
+*/
 // Prepare sets the current transaction hash and index and block hash which is
 // used when the EVM emits new state logs.
 func (self *State1DB) Prepare(thash, bhash common.Hash, ti int) {
