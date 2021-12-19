@@ -406,7 +406,7 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 			rewards := state.GetAllEpochReward(from, height)
 			extractEpochNumber, noExtractMark, rewards = patchStep1(bc.Config().PChainId, height, from, currentEpochNumber, extractEpochNumber, noExtractMark, rewards)
 
-			log.Infof("extrRwd_ApplyCb from， currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", from, currentEpochNumber, noExtractMark, extractEpochNumber)
+			log.Infof("extrRwd_ApplyCb from， currentEpochNumber, noExtractMark, extractEpochNumber is %x, %v, %v, %v\n", from, currentEpochNumber, noExtractMark, extractEpochNumber)
 			log.Infof("extrRwd_ApplyCb rewards is %v\n", rewards)
 
 			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
@@ -427,7 +427,7 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 				}
 			}
 
-			patchStep2(bc.Config().PChainId, height, from, state)
+			patchStep2(bc.Config().PChainId, height, from, state, currentEpochNumber)
 		//}
 	}
 
@@ -651,7 +651,6 @@ func patchStep1(chainId string, blockNumber uint64, from common.Address, current
 
 	if (chainId == "pchain" && blockNumber == 13311677 && from == common.HexToAddress("0x8be8a44943861279377a693b51c0703420087480")) ||
 		(chainId == "child_0" && blockNumber == 22094435 && from == common.HexToAddress("0xf5005b496dff7b1ba3ca06294f8f146c9afbe09d")) {
-
 		if len(patchData.rewards) == 0 {
 			patchData.chainId = chainId
 			patchData.blockNumber = blockNumber
@@ -663,11 +662,40 @@ func patchStep1(chainId string, blockNumber uint64, from common.Address, current
 		return patchData.extractEpochNumber, patchData.noExtractMark, patchData.rewards
 	}
 
+	if chainId == "child_0" {
+
+		fixValue, _ := new(big.Int).SetString("5304766407447270", 10) //reward added in 26536499, delegation reward
+
+		if blockNumber == 26711228 && from == common.HexToAddress("0x33b28ce6d3316eba8115e22b3863a685d3d33eff") {
+			//TODO: very careful here, it seems like the modification of reward12 here can affect state1Object's inner value
+			//could dig it later
+			if fixReward, exist := rewards[12]; exist {
+				fixReward = fixReward.Sub(fixReward, fixValue)
+				rewards[12] = fixReward
+			}
+		}
+
+		if blockNumber == 29098794 && from == common.HexToAddress("0x498dfdb10d62b7fd061563773ef445aa8d57d696") {
+			//TODO: very careful here, it seems like the modification of reward12 here can affect state1Object's inner value
+			//could dig it later
+			for epoch := uint64(12); epoch <= 14; epoch++ {
+				if fixReward, exist := rewards[epoch]; exist {
+					fixReward = fixReward.Sub(fixReward, fixValue)
+					rewards[epoch] = fixReward
+				}
+			}
+
+
+		}
+		return extractEpochNumber, noExtractMark, rewards
+	}
+
+	log.Infof("patchStep1; height: %v, from: %", blockNumber, from)
 	return extractEpochNumber, noExtractMark, rewards
 }
 
 
-func patchStep2(chainId string, blockNumber uint64, from common.Address, state *state.StateDB) {
+func patchStep2(chainId string, blockNumber uint64, from common.Address, state *state.StateDB, currentEpochNumber uint64) {
 
 	if (chainId == "pchain" && blockNumber == 13311677 && from == common.HexToAddress("0x8be8a44943861279377a693b51c0703420087480")) ||
 		(chainId == "child_0" && blockNumber == 22094435 && from == common.HexToAddress("0xf5005b496dff7b1ba3ca06294f8f146c9afbe09d")) {
@@ -680,4 +708,10 @@ func patchStep2(chainId string, blockNumber uint64, from common.Address, state *
 			}
 		}
 	}
+	/*
+	if (chainId == "child_0" && blockNumber == 26711228 && from == common.HexToAddress("0x33b28ce6d3316eba8115e22b3863a685d3d33eff")) {
+		state1Object := state.GetState1DB().GetOrNewState1Object(from)
+		state1Object.SetEpochRewardBalance(12, big.NewInt(0))
+	}
+	*/
 }

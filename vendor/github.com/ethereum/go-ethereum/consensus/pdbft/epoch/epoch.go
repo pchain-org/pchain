@@ -352,9 +352,9 @@ func (epoch *Epoch) GetPreviousEpoch() *Epoch {
 func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *state.StateDB,
 			outsideReward, selfRetrieveReward bool) (bool, *tmTypes.ValidatorSet, error) {
 
-	log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
-
 	if height == epoch.EndBlock {
+		log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
+
 		epoch.nextEpoch = epoch.GetNextEpoch()
 		if epoch.nextEpoch != nil {
 
@@ -381,7 +381,11 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 					}
 				}
 			}
-
+			/*
+			inspectAddr := common.HexToAddress("0x33b28ce6d3316eba8115e22b3863a685d3d33eff")
+			insRewards := state.GetAllEpochReward(inspectAddr, height)
+			log.Infof("0x33b28ce6d3316eba8115e22b3863a685d3d33eff in h:%v rewards is %v\n", height, insRewards)
+			*/
 			// Step 1: Refund the Delegate (subtract the pending refund / deposit proxied amount)
 			for refundAddress := range state.GetDelegateAddressRefundSet() {
 				state.ForEachProxied(refundAddress, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {

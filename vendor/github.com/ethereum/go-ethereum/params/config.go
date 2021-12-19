@@ -53,6 +53,9 @@ var (
 
 	MainnetHeaderHashWithoutTimeBlock = big.NewInt(17160000)
 	TestnetHeaderHashWithoutTimeBlock = big.NewInt(40)
+
+	MainnetIstanbulBlock = big.NewInt(24195000)
+	TestnetIstanbulBlock = big.NewInt(40)
 )
 
 var (
@@ -70,7 +73,7 @@ var (
 		ByzantiumBlock:               big.NewInt(0), //let's start from 1 block
 		ConstantinopleBlock:          big.NewInt(0),
 		PetersburgBlock:              big.NewInt(0),
-		IstanbulBlock:                big.NewInt(0),
+		IstanbulBlock:                MainnetIstanbulBlock,
 		Child0HashTimeLockContract:   common.HexToAddress("0x18c496af47eb1c0946f64a25d3f589f71934bf3d"),
 		OutOfStorageBlock:            big.NewInt(5890000),
 		Child0OutOfStorageBlock:      big.NewInt(13930000),
@@ -581,20 +584,20 @@ type Rules struct {
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 }
 
-func (c *ChainConfig) Rules(num *big.Int) Rules {
+func (c *ChainConfig) Rules(mainchainNum *big.Int) Rules {
 	chainId := c.ChainId
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
 	return Rules{
 		ChainId:          new(big.Int).Set(chainId),
-		IsHomestead:      c.IsHomestead(num),
-		IsEIP150:         c.IsEIP150(num),
-		IsEIP155:         c.IsEIP155(num),
-		IsEIP158:         c.IsEIP158(num),
-		IsByzantium:      c.IsByzantium(num),
-		IsConstantinople: c.IsConstantinople(num),
-		IsPetersburg:     c.IsPetersburg(num),
-		IsIstanbul:       c.IsIstanbul(num),
+		IsHomestead:      c.IsHomestead(mainchainNum),
+		IsEIP150:         c.IsEIP150(mainchainNum),
+		IsEIP155:         c.IsEIP155(mainchainNum),
+		IsEIP158:         c.IsEIP158(mainchainNum),
+		IsByzantium:      c.IsByzantium(mainchainNum),
+		IsConstantinople: c.IsConstantinople(mainchainNum),
+		IsPetersburg:     c.IsPetersburg(mainchainNum),
+		IsIstanbul:       c.IsIstanbul(mainchainNum),
 	}
 }

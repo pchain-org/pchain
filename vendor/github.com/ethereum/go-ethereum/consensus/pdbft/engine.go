@@ -9,6 +9,7 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	//"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/hashicorp/golang-lru"
@@ -800,6 +801,14 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		}
 	}
 
+	/*
+	height := header.Number.Uint64()
+	inspectAddr := common.HexToAddress("0x33b28ce6d3316eba8115e22b3863a685d3d33eff")
+	if header.Coinbase == inspectAddr && height >= 24854000{
+		insRewards := state.GetAllEpochReward(inspectAddr, height)
+		log.Infof("in accumulateRewards, before allocate reward, 0x33b28ce6d3316eba8115e22b3863a685d3d33eff in h:%v rewards is %v\n", height, insRewards)
+	}
+	*/
 	outsideReward := config.IsOutOfStorage(header.Number, header.MainChainNumber)
 	/*
 	rollbackCatchup := false
@@ -827,6 +836,11 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 				divideRewardByEpoch(state, key, ep.Number, height,individualReward, outsideReward, selfRetrieveReward/*, rollbackCatchup*/)
 				totalIndividualReward.Add(totalIndividualReward, individualReward)
 			}
+			/*
+			if key == inspectAddr && height >= 24854000{
+				log.Infof("in accumulateRewards, 0x33b28ce6d3316eba8115e22b3863a685d3d33eff in h:%v delegated for %x\n", height, header.Coinbase)
+			}
+			*/
 			return true
 		})
 		// Recheck the Total Individual Reward, Float the difference
@@ -857,10 +871,24 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			}
 		}
 	}
+
+	/*
+	if header.Coinbase == inspectAddr && height >= 24854000{
+		insRewards := state.GetAllEpochReward(inspectAddr, height)
+		log.Infof("in accumulateRewards, after allocate reward, 0x33b28ce6d3316eba8115e22b3863a685d3d33eff in h:%v rewards is %v\n", height, insRewards)
+	}
+	*/
 }
 
 func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64,height uint64, reward *big.Int,
 						outsideReward, selfRetrieveReward/*, rollbackCatchup*/ bool) {
+	/*
+	inspectAddr := common.HexToAddress("0x33b28ce6d3316eba8115e22b3863a685d3d33eff")
+	if addr == inspectAddr && height >= 24854000 {
+		insRewards := state.GetAllEpochReward(inspectAddr, height)
+		log.Infof("in divideRewardByEpoch, before allocate reward, 0x33b28ce6d3316eba8115e22b3863a685d3d33eff in h:%v rewards is %v\n", height, insRewards)
+	}
+	*/
 	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
 	lastEpochReward := new(big.Int).Set(reward)
 	for i := epochNumber; i < epochNumber+12; i++ {
@@ -890,4 +918,10 @@ func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber 
 	if !selfRetrieveReward {
 		state.MarkAddressReward(addr)
 	}
+	/*
+	if addr == inspectAddr && height >= 24854000 {
+		insRewards := state.GetAllEpochReward(inspectAddr, height)
+		log.Infof("in divideRewardByEpoch, after allocate reward, 0x33b28ce6d3316eba8115e22b3863a685d3d33eff in h:%v rewards is %v\n", height, insRewards)
+	}
+	*/
 }

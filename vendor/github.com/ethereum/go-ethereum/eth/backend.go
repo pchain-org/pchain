@@ -133,6 +133,11 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		return nil, genesisErr
 	}
 
+	//directly support corresponding instruction set
+	chainConfig.ConstantinopleBlock = big.NewInt(0)
+	chainConfig.PetersburgBlock     = big.NewInt(0)
+	chainConfig.IstanbulBlock       = big.NewInt(0)
+
 	// Update HTLC Hard Fork and Contract if any one blank
 	switch ctx.ChainId() {
 	case "pchain":
@@ -145,6 +150,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig.ChildSd2mcWhenEpochEndsBlock  = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 		chainConfig.ValidateHTLCBlock             = params.MainnetChainConfig.ValidateHTLCBlock
 		chainConfig.HeaderHashWithoutTimeBlock    = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
+		chainConfig.IstanbulBlock                 = params.MainnetChainConfig.IstanbulBlock
 	case "testnet":
 		if chainConfig.OutOfStorageBlock == nil {
 			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
@@ -155,6 +161,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		chainConfig.ChildSd2mcWhenEpochEndsBlock  = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 		chainConfig.ValidateHTLCBlock             = params.TestnetChainConfig.ValidateHTLCBlock
 		chainConfig.HeaderHashWithoutTimeBlock    = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
+		chainConfig.IstanbulBlock                 = params.TestnetChainConfig.IstanbulBlock
 	case "child_0":
 		if (chainConfig.HashTimeLockContract == common.Address{}) {
 			if isTestnet {
@@ -171,6 +178,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock            = params.TestnetChainConfig.ValidateHTLCBlock
 			chainConfig.HeaderHashWithoutTimeBlock   = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
+			chainConfig.IstanbulBlock                = params.TestnetChainConfig.IstanbulBlock
 		} else {
 			chainConfig.OutOfStorageBlock            = params.MainnetChainConfig.Child0OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock       = params.MainnetChainConfig.ExtractRewardMainBlock
@@ -179,6 +187,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock            = params.MainnetChainConfig.ValidateHTLCBlock
 			chainConfig.HeaderHashWithoutTimeBlock   = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
+			chainConfig.IstanbulBlock                = params.MainnetChainConfig.IstanbulBlock
 		}
 	default:
 		if isTestnet {
@@ -189,6 +198,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock            = params.TestnetChainConfig.ValidateHTLCBlock
 			chainConfig.HeaderHashWithoutTimeBlock   = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
+			chainConfig.IstanbulBlock                = params.TestnetChainConfig.IstanbulBlock
 		} else {
 			chainConfig.OutOfStorageBlock            = params.MainnetChainConfig.OutOfStorageBlock
 			chainConfig.ExtractRewardMainBlock       = params.MainnetChainConfig.ExtractRewardMainBlock
@@ -197,13 +207,9 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
 			chainConfig.ValidateHTLCBlock            = params.MainnetChainConfig.ValidateHTLCBlock
 			chainConfig.HeaderHashWithoutTimeBlock   = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
+			chainConfig.IstanbulBlock                = params.MainnetChainConfig.IstanbulBlock
 		}
 	}
-
-	//directly support corresponding instruction set
-	chainConfig.ConstantinopleBlock = big.NewInt(0)
-	chainConfig.PetersburgBlock     = big.NewInt(0)
-	chainConfig.IstanbulBlock       = big.NewInt(0)
 
 	chainConfig.ChainLogger = logger
 	logger.Info("Initialised chain configuration", "config", chainConfig)
