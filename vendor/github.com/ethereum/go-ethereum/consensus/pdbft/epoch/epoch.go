@@ -363,9 +363,14 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 				currentEpochNumber := epoch.Number
 				for rewardAddress := range state.GetRewardSet() {
 					if outsideReward {
+						trace498d := pchainId == "child_0" && rewardAddress == common.HexToAddress("0x498dfdb10d62b7fd061563773ef445aa8d57d696")
 						currentEpochReward := state.GetOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber,height)
 						if currentEpochReward.Sign() == 1 {
 							state.SubOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, height,currentEpochReward)
+							if trace498d {
+								log.Infof("0x498dfdb10d62b7fd061563773ef445aa8d57d696 add %v reward to %v",
+									rewardAddress, state.GetState1DB().GetOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, height))
+							}
 							state.AddBalance(rewardAddress, currentEpochReward)
 						}
 					} else {

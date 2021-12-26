@@ -142,9 +142,8 @@ func (self *State1DB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, 
 		}
 	}
 	*/
-	stateObject.SetEpochRewardBalance(epochNo, newReward)
 
-	self.stateDB.AddRewardBalance(addr, amount)
+	stateObject.SetEpochRewardBalance(epochNo, newReward)
 }
 
 func (self *State1DB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
@@ -171,8 +170,6 @@ func (self *State1DB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, 
 	}
 	*/
 	stateObject.SetEpochRewardBalance(epochNo, newReward)
-	
-	self.stateDB.SubRewardBalance(addr, amount)
 }
 
 //func (self *StateDB) GetEpochReward(address common.Address, epoch uint64) *big.Int {
