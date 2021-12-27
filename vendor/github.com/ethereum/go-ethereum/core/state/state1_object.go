@@ -38,10 +38,6 @@ type state1Object struct {
 	// during a database read is memoized here and will eventually be returned
 	// by StateDB.Commit.
 	dbErr error
-
-	//rewardTrie   Trie   // Reward Trie, store the pending reward balance for this account
-	//originReward Reward // cache data of Reward trie
-	//dirtyReward  Reward // dirty data of Reward trie, need to be flushed to disk later
 	
 	// Cache flags.
 	// When an object is marked suicided it will be delete from the trie
@@ -150,7 +146,7 @@ func (self *state1Object) markSuicided() {
 }
 
 func (c *state1Object) touch() {
-	c.db.journal = append(c.db.journal, touchState1Change{
+	c.db.journal = append(c.db.journal, state1TouchChange{
 		account:   &c.address,
 		prev:      c.touched,
 		prevDirty: c.onDirty == nil,
@@ -168,7 +164,7 @@ func (c *state1Object) Address() common.Address {
 }
 
 func (self *state1Object) SetEpochReward(epochReward map[uint64]*big.Int) {
-	self.db.journal = append(self.db.journal, epochRewardState1Change{
+	self.db.journal = append(self.db.journal, state1EpochRewardChange{
 		account: &self.address,
 		prev:    self.data.EpochReward,
 	})
@@ -184,7 +180,7 @@ func (self *state1Object) setEpochReward(epochReward map[uint64]*big.Int) {
 }
 
 func (self *state1Object) SetExtractNumber(extractNumber uint64) {
-	self.db.journal = append(self.db.journal, extractNumberState1Change{
+	self.db.journal = append(self.db.journal, state1ExtractNumberChange{
 		account: &self.address,
 		prev:    self.data.ExtractNumber,
 	})
@@ -211,16 +207,16 @@ func (self *state1Object) ExtractNumber() uint64 {
 	return self.data.ExtractNumber
 }
 
-// Never called, but must be present to allow stateObject to be used
+// Never called, but must be present to allow state1Object to be used
 // as a vm.Account interface that also satisfies the vm.ContractRef
 // interface. Interfaces are awesome.
 func (self *state1Object) Value() *big.Int {
-	panic("Value on stateObject should never be called")
+	panic("Value on state1Object should never be called")
 }
 
 func (self *state1Object) deepCopy(db *State1DB, onDirty func(addr common.Address)) *state1Object {
-	stateObject := newState1Object(db, self.address, self.data, onDirty)
-	stateObject.suicided = self.suicided
-	stateObject.deleted = self.deleted
-	return stateObject
+	state1Object := newState1Object(db, self.address, self.data, onDirty)
+	state1Object.suicided = self.suicided
+	state1Object.deleted = self.deleted
+	return state1Object
 }

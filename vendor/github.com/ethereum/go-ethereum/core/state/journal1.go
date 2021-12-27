@@ -44,23 +44,23 @@ type (
 		prevExtractNumber uint64
 	}
 
-	addState1LogChange struct {
+	state1AddLogChange struct {
 		txhash common.Hash
 	}
-	
-	epochRewardState1Change struct {
+
+	state1EpochRewardChange struct {
 		account  *common.Address
 		prev     map[uint64]*big.Int
 	}
 
-	extractNumberState1Change struct {
+	state1ExtractNumberChange struct {
 		account *common.Address
 		prev    uint64
 	}
-	addState1PreimageChange struct {
+	state1AddPreimageChange struct {
 		hash common.Hash
 	}
-	touchState1Change struct {
+	state1TouchChange struct {
 		account   *common.Address
 		prev      bool
 		prevDirty bool
@@ -76,11 +76,11 @@ func (ch resetState1ObjectChange) undo(s *State1DB) {
 	s.setState1Object(ch.prev)
 }
 
-func (ch epochRewardState1Change) undo(s *State1DB) {
+func (ch state1EpochRewardChange) undo(s *State1DB) {
 	s.getState1Object(*ch.account).setEpochReward(ch.prev)
 }
 
-func (ch extractNumberState1Change) undo(s *State1DB) {
+func (ch state1ExtractNumberChange) undo(s *State1DB) {
 	s.getState1Object(*ch.account).setExtractNumber(ch.prev)
 }
 
@@ -93,7 +93,7 @@ func (ch suicideState1ObjectChange) undo(s *State1DB) {
 	}
 }
 
-func (ch addState1LogChange) undo(s *State1DB) {
+func (ch state1AddLogChange) undo(s *State1DB) {
 	logs := s.logs[ch.txhash]
 	if len(logs) == 1 {
 		delete(s.logs, ch.txhash)
@@ -103,11 +103,11 @@ func (ch addState1LogChange) undo(s *State1DB) {
 	s.logSize--
 }
 
-func (ch addState1PreimageChange) undo(s *State1DB) {
+func (ch state1AddPreimageChange) undo(s *State1DB) {
 	delete(s.preimages, ch.hash)
 }
 
-func (ch touchState1Change) undo(s *State1DB) {
+func (ch state1TouchChange) undo(s *State1DB) {
 	if !ch.prev && *ch.account != ripemd {
 		s.getState1Object(*ch.account).touched = ch.prev
 		if !ch.prevDirty {

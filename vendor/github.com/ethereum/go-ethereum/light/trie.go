@@ -31,7 +31,6 @@ import (
 )
 
 func NewState(ctx context.Context, head *types.Header, odr OdrBackend) *state.StateDB {
-	//state, _ := state.New(head.Root, NewStateDatabase(ctx, head, odr))
 	root := head.Root
 	root1 := rawdb.ReadRoot1(odr.Database(), head.Hash(), head.Number.Uint64())
 	state, _ := state.NewFromRoots(root, root1, NewStateDatabase(ctx, head, odr))

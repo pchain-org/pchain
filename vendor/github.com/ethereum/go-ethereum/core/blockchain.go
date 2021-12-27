@@ -190,7 +190,6 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	if err := bc.loadLastState(); err != nil {
 		return nil, err
 	}
-
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
 	for hash := range BadHashes {
 		if header := bc.GetHeaderByHash(hash); header != nil {
@@ -231,7 +230,6 @@ func (bc *BlockChain) loadLastState() error {
 		return bc.Reset()
 	}
 	// Make sure the state associated with the block is available
-	//if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
 	root, root1 := bc.GetRoots(currentBlock.Header())
 	if _, err := state.NewFromRoots(root, root1, bc.stateCache); err != nil {
 		// Dangling block without a state associated, init from scratch
@@ -307,7 +305,6 @@ func (bc *BlockChain) SetHead(head uint64) error {
 		bc.currentBlock.Store(bc.GetBlock(currentHeader.Hash(), currentHeader.Number.Uint64()))
 	}
 	if currentBlock := bc.CurrentBlock(); currentBlock != nil {
-		//if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
 		root, root1 := bc.GetRoots(currentBlock.Header())
 		if _, err := state.NewFromRoots(root, root1, bc.stateCache); err != nil {
 			// Rewound state missing, rolled back to before pivot, reset to genesis
@@ -383,13 +380,12 @@ func (bc *BlockChain) Processor() Processor {
 
 // State returns a new mutable state based on the current HEAD block.
 func (bc *BlockChain) State() (*state.StateDB, error) {
-	//return bc.StateAt(bc.CurrentBlock().Root())
 	return bc.StateAtHeader(bc.CurrentBlock().Header())
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
-func (bc *BlockChain) StateAt___(root common.Hash) (*state.StateDB, error) {
-	return state.New___(root, bc.stateCache)
+func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
+	return state.New(root, bc.stateCache)
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
@@ -443,7 +439,6 @@ func (bc *BlockChain) ResetWithGenesisBlock(genesis *types.Block) error {
 func (bc *BlockChain) repair(head **types.Block) error {
 	for {
 		// Abort if we've rewound to a head block that does have associated state
-		//if _, err := state.New((*head).Root(), bc.stateCache); err == nil {
 		root, root1 := bc.GetRoots((*head).Header())
 		if _, err := state.NewFromRoots(root, root1, bc.stateCache); err == nil {
 			bc.logger.Info("Rewound blockchain to past state", "number", (*head).Number(), "hash", (*head).Hash())
@@ -691,7 +686,6 @@ func (bc *BlockChain) ValidateBlock(block *types.Block) (*state.StateDB, types.R
 
 	var parent *types.Block
 	parent = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
-	//state, err := state.New(parent.Root(), bc.stateCache)
 	root, root1 := bc.GetRoots(parent.Header())
 	state, err := state.NewFromRoots(root, root1, bc.stateCache)
 	if err != nil {
@@ -1004,39 +998,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	rawdb.WriteBlock(bc.db, block)
 
-	// reward outside
-	/*
-	rewardOutside := bc.chainConfig.IsOutOfStorage(block.Number(), block.Header().MainChainNumber)
-	if rewardOutside {
-		outsideReward := state.GetOutsideReward()
-		for addr, reward := range outsideReward {
-			for epoch, rewardAmount := range reward {
-				if rewardAmount.Sign() < 0 && ((bc.chainConfig.PChainId== "pchain" && block.NumberU64() == 13311677) || (bc.chainConfig.PChainId=="child_0" && block.NumberU64()==22094435))  {
-					log.Errorf("!!!should dig it, rewardAmount for %x is %v", addr, rewardAmount)
-					rewardAmount = rewardAmount.Abs(rewardAmount)
-				}
-				rawdb.WriteReward(bc.db, addr, epoch, block.NumberU64(), rewardAmount)
-			}
-		}
-		state.ClearOutsideReward()
-
-		prevLastBlock, err := state.ReadOOSLastBlock()
-		if err != nil || prevLastBlock.Cmp(block.Number()) < 0 {
-			state.WriteOOSLastBlock(block.Number())
-		}
-	}
-
-	tdm := bc.Engine().(consensus.Tendermint)
-	selfRetrieveReward := consensus.IsSelfRetrieveReward(tdm.GetEpoch(), bc, block.Header())
-	if selfRetrieveReward {
-		extractRewardSet := state.GetExtractRewardSet()
-		for addr, epoch := range extractRewardSet {
-			state.WriteEpochRewardExtracted(addr, epoch, block.NumberU64())
-
-		}
-		state.ClearExtractRewardSet()
-	}
-	*/
 
 	root1, err := state.GetState1DB().Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err := bc.hc.WriteRoot1(block.Hash(), block.NumberU64(), root1); err != nil {
@@ -1177,14 +1138,6 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 //
 // After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
-	/*
-	if bc.chainConfig.PChainId == "pchain" && bc.CurrentBlock().NumberU64() >= 18000000{
-		for ; true; {
-			log.Infof("now not syn main chain to save disk for debug")
-			time.Sleep(time.Second)
-		}
-	}
-	*/
 	// Sanity check that we have something meaningful to import
 	if len(chain) == 0 {
 		return 0, nil
@@ -1329,7 +1282,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
 		
-		//statedb, err := state.New(parent.Root, bc.stateCache)
 		root, root1 := bc.GetRoots(parent)
 		statedb, err := state.NewFromRoots(root, root1, bc.stateCache)
 		if err != nil {

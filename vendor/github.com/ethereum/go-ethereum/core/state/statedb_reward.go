@@ -111,26 +111,13 @@ func (db *StateDB) ForEachReward(addr common.Address, cb func(key uint64, reward
 		cb(key, &value)
 	}
 }
-/*
-//outside reward, supported by state1DB
-func (self *StateDB) GetOutsideReward() map[common.Address]Reward {
-	return self.state1DB.GetOutsideReward()
-}
 
-func (self *StateDB) ClearOutsideReward() {
-	self.state1DB.ClearOutsideReward()
-}
-*/
 //if there is a cache in memory, then return it; or return the lastest value from older block(height-1)
 func (self *StateDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64) *big.Int {
 	return self.state1DB.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height)
 }
-/*
-//get value from db directly; this will ignore current runtime-context
-func (self *StateDB) GetOutsideRewardBalanceByEpochNumberFromDB(addr common.Address, epochNo uint64, height uint64) *big.Int {
-	return self.state1DB.GetOutsideRewardBalanceByEpochNumberFromDB(addr, epochNo, height)
-}
-*/
+
+
 func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
 	self.state1DB.AddOutsideRewardBalanceByEpochNumber(addr, epochNo, height, amount)
 	self.AddRewardBalance(addr, amount)
@@ -162,20 +149,6 @@ func (self *StateDB) GetAllEpochReward(address common.Address, height uint64) ma
 	return result
 }
 
-/*
-//get value from db directly; this will ignore current runtime-context
-func (self *StateDB) GetAllEpochRewardFromDB(address common.Address, height uint64) map[uint64]*big.Int {
-	return self.state1DB.GetAllEpochRewardFromDB(address, height)
-}
-
-func (self *StateDB) GetExtractRewardSet() map[common.Address]uint64 {
-	return self.state1DB.GetExtractRewardSet()
-}
-
-func (self *StateDB) ClearExtractRewardSet() {
-	self.state1DB.ClearExtractRewardSet()
-}
-*/
 func (self *StateDB) SetEpochRewardExtracted(address common.Address, epoch uint64) {
 	self.state1DB.SetEpochRewardExtracted(address, epoch)
 }
@@ -184,25 +157,7 @@ func (self *StateDB) SetEpochRewardExtracted(address common.Address, epoch uint6
 func (self *StateDB) GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error) {
 	return self.state1DB.GetEpochRewardExtracted(address, height)
 }
-/*
-//get value from db directly; this will ignore current runtime-context
-func (self *StateDB) GetEpochRewardExtractedFromDB(address common.Address, height uint64) (uint64, error) {
-	return self.state1DB.GetEpochRewardExtractedFromDB(address, height)
-}
 
-func (self *StateDB) WriteEpochRewardExtracted(address common.Address, epoch uint64, height uint64) error {
-	return self.state1DB.WriteEpochRewardExtracted(address, epoch, height)
-}
-
-//record candidate's last proposed block which brings reward
-func (self *StateDB) ReadOOSLastBlock() (*big.Int, error) {
-	return self.state1DB.ReadOOSLastBlock()
-}
-
-func (self *StateDB) WriteOOSLastBlock(blockNumber *big.Int) error {
-	return self.state1DB.WriteOOSLastBlock(blockNumber)
-}
-*/
 // ----- Reward Set
 
 // MarkAddressReward adds the specified object to the dirty map to avoid

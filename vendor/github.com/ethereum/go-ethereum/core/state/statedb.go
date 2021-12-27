@@ -96,12 +96,12 @@ type StateDB struct {
 }
 
 // Create a new state from a given trie
-func New___(root common.Hash, db Database) (*StateDB, error) {
+func New(root common.Hash, db Database) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &StateDB{
 		db:                            db,
 		trie:                          tr,
@@ -759,8 +759,6 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 
 	// Invalidate journal because reverting across transactions is not allowed.
 	s.clearJournalAndRefund()
-	
-	//s.state1DB.Finalise(deleteEmptyObjects)
 }
 
 // IntermediateRoot computes the current root hash of the state trie.

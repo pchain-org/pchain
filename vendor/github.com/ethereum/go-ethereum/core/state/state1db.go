@@ -44,16 +44,6 @@ type State1DB struct {
 	state1Objects      map[common.Address]*state1Object
 	state1ObjectsDirty map[common.Address]struct{}
 
-	// Cache of Reward Set
-	//rewardSet          RewardSet
-	//rewardSetDirty     bool
-	
-	//rewardOutsideSet map[common.Address]Reward //cache rewards of candidate&delegators for recording in diskdb
-	//extractRewardSet map[common.Address]uint64 //cache rewards of different epochs when delegator does extract
-
-	//if there is rollback, the rewards stored in diskdb for 'out-of-storage' feature should not be added again
-	//remember the last block consistent with out-of-storage recording
-	//oosLastBlock  *big.Int
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -61,9 +51,6 @@ type State1DB struct {
 	// during a database read is memoized here and will eventually be returned
 	// by StateDB.Commit.
 	dbErr error
-
-	// The refund counter, also used by state transitioning.
-	refund uint64
 
 	thash, bhash common.Hash
 	txIndex      int
@@ -136,7 +123,7 @@ func (self *State1DB) Reset(root common.Hash) error {
 }
 
 func (self *State1DB) AddLog(log *types.Log) {
-	self.journal = append(self.journal, addState1LogChange{txhash: self.thash})
+	self.journal = append(self.journal, state1AddLogChange{txhash: self.thash})
 
 	log.TxHash = self.thash
 	log.BlockHash = self.bhash
@@ -161,7 +148,7 @@ func (self *State1DB) Logs() []*types.Log {
 // AddPreimage records a SHA3 preimage seen by the VM.
 func (self *State1DB) AddPreimage(hash common.Hash, preimage []byte) {
 	if _, ok := self.preimages[hash]; !ok {
-		self.journal = append(self.journal, addState1PreimageChange{hash: hash})
+		self.journal = append(self.journal, state1AddPreimageChange{hash: hash})
 		pi := make([]byte, len(preimage))
 		copy(pi, preimage)
 		self.preimages[hash] = pi
@@ -211,9 +198,9 @@ func (self *State1DB) HasSuicided(addr common.Address) bool {
 }
 
 func (self *State1DB) SetEpochRewardExtracted(addr common.Address, extractNumber uint64) {
-	stateObject := self.GetOrNewState1Object(addr)
-	if stateObject != nil {
-		stateObject.SetExtractNumber(extractNumber)
+	state1Object := self.GetOrNewState1Object(addr)
+	if state1Object != nil {
+		state1Object.SetExtractNumber(extractNumber)
 	}
 }
 
@@ -221,21 +208,21 @@ func (self *State1DB) SetEpochRewardExtracted(addr common.Address, extractNumber
 // This clears the account balance.
 //
 // The account's state object is still available until the state is committed,
-// getStateObject will return a non-nil account after Suicide.
+// getState1Object will return a non-nil account after Suicide.
 func (self *State1DB) Suicide(addr common.Address) bool {
-	stateObject := self.getState1Object(addr)
-	if stateObject == nil {
+	state1Object := self.getState1Object(addr)
+	if state1Object == nil {
 		return false
 	}
 	self.journal = append(self.journal, suicideState1ObjectChange{
 		account:     &addr,
-		prev:        stateObject.suicided,
-		prevEpochReward:   stateObject.EpochReward(),
-		prevExtractNumber: stateObject.ExtractNumber(),
+		prev:        state1Object.suicided,
+		prevEpochReward:   state1Object.EpochReward(),
+		prevExtractNumber: state1Object.ExtractNumber(),
 	})
-	stateObject.markSuicided()
-	stateObject.data.EpochReward = make(map[uint64]*big.Int)
-	stateObject.data.ExtractNumber = 0
+	state1Object.markSuicided()
+	state1Object.data.EpochReward = make(map[uint64]*big.Int)
+	state1Object.data.ExtractNumber = 0
 	return true
 }
 
@@ -243,25 +230,25 @@ func (self *State1DB) Suicide(addr common.Address) bool {
 // Setting, updating & deleting state object methods
 //
 
-// updateStateObject writes the given object to the trie.
-func (self *State1DB) updateState1Object(stateObject *state1Object) {
-	addr := stateObject.Address()
-	data, err := rlp.EncodeToBytes(stateObject)
+// updateState1Object writes the given object to the trie.
+func (self *State1DB) updateState1Object(state1Object *state1Object) {
+	addr := state1Object.Address()
+	data, err := rlp.EncodeToBytes(state1Object)
 	if err != nil {
 		panic(fmt.Errorf("can't encode object at %x: %v", addr[:], err))
 	}
 	self.setError(self.trie.TryUpdate(addr[:], data))
 }
 
-// deleteStateObject removes the given object from the state trie.
-func (self *State1DB) deleteState1Object(stateObject *state1Object) {
-	stateObject.deleted = true
-	addr := stateObject.Address()
+// deleteState1Object removes the given object from the state trie.
+func (self *State1DB) deleteState1Object(state1Object *state1Object) {
+	state1Object.deleted = true
+	addr := state1Object.Address()
 	self.setError(self.trie.TryDelete(addr[:]))
 }
 
-// Retrieve a state object given my the address. Returns nil if not found.
-func (self *State1DB) getState1Object(addr common.Address) (stateObject *state1Object) {
+// Retrieve a state1 object given my the address. Returns nil if not found.
+func (self *State1DB) getState1Object(addr common.Address)  *state1Object {
 	// Prefer 'live' objects.
 	if obj := self.state1Objects[addr]; obj != nil {
 		if obj.deleted {
@@ -300,7 +287,7 @@ func (self *State1DB) GetOrNewState1Object(addr common.Address) *state1Object {
 	return state1Object
 }
 
-// MarkStateObjectDirty adds the specified object to the dirty map to avoid costly
+// MarkState1ObjectDirty adds the specified object to the dirty map to avoid costly
 // state object cache iteration to find a handful of modified ones.
 func (self *State1DB) MarkState1ObjectDirty(addr common.Address) {
 	self.state1ObjectsDirty[addr] = struct{}{}
@@ -347,7 +334,6 @@ func (self *State1DB) Copy() *State1DB {
 		trie:                          self.db.CopyTrie(self.trie),
 		state1Objects:                 make(map[common.Address]*state1Object, len(self.state1ObjectsDirty)),
 		state1ObjectsDirty:            make(map[common.Address]struct{}, len(self.state1ObjectsDirty)),
-		refund:                        self.refund,
 		logs:                          make(map[common.Hash][]*types.Log, len(self.logs)),
 		logSize:                       self.logSize,
 		preimages:                     make(map[common.Hash][]byte, len(self.preimages)),
@@ -396,20 +382,16 @@ func (self *State1DB) RevertToSnapshot(revid int) {
 	self.validRevisions = self.validRevisions[:idx]
 }
 
-// GetRefund returns the current value of the refund counter.
-func (self *State1DB) GetRefund() uint64 {
-	return self.refund
-}
 /*
 // Finalise finalises the state by removing the self destructed objects
 // and clears the journal as well as the refunds.
 func (s *State1DB) Finalise(deleteEmptyObjects bool) {
 	for addr := range s.state1ObjectsDirty {
-		stateObject := s.state1Objects[addr]
-		if stateObject.suicided || (deleteEmptyObjects && stateObject.empty()) {
-			s.deleteState1Object(stateObject)
+		state1Object := s.state1Objects[addr]
+		if state1Object.suicided || (deleteEmptyObjects && state1Object.empty()) {
+			s.deleteState1Object(state1Object)
 		} else {
-			s.updateState1Object(stateObject)
+			s.updateState1Object(state1Object)
 		}
 	}
 
@@ -443,12 +425,12 @@ func (s *State1DB) DeleteSuicides() {
 	s.clearJournalAndRefund()
 
 	for addr := range s.state1ObjectsDirty {
-		stateObject := s.state1Objects[addr]
+		state1Object := s.state1Objects[addr]
 
 		// If the object has been removed by a suicide
 		// flag the object as deleted.
-		if stateObject.suicided {
-			stateObject.deleted = true
+		if state1Object.suicided {
+			state1Object.deleted = true
 		}
 		delete(s.state1ObjectsDirty, addr)
 	}
@@ -457,7 +439,6 @@ func (s *State1DB) DeleteSuicides() {
 func (s *State1DB) clearJournalAndRefund() {
 	s.journal = nil
 	s.validRevisions = s.validRevisions[:0]
-	s.refund = 0
 }
 
 // Commit writes the state to the underlying in-memory trie database.
@@ -465,15 +446,15 @@ func (s *State1DB) Commit(deleteEmptyObjects bool) (root common.Hash, err error)
 	defer s.clearJournalAndRefund()
 
 	// Commit objects to the trie.
-	for addr, stateObject := range s.state1Objects {
+	for addr, state1Object := range s.state1Objects {
 		_, isDirty := s.state1ObjectsDirty[addr]
 		switch {
-		case stateObject.suicided || (isDirty && deleteEmptyObjects && stateObject.empty()):
+		case state1Object.suicided || (isDirty && deleteEmptyObjects && state1Object.empty()):
 			// If the object has been removed, don't bother syncing it
 			// and just mark it for deletion in the trie.
-			s.deleteState1Object(stateObject)
+			s.deleteState1Object(state1Object)
 		case isDirty:
-			s.updateState1Object(stateObject)
+			s.updateState1Object(state1Object)
 		}
 		delete(s.state1ObjectsDirty, addr)
 	}

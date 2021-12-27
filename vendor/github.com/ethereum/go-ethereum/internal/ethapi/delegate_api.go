@@ -189,9 +189,6 @@ func del_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockC
 func del_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
-	if bc.Config().PChainId == "child_0" && from == common.HexToAddress("0x498dfdb10d62b7fd061563773ef445aa8d57d696") {
-		log.Info("delegate from 0x498dfdb10d62b7fd061563773ef445aa8d57d696")
-	}
 	args, verror := delegateValidation(from, tx, state, bc)
 	if verror != nil {
 		return verror
@@ -199,9 +196,6 @@ func del_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChai
 
 	// Do job
 	amount := tx.Value()
-	if bc.Config().PChainId == "child_0" && from == common.HexToAddress("0x498dfdb10d62b7fd061563773ef445aa8d57d696") {
-		log.Infof("delegate from 0x498dfdb10d62b7fd061563773ef445aa8d57d696 to %x with amount: %v", args.Candidate, amount)
-	}
 	// Move Balance to delegate balance
 	state.SubBalance(from, amount)
 	state.AddDelegateBalance(from, amount)
@@ -359,88 +353,35 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 		curBlockHeight := bc.CurrentBlock().NumberU64()
 		height := curBlockHeight + 1
-		//heightBI := big.NewInt(0).SetUint64(height)
-		//ispatch := bc.Config().IsSelfRetrieveRewardPatch(heightBI, bc.CurrentBlock().Header().MainChainNumber)
-		/*if !ispatch {
-			epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
-			currentEpochNumber := epoch.Number
-			noExtractMark := false
-			//extractEpochNumber, err := state.GetEpochRewardExtractedFromDB(from, curBlockHeight)
-			extractEpochNumber, err := state.GetEpochRewardExtracted(from, curBlockHeight)
-			if err != nil {
-				noExtractMark = true
-			}
-			maxExtractEpochNumber := uint64(0)
+		epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
+		currentEpochNumber := epoch.Number
+		extractEpochNumber, err := state.GetEpochRewardExtracted(from, height)
+		noExtractMark := false
+		if extractEpochNumber == 0 || err != nil {
+			noExtractMark = true
+		}
+		maxExtractEpochNumber := uint64(0)
 
-			//rewards := state.GetAllEpochRewardFromDB(from, curBlockHeight)
-			rewards := state.GetAllEpochReward(from, curBlockHeight)
+		rewards := state.GetAllEpochReward(from, height)		
+		extractEpochNumber, noExtractMark, rewards = patchStep1(bc.Config().PChainId, height, from, currentEpochNumber, extractEpochNumber, noExtractMark, rewards)
+		log.Debugf("extrRwd_ApplyCb from， currentEpochNumber, noExtractMark, extractEpochNumber is %x, %v, %v, %v\n", from, currentEpochNumber, noExtractMark, extractEpochNumber)
+		log.Debugf("extrRwd_ApplyCb after patchStep1, rewards is %v\n", rewards)
 
-			log.Infof("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
-			log.Infof("extrRwd_ApplyCb rewards is %v\n", rewards)
+		//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
+		for epNumber, reward := range rewards{
+			if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
 
-			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
-			for epNumber, reward := range rewards{
-				if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
-					state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
-					state.AddBalance(from, reward)
+				state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
+				state.AddBalance(from, reward)
 
-					if maxExtractEpochNumber < epNumber {
-						maxExtractEpochNumber = epNumber
-						state.SetEpochRewardExtracted(from, maxExtractEpochNumber)
-					}
+				if maxExtractEpochNumber < epNumber {
+					maxExtractEpochNumber = epNumber
+					state.SetEpochRewardExtracted(from, maxExtractEpochNumber)
 				}
 			}
-		} else {
+		}
 
-			//extrRwd is after OutOfStorage feature, so need not check for IsOutOfStorage()
-			rollbackCatchup := false
-			lastBlock, err := state.ReadOOSLastBlock();
-			if err == nil && heightBI.Cmp(lastBlock) <= 0 {
-				rollbackCatchup = true
-			}
-			*/
-
-			epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
-			currentEpochNumber := epoch.Number
-			extractEpochNumber, err := state.GetEpochRewardExtracted(from, height)
-			noExtractMark := false
-			if extractEpochNumber == 0 || err != nil {
-				noExtractMark = true
-			}
-			maxExtractEpochNumber := uint64(0)
-
-			log.Infof("extrRwd_ApplyCb from， currentEpochNumber, noExtractMark, extractEpochNumber is %x, %v, %v, %v\n", from, currentEpochNumber, noExtractMark, extractEpochNumber)
-
-			rewards := state.GetAllEpochReward(from, height)
-			log.Infof("extrRwd_ApplyCb before patchStep1, rewards is %v\n", rewards)
-			extractEpochNumber, noExtractMark, rewards = patchStep1(bc.Config().PChainId, height, from, currentEpochNumber, extractEpochNumber, noExtractMark, rewards)
-			log.Infof("extrRwd_ApplyCb after patchStep1, rewards is %v\n", rewards)
-			trace498d := bc.Config().PChainId == "child_0" && from == common.HexToAddress("0x498dfdb10d62b7fd061563773ef445aa8d57d696")
-
-			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
-			for epNumber, reward := range rewards{
-				if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
-
-					//if !rollbackCatchup {
-						state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
-						if trace498d {
-							log.Infof("0x498dfdb10d62b7fd061563773ef445aa8d57d696 sub %v reward to %v",
-								reward, state.GetState1DB().GetOutsideRewardBalanceByEpochNumber(from, epNumber, height))
-						}
-					//} else {
-					//	state.SubRewardBalance(from, reward)
-					//}
-					state.AddBalance(from, reward)
-
-					if maxExtractEpochNumber < epNumber {
-						maxExtractEpochNumber = epNumber
-						state.SetEpochRewardExtracted(from, maxExtractEpochNumber)
-					}
-				}
-			}
-
-			patchStep2(bc.Config().PChainId, height, from, state, currentEpochNumber)
-		//}
+		patchStep2(bc.Config().PChainId, height, from, state, currentEpochNumber)
 	}
 
 	return nil

@@ -363,14 +363,9 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 				currentEpochNumber := epoch.Number
 				for rewardAddress := range state.GetRewardSet() {
 					if outsideReward {
-						trace498d := pchainId == "child_0" && rewardAddress == common.HexToAddress("0x498dfdb10d62b7fd061563773ef445aa8d57d696")
 						currentEpochReward := state.GetOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber,height)
 						if currentEpochReward.Sign() == 1 {
 							state.SubOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, height,currentEpochReward)
-							if trace498d {
-								log.Infof("0x498dfdb10d62b7fd061563773ef445aa8d57d696 add %v reward to %v",
-									rewardAddress, state.GetState1DB().GetOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, height))
-							}
 							state.AddBalance(rewardAddress, currentEpochReward)
 						}
 					} else {
@@ -386,11 +381,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 					}
 				}
 			}
-			/*
-			inspectAddr := common.HexToAddress("0x33b28ce6d3316eba8115e22b3863a685d3d33eff")
-			insRewards := state.GetAllEpochReward(inspectAddr, height)
-			log.Infof("0x33b28ce6d3316eba8115e22b3863a685d3d33eff in h:%v rewards is %v\n", height, insRewards)
-			*/
+
 			// Step 1: Refund the Delegate (subtract the pending refund / deposit proxied amount)
 			for refundAddress := range state.GetDelegateAddressRefundSet() {
 				state.ForEachProxied(refundAddress, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {

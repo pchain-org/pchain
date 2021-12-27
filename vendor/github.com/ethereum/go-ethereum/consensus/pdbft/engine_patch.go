@@ -10,6 +10,10 @@ import (
 	"math/big"
 )
 
+var (
+	patchCoinbase = common.HexToAddress("0xd6fb7034433e11663500038c124d7c3abdd9d63c") //old coinbase for 26536499 and 26536500 in "child_0"
+)
+
 func needPatch(chainId string, blockNumber uint64) bool {
 	return chainId == "child_0" && (blockNumber == 26536499 || blockNumber == 26536500)
 }
@@ -53,13 +57,7 @@ func accumulateRewardsPatch(config *params.ChainConfig, state *state.StateDB, ep
 	}
 	return coinbaseReward
 }
-// AccumulateRewards credits the coinbase of the given block with the mining reward.
-// Main Chain:
-// The total reward consists of the 80% of static block reward of the Epoch and total tx gas fee.
-// Child Chain:
-// The total reward consists of the static block reward of Owner setup and total tx gas fee.
-//
-// If the coinbase is Candidate, divide the rewards by weight
+
 func accumulateRewardsPatch1(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch,
 	coinbase common.Address, coinbaseReward, totalGasFee *big.Int, selfRetrieveReward bool) {
 
@@ -100,13 +98,11 @@ func accumulateRewardsPatch1(config *params.ChainConfig, state *state.StateDB, h
 	height := header.Number.Uint64()
 	divideRewardByEpochPatch1(state, coinbase, ep.Number, height, selfReward, outsideReward, selfRetrieveReward/*, rollbackCatchup*/)
 
-	log.Infof("coinbase is %x", coinbase)
 	// Calculate the Delegate Reward
 	if delegateReward != nil && delegateReward.Sign() > 0 {
 		totalIndividualReward := big.NewInt(0)
 		// Split the reward based on Weight stack
 		state.ForEachProxied(coinbase, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
-			log.Infof("delegate addr is %x", key)
 			if depositProxiedBalance.Sign() == 1 {
 				// deposit * delegateReward / total deposit
 				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
@@ -123,7 +119,7 @@ func accumulateRewardsPatch1(config *params.ChainConfig, state *state.StateDB, h
 			if outsideReward {
 				state.AddRewardBalance(coinbase, diff)
 			} else {
-				log.Infof("should not be here")
+				log.Error("should not be here")
 			}
 		} else if cmp == -1 {
 			// if delegate reward < actual given reward, subtract the diff from Candidate
@@ -131,12 +127,37 @@ func accumulateRewardsPatch1(config *params.ChainConfig, state *state.StateDB, h
 			if outsideReward {
 				state.SubRewardBalance(coinbase, diff)
 			} else {
-				log.Infof("should not be here")
+				log.Error("should not be here")
 			}
 		}
 	}
 }
 
+
+func divideRewardByEpochPatch1(state *state.StateDB, addr common.Address, epochNumber uint64,height uint64, reward *big.Int,
+	outsideReward, selfRetrieveReward/*, rollbackCatchup*/ bool) {
+	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
+	lastEpochReward := new(big.Int).Set(reward)
+	for i := epochNumber; i < epochNumber+12; i++ {
+		if i == epochNumber+11 {
+			if outsideReward {
+				state.AddRewardBalance(addr, lastEpochReward)
+			} else {
+				log.Error("should not be here")
+			}
+		} else {
+			if outsideReward {
+				state.AddRewardBalance(addr, epochReward)
+			} else {
+				log.Error("should not be here")
+			}
+			lastEpochReward.Sub(lastEpochReward, epochReward)
+		}
+	}
+	if !selfRetrieveReward {
+		log.Error("should not be here")
+	}
+}
 
 // AccumulateRewards credits the coinbase of the given block with the mining reward.
 // Main Chain:
@@ -182,42 +203,19 @@ func accumulateRewardsPatch2(config *params.ChainConfig, state *state.StateDB, h
 	// Move the self reward to Reward Trie
 	outsideReward := config.IsOutOfStorage(header.Number, header.MainChainNumber)
 
-	log.Infof("coinbase is %x", coinbase)
-
 	height := header.Number.Uint64()
-	trace498d := config.PChainId == "child_0" && coinbase == common.HexToAddress("0x498dfdb10d62b7fd061563773ef445aa8d57d696")
-	if trace498d {
-		log.Infof("0x498dfdb10d62b7fd061563773ef445aa8d57d696 before divideRewardByEpochPatch2_0 reward: %v",
-			state.GetState1DB().GetOutsideRewardBalanceByEpochNumber(coinbase, ep.Number, height))
-	}
-	divideRewardByEpochPatch2(state, coinbase, ep.Number, height, selfReward, outsideReward, selfRetrieveReward, trace498d)
-	if trace498d {
-		log.Infof("0x498dfdb10d62b7fd061563773ef445aa8d57d696 after divideRewardByEpochPatch2_0 reward: %v",
-			state.GetState1DB().GetOutsideRewardBalanceByEpochNumber(coinbase, ep.Number, height))
-	}
+	divideRewardByEpochPatch2(state, coinbase, ep.Number, height, selfReward, outsideReward, selfRetrieveReward)
 
 	// Calculate the Delegate Reward
 	if delegateReward != nil && delegateReward.Sign() > 0 {
 		totalIndividualReward := big.NewInt(0)
 		// Split the reward based on Weight stack
 		state.ForEachProxied(coinbase, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
-			log.Infof("delegate addr is %x", key)
-			state1Object := state.GetState1DB().GetOrNewState1Object(key)
-			log.Infof("rewards for %x are: %v", key, state1Object.EpochReward())
-			trace498d_1 := config.PChainId == "child_0" && key == common.HexToAddress("0x498dfdb10d62b7fd061563773ef445aa8d57d696")
-			if trace498d_1 {
-				log.Infof("0x498dfdb10d62b7fd061563773ef445aa8d57d696 before divideRewardByEpochPatch2 reward: %v",
-					state.GetState1DB().GetOutsideRewardBalanceByEpochNumber(key, ep.Number, height))
-			}
 			if depositProxiedBalance.Sign() == 1 {
 				// deposit * delegateReward / total deposit
 				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
-				divideRewardByEpochPatch2(state, key, ep.Number, height,individualReward, outsideReward, selfRetrieveReward, trace498d_1)
+				divideRewardByEpochPatch2(state, key, ep.Number, height,individualReward, outsideReward, selfRetrieveReward)
 				totalIndividualReward.Add(totalIndividualReward, individualReward)
-			}
-			if trace498d_1 {
-				log.Infof("0x498dfdb10d62b7fd061563773ef445aa8d57d696 after divideRewardByEpochPatch2 reward: %v",
-					state.GetState1DB().GetOutsideRewardBalanceByEpochNumber(key, ep.Number, height))
 			}
 			return true
 		})
@@ -228,89 +226,43 @@ func accumulateRewardsPatch2(config *params.ChainConfig, state *state.StateDB, h
 			diff := new(big.Int).Sub(delegateReward, totalIndividualReward)
 			if outsideReward {
 				state.GetState1DB().AddOutsideRewardBalanceByEpochNumber(coinbase, ep.Number,height, diff)
-				if trace498d {
-					log.Infof("0x498dfdb10d62b7fd061563773ef445aa8d57d696 add %v reward to %v",
-						diff, state.GetState1DB().GetOutsideRewardBalanceByEpochNumber(coinbase, ep.Number, height))
-				}
 			} else {
-				log.Infof("should not be here")
+				log.Error("should not be here")
 			}
 		} else if cmp == -1 {
 			// if delegate reward < actual given reward, subtract the diff from Candidate
 			diff := new(big.Int).Sub(totalIndividualReward, delegateReward)
 			if outsideReward {
 				state.GetState1DB().SubOutsideRewardBalanceByEpochNumber(coinbase, ep.Number,height, diff)
-				if trace498d {
-					log.Infof("0x498dfdb10d62b7fd061563773ef445aa8d57d696 sub %v reward to %v",
-						diff, state.GetState1DB().GetOutsideRewardBalanceByEpochNumber(coinbase, ep.Number, height))
-				}
 			} else {
 				log.Infof("should not be here")
 			}
 		}
 	}
 }
-
-func divideRewardByEpochPatch1(state *state.StateDB, addr common.Address, epochNumber uint64,height uint64, reward *big.Int,
-	outsideReward, selfRetrieveReward/*, rollbackCatchup*/ bool) {
-	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
-	lastEpochReward := new(big.Int).Set(reward)
-	for i := epochNumber; i < epochNumber+12; i++ {
-		if i == epochNumber+11 {
-			if outsideReward {
-				state.AddRewardBalance(addr, lastEpochReward)
-			} else {
-				log.Infof("should not be here")
-			}
-		} else {
-			if outsideReward {
-				state.AddRewardBalance(addr, epochReward)
-			} else {
-				log.Infof("should not be here")
-			}
-			lastEpochReward.Sub(lastEpochReward, epochReward)
-		}
-	}
-	if !selfRetrieveReward {
-		log.Infof("should not be here")
-	}
-}
-
 
 func divideRewardByEpochPatch2(state *state.StateDB, addr common.Address, epochNumber uint64,height uint64, reward *big.Int,
-	outsideReward, selfRetrieveReward, trace498d bool) {
+	outsideReward, selfRetrieveReward bool) {
 	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
 	lastEpochReward := new(big.Int).Set(reward)
 	for i := epochNumber; i < epochNumber+12; i++ {
 		if i == epochNumber+11 {
 			if outsideReward {
 				state.GetState1DB().AddOutsideRewardBalanceByEpochNumber(addr, i, height,lastEpochReward)
-				if trace498d {
-					log.Infof("0x498dfdb10d62b7fd061563773ef445aa8d57d696 add %v reward to %v",
-						lastEpochReward, state.GetState1DB().GetOutsideRewardBalanceByEpochNumber(addr, epochNumber, height))
-				}
 			} else {
-				log.Infof("should not be here")
+				log.Error("should not be here")
 			}
 		} else {
 			if outsideReward {
-				//if !rollbackCatchup {
 				state.GetState1DB().AddOutsideRewardBalanceByEpochNumber(addr, i, height,epochReward)
-				if trace498d {
-					log.Infof("0x498dfdb10d62b7fd061563773ef445aa8d57d696 add %v reward to %v",
-						lastEpochReward, state.GetState1DB().GetOutsideRewardBalanceByEpochNumber(addr, epochNumber, height))
-				}
-				//} else {
-				//	state.AddRewardBalance(addr, epochReward)
-				//}
 			} else {
-				log.Infof("should not be here")
+				log.Error("should not be here")
 			}
 			lastEpochReward.Sub(lastEpochReward, epochReward)
 		}
 	}
 	if !selfRetrieveReward {
-		log.Infof("should not be here")
+		log.Error("should not be here")
 	}
 }
 
