@@ -1148,14 +1148,6 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 //
 // After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
-
-	if bc.chainConfig.PChainId == "pchain" && bc.CurrentBlock().NumberU64() >= 21000000{
-		for ; true; {
-			log.Infof("now not syn main chain to save disk for debug")
-			time.Sleep(time.Second)
-		}
-	}
-
 	// Sanity check that we have something meaningful to import
 	if len(chain) == 0 {
 		return 0, nil
