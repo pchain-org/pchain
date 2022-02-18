@@ -58,6 +58,9 @@ func TestDefaults(t *testing.T) {
 	if cfg.BlockNumber == nil {
 		t.Error("expected block number to be non nil")
 	}
+	if cfg.MainChainNumber == nil {
+		t.Error("expected mainchain block number to be non nil")
+	}
 }
 
 func TestEVM(t *testing.T) {
@@ -169,8 +172,9 @@ func benchmarkEVM_Create(bench *testing.B, code string) {
 		Time:        new(big.Int).SetUint64(0),
 		Coinbase:    common.Address{},
 		BlockNumber: new(big.Int).SetUint64(1),
+		MainChainNumber: new(big.Int).SetUint64(1),
 		ChainConfig: &params.ChainConfig{
-			ChainID:             big.NewInt(1),
+			ChainId:             big.NewInt(1),
 			HomesteadBlock:      new(big.Int),
 			ByzantiumBlock:      new(big.Int),
 			ConstantinopleBlock: new(big.Int),
@@ -212,7 +216,7 @@ func fakeHeader(n uint64, parentHash common.Hash) *types.Header {
 		Coinbase:   common.HexToAddress("0x00000000000000000000000000000000deadbeef"),
 		Number:     big.NewInt(int64(n)),
 		ParentHash: parentHash,
-		Time:       1000,
+		Time:       big.NewInt(int64(1000)),
 		Nonce:      types.BlockNonce{0x1},
 		Extra:      []byte{},
 		Difficulty: big.NewInt(0),
@@ -292,6 +296,7 @@ func TestBlockhash(t *testing.T) {
 	ret, _, err := Execute(data, input, &Config{
 		GetHashFn:   core.GetHashFn(header, chain),
 		BlockNumber: new(big.Int).Set(header.Number),
+		MainChainNumber: new(big.Int).Set(header.MainChainNumber),
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)

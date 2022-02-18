@@ -985,6 +985,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteBlock(bc.db, block)
 
 	// reward outside
+	tdm := bc.Engine().(consensus.Tendermint)
 	rewardOutside := bc.chainConfig.IsOutOfStorage(block.Number(), block.Header().MainChainNumber)
 	if rewardOutside {
 		outsideReward := state.GetOutsideReward()
@@ -999,21 +1000,20 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		}
 		state.ClearOutsideReward()
 
+		selfRetrieveReward := consensus.IsSelfRetrieveReward(tdm.GetEpoch(), bc, block.Header())
+		if selfRetrieveReward {
+			extractRewardSet := state.GetExtractRewardSet()
+			for addr, epoch := range extractRewardSet {
+				state.WriteEpochRewardExtracted(addr, epoch, block.NumberU64())
+
+			}
+			state.ClearExtractRewardSet()
+		}
+
 		prevLastBlock, err := state.ReadOOSLastBlock()
 		if err != nil || prevLastBlock.Cmp(block.Number()) < 0 {
 			state.WriteOOSLastBlock(block.Number())
 		}
-	}
-
-	tdm := bc.Engine().(consensus.Tendermint)
-	selfRetrieveReward := consensus.IsSelfRetrieveReward(tdm.GetEpoch(), bc, block.Header())
-	if selfRetrieveReward {
-		extractRewardSet := state.GetExtractRewardSet()
-		for addr, epoch := range extractRewardSet {
-			state.WriteEpochRewardExtracted(addr, epoch, block.NumberU64())
-
-		}
-		state.ClearExtractRewardSet()
 	}
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
@@ -1148,6 +1148,14 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 //
 // After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
+
+	if bc.chainConfig.PChainId == "pchain" && bc.CurrentBlock().NumberU64() >= 21000000{
+		for ; true; {
+			log.Infof("now not syn main chain to save disk for debug")
+			time.Sleep(time.Second)
+		}
+	}
+
 	// Sanity check that we have something meaningful to import
 	if len(chain) == 0 {
 		return 0, nil

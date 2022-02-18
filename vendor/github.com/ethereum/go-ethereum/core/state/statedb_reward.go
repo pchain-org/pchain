@@ -147,7 +147,7 @@ func (self *StateDB) GetOutsideRewardBalanceByEpochNumberFromDB(addr common.Addr
 	return rb
 }
 
-func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+func (self *StateDB) AddOutsideRewardBalanceByEpochNumber0(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
 	currentRewardBalance := self.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height)
 	newReward := new(big.Int).Add(currentRewardBalance, amount)
 	if rs, exist := self.rewardOutsideSet[addr]; exist {
@@ -156,11 +156,15 @@ func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, e
 		epochReward := Reward{epochNo: newReward}
 		self.rewardOutsideSet[addr] = epochReward
 	}
+}
 
+func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+	self.AddOutsideRewardBalanceByEpochNumber0(addr, epochNo, height, amount)
 	self.AddRewardBalance(addr, amount)
 }
 
-func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+
+func (self *StateDB) SubOutsideRewardBalanceByEpochNumber0(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
 	currentRewardBalance := self.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height)
 	newReward := new(big.Int).Sub(currentRewardBalance, amount)
 	if rs, exist := self.rewardOutsideSet[addr]; exist {
@@ -169,7 +173,10 @@ func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, e
 		epochReward := Reward{epochNo: newReward}
 		self.rewardOutsideSet[addr] = epochReward
 	}
+}
 
+func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+	self.SubOutsideRewardBalanceByEpochNumber0(addr, epochNo, height, amount)
 	self.SubRewardBalance(addr, amount)
 }
 

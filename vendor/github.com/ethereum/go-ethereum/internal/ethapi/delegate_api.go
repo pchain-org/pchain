@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"math/big"
@@ -354,7 +355,21 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 		curBlockHeight := bc.CurrentBlock().NumberU64()
 		height := curBlockHeight + 1
 		heightBI := big.NewInt(0).SetUint64(height)
-		ispatch := bc.Config().IsSelfRetrieveRewardPatch(heightBI, bc.CurrentBlock().Header().MainChainNumber)
+
+		//extrRwd is after OutOfStorage feature, so need not check for IsOutOfStorage()
+		rollbackCatchup := false
+		lastBlock, err := state.ReadOOSLastBlock();
+		if err == nil && heightBI.Cmp(lastBlock) <= 0 {
+			rollbackCatchup = true
+		}
+
+		chainId := bc.Config().PChainId
+		header := bc.CurrentBlock().Header()
+		mainChainNumber := heightBI
+		if !params.IsMainChain(chainId) {
+			mainChainNumber = header.MainChainNumber
+		}
+		ispatch := bc.Config().IsSelfRetrieveRewardPatch(heightBI, mainChainNumber)
 		if !ispatch {
 			epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
 			currentEpochNumber := epoch.Number
@@ -367,13 +382,19 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 			rewards := state.GetAllEpochRewardFromDB(from, curBlockHeight)
 
-			log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
-			log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
+			patchReward(bc.Config().PChainId, from, height, &rewards)
+
+			log.Infof("extrRwd_ApplyCb currentEpochNumber, from %x, noExtractMark, extractEpochNumber is %v, %v, %v\n", from, currentEpochNumber, noExtractMark, extractEpochNumber)
+			log.Infof("extrRwd_ApplyCb rewards is %v\n", rewards)
 
 			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
 			for epNumber, reward := range rewards{
 				if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
-					state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
+					if !rollbackCatchup {
+						state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
+					} else {
+						state.SubRewardBalance(from, reward)
+					}
 					state.AddBalance(from, reward)
 
 					if maxExtractEpochNumber < epNumber {
@@ -383,13 +404,6 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 				}
 			}
 		} else {
-
-			//extrRwd is after OutOfStorage feature, so need not check for IsOutOfStorage()
-			rollbackCatchup := false
-			lastBlock, err := state.ReadOOSLastBlock();
-			if err == nil && heightBI.Cmp(lastBlock) <= 0 {
-				rollbackCatchup = true
-			}
 
 			epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
 			currentEpochNumber := epoch.Number
@@ -402,8 +416,8 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 			rewards := state.GetAllEpochReward(from, height)
 
-			log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
-			log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
+			log.Infof("extrRwd_ApplyCb currentEpochNumber, from %x, noExtractMark, extractEpochNumber is %v, %v, %v\n", from, currentEpochNumber, noExtractMark, extractEpochNumber)
+			log.Infof("extrRwd_ApplyCb rewards is %v\n", rewards)
 
 			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
 			for epNumber, reward := range rewards{
@@ -427,6 +441,16 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 	}
 
 	return nil
+}
+
+func patchReward(chainId string, from common.Address, height uint64, rewards *map[uint64]*big.Int) {
+
+	patchAddr := common.HexToAddress("0x56381110d091ed4c535425d260fed2feb5a209a7")
+	patchRwd,_ := new(big.Int).SetString("3374427796234726240303", 10)
+	if chainId == "child_0" && height == 29365687 && patchAddr == from && (*rewards)[12].Cmp(patchRwd) == 0{
+		newRwd,_ := new(big.Int).SetString("3374427796234726240301", 10)
+		(*rewards)[12] = newRwd
+	}
 }
 
 // Validation
