@@ -141,3 +141,9 @@ For a full guide on how to set up and become a validator node on the Pchain Netw
 ### How To Delegate Your Stake
 
 To learn how to delegate your PI to validators to receive rewards, read [How To Delegate or Stake](https://pliangroup.gitbook.io/plian/using-the-blockchain/delegating-or-staking)
+
+### patch_work1
+
+This branch originally is to add Istanbul fork number and improve catchup performance for chain "child_0". It is halfway to complete its goal. The Istanbul fork works and the catchup does not for now.
+
+There are some log-redundant/test code in some commits, which are pushed for future reference.
