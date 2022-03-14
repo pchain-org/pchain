@@ -353,6 +353,7 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 		curBlockHeight := bc.CurrentBlock().NumberU64()
 		height := curBlockHeight + 1
+
 		epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
 		currentEpochNumber := epoch.Number
 		extractEpochNumber, err := state.GetEpochRewardExtracted(from, height)
@@ -362,13 +363,15 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 		}
 		maxExtractEpochNumber := uint64(0)
 
-		rewards := state.GetAllEpochReward(from, height)		
+		log.Infof("extrRwd_ApplyCb from， currentEpochNumber, noExtractMark, extractEpochNumber is %x, %v, %v, %v\n", from, currentEpochNumber, noExtractMark, extractEpochNumber)
+
+		rewards := state.GetAllEpochReward(from, height)
+		log.Infof("extrRwd_ApplyCb before patchStep1, rewards is %v\n", rewards)
 		extractEpochNumber, noExtractMark, rewards = patchStep1(bc.Config().PChainId, height, from, currentEpochNumber, extractEpochNumber, noExtractMark, rewards)
-		log.Debugf("extrRwd_ApplyCb from， currentEpochNumber, noExtractMark, extractEpochNumber is %x, %v, %v, %v\n", from, currentEpochNumber, noExtractMark, extractEpochNumber)
-		log.Debugf("extrRwd_ApplyCb after patchStep1, rewards is %v\n", rewards)
+		log.Infof("extrRwd_ApplyCb after patchStep1, rewards is %v\n", rewards)
 
 		//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
-		for epNumber, reward := range rewards{
+		for epNumber, reward := range rewards {
 			if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
 
 				state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
@@ -616,6 +619,7 @@ func patchStep1(chainId string, blockNumber uint64, from common.Address, current
 		}
 		return patchData.extractEpochNumber, patchData.noExtractMark, patchData.rewards
 	}
+
 	return extractEpochNumber, noExtractMark, rewards
 }
 

@@ -998,7 +998,6 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	rawdb.WriteBlock(bc.db, block)
 
-
 	root1, err := state.GetState1DB().Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err := bc.hc.WriteRoot1(block.Hash(), block.NumberU64(), root1); err != nil {
 		return NonStatTy, err

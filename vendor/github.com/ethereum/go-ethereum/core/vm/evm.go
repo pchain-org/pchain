@@ -86,12 +86,11 @@ type Context struct {
 	GasPrice *big.Int       // Provides information for GASPRICE
 
 	// Block information
-	Coinbase            common.Address // Provides information for COINBASE
-	GasLimit            uint64         // Provides information for GASLIMIT
-	BlockNumber         *big.Int       // Provides information for NUMBER
-	MainChainNumber     *big.Int       // Provides information for MAINCHAINNUMBER
-	Time                *big.Int       // Provides information for TIME
-	Difficulty          *big.Int       // Provides information for DIFFICULTY
+	Coinbase    common.Address // Provides information for COINBASE
+	GasLimit    uint64         // Provides information for GASLIMIT
+	BlockNumber *big.Int       // Provides information for NUMBER
+	Time        *big.Int       // Provides information for TIME
+	Difficulty  *big.Int       // Provides information for DIFFICULTY
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -139,7 +138,7 @@ func NewEVM(ctx Context, statedb StateDB, chainConfig *params.ChainConfig, vmCon
 		StateDB:      statedb,
 		vmConfig:     vmConfig,
 		chainConfig:  chainConfig,
-		chainRules:   chainConfig.Rules(ctx.MainChainNumber),
+		chainRules:   chainConfig.Rules(ctx.BlockNumber),
 		interpreters: make([]Interpreter, 0, 1),
 	}
 

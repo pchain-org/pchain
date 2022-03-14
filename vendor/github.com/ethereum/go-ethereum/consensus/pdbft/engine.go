@@ -478,12 +478,15 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 
 	// Calculate the rewards
-	patch := needPatch(sb.chainConfig.PChainId, header.Number.Uint64())
+	hn := header.Number.Uint64()
+	patch := needPatch(sb.chainConfig.PChainId, hn)
 	if !patch {
 		accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
 	} else {
 		coinbaseReward := accumulateRewardsPatch(sb.chainConfig, state, epoch, totalGasFee)
 		accumulateRewardsPatch1(sb.chainConfig, state, header, epoch, header.Coinbase, coinbaseReward, totalGasFee, selfRetrieveReward)
+
+		patchCoinbase := common.HexToAddress("0xd6fb7034433e11663500038c124d7c3abdd9d63c") //old coinbase for 26536499 and 26536500 in "child_0"
 		accumulateRewardsPatch2(sb.chainConfig, state, header, epoch, patchCoinbase, coinbaseReward, totalGasFee, selfRetrieveReward)
 	}
 
@@ -808,8 +811,8 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	outsideReward := config.IsOutOfStorage(header.Number, header.MainChainNumber)
-	
 	// Move the self reward to Reward Trie
+	//divideRewardByEpoch(state, header.Coinbase, ep.Number, selfReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 	height := header.Number.Uint64()
 	divideRewardByEpoch(state, header.Coinbase, ep.Number, height, selfReward, outsideReward, selfRetrieveReward)
 	// Calculate the Delegate Reward

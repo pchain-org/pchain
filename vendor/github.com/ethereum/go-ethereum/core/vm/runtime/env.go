@@ -29,7 +29,6 @@ func NewEnv(cfg *Config) *vm.EVM {
 		Origin:      cfg.Origin,
 		Coinbase:    cfg.Coinbase,
 		BlockNumber: cfg.BlockNumber,
-		MainChainNumber: cfg.MainChainNumber,
 		Time:        cfg.Time,
 		Difficulty:  cfg.Difficulty,
 		GasLimit:    cfg.GasLimit,

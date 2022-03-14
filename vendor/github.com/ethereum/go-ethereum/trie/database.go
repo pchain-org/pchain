@@ -75,6 +75,7 @@ type Database struct {
 	newest  common.Hash                 // Newest tracked node, flush-list tail
 
 	preimages map[common.Hash][]byte // Preimages of nodes from the secure trie
+	//seckeybuf [secureKeyLength]byte  // Ephemeral buffer for calculating preimage keys
 
 	gctime  time.Duration      // Time spent on garbage collection since last commit
 	gcnodes uint64             // Nodes garbage collected since last commit
@@ -1071,7 +1072,9 @@ func (db *Database) GetEpochRewardExtracted(address common.Address, height uint6
 
 	epochBytes, err := db.diskdb.Get(append(common.RewardExtractPrefix, address.Bytes()...))
 
+	log.Debugf("GetEpochRewardExtracted， get bytes: %x, error: %v", epochBytes, err)
 	if err != nil {
+		log.Debugf("return (%v, %v)", new(big.Int).SetUint64(common.INV_EPOCH), err)
 		return common.INV_EPOCH, err
 	}
 
@@ -1112,6 +1115,7 @@ func (db *Database) GetEpochRewardExtracted(address common.Address, height uint6
 
 		}
 
+		log.Debugf("here return (%x, %v, nil)", epochBytes, common.DecodeUint64(epochBytes))
 		return common.DecodeUint64(epochBytes), nil
 	}
 }

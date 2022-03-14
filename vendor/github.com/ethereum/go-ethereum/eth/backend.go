@@ -133,33 +133,26 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		return nil, genesisErr
 	}
 
-	//directly support corresponding instruction set
-	chainConfig.ConstantinopleBlock = big.NewInt(0)
-	chainConfig.PetersburgBlock = big.NewInt(0)
-	chainConfig.IstanbulBlock = big.NewInt(0)
-
 	// Update HTLC Hard Fork and Contract if any one blank
 	switch ctx.ChainId() {
 	case "pchain":
 		if chainConfig.OutOfStorageBlock == nil {
 			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
 		}
-		chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
-		chainConfig.Sd2mcV1Block = params.MainnetChainConfig.Sd2mcV1Block
-		chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
-		chainConfig.ValidateHTLCBlock = params.MainnetChainConfig.ValidateHTLCBlock
-		chainConfig.HeaderHashWithoutTimeBlock = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
-		chainConfig.IstanbulBlock = params.MainnetChainConfig.IstanbulBlock
+		chainConfig.ExtractRewardMainBlock        = params.MainnetChainConfig.ExtractRewardMainBlock
+		chainConfig.Sd2mcV1Block                  = params.MainnetChainConfig.Sd2mcV1Block
+		chainConfig.ChildSd2mcWhenEpochEndsBlock  = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
+		chainConfig.ValidateHTLCBlock             = params.MainnetChainConfig.ValidateHTLCBlock
+		chainConfig.HeaderHashWithoutTimeBlock    = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
 	case "testnet":
 		if chainConfig.OutOfStorageBlock == nil {
 			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
 		}
-		chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
-		chainConfig.Sd2mcV1Block = params.TestnetChainConfig.Sd2mcV1Block
-		chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
-		chainConfig.ValidateHTLCBlock = params.TestnetChainConfig.ValidateHTLCBlock
-		chainConfig.HeaderHashWithoutTimeBlock = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
-		chainConfig.IstanbulBlock = params.TestnetChainConfig.IstanbulBlock
+		chainConfig.ExtractRewardMainBlock        = params.TestnetChainConfig.ExtractRewardMainBlock
+		chainConfig.Sd2mcV1Block                  = params.TestnetChainConfig.Sd2mcV1Block
+		chainConfig.ChildSd2mcWhenEpochEndsBlock  = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
+		chainConfig.ValidateHTLCBlock             = params.TestnetChainConfig.ValidateHTLCBlock
+		chainConfig.HeaderHashWithoutTimeBlock    = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
 	case "child_0":
 		if (chainConfig.HashTimeLockContract == common.Address{}) {
 			if isTestnet {
@@ -169,41 +162,42 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 			}
 		}
 		if isTestnet {
-			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.Child0OutOfStorageBlock
-			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
-			chainConfig.Sd2mcV1Block = params.TestnetChainConfig.Sd2mcV1Block
+			chainConfig.OutOfStorageBlock            = params.TestnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock       = params.TestnetChainConfig.ExtractRewardMainBlock
+			chainConfig.Sd2mcV1Block                 = params.TestnetChainConfig.Sd2mcV1Block
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
-			chainConfig.ValidateHTLCBlock = params.TestnetChainConfig.ValidateHTLCBlock
-			chainConfig.HeaderHashWithoutTimeBlock = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
-			chainConfig.IstanbulBlock = params.TestnetChainConfig.IstanbulBlock
+			chainConfig.ValidateHTLCBlock            = params.TestnetChainConfig.ValidateHTLCBlock
+			chainConfig.HeaderHashWithoutTimeBlock   = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
 		} else {
-			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.Child0OutOfStorageBlock
-			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
-			chainConfig.Sd2mcV1Block = params.MainnetChainConfig.Sd2mcV1Block
+			chainConfig.OutOfStorageBlock            = params.MainnetChainConfig.Child0OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock       = params.MainnetChainConfig.ExtractRewardMainBlock
+			chainConfig.Sd2mcV1Block                 = params.MainnetChainConfig.Sd2mcV1Block
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
-			chainConfig.ValidateHTLCBlock = params.MainnetChainConfig.ValidateHTLCBlock
-			chainConfig.HeaderHashWithoutTimeBlock = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
-			chainConfig.IstanbulBlock = params.MainnetChainConfig.IstanbulBlock
+			chainConfig.ValidateHTLCBlock            = params.MainnetChainConfig.ValidateHTLCBlock
+			chainConfig.HeaderHashWithoutTimeBlock   = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
 		}
 	default:
 		if isTestnet {
-			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
-			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
-			chainConfig.Sd2mcV1Block = params.TestnetChainConfig.Sd2mcV1Block
+			chainConfig.OutOfStorageBlock            = params.TestnetChainConfig.OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock       = params.TestnetChainConfig.ExtractRewardMainBlock
+			chainConfig.Sd2mcV1Block                 = params.TestnetChainConfig.Sd2mcV1Block
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
-			chainConfig.ValidateHTLCBlock = params.TestnetChainConfig.ValidateHTLCBlock
-			chainConfig.HeaderHashWithoutTimeBlock = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
-			chainConfig.IstanbulBlock = params.TestnetChainConfig.IstanbulBlock
+			chainConfig.ValidateHTLCBlock            = params.TestnetChainConfig.ValidateHTLCBlock
+			chainConfig.HeaderHashWithoutTimeBlock   = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
 		} else {
-			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
-			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
-			chainConfig.Sd2mcV1Block = params.MainnetChainConfig.Sd2mcV1Block
+			chainConfig.OutOfStorageBlock            = params.MainnetChainConfig.OutOfStorageBlock
+			chainConfig.ExtractRewardMainBlock       = params.MainnetChainConfig.ExtractRewardMainBlock
+			chainConfig.Sd2mcV1Block                 = params.MainnetChainConfig.Sd2mcV1Block
 			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
-			chainConfig.ValidateHTLCBlock = params.MainnetChainConfig.ValidateHTLCBlock
-			chainConfig.HeaderHashWithoutTimeBlock = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
-			chainConfig.IstanbulBlock = params.MainnetChainConfig.IstanbulBlock
+			chainConfig.ValidateHTLCBlock            = params.MainnetChainConfig.ValidateHTLCBlock
+			chainConfig.HeaderHashWithoutTimeBlock   = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
 		}
 	}
+
+	//directly support corresponding instruction set
+	chainConfig.ConstantinopleBlock = big.NewInt(0)
+	chainConfig.PetersburgBlock     = big.NewInt(0)
+	chainConfig.IstanbulBlock       = big.NewInt(0)
 
 	chainConfig.ChainLogger = logger
 	logger.Info("Initialised chain configuration", "config", chainConfig)

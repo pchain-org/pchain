@@ -43,10 +43,10 @@ var (
 
 	// Data item prefixes (use single byte to avoid mixing data types, avoid `i`, used for indexes).
 	headerPrefix       = []byte("h") // headerPrefix + num (uint64 big endian) + hash -> header
-	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
-	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 	headerTDSuffix     = []byte("t") // headerPrefix + num (uint64 big endian) + hash + headerTDSuffix -> td
 	headerRoot1Suffix  = []byte("Root1") // headerPrefix + num (uint64 big endian) + hash + headerRoot1Suffix -> Root1
+	headerHashSuffix   = []byte("n") // headerPrefix + num (uint64 big endian) + headerHashSuffix -> hash
+	headerNumberPrefix = []byte("H") // headerNumberPrefix + hash -> num (uint64 big endian)
 
 	blockBodyPrefix     = []byte("b") // blockBodyPrefix + num (uint64 big endian) + hash -> block body
 	blockReceiptsPrefix = []byte("r") // blockReceiptsPrefix + num (uint64 big endian) + hash -> block receipts
@@ -91,16 +91,6 @@ func headerKey(number uint64, hash common.Hash) []byte {
 	return append(append(headerPrefix, encodeBlockNumber(number)...), hash.Bytes()...)
 }
 
-// headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
-func headerHashKey(number uint64) []byte {
-	return append(append(headerPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
-}
-
-// headerNumberKey = headerNumberPrefix + hash
-func headerNumberKey(hash common.Hash) []byte {
-	return append(headerNumberPrefix, hash.Bytes()...)
-}
-
 // headerTDKey = headerPrefix + num (uint64 big endian) + hash + headerTDSuffix
 func headerTDKey(number uint64, hash common.Hash) []byte {
 	return append(headerKey(number, hash), headerTDSuffix...)
@@ -109,6 +99,16 @@ func headerTDKey(number uint64, hash common.Hash) []byte {
 // headerRoot1Key = headerPrefix + num (uint64 big endian) + hash + headerRoot1Suffix
 func headerRoot1Key(number uint64, hash common.Hash) []byte {
 	return append(headerKey(number, hash), headerRoot1Suffix...)
+}
+
+// headerHashKey = headerPrefix + num (uint64 big endian) + headerHashSuffix
+func headerHashKey(number uint64) []byte {
+	return append(append(headerPrefix, encodeBlockNumber(number)...), headerHashSuffix...)
+}
+
+// headerNumberKey = headerNumberPrefix + hash
+func headerNumberKey(hash common.Hash) []byte {
+	return append(headerNumberPrefix, hash.Bytes()...)
 }
 
 // blockBodyKey = blockBodyPrefix + num (uint64 big endian) + hash
