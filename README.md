@@ -141,3 +141,11 @@ For a full guide on how to set up and become a validator node on the Pchain Netw
 ### How To Delegate Your Stake
 
 To learn how to delegate your PI to validators to receive rewards, read [How To Delegate or Stake](https://pliangroup.gitbook.io/plian/using-the-blockchain/delegating-or-staking)
+
+### no_oos
+
+This branch is to supply another way to save epoch-reward with reward-trie instead of current OOS(Out-Of-Storage) mechanism. OOS works well and saves a lot of disk storage, but it is not possible to check data consistence with every block during synchronization. With current OOS, the data corruption only revealed when there is a 'Bad Block' error, but the cause was rooted likely long before.
+
+This branch of pchain-client generates one unique hash for each block's epoch reward, this could help check data consistence for every block. Not add the consistence check for synchronization/catchup yet, but here has the base.
+
+This branch of pchain-client consumes more disk storage than OOS because of saving epoch reward for every block. But with some logic/code changes, the disk consumption is much accepable than before.
