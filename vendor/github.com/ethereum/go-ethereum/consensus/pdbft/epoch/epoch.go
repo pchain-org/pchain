@@ -693,7 +693,7 @@ func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime t
 	var epochNumberPerYear = epoch.rs.EpochNumberPerYear //12
 	var totalYear = epoch.rs.TotalYear                   // 23
 
-	const EMERGENCY_BLOCKS_OF_NEXT_EPOCH uint64 = 100000 //at least 100000 blocks per epoch
+	const EMERGENCY_BLOCKS_OF_NEXT_EPOCH uint64 = 2400 //at least 2400 blocks per epoch
 
 	zeroEpoch := loadOneEpoch(epoch.db, 0, epoch.logger)
 	initStartTime := zeroEpoch.StartTime
