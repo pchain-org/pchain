@@ -98,7 +98,7 @@ var (
 		EIP150Hash:                 common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 		EIP155Block:                big.NewInt(10),
 		EIP158Block:                big.NewInt(10),
-		ByzantiumBlock:             big.NewInt(1700000),
+		ByzantiumBlock:             big.NewInt(0),
 		ConstantinopleBlock:        big.NewInt(0),
 		PetersburgBlock:            big.NewInt(0),
 		IstanbulBlock:              big.NewInt(0),
@@ -212,12 +212,12 @@ type ChainConfig struct {
 	Sd2mcV1Block                *big.Int       `json:"sd2mcV1Block, omitempty"`
 
 	// For default setup propose
-	Child0HashTimeLockContract   common.Address
-	Child0OutOfStorageBlock      *big.Int
-	ChildSd2mcWhenEpochEndsBlock *big.Int
-	ValidateHTLCBlock            *big.Int
-	HeaderHashWithoutTimeBlock   *big.Int
-	MarkProposedInEpochMainBlock *big.Int
+	Child0HashTimeLockContract   common.Address	`json:"child0HashTimeLockContract,omitempty"`
+	Child0OutOfStorageBlock      *big.Int		`json:"child0OutOfStorageBlock,omitempty"`
+	ChildSd2mcWhenEpochEndsBlock *big.Int		`json:"childSd2mcWhenEpochEndsBlock,omitempty"`
+	ValidateHTLCBlock            *big.Int		`json:"validateHTLCBlock,omitempty"`
+	HeaderHashWithoutTimeBlock   *big.Int		`json:"headerHashWithoutTimeBlock,omitempty"`
+	MarkProposedInEpochMainBlock *big.Int		`json:"markProposedInEpochMainBlock,omitempty"`
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
