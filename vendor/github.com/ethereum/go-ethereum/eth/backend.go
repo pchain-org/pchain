@@ -259,6 +259,9 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
 		}
+		if (chainConfig.Child0AutoRewardBlock == nil) && chainId == "child_0" {
+			chainConfig.Child0AutoRewardBlock = params.MainnetChainConfig.Child0AutoRewardBlock
+		}
 	} else {
 		if chainConfig.OutOfStorageBlock == nil {
 			if chainId == "child_0" {
@@ -296,6 +299,9 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		}
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
+		}
+		if (chainConfig.Child0AutoRewardBlock == nil) && chainId == "child_0" {
+			chainConfig.Child0AutoRewardBlock = params.TestnetChainConfig.Child0AutoRewardBlock
 		}
 	}
 }

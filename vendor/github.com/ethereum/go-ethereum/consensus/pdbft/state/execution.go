@@ -3,13 +3,11 @@ package state
 import (
 	"errors"
 	"github.com/ethereum/go-ethereum/consensus"
-
-	//"fmt"
-
 	ep "github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 //--------------------------------------------------
@@ -64,6 +62,7 @@ func (s *State) validateBlock(block *types.TdmBlock) error {
 func init() {
 	core.RegisterInsertBlockCb("UpdateLocalEpoch", updateLocalEpoch)
 	core.RegisterInsertBlockCb("AutoStartMining", autoStartMining)
+	core.RegisterInsertBlockCb("Child0PatchAutoReward", child0PatchAutoReward)
 }
 
 func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
@@ -127,5 +126,15 @@ func autoStartMining(bc *core.BlockChain, block *ethTypes.Block) {
 		if nextValidators.HasAddress(eng.PrivateValidator().Bytes()) && !eng.IsStarted() {
 			bc.PostChainEvents([]interface{}{core.StartMiningEvent{}}, nil)
 		}
+	}
+}
+
+func child0PatchAutoReward(bc *core.BlockChain, block *ethTypes.Block) {
+	config := bc.Config()
+	if config.PChainId == "child_0" && block.Number().Cmp(config.Child0AutoRewardBlock) == 0 {
+		isMainChain := params.IsMainChain(bc.GetCrossChainHelper().GetMainChainId())
+		ep := bc.Engine().(consensus.Tendermint).GetEpoch()
+		ep.Child0PatchAutoReward(isMainChain)
+		ep.Save()
 	}
 }

@@ -1122,34 +1122,40 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 
 		ethBlock := cs.blockFromMiner
 		var commit = &types.Commit{}
+		var epochToSave *ep.Epoch = nil
 		var epochBytes []byte
 
 		// After Reveal vote end height + 1, next epoch validator will be updated at end of block insert
 		// at height + 2, we should put the new epoch bytes into New Block
 		if cs.Height == cs.Epoch.GetRevealVoteEndHeight()+2 {
 			// Save the next epoch data into block and tell the main chain
-			nextEp := cs.Epoch.GetNextEpoch()
-			if nextEp == nil {
+			epochToSave = cs.Epoch.GetNextEpoch()
+			if epochToSave == nil {
 				panic("missing next epoch after reveal vote")
 			}
-			epochBytes = nextEp.Bytes()
-
 		} else if cs.Height == cs.Epoch.StartBlock || cs.Height == 1 {
 			// We're save the epoch data into block so that it'll be sent to the main chain.
 			// When block height equal to first block of Chain or Epoch
-			epochBytes = cs.Epoch.Bytes()
+			epochToSave = cs.Epoch
 
 		}else if cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(cs.getMainBlock()) && cs.Height==cs.Epoch.EndBlock{
 			//At the end block of epoch, save epoch data into block, epcoh data is taken from herder
-			epochBytes=cs.blockFromMiner.Header().Extra
-
+			epochToSave = cs.Epoch.GetNextEpoch()
 		} else {
 			shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
 			if shouldProposeEpoch {
 				lastHeight := cs.backend.ChainReader().CurrentBlock().Number().Uint64()
 				lastBlockTime := time.Unix(int64(cs.backend.ChainReader().CurrentBlock().Time()), 0)
-				epochBytes = cs.Epoch.ProposeNextEpoch(lastHeight, lastBlockTime).Bytes()
+				epochToSave = cs.Epoch.ProposeNextEpoch(lastHeight, lastBlockTime)
+			}
+		}
 
+		if epochToSave != nil {
+			if cs.chainConfig.IsChild0AutoReward(ethBlock.Number()) &&
+				epochToSave.CanApplyAutoReward(cs.chainConfig.Child0AutoRewardBlock) {
+				epochBytes = epochToSave.BytesWithAutoReward()
+			} else {
+				epochBytes = epochToSave.Bytes()
 			}
 		}
 
@@ -1275,7 +1281,16 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 		}
 	} else if cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(cs.getMainBlock()) && cs.Height == cs.Epoch.EndBlock {
 		if cs.Height == cs.blockFromMiner.Number().Uint64() {
-			selfEpochBytes := cs.blockFromMiner.Header().Extra
+			var selfEpochBytes []byte
+			epochToSave := cs.Epoch.GetNextEpoch()
+			if epochToSave != nil {
+				if cs.chainConfig.IsChild0AutoReward(cs.blockFromMiner.Number()) &&
+					epochToSave.CanApplyAutoReward(cs.chainConfig.Child0AutoRewardBlock) {
+					selfEpochBytes = epochToSave.BytesWithAutoReward()
+				} else {
+					selfEpochBytes = epochToSave.Bytes()
+				}
+			}
 			proposedEpochBytes := cs.ProposalBlock.TdmExtra.EpochBytes
 			if bytes.Equal(selfEpochBytes, proposedEpochBytes) {
 				cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header())

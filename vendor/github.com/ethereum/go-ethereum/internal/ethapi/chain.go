@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	ep "github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -843,8 +844,12 @@ func wfmcValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 	if chainInfo == nil {
 		return errors.New("chain id not exist")
-	} else if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
-		return errors.New("no enough balance to withdraw")
+	} else {
+		//check if it matches 'child_0 auto reward'
+		if !isChild0AutoReward(chainInfo, cch) &&
+			state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
+			return errors.New("no enough balance to withdraw")
+		}
 	}
 
 	return nil
@@ -898,15 +903,18 @@ func wfmcApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 	}
 
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
-	if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
+	child0AutoReward := isChild0AutoReward(chainInfo, cch)
+	if !child0AutoReward &&
+		state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
 		return core.ErrInvalidTx4
-		//return errors.New("no enough balance to withdraw")
 	}
 
 	// mark from -> tx3 on the main chain (to indicate tx3's used).
 	state.AddTX3(from, args.TxHash)
 
-	state.SubChainBalance(chainInfo.Owner, args.Amount)
+	if !child0AutoReward {
+		state.SubChainBalance(chainInfo.Owner, args.Amount)
+	}
 	state.AddBalance(from, args.Amount)
 
 	return nil
@@ -935,7 +943,8 @@ func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.Cros
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
 	if chainInfo == nil {
 		return errors.New("chain id not exist")
-	} else if state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
+	} else if !isChild0AutoReward(chainInfo, cch) &&
+		state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
 		return errors.New("no enough balance to withdraw")
 	}
 
@@ -985,12 +994,39 @@ func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 	}
 
 	chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ChainId)
+	child0AutoReward := isChild0AutoReward(chainInfo, cch)
+	if !isChild0AutoReward(chainInfo, cch) &&
+		state.GetChainBalance(chainInfo.Owner).Cmp(args.Amount) < 0 {
+		return errors.New("no enough balance to withdraw")
+	}
 
 	// mark from -> tx3 on the main chain (to indicate tx3's used).
 	state.AddTX3(from, args.TxHash)
 
-	state.SubChainBalance(chainInfo.Owner, args.Amount)
+	if !child0AutoReward {
+		state.SubChainBalance(chainInfo.Owner, args.Amount)
+	}
 	state.AddBalance(from, args.Amount)
 
 	return nil
+}
+
+//check if it matches 'child_0 auto reward'
+func isChild0AutoReward(chainInfo *core.ChainInfo, cch core.CrossChainHelper) bool {
+
+	if chainInfo.ChainId != "child_0" {
+		return false
+	}
+
+	var arBlock *big.Int = nil
+	mainChainId := cch.GetMainChainId()
+	if mainChainId == params.MainnetChainConfig.PChainId {
+		arBlock = params.MainnetChainConfig.Child0AutoRewardBlock
+	} else if mainChainId == params.TestnetChainConfig.PChainId {
+		arBlock = params.TestnetChainConfig.Child0AutoRewardBlock
+	}
+
+	return arBlock!= nil &&
+		arBlock.Cmp(new(big.Int).SetUint64(chainInfo.Epoch.StartBlock)) < 0 &&
+		(uint64(chainInfo.Epoch.Status) & uint64(ep.EPOCH_CHILD0_AUTOREWARD) != 0)
 }
