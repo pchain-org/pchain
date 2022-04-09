@@ -12,7 +12,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-var clientIdentifier = "pchain" // Client identifier to advertise over the network
+var clientIdentifier = params.MAINNETPCHAINID // Client identifier to advertise over the network
 
 // MakeSystemNode sets up a local node and configures the services to launch
 func MakeSystemNode(chainId, version string, ctx *cli.Context, cch core.CrossChainHelper) *node.Node {
@@ -21,7 +21,7 @@ func MakeSystemNode(chainId, version string, ctx *cli.Context, cch core.CrossCha
 	//utils.RegisterEthService(stack, &cfg.Eth)
 	registerEthService(stack, &cfg.Eth, ctx, cch)
 
-	if (chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId) && ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
+	if params.IsMainChain(chainId) && ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
 		// Only Main Chain can start the dashboard, the dashboard is still not complete
 		utils.RegisterDashboardService(stack, &cfg.Dashboard, "" /*gitCommit*/)
 	}

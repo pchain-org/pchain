@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"math/big"
@@ -302,7 +303,7 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 		if depositProxiedBalance.Sign() > 0 {
 			allRefund = false
 			mainChainHeight := bc.CurrentHeader().Number
-			if bc.Config().PChainId != "pchain" && bc.Config().PChainId != "testnet" {
+			if !params.IsMainChain(bc.Config().PChainId) {
 				mainChainHeight = bc.CurrentHeader().MainChainNumber
 			}
 			if !bc.Config().IsChildSd2mcWhenEpochEndsBlock(mainChainHeight) {

@@ -53,12 +53,27 @@ var (
 
 	MainnetHeaderHashWithoutTimeBlock = big.NewInt(17160000)
 	TestnetHeaderHashWithoutTimeBlock = big.NewInt(40)
+
+	MainnetChild0AutoRewardBlock = big.NewInt(17560) //block number in chain "child_0" for mainnet, to patch reward scheme
+	TestnetChild0AutoRewardBlock = big.NewInt(1000000000) //block number in chain "child_0" for testnet, to patch reward scheme
+)
+
+const (
+	MAINNETPCHAINID	= "pchain"
+	TESTNETPCHAINID	= "testnet"
+	CHILD0PCHAINID	= "child_0"
+)
+
+var (
+	//be careful, setting this variable to 'true' will make the client run as a private chain, which is not consist with the mainnet pchain of plian.org
+	//only for test in local host(s)
+	LocalChainTest = true
 )
 
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		PChainId:                     "pchain",
+		PChainId:                     MAINNETPCHAINID,
 		ChainId:                      big.NewInt(1),
 		HomesteadBlock:               big.NewInt(0),
 		DAOForkBlock:                 nil,
@@ -80,6 +95,7 @@ var (
 		ChildSd2mcWhenEpochEndsBlock: MainnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock:            MainnetValidateHTLCBlock,
 		HeaderHashWithoutTimeBlock:   MainnetHeaderHashWithoutTimeBlock,
+		Child0AutoRewardBlock:        MainnetChild0AutoRewardBlock,
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -89,24 +105,30 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the test network.
 	TestnetChainConfig = &ChainConfig{
-		PChainId:                   "testnet",
-		ChainId:                    big.NewInt(2),
-		HomesteadBlock:             big.NewInt(0),
-		DAOForkBlock:               nil,
-		DAOForkSupport:             true,
-		EIP150Block:                big.NewInt(0),
-		EIP150Hash:                 common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-		EIP155Block:                big.NewInt(10),
-		EIP158Block:                big.NewInt(10),
-		ByzantiumBlock:             big.NewInt(0),
-		ConstantinopleBlock:        big.NewInt(0),
-		PetersburgBlock:            big.NewInt(0),
-		IstanbulBlock:              big.NewInt(0),
-		Child0HashTimeLockContract: common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
-		OutOfStorageBlock:          big.NewInt(10),
-		Child0OutOfStorageBlock:    big.NewInt(10),
-		ExtractRewardMainBlock:     TestnetExtractRewardMainBlock,
-		Sd2mcV1Block:               TestnetSd2mcV1MainBlock,
+		PChainId:                     TESTNETPCHAINID,
+		ChainId:                      big.NewInt(2),
+		HomesteadBlock:               big.NewInt(0),
+		DAOForkBlock:                 nil,
+		DAOForkSupport:               true,
+		EIP150Block:                  big.NewInt(0),
+		EIP150Hash:                   common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+		EIP155Block:                  big.NewInt(10),
+		EIP158Block:                  big.NewInt(10),
+		ByzantiumBlock:               big.NewInt(0),
+		ConstantinopleBlock:          big.NewInt(0),
+		PetersburgBlock:              big.NewInt(0),
+		IstanbulBlock:                big.NewInt(0),
+		Child0HashTimeLockContract:   common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
+		OutOfStorageBlock:            big.NewInt(10),
+		Child0OutOfStorageBlock:      big.NewInt(10),
+		ExtractRewardMainBlock:       TestnetExtractRewardMainBlock,
+		ExtractRewardPatchMainBlock:  TestnetExtractRewardPatchMainBlock,
+		Sd2mcV1Block:                 TestnetSd2mcV1MainBlock,
+		ChildSd2mcWhenEpochEndsBlock: TestnetSd2mcWhenEpochEndsBlock,
+		ValidateHTLCBlock:            TestnetValidateHTLCBlock,
+		HeaderHashWithoutTimeBlock:   TestnetHeaderHashWithoutTimeBlock,
+		Child0AutoRewardBlock:        TestnetChild0AutoRewardBlock,
+
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -160,16 +182,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, new(EthashConfig), nil, nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, nil, new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, new(EthashConfig), nil, nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, nil, new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -218,6 +240,7 @@ type ChainConfig struct {
 	ValidateHTLCBlock            *big.Int		`json:"validateHTLCBlock,omitempty"`
 	HeaderHashWithoutTimeBlock   *big.Int		`json:"headerHashWithoutTimeBlock,omitempty"`
 	MarkProposedInEpochMainBlock *big.Int		`json:"markProposedInEpochMainBlock,omitempty"`
+	Child0AutoRewardBlock        *big.Int		`json:"child0AutoRewardBlock,omitempty"`
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
@@ -379,7 +402,7 @@ func (c *ChainConfig) IsOutOfStorage(blockNumber, mainBlockNumber *big.Int) bool
 
 	log.Debugf("IsOutOfStorage, c.PChainId, c.OutOfStorageBlock, blockNumber, mainBlockNumber is %v, %v, %v, %v",
 		c.PChainId, c.OutOfStorageBlock, blockNumber, mainBlockNumber)
-	if c.PChainId == "child_0" || c.IsMainChain() {
+	if c.PChainId == CHILD0PCHAINID || c.IsMainChain() {
 		return isForked(c.OutOfStorageBlock, blockNumber)
 	} else {
 		return isForked(c.OutOfStorageBlock, mainBlockNumber)
@@ -398,15 +421,6 @@ func (c *ChainConfig) IsChildSd2mcWhenEpochEndsBlock(mainBlockNumber *big.Int) b
 	return isForked(c.ChildSd2mcWhenEpochEndsBlock, mainBlockNumber)
 }
 
-func IsSelfRetrieveReward(mainChainId string, mainBlockNumber *big.Int) bool {
-	if mainChainId == MainnetChainConfig.PChainId {
-		return isForked(MainnetExtractRewardMainBlock, mainBlockNumber)
-	} else if mainChainId == TestnetChainConfig.PChainId {
-		return isForked(TestnetExtractRewardMainBlock, mainBlockNumber)
-	}
-	return false
-}
-
 func (c *ChainConfig) IsSelfRetrieveRewardPatch(blockNumber, mainBlockNumber *big.Int) bool {
 	if c.IsMainChain() {
 		return isForked(c.ExtractRewardPatchMainBlock, blockNumber)
@@ -414,6 +428,11 @@ func (c *ChainConfig) IsSelfRetrieveRewardPatch(blockNumber, mainBlockNumber *bi
 		return isForked(c.ExtractRewardPatchMainBlock, mainBlockNumber)
 	}
 	return false
+}
+
+//Note: after this patch forks, autoreward will not enable until new epoch estimation
+func (c *ChainConfig) IsChild0AutoReward(blockNumber *big.Int) bool {
+	return c.PChainId == CHILD0PCHAINID && isForked(c.Child0AutoRewardBlock, blockNumber)
 }
 
 func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {

@@ -7,6 +7,7 @@ import (
 	tmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
 	"math"
@@ -25,6 +26,7 @@ const (
 	EPOCH_PROPOSED_NOT_VOTED        // value --> 1
 	EPOCH_VOTED_NOT_SAVED           // value --> 2
 	EPOCH_SAVED                     // value --> 3
+	EPOCH_CHILD0_AUTOREWARD  = int(0x100) // this is for child0_patch_autoreward, not perfect, just make it work, :-(
 
 	NextEpochProposeStartPercent  = 0.75
 	NextEpochHashVoteEndPercent   = 0.85
@@ -214,6 +216,17 @@ func (epoch *Epoch) Bytes() []byte {
 	return wire.BinaryBytes(*epoch)
 }
 
+func (epoch *Epoch) CanApplyAutoReward(child0AutoRewardBlock *big.Int) bool {
+	return new(big.Int).SetUint64(epoch.StartBlock).Cmp(child0AutoRewardBlock) > 0 &&
+		epoch.rs != nil && epoch.rs.RewardFirstYear != nil && epoch.rs.RewardFirstYear.Sign() > 0
+}
+
+func (epoch *Epoch) BytesWithAutoReward() []byte {
+	tmpEpoch := epoch.copy(false)
+	tmpEpoch.Status += EPOCH_CHILD0_AUTOREWARD
+	return wire.BinaryBytes(*tmpEpoch)
+}
+
 func (epoch *Epoch) ValidateNextEpoch(next *Epoch, lastHeight uint64, lastBlockTime time.Time) error {
 
 	myNextEpoch := epoch.ProposeNextEpoch(lastHeight, lastBlockTime)
@@ -262,7 +275,8 @@ func (epoch *Epoch) ProposeNextEpoch(lastBlockHeight uint64, lastBlockTime time.
 			Status:         EPOCH_PROPOSED_NOT_VOTED,
 			Validators:     epoch.Validators.Copy(), // Old Validators
 
-			logger: epoch.logger,
+			rs:             epoch.rs,
+			logger:         epoch.logger,
 		}
 
 		return next
@@ -389,7 +403,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 						// Refund Pending Refund
 
 						//Due to the bug before, modified 33b28ce6d3316eba8115e22b3863a685d3d33eff refunding amount mandatorily to avoid the negative number error
-						if height == 26536499 && pchainId == "child_0" && state.GetDelegateBalance(key).Cmp(pendingRefundBalance) < 0 && key == common.HexToAddress("33b28ce6d3316eba8115e22b3863a685d3d33eff"){
+						if height == 26536499 && pchainId == params.CHILD0PCHAINID && state.GetDelegateBalance(key).Cmp(pendingRefundBalance) < 0 && key == common.HexToAddress("33b28ce6d3316eba8115e22b3863a685d3d33eff"){
 							state.SubPendingRefundBalanceByUser(refundAddress, key, pendingRefundBalance)
 							pendingRefundBalance = new(big.Int).Div(pendingRefundBalance, big.NewInt(2))
 							log.Infof("Modified address 33b28ce6d3316eba8115e22b3863a685d3d33eff refunding amount, now is %s", pendingRefundBalance.String())
@@ -651,25 +665,13 @@ func (epoch *Epoch) Copy() *Epoch {
 	return epoch.copy(true)
 }
 
-func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
+func (epoch *Epoch) copy(deepcopy bool) *Epoch {
 
-	var previousEpoch, nextEpoch *Epoch
-	if copyPrevNext {
-		if epoch.previousEpoch != nil {
-			previousEpoch = epoch.previousEpoch.copy(false)
-		}
-
-		if epoch.nextEpoch != nil {
-			nextEpoch = epoch.nextEpoch.copy(false)
-		}
-	}
-
-	return &Epoch{
+	result :=  &Epoch{
 		mtx:    epoch.mtx,
 		db:     epoch.db,
 		logger: epoch.logger,
-
-		rs: epoch.rs,
+		rs:     epoch.rs,
 
 		Number:           epoch.Number,
 		RewardPerBlock:   new(big.Int).Set(epoch.RewardPerBlock),
@@ -682,9 +684,25 @@ func (epoch *Epoch) copy(copyPrevNext bool) *Epoch {
 		Validators:       epoch.Validators.Copy(),
 		validatorVoteSet: epoch.validatorVoteSet.Copy(),
 
-		previousEpoch: previousEpoch,
-		nextEpoch:     nextEpoch,
+		previousEpoch:    epoch.previousEpoch,
+		nextEpoch:        epoch.nextEpoch,
 	}
+
+	if deepcopy {
+		if epoch.rs != nil {
+			result.rs = epoch.rs.copy(true)
+		}
+
+		if epoch.previousEpoch != nil {
+			result.previousEpoch = epoch.previousEpoch.copy(deepcopy)
+		}
+
+		if epoch.nextEpoch != nil {
+			result.nextEpoch = epoch.nextEpoch.copy(deepcopy)
+		}
+	}
+
+	return result
 }
 
 func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime time.Time) (rewardPerBlock *big.Int, blocksOfNextEpoch uint64) {
@@ -810,6 +828,24 @@ func calculateRewardPerEpochByYear(rewardFirstYear *big.Int, year, totalYear, ep
 	}
 
 	return new(big.Int).Div(rewardYear, big.NewInt(epochNumberPerYear))
+}
+
+func (epoch *Epoch) Child0PatchAutoReward(isMainChain bool) {
+	if isMainChain {
+		epoch.rs.RewardFirstYear    = mainnetChild0RewardFirstYear
+		epoch.rs.EpochNumberPerYear = mainnetChild0EpochNumberPerYear
+		epoch.rs.TotalYear          = mainnetChild0TotalYear
+	} else {
+		epoch.rs.RewardFirstYear    = testnetChild0RewardFirstYear
+		epoch.rs.EpochNumberPerYear = testnetChild0EpochNumberPerYear
+		epoch.rs.TotalYear          = testnetChild0TotalYear
+	}
+
+	if epoch.nextEpoch != nil {
+		epoch.nextEpoch.rs = epoch.rs
+	}
+
+	epoch.rs.Save()
 }
 
 func (epoch *Epoch) Equals(other *Epoch, checkPrevNext bool) bool {

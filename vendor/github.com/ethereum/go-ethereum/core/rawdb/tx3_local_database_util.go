@@ -128,7 +128,7 @@ func WriteTX3ProofData(db ethdb.Database, proofData *types.TX3ProofData) error {
 	}
 
 	chainId := tdmExtra.ChainID
-	if chainId == "" || chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
+	if chainId == "" || params.IsMainChain(chainId) {
 		return fmt.Errorf("invalid child chain id: %s", chainId)
 	}
 

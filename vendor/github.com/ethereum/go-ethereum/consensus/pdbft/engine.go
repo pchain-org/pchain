@@ -438,7 +438,7 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	//}
 
 	// Add Main Chain Height if running on Child Chain
-	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId && sb.chainConfig.PChainId != params.TestnetChainConfig.PChainId {
+	if !params.IsMainChain(sb.chainConfig.PChainId) {
 		header.MainChainNumber = sb.core.cch.GetHeightFromMainChain()
 	}
 
@@ -456,7 +456,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	sb.logger.Debugf("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
 	// Check if any Child Chain need to be launch and Update their account balance accordingly
-	if sb.chainConfig.PChainId == params.MainnetChainConfig.PChainId || sb.chainConfig.PChainId == params.TestnetChainConfig.PChainId {
+	if params.IsMainChain(sb.chainConfig.PChainId) {
 		// Check the Child Chain Start
 		readyId, updateBytes, removedId := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
 		if len(readyId) > 0 || updateBytes != nil || len(removedId) > 0 {
@@ -488,13 +488,6 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
 		})
-		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber){
-			epochInfo:=epoch.GetNextEpoch();
-			if epochInfo !=nil {
-				header.Extra = epochInfo.Bytes()
-			}
-		}
-
 	}
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
@@ -734,21 +727,29 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 						totalGasFee *big.Int, selfRetrieveReward bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
-	if config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId {
-		// Main Chain
 
-		// Coinbase Reward   = 80% of Total Reward
-		// Foundation Reward = 20% of Total Reward
+	//the chain can reward its block proposer if:
+	//1, it is mainnet chain or testnet main chain
+	//2, it is child_0 and it current epoch is after the epoch which includes the Child0PatchAutoRewardBlock
+	autoReward := params.IsMainChain(config.PChainId) ||
+				(config.IsChild0AutoReward(header.Number) && ep.CanApplyAutoReward(config.Child0AutoRewardBlock))
+	if  autoReward {
 		rewardPerBlock := ep.RewardPerBlock
 		if rewardPerBlock != nil && rewardPerBlock.Sign() == 1 {
-			// 80% Coinbase Reward
-			coinbaseReward = new(big.Int).Mul(rewardPerBlock, big.NewInt(8))
-			coinbaseReward.Quo(coinbaseReward, big.NewInt(10))
-			// 20% go to PChain Foundation (For official Child Chain running cost)
-			foundationReward := new(big.Int).Sub(rewardPerBlock, coinbaseReward)
-			state.AddBalance(foundationAddress, foundationReward)
+			if params.IsMainChain(config.PChainId) {// Main Chain
+				// Coinbase Reward   = 80% of Total Reward
+				// Foundation Reward = 20% of Total Reward
+				// 80% Coinbase Reward
+				coinbaseReward = new(big.Int).Mul(rewardPerBlock, big.NewInt(8))
+				coinbaseReward.Quo(coinbaseReward, big.NewInt(10))
+				// 20% go to PChain Foundation (For official Child Chain running cost)
+				foundationReward := new(big.Int).Sub(rewardPerBlock, coinbaseReward)
+				state.AddBalance(foundationAddress, foundationReward)
 
-			coinbaseReward.Add(coinbaseReward, totalGasFee)
+				coinbaseReward.Add(coinbaseReward, totalGasFee)
+			} else { //Child_0 auto_reward
+				coinbaseReward = new(big.Int).Add(rewardPerBlock, totalGasFee)
+			}
 		} else {
 			coinbaseReward = totalGasFee
 		}

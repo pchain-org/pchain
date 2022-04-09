@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	clientIdentifier = "pchain" // Client identifier to advertise over the network; it also is the main chain's id
+	clientIdentifier = params.MAINNETPCHAINID // Client identifier to advertise over the network; it also is the main chain's id
 )
 
 func main() {
@@ -100,7 +100,7 @@ func main() {
 		log.NewLogger("", commonLogDir, ctx.GlobalInt(verbosityFlag.Name), ctx.GlobalBool(debugFlag.Name), ctx.GlobalString(vmoduleFlag.Name), ctx.GlobalString(backtraceAtFlag.Name))
 
 		// Tendermint Config
-		chainId := params.MainnetChainConfig.PChainId
+		chainId := params.MAINNETPCHAINID
 		if ctx.GlobalBool(utils.TestnetFlag.Name) {
 			chainId = params.TestnetChainConfig.PChainId
 		}

@@ -6,11 +6,22 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
+	"math"
 	"math/big"
 	"sync"
 )
 
 const rewardSchemeKey = "REWARDSCHEME"
+
+var (
+	mainnetChild0RewardFirstYear    = big.NewInt(math.MaxInt64)
+	mainnetChild0EpochNumberPerYear = uint64(8760)
+	mainnetChild0TotalYear          = uint64(23)
+
+	testnetChild0RewardFirstYear    = big.NewInt(math.MaxInt64)
+	testnetChild0EpochNumberPerYear = uint64(8760)
+	testnetChild0TotalYear          = uint64(23)
+)
 
 type RewardScheme struct {
 	mtx sync.Mutex
@@ -34,6 +45,7 @@ func LoadRewardScheme(db dbm.DB) *RewardScheme {
 			log.Errorf("LoadRewardScheme Failed, error: %v", err)
 			return nil
 		}
+		rs.db = db
 		return rs
 	}
 }
@@ -50,6 +62,24 @@ func MakeRewardScheme(db dbm.DB, rsDoc *tmTypes.RewardSchemeDoc) *RewardScheme {
 	}
 
 	return rs
+}
+
+func (rs *RewardScheme) copy(deepcopy bool) *RewardScheme {
+
+	rsCopy := &RewardScheme{
+		db:                 rs.db,
+		TotalReward:        rs.TotalReward,
+		RewardFirstYear:    rs.RewardFirstYear,
+		EpochNumberPerYear: rs.EpochNumberPerYear,
+		TotalYear:          rs.TotalYear,
+	}
+
+	if deepcopy {
+		rsCopy.TotalReward = new(big.Int).Set(rs.TotalReward)
+		rsCopy.RewardFirstYear = new(big.Int).Set(rs.RewardFirstYear)
+	}
+
+	return rsCopy
 }
 
 // Save the Reward Scheme to DB

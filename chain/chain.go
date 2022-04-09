@@ -6,6 +6,7 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/log"
 	eth "github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/pchain/ethereum"
 	"github.com/pchain/version"
 	cfg "github.com/tendermint/go-config"
@@ -15,8 +16,8 @@ import (
 
 const (
 	// Client identifier to advertise over the network
-	MainChain    = "pchain"
-	TestnetChain = "testnet"
+	MainChain    = params.MAINNETPCHAINID
+	TestnetChain = params.TESTNETPCHAINID
 )
 
 type Chain struct {

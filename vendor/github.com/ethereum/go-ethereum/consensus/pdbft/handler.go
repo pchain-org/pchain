@@ -36,10 +36,10 @@ func (sb *backend) Protocol() consensus.Protocol {
 	sb.logger.Info("Tendermint (backend) Protocol, add logic here")
 
 	var protocolName string
-	if sb.chainConfig.PChainId == params.MainnetChainConfig.PChainId || sb.chainConfig.PChainId == params.TestnetChainConfig.PChainId {
-		protocolName = "pchain" //we also use "pchain" if the net is "testnet"
+	if params.IsMainChain(sb.chainConfig.PChainId) {
+		protocolName = params.MAINNETPCHAINID //we also use "pchain" if the net is "testnet"
 	} else {
-		protocolName = "pchain_" + sb.chainConfig.PChainId
+		protocolName = params.MAINNETPCHAINID + "_" + sb.chainConfig.PChainId
 	}
 
 	return consensus.Protocol{

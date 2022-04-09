@@ -223,7 +223,7 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 
 	if !isTestnet {
 		if chainConfig.OutOfStorageBlock == nil {
-			if chainId == "child_0" {
+			if chainId == params.CHILD0PCHAINID {
 				chainConfig.OutOfStorageBlock = params.MainnetChainConfig.Child0OutOfStorageBlock
 			} else {
 				chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
@@ -256,12 +256,15 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if chainConfig.IstanbulBlock == nil {
 			chainConfig.IstanbulBlock = params.MainnetChainConfig.IstanbulBlock
 		}
-		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
+		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == params.CHILD0PCHAINID {
 			chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
+		}
+		if (chainConfig.Child0AutoRewardBlock == nil) && chainId == params.CHILD0PCHAINID {
+			chainConfig.Child0AutoRewardBlock = params.MainnetChainConfig.Child0AutoRewardBlock
 		}
 	} else {
 		if chainConfig.OutOfStorageBlock == nil {
-			if chainId == "child_0" {
+			if chainId == params.CHILD0PCHAINID {
 				chainConfig.OutOfStorageBlock = params.TestnetChainConfig.Child0OutOfStorageBlock
 			} else {
 				chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
@@ -294,8 +297,50 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if chainConfig.IstanbulBlock == nil {
 			chainConfig.IstanbulBlock = params.TestnetChainConfig.IstanbulBlock
 		}
-		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
+		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == params.CHILD0PCHAINID {
 			chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
+		}
+		if (chainConfig.Child0AutoRewardBlock == nil) && chainId == params.CHILD0PCHAINID {
+			chainConfig.Child0AutoRewardBlock = params.TestnetChainConfig.Child0AutoRewardBlock
+		}
+	}
+
+	if params.LocalChainTest && !params.IsMainChain(chainId) {
+		if chainConfig.OutOfStorageBlock == nil {
+			chainConfig.OutOfStorageBlock = big.NewInt(0)
+		}
+		if chainConfig.ExtractRewardMainBlock == nil {
+			chainConfig.ExtractRewardMainBlock = big.NewInt(0)
+		}
+		if chainConfig.ExtractRewardPatchMainBlock == nil {
+			chainConfig.ExtractRewardPatchMainBlock = big.NewInt(0)
+		}
+		if chainConfig.Sd2mcV1Block == nil {
+			chainConfig.Sd2mcV1Block = big.NewInt(0)
+		}
+		if chainConfig.ChildSd2mcWhenEpochEndsBlock == nil {
+			chainConfig.ChildSd2mcWhenEpochEndsBlock = big.NewInt(0)
+		}
+		if chainConfig.ValidateHTLCBlock == nil {
+			chainConfig.ValidateHTLCBlock = big.NewInt(0)
+		}
+		if chainConfig.HeaderHashWithoutTimeBlock == nil {
+			chainConfig.HeaderHashWithoutTimeBlock = big.NewInt(0)
+		}
+		if chainConfig.ConstantinopleBlock == nil {
+			chainConfig.ConstantinopleBlock = big.NewInt(0)
+		}
+		if chainConfig.PetersburgBlock == nil {
+			chainConfig.PetersburgBlock = big.NewInt(0)
+		}
+		if chainConfig.IstanbulBlock == nil {
+			chainConfig.IstanbulBlock = big.NewInt(0)
+		}
+		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == params.CHILD0PCHAINID {
+			chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
+		}
+		if (chainConfig.Child0AutoRewardBlock == nil) && chainId == params.CHILD0PCHAINID {
+			chainConfig.Child0AutoRewardBlock = big.NewInt(0)
 		}
 	}
 }
@@ -565,7 +610,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	go s.loopForMiningEvent()
 
 	// Start the Data Reduction
-	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0"{
+	if s.config.PruneStateData && s.chainConfig.PChainId == params.CHILD0PCHAINID{
 		go s.StartScanAndPrune(0)
 	}
 

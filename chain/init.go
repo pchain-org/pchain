@@ -269,7 +269,7 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 	if _, err := os.Stat(genFile); os.IsNotExist(err) {
 
 		var rewardScheme types.RewardSchemeDoc
-		if chainId == MainChain || chainId == TestnetChain {
+		if params.IsMainChain(chainId) {
 			posReward, _ := new(big.Int).SetString(POSReward, 10)
 			LockReward, _ := new(big.Int).SetString(LockReward, 10)
 			totalReward := new(big.Int).Sub(posReward, LockReward)
@@ -277,6 +277,13 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 				TotalReward:        totalReward,
 				RewardFirstYear:    new(big.Int).Div(totalReward, big.NewInt(8)),
 				EpochNumberPerYear: 12,
+				TotalYear:          23,
+			}
+		} else if params.LocalChainTest {
+			rewardScheme = types.RewardSchemeDoc{
+				TotalReward:        big.NewInt(0),
+				RewardFirstYear:    big.NewInt(0),
+				EpochNumberPerYear: 8760, //one epoch each hour
 				TotalYear:          23,
 			}
 		} else {
@@ -289,7 +296,7 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 		}
 
 		var rewardPerBlock *big.Int
-		if chainId == MainChain || chainId == TestnetChain {
+		if params.IsMainChain(chainId) {
 			rewardPerBlock = big.NewInt(1219698431069958847)
 		} else {
 			rewardPerBlock = big.NewInt(0)
@@ -307,6 +314,10 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 				EndBlock:       657000,
 				Status:         0,
 			},
+		}
+
+		if params.LocalChainTest && !params.IsMainChain(chainId) {
+			genDoc.CurrentEpoch.EndBlock = 7200
 		}
 
 		if privValidator != nil {

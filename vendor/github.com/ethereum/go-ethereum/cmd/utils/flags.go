@@ -939,7 +939,7 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
 	case ctx.GlobalBool(TestnetFlag.Name):
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "testnet")
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), params.TESTNETPCHAINID)
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
 	case ctx.GlobalBool(OttomanFlag.Name):

@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -123,7 +124,7 @@ func remoteConsole(ctx *cli.Context) error {
 		}
 		if path != "" {
 			if ctx.GlobalBool(utils.TestnetFlag.Name) {
-				path = filepath.Join(path, "testnet")
+				path = filepath.Join(path, params.TESTNETPCHAINID)
 			} else if ctx.GlobalBool(utils.RinkebyFlag.Name) {
 				path = filepath.Join(path, "rinkeby")
 			}
