@@ -41,7 +41,7 @@ type Backend interface {
 	// General Ethereum API
 	Downloader() *downloader.Downloader
 	ProtocolVersion() int
-	ChainID() *big.Int
+	ChainId() *big.Int
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	ChainDb() ethdb.Database
 	EventMux() *event.TypeMux

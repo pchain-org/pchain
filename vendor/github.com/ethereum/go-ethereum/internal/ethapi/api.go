@@ -81,7 +81,7 @@ func (s *PublicEthereumAPI) ProtocolVersion() hexutil.Uint {
 
 // ChainId is the EIP-155 replay-protection chain id for the current ethereum chain config.
 func (s *PublicEthereumAPI) ChainId() (hexutil.Uint64, error) {
-	return (hexutil.Uint64)(s.b.ChainID().Uint64()), nil
+	return (hexutil.Uint64)(s.b.ChainId().Uint64()), nil
 }
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up to date or has not
@@ -125,6 +125,7 @@ func (s *PublicTxPoolAPI) Content() map[string]map[string]map[string]*RPCTransac
 		"queued":  make(map[string]map[string]*RPCTransaction),
 	}
 	pending, queue := s.b.TxPoolContent()
+
 	// Flatten the pending transactions
 	for account, txs := range pending {
 		dump := make(map[string]*RPCTransaction)
@@ -1128,7 +1129,7 @@ type RPCTransaction struct {
 func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber uint64, index uint64) *RPCTransaction {
 	var signer types.Signer = types.FrontierSigner{}
 	if tx.Protected() {
-		signer = types.NewEIP155Signer(tx.ChainID())
+		signer = types.NewEIP155Signer(tx.ChainId())
 	}
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
@@ -1406,7 +1407,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	bigblock := new(big.Int).SetUint64(blockNumber)
 	var signer types.Signer = types.FrontierSigner{}
 	if tx.Protected() {
-		signer = types.NewEIP155Signer(tx.ChainID())
+		signer = types.NewEIP155Signer(tx.ChainId())
 	}
 	from, _ := types.Sender(signer, tx)
 
@@ -1700,7 +1701,7 @@ func (s *PublicTransactionPoolAPI) PendingTransactions() ([]*RPCTransaction, err
 	for _, tx := range pending {
 		var signer types.Signer = types.HomesteadSigner{}
 		if tx.Protected() {
-			signer = types.NewEIP155Signer(tx.ChainID())
+			signer = types.NewEIP155Signer(tx.ChainId())
 		}
 		from, _ := types.Sender(signer, tx)
 		if _, err := s.b.AccountManager().Find(accounts.Account{Address: from}); err == nil {
@@ -1728,7 +1729,7 @@ func (s *PublicTransactionPoolAPI) Resend(ctx context.Context, sendArgs SendTxAr
 	for _, p := range pending {
 		var signer types.Signer = types.HomesteadSigner{}
 		if p.Protected() {
-			signer = types.NewEIP155Signer(p.ChainID())
+			signer = types.NewEIP155Signer(p.ChainId())
 		}
 		wantSigHash := signer.Hash(matchTx)
 

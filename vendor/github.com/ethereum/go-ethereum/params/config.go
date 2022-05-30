@@ -121,7 +121,7 @@ var (
 		EIP150Hash:                     common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
 		EIP155Block:                    big.NewInt(10),
 		EIP158Block:                    big.NewInt(10),
-		ByzantiumBlock:                 big.NewInt(1700000),
+		ByzantiumBlock:                 big.NewInt(0),
 		ConstantinopleBlock:            big.NewInt(0),
 		PetersburgBlock:                big.NewInt(0),
 		IstanbulBlock:                  TestnetIstanbulBlock,
@@ -260,8 +260,8 @@ type CheckpointOracleConfig struct {
 // that any network, identified by its genesis block, can have its own
 // set of configuration options.
 type ChainConfig struct {
-	PChainId string   `json:"pChainID"` //PChain id identifies the current chain
-	ChainId  *big.Int `json:"chainID"`  // Chain id identifies the current chain and is used for replay protection
+	PChainId string   `json:"pChainId"` //PChain id identifies the current chain
+	ChainId  *big.Int `json:"chainId"`  // Chain id identifies the current chain and is used for replay protection
 
 	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
 
@@ -291,12 +291,12 @@ type ChainConfig struct {
 	Sd2mcV1Block                *big.Int       `json:"sd2mcV1Block, omitempty"`
 
 	// For default setup propose
-	Child0HashTimeLockContract   common.Address
-	Child0OutOfStorageBlock      *big.Int
-	ChildSd2mcWhenEpochEndsBlock *big.Int
-	ValidateHTLCBlock            *big.Int
-	HeaderHashWithoutTimeBlock   *big.Int
-	MarkProposedInEpochMainBlock *big.Int
+	Child0HashTimeLockContract   common.Address	`json:"child0HashTimeLockContract,omitempty"`
+	Child0OutOfStorageBlock      *big.Int		`json:"child0OutOfStorageBlock,omitempty"`
+	ChildSd2mcWhenEpochEndsBlock *big.Int		`json:"childSd2mcWhenEpochEndsBlock,omitempty"`
+	ValidateHTLCBlock            *big.Int		`json:"validateHTLCBlock,omitempty"`
+	HeaderHashWithoutTimeBlock   *big.Int		`json:"headerHashWithoutTimeBlock,omitempty"`
+	MarkProposedInEpochMainBlock *big.Int		`json:"markProposedInEpochMainBlock,omitempty"`
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
@@ -390,7 +390,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{PChainID: %s ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v}",
+	return fmt.Sprintf("{PChainId: %s ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Engine: %v}",
 		c.PChainId,
 		c.ChainId,
 		c.HomesteadBlock,
@@ -482,7 +482,7 @@ func (c *ChainConfig) IsHashTimeLockWithdraw(num *big.Int, contractAddress *comm
 
 func (c *ChainConfig) IsOutOfStorage(blockNumber, mainBlockNumber *big.Int) bool {
 
-	log.Debugf("IsOutOfStorage, c.PChainID, c.OutOfStorageBlock, blockNumber, mainBlockNumber is %v, %v, %v, %v",
+	log.Debugf("IsOutOfStorage, c.PChainId, c.OutOfStorageBlock, blockNumber, mainBlockNumber is %v, %v, %v, %v",
 		c.PChainId, c.OutOfStorageBlock, blockNumber, mainBlockNumber)
 	if c.PChainId == "child_0" || c.IsMainChain() {
 		return isForked(c.OutOfStorageBlock, blockNumber)
@@ -503,10 +503,10 @@ func (c *ChainConfig) IsChildSd2mcWhenEpochEndsBlock(mainBlockNumber *big.Int) b
 	return isForked(c.ChildSd2mcWhenEpochEndsBlock, mainBlockNumber)
 }
 
-func IsSelfRetrieveReward(mainChainID string, mainBlockNumber *big.Int) bool {
-	if mainChainID == MainnetChainConfig.PChainId {
+func IsSelfRetrieveReward(mainChainId string, mainBlockNumber *big.Int) bool {
+	if mainChainId == MainnetChainConfig.PChainId {
 		return isForked(MainnetExtractRewardMainBlock, mainBlockNumber)
-	} else if mainChainID == TestnetChainConfig.PChainId {
+	} else if mainChainId == TestnetChainConfig.PChainId {
 		return isForked(TestnetExtractRewardMainBlock, mainBlockNumber)
 	}
 	return false
@@ -521,10 +521,10 @@ func (c *ChainConfig) IsSelfRetrieveRewardPatch(blockNumber, mainBlockNumber *bi
 	return false
 }
 
-func IsSd2mc(mainChainID string, mainBlockNumber *big.Int) bool {
-	if mainChainID == MainnetChainConfig.PChainId {
+func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {
+	if mainChainId == MainnetChainConfig.PChainId {
 		return isForked(MainnetSd2mcV1MainBlock, mainBlockNumber)
-	} else if mainChainID == TestnetChainConfig.PChainId {
+	} else if mainChainId == TestnetChainConfig.PChainId {
 		return isForked(TestnetSd2mcV1MainBlock, mainBlockNumber)
 	}
 	return false
@@ -738,7 +738,7 @@ func (err *ConfigCompatError) Error() string {
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	ChainID                                                 *big.Int
+	ChainId                                                 *big.Int
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon, IsCatalyst                          bool
@@ -751,7 +751,7 @@ func (c *ChainConfig) Rules(mainchainNum *big.Int) Rules {
 		chainId = new(big.Int)
 	}
 	rules := Rules{
-		ChainID:          new(big.Int).Set(chainId),
+		ChainId:          new(big.Int).Set(chainId),
 		IsHomestead:      c.IsHomestead(mainchainNum),
 		IsEIP150:         c.IsEIP150(mainchainNum),
 		IsEIP155:         c.IsEIP155(mainchainNum),

@@ -154,7 +154,7 @@ func StringToFunctionType(s string) FunctionType {
 }
 
 type CreateChildChainArgs struct {
-	ChainId       string
+	ChainId          string
 	MinValidators    uint16
 	MinDepositAmount *big.Int
 	StartBlock       *big.Int
@@ -182,8 +182,8 @@ type WithdrawFromChildChainArgs struct {
 
 type WithdrawFromMainChainArgs struct {
 	ChainId string
-	Amount     *big.Int
-	TxHash     common.Hash
+	Amount  *big.Int
+	TxHash  common.Hash
 }
 
 type VoteNextEpochArgs struct {

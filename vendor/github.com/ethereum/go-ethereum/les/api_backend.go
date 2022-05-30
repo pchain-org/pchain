@@ -248,7 +248,7 @@ func (b *LesApiBackend) ProtocolVersion() int {
 	return b.eth.LesVersion() + 10000
 }
 
-func (b *LesApiBackend) ChainID() *big.Int {
+func (b *LesApiBackend) ChainId() *big.Int {
 	localChainID := b.eth.chainConfig.ChainId
 	return types.GetPublicChainID(localChainID)
 }

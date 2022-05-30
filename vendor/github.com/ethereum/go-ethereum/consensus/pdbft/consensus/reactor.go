@@ -212,7 +212,7 @@ func (conR *ConsensusReactor) Receive(chID uint64, src consensus.Peer, msgBytes 
 		conR.AddPeer(src)
 		ps = src.GetPeerState().(*PeerState)
 	}
-	//ps := src.Data.Get(conR.ChainID + "." + types.PeerStateKey).(*PeerState)
+	//ps := src.Data.Get(conR.ChainId + "." + types.PeerStateKey).(*PeerState)
 
 	switch chID {
 	case StateChannel:

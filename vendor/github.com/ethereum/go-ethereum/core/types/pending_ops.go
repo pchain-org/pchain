@@ -36,7 +36,7 @@ type PendingOp interface {
 // CreateChildChain op
 type CreateChildChainOp struct {
 	From             common.Address
-	ChainID       string
+	ChainId          string
 	MinValidators    uint16
 	MinDepositAmount *big.Int
 	StartBlock       *big.Int
@@ -45,34 +45,34 @@ type CreateChildChainOp struct {
 
 func (op *CreateChildChainOp) Conflict(op1 PendingOp) bool {
 	if op1, ok := op1.(*CreateChildChainOp); ok {
-		return op.ChainID == op1.ChainID
+		return op.ChainId == op1.ChainId
 	}
 	return false
 }
 
 func (op *CreateChildChainOp) String() string {
 	return fmt.Sprintf("CreateChildChainOp - From: %x, ChainId: %s, MinValidators: %d, MinDepositAmount: %x, StartBlock: %x, EndBlock: %x",
-		op.From, op.ChainID, op.MinValidators, op.MinDepositAmount, op.StartBlock, op.EndBlock)
+		op.From, op.ChainId, op.MinValidators, op.MinDepositAmount, op.StartBlock, op.EndBlock)
 }
 
 // JoinChildChain op
 type JoinChildChainOp struct {
 	From          common.Address
 	PubKey        crypto.PubKey
-	ChainID    string
+	ChainId       string
 	DepositAmount *big.Int
 }
 
 func (op *JoinChildChainOp) Conflict(op1 PendingOp) bool {
 	if op1, ok := op1.(*JoinChildChainOp); ok {
-		return op.ChainID == op1.ChainID && op.From == op1.From
+		return op.ChainId == op1.ChainId && op.From == op1.From
 	}
 	return false
 }
 
 func (op *JoinChildChainOp) String() string {
 	return fmt.Sprintf("JoinChildChainOp - From: %x, PubKey: %s, ChainId: %s, DepositAmount: %x",
-		op.From, op.PubKey, op.ChainID, op.DepositAmount)
+		op.From, op.PubKey, op.ChainId, op.DepositAmount)
 }
 
 // LaunchChildChain op

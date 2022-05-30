@@ -135,7 +135,7 @@ func (api *PublicDelegateAPI) CheckCandidate(ctx context.Context, address common
 
 func (api *PublicDelegateAPI) ExtractReward(ctx context.Context, from common.Address, gasPrice *hexutil.Big) (common.Hash, error) {
 
-	input, err := pabi.ChainABI.Pack(pabi.ExtractReward.String())
+	input, err := pabi.ChainABI.Pack(pabi.ExtractReward.String(), from)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -587,7 +587,7 @@ func cancelCandidateValidation(from common.Address, tx *types.Transaction, state
 
 // Common
 func derivedAddressFromTx(tx *types.Transaction) (from common.Address) {
-	signer := types.NewEIP155Signer(tx.ChainID())
+	signer := types.NewEIP155Signer(tx.ChainId())
 	from, _ = types.Sender(signer, tx)
 	return
 }

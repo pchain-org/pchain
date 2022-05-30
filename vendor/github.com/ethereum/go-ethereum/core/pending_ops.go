@@ -12,9 +12,9 @@ import (
 func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 	switch op := op.(type) {
 	case *types.CreateChildChainOp:
-		return cch.CreateChildChain(op.From, op.ChainID, op.MinValidators, op.MinDepositAmount, op.StartBlock, op.EndBlock)
+		return cch.CreateChildChain(op.From, op.ChainId, op.MinValidators, op.MinDepositAmount, op.StartBlock, op.EndBlock)
 	case *types.JoinChildChainOp:
-		return cch.JoinChildChain(op.From, op.PubKey, op.ChainID, op.DepositAmount)
+		return cch.JoinChildChain(op.From, op.PubKey, op.ChainId, op.DepositAmount)
 	case *types.LaunchChildChainsOp:
 		if len(op.ChildChainIds) > 0 {
 			var events []interface{}
@@ -51,7 +51,7 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 				bc.PostChainEvents([]interface{}{StopMiningEvent{}}, nil)
 			}
 			eng.SetEpoch(nextEp)
-			cch.ChangeValidators(op.ChainID) //must after eng.SetEpoch(nextEp), it uses epoch just set
+			cch.ChangeValidators(op.ChainId) //must after eng.SetEpoch(nextEp), it uses epoch just set
 		}
 		return err
 	default:

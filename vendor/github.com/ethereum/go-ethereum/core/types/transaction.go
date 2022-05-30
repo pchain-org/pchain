@@ -253,7 +253,7 @@ func (tx *Transaction) Type() uint8 {
 // ChainId returns the EIP155 chain ID of the transaction. The return value will always be
 // non-nil. For legacy transactions which are not replay-protected, the return value is
 // zero.
-func (tx *Transaction) ChainID() *big.Int {
+func (tx *Transaction) ChainId() *big.Int {
 	return tx.inner.chainID()
 }
 

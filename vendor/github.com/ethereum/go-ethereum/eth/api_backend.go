@@ -273,7 +273,7 @@ func (b *EthApiBackend) ProtocolVersion() int {
 	return b.eth.EthVersion()
 }
 
-func (b *EthApiBackend) ChainID() *big.Int {
+func (b *EthApiBackend) ChainId() *big.Int {
 	localChainID := b.eth.ChainConfig().ChainId
 	return types.GetPublicChainID(localChainID)
 }
