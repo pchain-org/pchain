@@ -295,7 +295,7 @@ func (cch *CrossChainHelper) GetEpochFromMainChain() (string, *epoch.Epoch) {
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
 		ep = tdm.GetEpoch()
 	}
-	return ethereum.ChainConfig().PChainID, ep
+	return ethereum.ChainConfig().PChainId, ep
 }
 
 func (cch *CrossChainHelper) GetApiBridgeFromMainChain() bridge.APIBridge {

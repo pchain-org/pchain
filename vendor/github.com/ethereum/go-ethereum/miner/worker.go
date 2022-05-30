@@ -465,7 +465,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		return err
 	}
 	work := &Work{
-		signer:    types.NewEIP155Signer(self.config.ChainID),
+		signer:    types.NewEIP155Signer(self.config.ChainId),
 		state:     state,
 		ancestors: set.New(),
 		family:    set.New(),

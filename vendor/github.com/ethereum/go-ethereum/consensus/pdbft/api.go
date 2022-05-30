@@ -156,8 +156,8 @@ func (api *API) GeneratePrivateValidator(from common.Address) (*tdmTypes.PrivVal
 
 // GetCurrentEpochNumber retrieves the current epoch number.
 func (api *API) GetCurrentEpochNumberOfChildChain(chainId string) (hexutil.Uint64, error) {
-	if api.chain.Config().PChainID != params.MainnetChainConfig.PChainID &&
-		api.chain.Config().PChainID != params.TestnetChainConfig.PChainID {
+	if api.chain.Config().PChainId != params.MainnetChainConfig.PChainId &&
+		api.chain.Config().PChainId != params.TestnetChainConfig.PChainId {
 		return hexutil.Uint64(0), errors.New("this api is only supported by main chain")
 	}
 
@@ -173,8 +173,8 @@ func (api *API) GetCurrentEpochNumberOfChildChain(chainId string) (hexutil.Uint6
 // GetEpoch retrieves the Epoch Detail by Number
 func (api *API) GetEpochOfChildChain(chainId string, num hexutil.Uint64) (*tdmTypes.EpochApi, error) {
 
-	if api.chain.Config().PChainID != params.MainnetChainConfig.PChainID &&
-		api.chain.Config().PChainID != params.TestnetChainConfig.PChainID {
+	if api.chain.Config().PChainId != params.MainnetChainConfig.PChainId &&
+		api.chain.Config().PChainId != params.TestnetChainConfig.PChainId {
 		return nil, errors.New("this api is only supported by main chain")
 	}
 

@@ -47,7 +47,7 @@ type ConsensusReactor struct {
 func NewConsensusReactor(consensusState *ConsensusState) *ConsensusReactor {
 	conR := &ConsensusReactor{
 		conS:    consensusState,
-		ChainId: consensusState.chainConfig.PChainID,
+		ChainId: consensusState.chainConfig.PChainId,
 		logger:  consensusState.backend.GetLogger(),
 	}
 

@@ -1004,7 +1004,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		// Note!!! This will BLOCK the WHOLE consensus stack since it blocks receiveRoutine.
 		// TODO: what if there're more than one round for a height? 'saveBlockToMainChain' would be called more than once
 		if cs.state.TdmExtra.NeedToSave &&
-			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainID && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainID) {
+			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
 			if cs.privValidator != nil && cs.IsProposer() {
 				cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
 				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
@@ -1014,7 +1014,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		}
 
 		if cs.state.TdmExtra.NeedToBroadcast &&
-			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainID && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainID) {
+			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
 			if cs.privValidator != nil && cs.IsProposer() {
 				cs.logger.Infof("enterPropose: broadcastTX3ProofDataToMainChain height: %v", cs.state.TdmExtra.Height)
 				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
@@ -1024,7 +1024,7 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		}
 	} else {
 		if cs.state.TdmExtra.NeedToSave &&
-			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainID && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainID) {
+			(cs.state.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && cs.state.TdmExtra.ChainID != params.TestnetChainConfig.PChainId) {
 			if cs.privValidator != nil && cs.IsProposer() {
 				cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
 				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
@@ -1548,7 +1548,7 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 		block.TdmExtra.SeenCommitHash = seenCommit.Hash()
 
 		// update 'NeedToSave' field here
-		if block.TdmExtra.ChainID != params.MainnetChainConfig.PChainID && block.TdmExtra.ChainID != params.TestnetChainConfig.PChainID {
+		if block.TdmExtra.ChainID != params.MainnetChainConfig.PChainId && block.TdmExtra.ChainID != params.TestnetChainConfig.PChainId {
 			// check epoch
 			if len(block.TdmExtra.EpochBytes) > 0 {
 				block.TdmExtra.NeedToSave = true
@@ -1609,14 +1609,14 @@ func (cs *ConsensusState) defaultSetProposal(proposal *types.Proposal) error {
 
 	if proposal.Round == cs.Round {
 		// Verify signature
-		if !cs.GetProposer().PubKey.VerifyBytes(types.SignBytes(cs.chainConfig.PChainID, proposal), proposal.Signature) {
+		if !cs.GetProposer().PubKey.VerifyBytes(types.SignBytes(cs.chainConfig.PChainId, proposal), proposal.Signature) {
 			return ErrInvalidProposalSignature
 		}
 
 	} else /*proposal.Round < cs.Round*/ {
 
 		// Verify signature
-		if !cs.proposerByRound(proposal.Round).Proposer.PubKey.VerifyBytes(types.SignBytes(cs.chainConfig.PChainID, proposal), proposal.Signature) {
+		if !cs.proposerByRound(proposal.Round).Proposer.PubKey.VerifyBytes(types.SignBytes(cs.chainConfig.PChainId, proposal), proposal.Signature) {
 			return ErrInvalidProposalSignature
 		}
 

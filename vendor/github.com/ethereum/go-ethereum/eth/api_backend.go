@@ -274,7 +274,7 @@ func (b *EthApiBackend) ProtocolVersion() int {
 }
 
 func (b *EthApiBackend) ChainID() *big.Int {
-	localChainID := b.eth.ChainConfig().ChainID
+	localChainID := b.eth.ChainConfig().ChainId
 	return types.GetPublicChainID(localChainID)
 }
 

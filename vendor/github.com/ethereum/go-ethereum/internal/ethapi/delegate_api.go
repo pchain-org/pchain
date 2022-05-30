@@ -302,7 +302,7 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 		if depositProxiedBalance.Sign() > 0 {
 			allRefund = false
 			mainChainHeight := bc.CurrentHeader().Number
-			if bc.Config().PChainID != "pchain" && bc.Config().PChainID != "testnet" {
+			if bc.Config().PChainId != "pchain" && bc.Config().PChainId != "testnet" {
 				mainChainHeight = bc.CurrentHeader().MainChainNumber
 			}
 			if !bc.Config().IsChildSd2mcWhenEpochEndsBlock(mainChainHeight) {

@@ -276,9 +276,9 @@ func MakeTendermintNode(backend *backend, config cfg.Config, chainConfig *params
 	genDocFile := config.GetString("genesis_file")
 
 	if !cmn.FileExists(genDocFile) {
-		if chainConfig.PChainID == params.MainnetChainConfig.PChainID {
+		if chainConfig.PChainId == params.MainnetChainConfig.PChainId {
 			genDoc, _ = types.GenesisDocFromJSON([]byte(types.MainnetGenesisJSON))
-		} else if chainConfig.PChainID == params.TestnetChainConfig.PChainID {
+		} else if chainConfig.PChainId == params.TestnetChainConfig.PChainId {
 			genDoc, _ = types.GenesisDocFromJSON([]byte(types.TestnetGenesisJSON))
 		} else {
 			return nil

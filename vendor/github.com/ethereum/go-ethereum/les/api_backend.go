@@ -249,7 +249,7 @@ func (b *LesApiBackend) ProtocolVersion() int {
 }
 
 func (b *LesApiBackend) ChainID() *big.Int {
-	localChainID := b.eth.chainConfig.ChainID
+	localChainID := b.eth.chainConfig.ChainId
 	return types.GetPublicChainID(localChainID)
 }
 

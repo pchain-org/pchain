@@ -100,9 +100,9 @@ func main() {
 		log.NewLogger("", commonLogDir, ctx.GlobalInt(verbosityFlag.Name), ctx.GlobalBool(debugFlag.Name), ctx.GlobalString(vmoduleFlag.Name), ctx.GlobalString(backtraceAtFlag.Name))
 
 		// Tendermint Config
-		chainId := params.MainnetChainConfig.PChainID
+		chainId := params.MainnetChainConfig.PChainId
 		if ctx.GlobalBool(utils.TestnetFlag.Name) {
-			chainId = params.TestnetChainConfig.PChainID
+			chainId = params.TestnetChainConfig.PChainId
 		}
 		chain.Config = chain.GetTendermintConfig(chainId, ctx)
 

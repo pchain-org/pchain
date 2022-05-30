@@ -440,7 +440,7 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	//}
 
 	// Add Main Chain Height if running on Child Chain
-	if sb.chainConfig.PChainID != params.MainnetChainConfig.PChainID && sb.chainConfig.PChainID != params.TestnetChainConfig.PChainID {
+	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId && sb.chainConfig.PChainId != params.TestnetChainConfig.PChainId {
 		header.MainChainNumber = sb.core.cch.GetHeightFromMainChain()
 	} else {
 		header.MainChainNumber = header.Number
@@ -460,7 +460,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	sb.logger.Debugf("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
 	// Check if any Child Chain need to be launch and Update their account balance accordingly
-	if sb.chainConfig.PChainID == params.MainnetChainConfig.PChainID || sb.chainConfig.PChainID == params.TestnetChainConfig.PChainID {
+	if sb.chainConfig.PChainId == params.MainnetChainConfig.PChainId || sb.chainConfig.PChainId == params.TestnetChainConfig.PChainId {
 		// Check the Child Chain Start
 		readyId, updateBytes, removedId := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
 		if len(readyId) > 0 || updateBytes != nil || len(removedId) > 0 {
@@ -484,11 +484,11 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
-	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainID, header.Number.Uint64(), state,
+	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
 		sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
 		selfRetrieveReward); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
-			ChainID:       sb.chainConfig.PChainID,
+			ChainID:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
 		})
 		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber) {
@@ -737,7 +737,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	totalGasFee *big.Int, selfRetrieveReward bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
-	if config.PChainID == params.MainnetChainConfig.PChainID || config.PChainID == params.TestnetChainConfig.PChainID {
+	if config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId {
 		// Main Chain
 
 		// Coinbase Reward   = 80% of Total Reward

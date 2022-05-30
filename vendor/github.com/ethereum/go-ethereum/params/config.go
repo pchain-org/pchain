@@ -78,8 +78,8 @@ var (
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		PChainID:                     "pchain",
-		ChainID:                      big.NewInt(1),
+		PChainId:                     "pchain",
+		ChainId:                      big.NewInt(1),
 		HomesteadBlock:               big.NewInt(0),
 		DAOForkBlock:                 nil,
 		DAOForkSupport:               false,
@@ -112,8 +112,8 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the test network.
 	TestnetChainConfig = &ChainConfig{
-		PChainID:                       "testnet",
-		ChainID:                        big.NewInt(2),
+		PChainId:                       "testnet",
+		ChainId:                        big.NewInt(2),
 		HomesteadBlock:                 big.NewInt(0),
 		DAOForkBlock:                   nil,
 		DAOForkSupport:                 true,
@@ -142,8 +142,8 @@ var (
 
 	// RinkebyChainConfig contains the chain parameters to run a node on the Rinkeby test network.
 	RinkebyChainConfig = &ChainConfig{
-		PChainID:            "",
-		ChainID:             big.NewInt(4),
+		PChainId:            "",
+		ChainId:             big.NewInt(4),
 		HomesteadBlock:      big.NewInt(1),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -163,8 +163,8 @@ var (
 
 	// OttomanChainConfig contains the chain parameters to run a node on the Ottoman test network.
 	OttomanChainConfig = &ChainConfig{
-		PChainID:            "",
-		ChainID:             big.NewInt(5),
+		PChainId:            "",
+		ChainId:             big.NewInt(5),
 		HomesteadBlock:      big.NewInt(1),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -201,8 +201,8 @@ var (
 )
 
 func init() {
-	digest := crypto.Keccak256([]byte(MainnetChainConfig.PChainID))
-	MainnetChainConfig.ChainID = new(big.Int).SetBytes(digest[:])
+	digest := crypto.Keccak256([]byte(MainnetChainConfig.PChainId))
+	MainnetChainConfig.ChainId = new(big.Int).SetBytes(digest[:])
 }
 
 
@@ -260,8 +260,8 @@ type CheckpointOracleConfig struct {
 // that any network, identified by its genesis block, can have its own
 // set of configuration options.
 type ChainConfig struct {
-	PChainID string   `json:"pChainID"` //PChain id identifies the current chain
-	ChainID  *big.Int `json:"chainID"`  // Chain id identifies the current chain and is used for replay protection
+	PChainId string   `json:"pChainID"` //PChain id identifies the current chain
+	ChainId  *big.Int `json:"chainID"`  // Chain id identifies the current chain and is used for replay protection
 
 	HomesteadBlock *big.Int `json:"homesteadBlock,omitempty"` // Homestead switch block (nil = no fork, 0 = already homestead)
 
@@ -351,7 +351,7 @@ func (c *TendermintConfig) String() string {
 // Create a new Chain Config based on the Chain ID, for child chain creation purpose
 func NewChildChainConfig(childChainID string) *ChainConfig {
 	config := &ChainConfig{
-		PChainID:       childChainID,
+		PChainId:       childChainID,
 		HomesteadBlock: big.NewInt(0),
 		DAOForkBlock:   nil,
 		DAOForkSupport: false,
@@ -369,8 +369,8 @@ func NewChildChainConfig(childChainID string) *ChainConfig {
 		},
 	}
 
-	digest := crypto.Keccak256([]byte(config.PChainID))
-	config.ChainID = new(big.Int).SetBytes(digest[:])
+	digest := crypto.Keccak256([]byte(config.PChainId))
+	config.ChainId = new(big.Int).SetBytes(digest[:])
 
 	return config
 }
@@ -391,8 +391,8 @@ func (c *ChainConfig) String() string {
 		engine = "unknown"
 	}
 	return fmt.Sprintf("{PChainID: %s ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Berlin: %v, London: %v, Engine: %v}",
-		c.PChainID,
-		c.ChainID,
+		c.PChainId,
+		c.ChainId,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
 		c.DAOForkSupport,
@@ -483,8 +483,8 @@ func (c *ChainConfig) IsHashTimeLockWithdraw(num *big.Int, contractAddress *comm
 func (c *ChainConfig) IsOutOfStorage(blockNumber, mainBlockNumber *big.Int) bool {
 
 	log.Debugf("IsOutOfStorage, c.PChainID, c.OutOfStorageBlock, blockNumber, mainBlockNumber is %v, %v, %v, %v",
-		c.PChainID, c.OutOfStorageBlock, blockNumber, mainBlockNumber)
-	if c.PChainID == "child_0" || c.IsMainChain() {
+		c.PChainId, c.OutOfStorageBlock, blockNumber, mainBlockNumber)
+	if c.PChainId == "child_0" || c.IsMainChain() {
 		return isForked(c.OutOfStorageBlock, blockNumber)
 	} else {
 		return isForked(c.OutOfStorageBlock, mainBlockNumber)
@@ -504,9 +504,9 @@ func (c *ChainConfig) IsChildSd2mcWhenEpochEndsBlock(mainBlockNumber *big.Int) b
 }
 
 func IsSelfRetrieveReward(mainChainID string, mainBlockNumber *big.Int) bool {
-	if mainChainID == MainnetChainConfig.PChainID {
+	if mainChainID == MainnetChainConfig.PChainId {
 		return isForked(MainnetExtractRewardMainBlock, mainBlockNumber)
-	} else if mainChainID == TestnetChainConfig.PChainID {
+	} else if mainChainID == TestnetChainConfig.PChainId {
 		return isForked(TestnetExtractRewardMainBlock, mainBlockNumber)
 	}
 	return false
@@ -522,9 +522,9 @@ func (c *ChainConfig) IsSelfRetrieveRewardPatch(blockNumber, mainBlockNumber *bi
 }
 
 func IsSd2mc(mainChainID string, mainBlockNumber *big.Int) bool {
-	if mainChainID == MainnetChainConfig.PChainID {
+	if mainChainID == MainnetChainConfig.PChainId {
 		return isForked(MainnetSd2mcV1MainBlock, mainBlockNumber)
-	} else if mainChainID == TestnetChainConfig.PChainID {
+	} else if mainChainID == TestnetChainConfig.PChainId {
 		return isForked(TestnetSd2mcV1MainBlock, mainBlockNumber)
 	}
 	return false
@@ -540,12 +540,12 @@ func (c *ChainConfig) IsHeaderHashWithoutTimeBlock(mainBlockNumber *big.Int) boo
 
 // Check whether is on main chain or not
 func (c *ChainConfig) IsMainChain() bool {
-	return c.PChainID == MainnetChainConfig.PChainID || c.PChainID == TestnetChainConfig.PChainID
+	return c.PChainId == MainnetChainConfig.PChainId || c.PChainId == TestnetChainConfig.PChainId
 }
 
 // Check provided chain id is on main chain or not
 func IsMainChain(chainId string) bool {
-	return chainId == MainnetChainConfig.PChainID || chainId == TestnetChainConfig.PChainID
+	return chainId == MainnetChainConfig.PChainId || chainId == TestnetChainConfig.PChainId
 }
 
 // GasTable returns the gas table corresponding to the current phase (homestead or homestead reprice).
@@ -646,7 +646,7 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	if isForkIncompatible(c.EIP158Block, newcfg.EIP158Block, head) {
 		return newCompatError("EIP158 fork block", c.EIP158Block, newcfg.EIP158Block)
 	}
-	if c.IsEIP158(head) && !configNumEqual(c.ChainID, newcfg.ChainID) {
+	if c.IsEIP158(head) && !configNumEqual(c.ChainId, newcfg.ChainId) {
 		return newCompatError("EIP158 chain ID", c.EIP158Block, newcfg.EIP158Block)
 	}
 	if isForkIncompatible(c.ByzantiumBlock, newcfg.ByzantiumBlock, head) {
@@ -746,7 +746,7 @@ type Rules struct {
 
 // Rules ensures c's ChainID is not nil.
 func (c *ChainConfig) Rules(mainchainNum *big.Int) Rules {
-	chainId := c.ChainID
+	chainId := c.ChainId
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
