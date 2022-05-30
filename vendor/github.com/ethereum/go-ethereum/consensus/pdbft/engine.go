@@ -3,6 +3,9 @@ package pdbft
 import (
 	"bytes"
 	"errors"
+	"math/big"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
@@ -11,10 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/hashicorp/golang-lru"
+	"github.com/ethereum/go-ethereum/trie"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/tendermint/go-wire"
-	"math/big"
-	"time"
 )
 
 const (
@@ -440,6 +442,8 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	// Add Main Chain Height if running on Child Chain
 	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId && sb.chainConfig.PChainId != params.TestnetChainConfig.PChainId {
 		header.MainChainNumber = sb.core.cch.GetHeightFromMainChain()
+	} else {
+		header.MainChainNumber = header.Number
 	}
 
 	return nil
@@ -476,21 +480,20 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 	selfRetrieveReward := consensus.IsSelfRetrieveReward(sb.GetEpoch(), chain, header)
 
-
 	// Calculate the rewards
 	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
-										sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
-										selfRetrieveReward); ok {
+		sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
+		selfRetrieveReward); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
 		})
-		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber){
-			epochInfo:=epoch.GetNextEpoch();
-			if epochInfo !=nil {
+		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber) {
+			epochInfo := epoch.GetNextEpoch()
+			if epochInfo != nil {
 				header.Extra = epochInfo.Bytes()
 			}
 		}
@@ -499,7 +502,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts), nil
+	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
 }
 
 // Seal generates a new block for the given input block with the local miner's
@@ -708,7 +711,7 @@ func prepareExtra(header *types.Header, vals []common.Address) ([]byte, error) {
 func writeSeal(h *types.Header, seal []byte) error {
 
 	//logger.Info("Tendermint (backend) writeSeal, add logic here")
-	if h.Extra==nil{
+	if h.Extra == nil {
 		payload := types.MagicExtra
 		h.Extra = payload
 	}
@@ -804,7 +807,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	rollbackCatchup := false
 	if outsideReward {
-		lastBlock, err := state.ReadOOSLastBlock();
+		lastBlock, err := state.ReadOOSLastBlock()
 		if err == nil && header.Number.Cmp(lastBlock) <= 0 {
 			rollbackCatchup = true
 		}
@@ -815,7 +818,6 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	height := header.Number.Uint64()
 	divideRewardByEpoch(state, header.Coinbase, ep.Number, height, selfReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 
-
 	// Calculate the Delegate Reward
 	if delegateReward != nil && delegateReward.Sign() > 0 {
 		totalIndividualReward := big.NewInt(0)
@@ -824,7 +826,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			if depositProxiedBalance.Sign() == 1 {
 				// deposit * delegateReward / total deposit
 				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
-				divideRewardByEpoch(state, key, ep.Number, height,individualReward, outsideReward, selfRetrieveReward, rollbackCatchup)
+				divideRewardByEpoch(state, key, ep.Number, height, individualReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 				totalIndividualReward.Add(totalIndividualReward, individualReward)
 			}
 			return true
@@ -836,7 +838,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			diff := new(big.Int).Sub(delegateReward, totalIndividualReward)
 			if outsideReward {
 				if !rollbackCatchup {
-					state.AddOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number,height, diff)
+					state.AddOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, height, diff)
 				} else {
 					state.AddRewardBalance(header.Coinbase, diff)
 				}
@@ -848,7 +850,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			diff := new(big.Int).Sub(totalIndividualReward, delegateReward)
 			if outsideReward {
 				if !rollbackCatchup {
-					state.SubOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number,height, diff)
+					state.SubOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, height, diff)
 				} else {
 					state.SubRewardBalance(header.Coinbase, diff)
 				}
@@ -867,7 +869,7 @@ func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber 
 		if i == epochNumber+11 {
 			if outsideReward {
 				if !rollbackCatchup {
-					state.AddOutsideRewardBalanceByEpochNumber(addr, i, height,lastEpochReward)
+					state.AddOutsideRewardBalanceByEpochNumber(addr, i, height, lastEpochReward)
 				} else {
 					state.AddRewardBalance(addr, lastEpochReward)
 				}
@@ -877,7 +879,7 @@ func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber 
 		} else {
 			if outsideReward {
 				if !rollbackCatchup {
-					state.AddOutsideRewardBalanceByEpochNumber(addr, i, height,epochReward)
+					state.AddOutsideRewardBalanceByEpochNumber(addr, i, height, epochReward)
 				} else {
 					state.AddRewardBalance(addr, epochReward)
 				}

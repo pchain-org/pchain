@@ -23,6 +23,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // Type enumerator
@@ -226,6 +228,42 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 	}
 
 	return
+}
+
+// GetType returns the reflection type of the ABI type.
+func (t Type) GetType() reflect.Type {
+	switch t.T {
+	case IntTy:
+		return reflectIntType(false, t.Size)
+	case UintTy:
+		return reflectIntType(true, t.Size)
+	case BoolTy:
+		return reflect.TypeOf(false)
+	case StringTy:
+		return reflect.TypeOf("")
+	case SliceTy:
+		return reflect.SliceOf(t.Elem.GetType())
+	case ArrayTy:
+		return reflect.ArrayOf(t.Size, t.Elem.GetType())
+	case TupleTy:
+		return t.Type
+	case AddressTy:
+		return reflect.TypeOf(common.Address{})
+	case FixedBytesTy:
+		return reflect.ArrayOf(t.Size, reflect.TypeOf(byte(0)))
+	case BytesTy:
+		return reflect.SliceOf(reflect.TypeOf(byte(0)))
+	case HashTy:
+		// hashtype currently not used
+		return reflect.ArrayOf(32, reflect.TypeOf(byte(0)))
+	case FixedPointTy:
+		// fixedpoint type currently not used
+		return reflect.ArrayOf(32, reflect.TypeOf(byte(0)))
+	case FunctionTy:
+		return reflect.ArrayOf(24, reflect.TypeOf(byte(0)))
+	default:
+		panic("Invalid type")
+	}
 }
 
 // String implements Stringer

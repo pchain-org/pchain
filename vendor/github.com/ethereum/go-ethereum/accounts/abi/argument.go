@@ -110,6 +110,23 @@ func (arguments Arguments) Unpack(v interface{}, data []byte) error {
 	return arguments.unpackAtomic(v, marshalledValues[0])
 }
 
+// Unpack performs the operation hexdata -> Go format.
+func (arguments Arguments) UnpackEx(data []byte) ([]interface{}, error) {
+	if len(data) == 0 {
+		if len(arguments) != 0 {
+			return nil, fmt.Errorf("abi: attempting to unmarshall an empty string while arguments are expected")
+		}
+		// Nothing to unmarshal, return default variables
+		nonIndexedArgs := arguments.NonIndexed()
+		defaultVars := make([]interface{}, len(nonIndexedArgs))
+		for index, arg := range nonIndexedArgs {
+			defaultVars[index] = reflect.New(arg.Type.GetType())
+		}
+		return defaultVars, nil
+	}
+	return arguments.UnpackValues(data)
+}
+
 // UnpackIntoMap performs the operation hexdata -> mapping of argument name to argument value
 func (arguments Arguments) UnpackIntoMap(v map[string]interface{}, data []byte) error {
 	if len(data) == 0 {
