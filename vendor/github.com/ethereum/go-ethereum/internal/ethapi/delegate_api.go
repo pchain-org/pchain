@@ -587,7 +587,7 @@ func cancelCandidateValidation(from common.Address, tx *types.Transaction, state
 
 // Common
 func derivedAddressFromTx(tx *types.Transaction) (from common.Address) {
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, _ = types.Sender(signer, tx)
 	return
 }

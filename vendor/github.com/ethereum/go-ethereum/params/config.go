@@ -65,14 +65,25 @@ var (
 	MainnetIstanbulBlock = big.NewInt(24195000)
 	TestnetIstanbulBlock = big.NewInt(40)
 
-	MainnetMuirGlacierBlock = big.NewInt(100000000000)
-	TestnetMuirGlacierBlock = big.NewInt(100000000000)
+	//!!! be careful, any assignment will be effective immediately with the new mechanism,
+	// even the assigned number is much bigger than current head
+	MainnetMuirGlacierBlock *big.Int = nil //big.NewInt(100000000000), must be larger than EIP155PatchEndBlock below
+	TestnetMuirGlacierBlock *big.Int = nil
 
-	MainnetBerlinBlock = big.NewInt(100000000000)
-	TestnetBerlinBlock = big.NewInt(100000000000)
+	//!!! be careful, any assignment will be effective immediately with the new mechanism,
+	// even the assigned number is much bigger than current head
+	MainnetBerlinBlock *big.Int = nil //big.NewInt(100000000000), must be larger than EIP155PatchEndBlock below
+	TestnetBerlinBlock *big.Int = nil
 
-	MainnetLondonBlock *big.Int = nil
+	//!!! be careful, any assignment will be effective immediately with the new mechanism,
+	// even the assigned number is much bigger than current head
+	MainnetLondonBlock *big.Int = nil //big.NewInt(100000000000), must be larger than EIP155PatchEndBlock below
 	TestnetLondonBlock *big.Int = nil
+
+	//To patch EvmCatchup commit '5de7c68' in master branch, which removes the check for chainId in tx,
+	//must be less than MainnetMuirGlacierBlock, MainnetBerlinBlock and MainnetLondonBlock if they are enabled
+	EIP155PatchStartBlock = big.NewInt(41168974)
+	EIP155PatchEndBlock   = big.NewInt(41168974)
 )
 
 var (

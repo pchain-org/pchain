@@ -79,11 +79,11 @@ If you want to build and run pchain under Windows(Not recommended), you could re
 If you want to know more about our Command Line Options,please consult our
 [CLI Wiki page](https://pliangroup.gitbook.io/plian/using-the-blockchain/advanced-features/command-line-options)
 
-### Please Check Your Pchain Client Version (Latest:1.3.9)
+### Please Check Your Pchain Client Version (Latest:1.4.00)
 
 ```
 $ pchain version
-//1.3.9
+//1.4.00
 ```
 
 ### Sync and run testnet

@@ -27,7 +27,10 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var ErrInvalidChainId = errors.New("invalid chain id for signer")
+var (
+	ErrInvalidChainId = errors.New("invalid chain id for signer")
+	ErrInvalidSigner  = errors.New("invalid signer, should be eip155")
+)
 
 // sigCache is used to cache the derived sender and contains
 // the signer used to derive it.
@@ -36,8 +39,27 @@ type sigCache struct {
 	from   common.Address
 }
 
+// MakeSigner returns a Signer based on the given chain ID and main block number.
+// !!! becareful, the mainBlockNumber is the current block height of MainNet 'pchain'
+// !!! the chainId can still be the local chainId
+func MakeSignerWithMainBlock(config *params.ChainConfig, mainBlockNumber *big.Int) Signer {
+	var signer Signer
+	switch {
+		case params.MainnetChainConfig.IsLondon(mainBlockNumber):
+			signer = NewLondonSigner(config.ChainId)
+		case params.MainnetChainConfig.IsBerlin(mainBlockNumber):
+			signer = NewEIP2930Signer(config.ChainId)
+		case params.MainnetChainConfig.IsEIP155(mainBlockNumber):
+			checkProtect := mainBlockNumber.Cmp(params.EIP155PatchStartBlock) < 0 || mainBlockNumber.Cmp(params.EIP155PatchEndBlock) > 0
+			signer = NewEIP155Signer(config.ChainId, checkProtect)
+		default:
+			signer = NewEIP155Signer(config.ChainId, true)
+	}
+	return signer
+}
+
 // MakeSigner returns a Signer based on the given chain config and block number.
-func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
+func MakeSignerWithLocalBlock(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	var signer Signer
 	switch {
 	case config.IsLondon(blockNumber):
@@ -45,11 +67,13 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 	case config.IsBerlin(blockNumber):
 		signer = NewEIP2930Signer(config.ChainId)
 	case config.IsEIP155(blockNumber):
-		signer = NewEIP155Signer(config.ChainId)
-	case config.IsHomestead(blockNumber):
-		signer = HomesteadSigner{}
+		checkProtect := true
+		if config.IsMainChain() {
+			checkProtect = blockNumber.Cmp(params.EIP155PatchStartBlock) < 0 || blockNumber.Cmp(params.EIP155PatchEndBlock) > 0
+		}
+		signer = NewEIP155Signer(config.ChainId, checkProtect)
 	default:
-		signer = FrontierSigner{}
+		signer = NewEIP155Signer(config.ChainId, true)
 	}
 	return signer
 }
@@ -62,18 +86,14 @@ func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
 // Use this in transaction-handling code where the current block number is unknown. If you
 // have the current block number available, use MakeSigner instead.
 func LatestSigner(config *params.ChainConfig) Signer {
-	if config.ChainId != nil {
-		if config.LondonBlock != nil {
-			return NewLondonSigner(config.ChainId)
-		}
-		if config.BerlinBlock != nil {
-			return NewEIP2930Signer(config.ChainId)
-		}
-		if config.EIP155Block != nil {
-			return NewEIP155Signer(config.ChainId)
-		}
+
+	if config.LondonBlock != nil {
+		return NewLondonSigner(config.ChainId)
 	}
-	return HomesteadSigner{}
+	if config.BerlinBlock != nil {
+		return NewEIP2930Signer(config.ChainId)
+	}
+	return NewEIP155Signer(config.ChainId, true)
 }
 
 // LatestSignerForChainID returns the 'most permissive' Signer available. Specifically,
@@ -84,10 +104,14 @@ func LatestSigner(config *params.ChainConfig) Signer {
 // configuration are unknown. If you have a ChainConfig, use LatestSigner instead.
 // If you have a ChainConfig and know the current block number, use MakeSigner instead.
 func LatestSignerForChainID(chainID *big.Int) Signer {
-	if chainID == nil {
-		return HomesteadSigner{}
+
+	if params.MainnetChainConfig.LondonBlock != nil {
+		return NewLondonSigner(chainID)
 	}
-	return NewLondonSigner(chainID)
+	if params.MainnetChainConfig.BerlinBlock != nil {
+		return NewEIP2930Signer(chainID)
+	}
+	return NewEIP155Signer(chainID, true)
 }
 
 // SignTx signs the transaction using the given signer and private key.
@@ -197,7 +221,7 @@ type londonSigner struct{ eip2930Signer }
 // - EIP-155 replay protected transactions, and
 // - legacy Homestead transactions.
 func NewLondonSigner(chainId *big.Int) Signer {
-	return londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}
+	return londonSigner{eip2930Signer{NewEIP155Signer(chainId, true)}}
 }
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
@@ -260,7 +284,7 @@ type eip2930Signer struct{ EIP155Signer }
 // NewEIP2930Signer returns a signer that accepts EIP-2930 access list transactions,
 // EIP-155 replay protected transactions, and legacy Homestead transactions.
 func NewEIP2930Signer(chainId *big.Int) Signer {
-	return eip2930Signer{NewEIP155Signer(chainId)}
+	return eip2930Signer{NewEIP155Signer(chainId, true)}
 }
 
 func (s eip2930Signer) ChainID() *big.Int {
@@ -352,15 +376,18 @@ func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 // are replay-protected as well as unprotected homestead transactions.
 type EIP155Signer struct {
 	chainId, chainIdMul *big.Int
+	checkProtect bool
 }
 
-func NewEIP155Signer(chainId *big.Int) EIP155Signer {
+func NewEIP155Signer(chainId *big.Int, checkProtect bool) EIP155Signer {
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
+
 	return EIP155Signer{
-		chainId:    chainId,
-		chainIdMul: new(big.Int).Mul(chainId, big.NewInt(2)),
+		chainId:    	chainId,
+		chainIdMul: 	new(big.Int).Mul(chainId, big.NewInt(2)),
+		checkProtect: 	checkProtect,
 	}
 }
 
@@ -380,7 +407,11 @@ func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
 	if !tx.Protected() {
-		return HomesteadSigner{}.Sender(tx)
+		if s.checkProtect {
+			return common.Address{}, ErrInvalidSigner
+		} else {
+			return HomesteadSigner{}.Sender(tx)
+		}
 	}
 	V, R, S := tx.RawSignatureValues()
 	if tx.ChainId().BitLen() <= 32 { // tx from ethereum tool
