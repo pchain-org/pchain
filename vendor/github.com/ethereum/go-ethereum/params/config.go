@@ -74,8 +74,10 @@ var (
 	MainnetLondonBlock *big.Int = nil
 	TestnetLondonBlock *big.Int = nil
 
-	MainnetMarkProposedInEpochMainBlock = big.NewInt(100000000000)
-	TestnetMarkProposedInEpochMainBlock = big.NewInt(40)
+	//To patch EvmCatchup commit '5de7c68' in master branch, which removes the check for chainId in tx,
+	//must be less than MainnetMuirGlacierBlock, MainnetBerlinBlock and MainnetLondonBlock if they are enabled
+	EIP155PatchStartBlock = big.NewInt(41168974)
+	EIP155PatchEndBlock   = big.NewInt(41168974)
 )
 
 var (

@@ -802,7 +802,7 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 
 // SetReceiptsData computes all the non-consensus fields of the receipts
 func SetReceiptsData(config *params.ChainConfig, block *types.Block, receipts types.Receipts) error {
-	signer := types.MakeSigner(config, block.Number())
+	signer := types.MakeSignerWithMainBlock(config, block.Header().MainChainNumber)
 
 	transactions, logIndex := block.Transactions(), uint(0)
 	if len(transactions) != len(receipts) {

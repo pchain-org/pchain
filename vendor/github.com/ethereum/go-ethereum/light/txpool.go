@@ -91,7 +91,7 @@ type TxRelayBackend interface {
 func NewTxPool(config *params.ChainConfig, chain *LightChain, relay TxRelayBackend) *TxPool {
 	pool := &TxPool{
 		config:      config,
-		signer:      types.NewEIP155Signer(config.ChainId),
+		signer:      types.LatestSigner(config),
 		nonce:       make(map[common.Address]uint64),
 		pending:     make(map[common.Hash]*types.Transaction),
 		mined:       make(map[common.Hash][]*types.Transaction),
@@ -315,7 +315,6 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	pool.homestead = pool.config.IsHomestead(mainchainNumber)
 	pool.homestead = pool.config.IsIstanbul(mainchainNumber)
 	pool.eip2718 = pool.config.IsBerlin(mainchainNumber)
-	pool.signer = types.MakeSigner(pool.config, mainchainNumber)
 }
 
 // Stop stops the light transaction pool

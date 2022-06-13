@@ -2,14 +2,14 @@ package ethclient
 
 import (
 	"context"
-	"crypto/ecdsa"
+	//"crypto/ecdsa"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
+	//"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
-	pabi "github.com/pchain/abi"
+	//pabi "github.com/pchain/abi"
 	"github.com/pkg/errors"
 	"math/big"
 	"math/rand"
@@ -140,6 +140,8 @@ func WrpTransactionByHash(chainUrl string, hash common.Hash) (tx *types.Transact
 
 
 // SendDataToMainChain send epoch data to main chain through eth_sendRawTransaction
+// deprecated
+/*
 func SendDataToMainChain(chainUrl string, data []byte, prv *ecdsa.PrivateKey, mainChainId string) (common.Hash, error) {
 
 	// data
@@ -201,6 +203,7 @@ func SendDataToMainChain(chainUrl string, data []byte, prv *ecdsa.PrivateKey, ma
 
 	return hash, err
 }
+*/
 
 // BroadcastDataToMainChain send tx3 proof data to MainChain via rpc call, then broadcast it via p2p network
 func BroadcastDataToMainChain(chainUrl string, chainId string, data []byte) error {
