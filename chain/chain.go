@@ -111,7 +111,7 @@ func CreateChildChain(ctx *cli.Context, chainId string, validator tdmTypes.PrivV
 	init_eth_blockchain(chainId, config.GetString("eth_genesis_file"), ctx)
 
 	// Init the Tendermint Genesis
-	init_em_files(config, chainId, config.GetString("eth_genesis_file"), validators)
+	init_tdm_files(config, chainId, config.GetString("eth_genesis_file"), validators)
 
 	return nil
 }

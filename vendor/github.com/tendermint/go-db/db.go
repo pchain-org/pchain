@@ -1,7 +1,10 @@
 package db
 
-import . "github.com/tendermint/go-common"
-import 	"sync"
+import (
+	"sync"
+
+	. "github.com/tendermint/go-common"
+)
 
 type DB interface {
 	Get([]byte) []byte

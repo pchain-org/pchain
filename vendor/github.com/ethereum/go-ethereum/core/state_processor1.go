@@ -17,73 +17,72 @@ import (
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, ops *types.PendingOps,
-	header *types.Header, tx *types.Transaction, usedGas *uint64, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper, mining bool) (*types.Receipt, uint64, error) {
-
-	signer := types.MakeSigner(config, header.Number)
-	msg, err := tx.AsMessage(signer)
-	if err != nil {
-		return nil, 0, err
-	}
+func applyTransactionEx(msg types.Message, config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, ops *types.PendingOps, header *types.Header,
+	tx *types.Transaction, usedGas *uint64, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper, mining bool, evm *vm.EVM) (*types.Receipt, uint64, error) {
 
 	// Not allow contract creation on PChain Main Chain
 	if config.IsMainChain() && tx.To() == nil {
 		return nil, 0, ErrNoContractOnMainChain
 	}
 
+	blockNumber := header.Number
+	blockHash := header.Hash()
+
 	if !pabi.IsPChainContractAddr(tx.To()) {
 
 		//log.Debugf("ApplyTransactionEx 1\n")
 
-		// Create a new context to be used in the EVM environment
-		context := NewEVMContext(msg, header, bc, author)
+		// Create a new context to be used in the EVM environment.
+		txContext := NewEVMTxContext(msg)
+		evm.Reset(txContext, statedb)
 
 		//log.Debugf("ApplyTransactionEx 2\n")
 
-		// Create a new environment which holds all relevant information
-		// about the transaction and calling mechanisms.
-		vmenv := vm.NewEVM(context, statedb, config, cfg)
-		// Apply the transaction to the current state (included in the env)
-		_, gas, money, failed, err := ApplyMessageEx(vmenv, msg, gp)
+		// Apply the transaction to the current state (included in the env).
+		result, money, err := ApplyMessageEx(evm, msg, gp)
 		if err != nil {
 			return nil, 0, err
 		}
 
-		//log.Debugf("ApplyTransactionEx 3\n")
-		// Update the state with pending changes
+		// Update the state with pending changes.
 		var root []byte
-		if config.IsByzantium(header.Number) {
+		if config.IsByzantium(blockNumber) {
 			//log.Debugf("ApplyTransactionEx(), is byzantium\n")
 			statedb.Finalise(true)
 		} else {
 			//log.Debugf("ApplyTransactionEx(), is not byzantium\n")
 			root = statedb.IntermediateRoot(false).Bytes()
 		}
-		*usedGas += gas
+		*usedGas += result.UsedGas
 		totalUsedMoney.Add(totalUsedMoney, money)
 
-		// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
-		// based on the eip phase, we're passing wether the root touch-delete accounts.
-		receipt := types.NewReceipt(root, failed, *usedGas)
+		// Create a new receipt for the transaction, storing the intermediate root and gas used
+		// by the tx.
+		receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
+		if result.Failed() {
+			receipt.Status = types.ReceiptStatusFailed
+		} else {
+			receipt.Status = types.ReceiptStatusSuccessful
+		}
 		//log.Debugf("ApplyTransactionEx，new receipt with (root,failed,*usedGas) = (%v,%v,%v)\n", root, failed, *usedGas)
 		receipt.TxHash = tx.Hash()
 		//log.Debugf("ApplyTransactionEx，new receipt with txhash %v\n", receipt.TxHash)
-		receipt.GasUsed = gas
+		receipt.GasUsed = result.UsedGas
 		//log.Debugf("ApplyTransactionEx，new receipt with gas %v\n", receipt.GasUsed)
-		// if the transaction created a contract, store the creation address in the receipt.
+		// If the transaction created a contract, store the creation address in the receipt.
 		if msg.To() == nil {
-			receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
+			receipt.ContractAddress = crypto.CreateAddress(evm.TxContext.Origin, tx.Nonce())
 		}
-		// Set the receipt logs and create a bloom for filtering
-		receipt.Logs = statedb.GetLogs(tx.Hash())
+		// Set the receipt logs and create the bloom filter.
+		receipt.Logs = statedb.GetLogs(tx.Hash(), blockHash)
 		//log.Debugf("ApplyTransactionEx，new receipt with receipt.Logs %v\n", receipt.Logs)
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-		receipt.BlockHash = statedb.BlockHash()
-		receipt.BlockNumber = header.Number
+		receipt.BlockHash = blockHash
+		receipt.BlockNumber = blockNumber
 		receipt.TransactionIndex = uint(statedb.TxIndex())
 		//log.Debugf("ApplyTransactionEx，new receipt with receipt.Bloom %v\n", receipt.Bloom)
 		//log.Debugf("ApplyTransactionEx 4\n")
-		return receipt, gas, err
+		return receipt, result.UsedGas, err
 
 	} else {
 
@@ -104,14 +103,20 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 		from := msg.From()
 		// Make sure this transaction's nonce is correct
-		if msg.CheckNonce() {
-			nonce := statedb.GetNonce(from)
-			if nonce < msg.Nonce() {
-				log.Info("ApplyTransactionEx() abort due to nonce too high")
-				return nil, 0, ErrNonceTooHigh
-			} else if nonce > msg.Nonce() {
-				log.Info("ApplyTransactionEx() abort due to nonce too low")
-				return nil, 0, ErrNonceTooLow
+		if !msg.IsFake() {
+			// Make sure this transaction's nonce is correct.
+			stNonce := statedb.GetNonce(msg.From())
+			if msgNonce := msg.Nonce(); stNonce < msgNonce {
+				return nil, 0, fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooHigh,
+					msg.From().Hex(), msgNonce, stNonce)
+			} else if stNonce > msgNonce {
+				return nil, 0, fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
+					msg.From().Hex(), msgNonce, stNonce)
+			}
+			// Make sure the sender is an EOA
+			if codeHash := statedb.GetCodeHash(msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
+				return nil, 0, fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
+					msg.From().Hex(), codeHash)
 			}
 		}
 
@@ -174,31 +179,34 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 		// Update the state with pending changes
 		var root []byte
-		if config.IsByzantium(header.Number) {
+		if config.IsByzantium(blockNumber) {
 			statedb.Finalise(true)
 		} else {
-			root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
+			root = statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
 		}
 
-		receipt := types.NewReceipt(root, true, *usedGas)
+		// Create a new receipt for the transaction, storing the intermediate root and gas used
+		// by the tx.
+		receipt := &types.Receipt{Type: tx.Type(), PostState: root, CumulativeGasUsed: *usedGas}
+		receipt.Status = types.ReceiptStatusFailed
 
 		//fix receipt status value
-		mainBlock := header.Number
+		mainBlock := blockNumber
 		if !bc.chainConfig.IsMainChain() {
 			mainBlock = header.MainChainNumber
 		}
 		if bc.Config().IsSelfRetrieveReward(mainBlock) {
-			receipt = types.NewReceipt(root, false, *usedGas)
+			receipt.Status = types.ReceiptStatusSuccessful
 		}
 
 		receipt.TxHash = tx.Hash()
 		receipt.GasUsed = gas
 
 		// Set the receipt logs and create a bloom for filtering
-		receipt.Logs = statedb.GetLogs(tx.Hash())
+		receipt.Logs = statedb.GetLogs(tx.Hash(), blockHash)
 		receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-		receipt.BlockHash = statedb.BlockHash()
-		receipt.BlockNumber = header.Number
+		receipt.BlockHash = blockHash
+		receipt.BlockNumber = blockNumber
 		receipt.TransactionIndex = uint(statedb.TxIndex())
 
 		statedb.SetNonce(msg.From(), statedb.GetNonce(msg.From())+1)
@@ -206,4 +214,22 @@ func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *comm
 
 		return receipt, 0, nil
 	}
+}
+
+// ApplyTransactionEx attempts to apply a transaction to the given state database
+// and uses the input parameters for its environment. It returns the receipt
+// for the transaction, gas used and an error if the transaction failed,
+// indicating the block was invalid.
+func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, ops *types.PendingOps, header *types.Header,
+	tx *types.Transaction, usedGas *uint64, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper, mining bool) (*types.Receipt, uint64, error) {
+
+	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
+	if err != nil {
+		return nil, 0, err
+	}
+	// Create a new context to be used in the EVM environment
+	blockContext := NewEVMBlockContext(header, bc, author)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, cfg)
+	return applyTransactionEx(msg, config, bc, author, gp, statedb, ops, header, tx, usedGas, totalUsedMoney, 
+		cfg, cch, mining, vmenv)
 }

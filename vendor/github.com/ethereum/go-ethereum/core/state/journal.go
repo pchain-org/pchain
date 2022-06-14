@@ -137,6 +137,14 @@ type (
 		prev      bool
 		prevDirty bool
 	}
+	// Changes to the access list
+	accessListAddAccountChange struct {
+		address *common.Address
+	}
+	accessListAddSlotChange struct {
+		address *common.Address
+		slot    *common.Hash
+	}
 )
 
 func (ch createObjectChange) undo(s *StateDB) {
@@ -272,4 +280,20 @@ func (ch addLogChange) undo(s *StateDB) {
 
 func (ch addPreimageChange) undo(s *StateDB) {
 	delete(s.preimages, ch.hash)
+}
+func (ch accessListAddAccountChange) undo(s *StateDB) {
+	/*
+		One important invariant here, is that whenever a (addr, slot) is added, if the
+		addr is not already present, the add causes two journal entries:
+		- one for the address,
+		- one for the (address,slot)
+		Therefore, when unrolling the change, we can always blindly delete the
+		(addr) at this point, since no storage adds can remain when come upon
+		a single (addr) change.
+	*/
+	s.accessList.DeleteAddress(*ch.address)
+}
+
+func (ch accessListAddSlotChange) undo(s *StateDB) {
+	s.accessList.DeleteSlot(*ch.address, *ch.slot)
 }

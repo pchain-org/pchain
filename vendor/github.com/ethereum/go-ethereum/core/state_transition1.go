@@ -1,8 +1,10 @@
 package core
 
 import (
+	"fmt"
+	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"math/big"
 )
 
@@ -13,60 +15,76 @@ import (
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessageEx(evm *vm.EVM, msg Message, gp *GasPool) ([]byte, uint64, *big.Int, bool, error) {
+func ApplyMessageEx(evm *vm.EVM, msg Message, gp *GasPool) (*ExecutionResult, *big.Int, error) {
 	return NewStateTransition(evm, msg, gp).TransitionDbEx()
 }
 
 // TransitionDbEx will move the state by applying the message against the given environment.
-func (st *StateTransition) TransitionDbEx() (ret []byte, usedGas uint64, usedMoney *big.Int, failed bool, err error) {
-	if err = st.preCheck(); err != nil {
-		return
+func (st *StateTransition) TransitionDbEx() (*ExecutionResult, *big.Int, error) {
+
+	if err := st.preCheck(); err != nil {
+		return nil, nil, err
 	}
 	msg := st.msg
-	sender := st.from() // err checked in preCheck
-	homestead := st.evm.ChainConfig().IsHomestead(st.evm.BlockNumber)
+	sender := vm.AccountRef(msg.From())
+	homestead := st.evm.ChainConfig().IsHomestead(st.evm.Context.MainChainNumber)
+	istanbul := st.evm.ChainConfig().IsIstanbul(st.evm.Context.MainChainNumber)
+	london := st.evm.ChainConfig().IsLondon(st.evm.Context.MainChainNumber)
 	contractCreation := msg.To() == nil
 
 	// Pay intrinsic gas
-	gas, err := IntrinsicGas(st.data, contractCreation, homestead)
+	gas, err := IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, istanbul)
 	if err != nil {
-		return nil, 0, nil, false, err
+		return nil, nil, err
 	}
-	if err = st.useGas(gas); err != nil {
-		return nil, 0, nil, false, err
+	if st.gas < gas {
+		return nil, nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gas, gas)
+	}
+	st.gas -= gas
+
+
+	// Check clause 6
+	if msg.Value().Sign() > 0 && !st.evm.Context.CanTransfer(st.state, msg.From(), msg.Value()) {
+		return nil, nil, fmt.Errorf("%w: address %v", ErrInsufficientFundsForTransfer, msg.From().Hex())
 	}
 
+	// Set up the initial access list.
+	if rules := st.evm.ChainConfig().Rules(st.evm.Context.MainChainNumber); rules.IsBerlin {
+		st.state.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
+	}
 	var (
-		evm = st.evm
-		// vm errors do not effect consensus and are therefor
-		// not assigned to err, except for insufficient balance
-		// error.
-		vmerr error
+		ret   []byte
+		vmerr error // vm errors do not effect consensus and are therefore not assigned to err
 	)
 	if contractCreation {
-		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
+		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
-		st.state.SetNonce(sender.Address(), st.state.GetNonce(sender.Address())+1)
-		ret, st.gas, vmerr = evm.Call(sender, st.to().Address(), st.data, st.gas, st.value)
+		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value)
 	}
-	if vmerr != nil {
-		log.Debug("VM returned with error", "err", vmerr)
-		// The only possible consensus-error would be if there wasn't
-		// sufficient balance to make the transfer happen. The first
-		// balance transfer may never fail.
-		if vmerr == vm.ErrInsufficientBalance {
-			return nil, 0, nil, false, vmerr
-		}
-	}
-	st.refundGas()
 
-	if st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.BlockNumber, msg.To(), st.data) {
-		usedMoney = big.NewInt(0)
+	if !london {
+		// Before EIP-3529: refunds were capped to gasUsed / 2
+		st.refundGas(params.RefundQuotient)
 	} else {
-		//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
-		usedMoney = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice)
+		// After EIP-3529: refunds are capped to gasUsed / 5
+		st.refundGas(params.RefundQuotientEIP3529)
 	}
 
-	return ret, st.gasUsed(), usedMoney, vmerr != nil, err
+	usedMoney := big.NewInt(0)
+	if !st.evm.ChainConfig().IsHashTimeLockWithdraw(st.evm.Context.MainChainNumber, msg.To(), st.data) {
+		//st.state.AddBalance(st.evm.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+		effectiveTip := st.gasPrice
+		if london {
+			effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
+		}
+		usedMoney = new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
+	}
+
+	return &ExecutionResult{
+		UsedGas: st.gasUsed(),
+		Err: vmerr,
+		ReturnData: ret,
+	}, usedMoney, err
 }

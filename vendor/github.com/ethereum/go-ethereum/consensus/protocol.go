@@ -20,6 +20,7 @@ package consensus
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/p2p"
 	"math/big"
 )
 
@@ -75,6 +76,8 @@ type Peer interface {
 	GetConsensusKey() string
 	// PeerState set the Peer State
 	SetPeerState(ps PeerState)
+	// P2PPeer return p2p.Peer
+	P2PPeer() *p2p.Peer
 }
 
 type PeerState interface {

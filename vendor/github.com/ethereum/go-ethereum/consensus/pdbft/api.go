@@ -2,12 +2,16 @@ package pdbft
 
 import (
 	"errors"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
-	"math/big"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // API is a user facing RPC API of Tendermint
@@ -158,4 +162,79 @@ func (api *API) GetNextEpochValidators() ([]*tdmTypes.EpochValidator, error) {
 func (api *API) GeneratePrivateValidator(from common.Address) (*tdmTypes.PrivValidator, error) {
 	validator := tdmTypes.GenPrivValidatorKey(from)
 	return validator, nil
+}
+
+// GetCurrentEpochNumber retrieves the current epoch number.
+func (api *API) GetCurrentEpochNumberOfChildChain(chainId string) (hexutil.Uint64, error) {
+	if api.chain.Config().PChainId != params.MainnetChainConfig.PChainId &&
+		api.chain.Config().PChainId != params.TestnetChainConfig.PChainId {
+		return hexutil.Uint64(0), errors.New("this api is only supported by main chain")
+	}
+
+	cch := api.tendermint.core.CrossChainHelper()
+	ci := core.GetChainInfo(cch.GetChainInfoDB(), chainId)
+	if ci == nil {
+		return hexutil.Uint64(0), errors.New("child chain not found")
+	}
+
+	return hexutil.Uint64(ci.EpochNumber), nil
+}
+
+// GetEpoch retrieves the Epoch Detail by Number
+func (api *API) GetEpochOfChildChain(chainId string, num hexutil.Uint64) (*tdmTypes.EpochApi, error) {
+
+	if api.chain.Config().PChainId != params.MainnetChainConfig.PChainId &&
+		api.chain.Config().PChainId != params.TestnetChainConfig.PChainId {
+		return nil, errors.New("this api is only supported by main chain")
+	}
+
+	number := uint64(num)
+
+	cch := api.tendermint.core.CrossChainHelper()
+	ci := core.GetChainInfo(cch.GetChainInfoDB(), chainId)
+	if ci == nil {
+		return nil, errors.New("child chain not found")
+	}
+
+	if number < 0 || number > ci.EpochNumber {
+		return nil, errors.New("epoch number out of range")
+	}
+
+	var resultEpoch *epoch.Epoch
+	resultEpoch = core.LoadEpoch(cch.GetChainInfoDB(), chainId, number)
+
+	validators := make([]*tdmTypes.EpochValidator, len(resultEpoch.Validators.Validators))
+	for i, val := range resultEpoch.Validators.Validators {
+		validators[i] = &tdmTypes.EpochValidator{
+			Address:        common.BytesToAddress(val.Address),
+			PubKey:         val.PubKey.KeyString(),
+			Amount:         (*hexutil.Big)(val.VotingPower),
+			RemainingEpoch: hexutil.Uint64(val.RemainingEpoch),
+		}
+	}
+
+	// Epoch Reward per block on main chain is 80% of total reward
+	// Child chain do not use this value as reward
+	eightyPercent := new(big.Int).Mul(resultEpoch.RewardPerBlock, big.NewInt(8))
+	eightyPercent.Div(eightyPercent, big.NewInt(10))
+
+	return &tdmTypes.EpochApi{
+		Number:           hexutil.Uint64(resultEpoch.Number),
+		RewardPerBlock:   (*hexutil.Big)(eightyPercent),
+		StartBlock:       hexutil.Uint64(resultEpoch.StartBlock),
+		EndBlock:         hexutil.Uint64(resultEpoch.EndBlock),
+		StartTime:        resultEpoch.StartTime,
+		EndTime:          resultEpoch.EndTime,
+		VoteStartBlock:   hexutil.Uint64(resultEpoch.GetVoteStartHeight()),
+		VoteEndBlock:     hexutil.Uint64(resultEpoch.GetVoteEndHeight()),
+		RevealStartBlock: hexutil.Uint64(resultEpoch.GetRevealVoteStartHeight()),
+		RevealEndBlock:   hexutil.Uint64(resultEpoch.GetRevealVoteEndHeight()),
+		Validators:       validators,
+	}, nil
+}
+
+// Peers retrieves all the information we know about each individual peer at the
+// protocol granularity for the specific chain.
+func (api *API) Peers() ([]*p2p.PeerInfo, error) {
+	return api.tendermint.core.consensusReactor.PeersInfo(), nil
 }

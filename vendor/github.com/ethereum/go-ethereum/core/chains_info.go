@@ -155,6 +155,22 @@ func SaveFutureEpoch(db dbm.DB, futureEpoch *ep.Epoch, chainId string) error {
 	return nil
 }
 
+func LoadEpoch(db dbm.DB, chainId string, number uint64) *ep.Epoch {
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	epochBytes := db.Get(calcEpochKey(number, chainId))
+	return ep.FromBytes(epochBytes)
+}
+
+func SaveEpoch(db dbm.DB, chainId string, epoch *ep.Epoch) error {
+	mtx.Lock()
+	defer mtx.Unlock()
+
+	db.SetSync(calcEpochKey(epoch.Number, chainId), epoch.Bytes())
+	return nil
+}
+
 func loadCoreChainInfo(db dbm.DB, chainId string) *CoreChainInfo {
 
 	cci := CoreChainInfo{db: db}

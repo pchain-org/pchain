@@ -3,6 +3,9 @@ package pdbft
 import (
 	"bytes"
 	"errors"
+	"math/big"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
@@ -11,10 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/hashicorp/golang-lru"
+	"github.com/ethereum/go-ethereum/trie"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/tendermint/go-wire"
-	"math/big"
-	"time"
 )
 
 const (
@@ -440,6 +442,8 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	// Add Main Chain Height if running on Child Chain
 	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId && sb.chainConfig.PChainId != params.TestnetChainConfig.PChainId {
 		header.MainChainNumber = sb.core.cch.GetHeightFromMainChain()
+	} else {
+		header.MainChainNumber = header.Number
 	}
 
 	return nil
@@ -488,15 +492,15 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
-										sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
-										selfRetrieveReward, markProposedInEpoch); ok {
+		sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
+		selfRetrieveReward, markProposedInEpoch); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
 		})
-		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber){
-			epochInfo:=epoch.GetNextEpoch();
-			if epochInfo !=nil {
+		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber) {
+			epochInfo := epoch.GetNextEpoch()
+			if epochInfo != nil {
 				header.Extra = epochInfo.Bytes()
 			}
 		}
@@ -505,7 +509,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts), nil
+	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
 }
 
 // Seal generates a new block for the given input block with the local miner's
@@ -714,7 +718,7 @@ func prepareExtra(header *types.Header, vals []common.Address) ([]byte, error) {
 func writeSeal(h *types.Header, seal []byte) error {
 
 	//logger.Info("Tendermint (backend) writeSeal, add logic here")
-	if h.Extra==nil{
+	if h.Extra == nil {
 		payload := types.MagicExtra
 		h.Extra = payload
 	}
@@ -737,7 +741,7 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 //
 // If the coinbase is Candidate, divide the rewards by weight
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch,
-						totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch bool) {
+	totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
 	if config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId {
@@ -810,7 +814,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	rollbackCatchup := false
 	if outsideReward {
-		lastBlock, err := state.ReadOOSLastBlock();
+		lastBlock, err := state.ReadOOSLastBlock()
 		if err == nil && header.Number.Cmp(lastBlock) <= 0 {
 			rollbackCatchup = true
 		}
@@ -875,7 +879,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 }
 
 func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64, height uint64,
-						reward *big.Int, outsideReward, selfRetrieveReward, rollbackCatchup bool) {
+	reward *big.Int, outsideReward, selfRetrieveReward, rollbackCatchup bool) {
 	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
 	lastEpochReward := new(big.Int).Set(reward)
 	for i := epochNumber; i < epochNumber+12; i++ {

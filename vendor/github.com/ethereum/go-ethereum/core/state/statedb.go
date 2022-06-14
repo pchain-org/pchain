@@ -85,12 +85,15 @@ type StateDB struct {
 	// The refund counter, also used by state transitioning.
 	refund uint64
 
-	thash, bhash common.Hash
-	txIndex      int
+	thash   common.Hash
+	txIndex int
 	logs         map[common.Hash][]*types.Log
 	logSize      uint
 
 	preimages map[common.Hash][]byte
+
+	// Per-transaction access list
+	accessList *accessList
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -122,6 +125,7 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		oosLastBlock:                  nil,
 		logs:                          make(map[common.Hash][]*types.Log),
 		preimages:                     make(map[common.Hash][]byte),
+		accessList:          newAccessList(),
 	}, nil
 }
 
@@ -153,7 +157,6 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.extractRewardSet = make(map[common.Address]uint64)
 	self.oosLastBlock     = nil
 	self.thash = common.Hash{}
-	self.bhash = common.Hash{}
 	self.txIndex = 0
 	self.logs = make(map[common.Hash][]*types.Log)
 	self.logSize = 0
@@ -166,15 +169,18 @@ func (self *StateDB) AddLog(log *types.Log) {
 	self.journal = append(self.journal, addLogChange{txhash: self.thash})
 
 	log.TxHash = self.thash
-	log.BlockHash = self.bhash
 	log.TxIndex = uint(self.txIndex)
 	log.Index = self.logSize
 	self.logs[self.thash] = append(self.logs[self.thash], log)
 	self.logSize++
 }
 
-func (self *StateDB) GetLogs(hash common.Hash) []*types.Log {
-	return self.logs[hash]
+func (self *StateDB) GetLogs(hash common.Hash, blockHash common.Hash) []*types.Log {
+	logs := self.logs[hash]
+	for _, l := range logs {
+		l.BlockHash = blockHash
+	}
+	return logs
 }
 
 func (self *StateDB) Logs() []*types.Log {
@@ -203,6 +209,16 @@ func (self *StateDB) Preimages() map[common.Hash][]byte {
 func (self *StateDB) AddRefund(gas uint64) {
 	self.journal = append(self.journal, refundChange{prev: self.refund})
 	self.refund += gas
+}
+
+// SubRefund removes gas from the refund counter.
+// This method will panic if the refund counter goes below zero
+func (self *StateDB) SubRefund(gas uint64) {
+	self.journal = append(self.journal, refundChange{prev: self.refund})
+	if gas > self.refund {
+		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, self.refund))
+	}
+	self.refund -= gas
 }
 
 // Exist reports whether the given account address exists in the state.
@@ -241,11 +257,6 @@ func (self *StateDB) TxIndex() int {
 	return self.txIndex
 }
 
-// BlockHash returns the current block hash set by Prepare.
-func (self *StateDB) BlockHash() common.Hash {
-	return self.bhash
-}
-
 func (self *StateDB) GetCode(addr common.Address) []byte {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
@@ -281,6 +292,15 @@ func (self *StateDB) GetState(a common.Address, b common.Hash) common.Hash {
 	stateObject := self.getStateObject(a)
 	if stateObject != nil {
 		return stateObject.GetState(self.db, b)
+	}
+	return common.Hash{}
+}
+
+// GetCommittedState retrieves a value from the given account's committed storage trie.
+func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.GetCommittedState(s.db, hash)
 	}
 	return common.Hash{}
 }
@@ -392,6 +412,16 @@ func (self *StateDB) SetState(addr common.Address, key common.Hash, value common
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetState(self.db, key, value)
+	}
+}
+
+
+// SetStorage replaces the entire storage for the specified account with given
+// storage. This function should only be used for debugging.
+func (self *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetStorage(storage)
 	}
 }
 
@@ -657,6 +687,12 @@ func (self *StateDB) Copy() *StateDB {
 	for hash, preimage := range self.preimages {
 		state.preimages[hash] = preimage
 	}
+	// Do we need to copy the access list? In practice: No. At the start of a
+	// transaction, the access list is empty. In practice, we only ever copy state
+	// _between_ transactions/blocks, never in the middle of a transaction.
+	// However, it doesn't cost us much to copy an empty list, so we do it anyway
+	// to not blow up if we ever decide copy it in the middle of a transaction
+	state.accessList = self.accessList.Copy()
 	return state
 }
 
@@ -738,12 +774,12 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	return s.trie.Hash()
 }
 
-// Prepare sets the current transaction hash and index and block hash which is
+// Prepare sets the current transaction hash and index which are
 // used when the EVM emits new state logs.
-func (self *StateDB) Prepare(thash, bhash common.Hash, ti int) {
-	self.thash = thash
-	self.bhash = bhash
-	self.txIndex = ti
+func (s *StateDB) Prepare(thash common.Hash, ti int) {
+	s.thash = thash
+	s.txIndex = ti
+	s.accessList = newAccessList()
 }
 
 // DeleteSuicides flags the suicided objects for deletion so that it
@@ -863,4 +899,65 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		return nil
 	})
 	return root, err
+}
+
+// PrepareAccessList handles the preparatory steps for executing a state transition with
+// regards to both EIP-2929 and EIP-2930:
+//
+// - Add sender to access list (2929)
+// - Add destination to access list (2929)
+// - Add precompiles to access list (2929)
+// - Add the contents of the optional tx access list (2930)
+//
+// This method should only be called if Berlin/2929+2930 is applicable at the current number.
+func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+	s.AddAddressToAccessList(sender)
+	if dst != nil {
+		s.AddAddressToAccessList(*dst)
+		// If it's a create-tx, the destination will be added inside evm.create
+	}
+	for _, addr := range precompiles {
+		s.AddAddressToAccessList(addr)
+	}
+	for _, el := range list {
+		s.AddAddressToAccessList(el.Address)
+		for _, key := range el.StorageKeys {
+			s.AddSlotToAccessList(el.Address, key)
+		}
+	}
+}
+
+// AddAddressToAccessList adds the given address to the access list
+func (s *StateDB) AddAddressToAccessList(addr common.Address) {
+	if s.accessList.AddAddress(addr) {
+		s.journal = append(s.journal, accessListAddAccountChange{&addr})
+	}
+}
+
+// AddSlotToAccessList adds the given (address, slot)-tuple to the access list
+func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
+	addrMod, slotMod := s.accessList.AddSlot(addr, slot)
+	if addrMod {
+		// In practice, this should not happen, since there is no way to enter the
+		// scope of 'address' without having the 'address' become already added
+		// to the access list (via call-variant, create, etc).
+		// Better safe than sorry, though
+		s.journal = append(s.journal, accessListAddAccountChange{&addr})
+	}
+	if slotMod {
+		s.journal = append(s.journal, accessListAddSlotChange{
+			address: &addr,
+			slot:    &slot,
+		})
+	}
+}
+
+// AddressInAccessList returns true if the given address is in the access list.
+func (s *StateDB) AddressInAccessList(addr common.Address) bool {
+	return s.accessList.ContainsAddress(addr)
+}
+
+// SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
+func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
+	return s.accessList.Contains(addr, slot)
 }

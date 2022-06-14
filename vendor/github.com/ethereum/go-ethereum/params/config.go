@@ -18,27 +18,33 @@ package params
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"math"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/log"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"golang.org/x/crypto/sha3"
 )
 
 var (
 	MainnetGenesisHash = common.HexToHash("0x5b0937e8c6189a45637f0eeb5d2c62b3794e08b695d1f3e339122c80ff7404e3") // Mainnet genesis hash to enforce below configs on
 	TestnetGenesisHash = common.HexToHash("0x5b0937e8c6189a45637f0eeb5d2c62b3794e08b695d1f3e339122c80ff7404e3") // Testnet genesis hash to enforce below configs on
 
+	MainnetOutOfStorageBlock = big.NewInt(5890000)
+	TestnetOutOfStorageBlock = big.NewInt(10)
+
+	MainnetChild0OutOfStorageBlock = big.NewInt(13930000)
+	TestnetChild0OutOfStorageBlock = big.NewInt(10)
+
 	//From epoch after this block, delegators need to query/retrieve his/her reward by RPC APIs.
 	// Note: it does not work exactly from this block, it works from the next epoch
 	//       and this number is the main chain block number
 	MainnetExtractRewardMainBlock = big.NewInt(9383000)
-	TestnetExtractRewardMainBlock = big.NewInt(2550000)
-
-	MainnetExtractRewardPatchMainBlock = big.NewInt(20970000)
-	TestnetExtractRewardPatchMainBlock = big.NewInt(2550000)
+	TestnetExtractRewardMainBlock = big.NewInt(40)
 
 	//use SaveData2MainBlock v1; which reports epoch/tx3 to main block
 	MainnetSd2mcV1MainBlock = big.NewInt(11824000)
@@ -48,38 +54,57 @@ var (
 	TestnetSd2mcWhenEpochEndsBlock = big.NewInt(40)
 
 	MainnetValidateHTLCBlock = big.NewInt(16000000)
-	TestnetValidateHTLCBlock = big.NewInt(9785000)
+	TestnetValidateHTLCBlock = big.NewInt(40)
 
-	MainnetHeaderHashWithoutTimeBlock=big.NewInt(17160000)
-	TestnetHeaderHashWithoutTimeBlock=big.NewInt(40)
+	MainnetHeaderHashWithoutTimeBlock = big.NewInt(17160000)
+	TestnetHeaderHashWithoutTimeBlock = big.NewInt(40)
 
-	MainnetMarkProposedInEpochMainBlock = big.NewInt(20000000)
-	TestnetMarkProposedInEpochMainBlock = big.NewInt(40)
+	MainnetExtractRewardPatchMainBlock = big.NewInt(20970000)
+	TestnetExtractRewardPatchMainBlock = big.NewInt(40)
+
+	MainnetIstanbulBlock = big.NewInt(24195000)
+	TestnetIstanbulBlock = big.NewInt(40)
+
+	MainnetMuirGlacierBlock = big.NewInt(100000000000)
+	TestnetMuirGlacierBlock = big.NewInt(100000000000)
+
+	MainnetBerlinBlock = big.NewInt(100000000000)
+	TestnetBerlinBlock = big.NewInt(100000000000)
+
+	MainnetMarkProposedInEpochMainBlock          = big.NewInt(20000000)
+	TestnetMarkProposedInEpochMainBlock          = big.NewInt(40)
+	MainnetLondonBlock                  *big.Int = nil
+	TestnetLondonBlock                  *big.Int = nil
 )
 
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		PChainId:       "pchain",
-		HomesteadBlock: big.NewInt(0),
-		DAOForkBlock:   nil,
-		DAOForkSupport: false,
-		EIP150Block:    big.NewInt(0),
-		EIP150Hash:     common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:    big.NewInt(0),
-		EIP158Block:    big.NewInt(0),
-		//ByzantiumBlock:      big.NewInt(4370000),
+		PChainId:                     "pchain",
+		ChainId:                      big.NewInt(1),
+		HomesteadBlock:               big.NewInt(0),
+		DAOForkBlock:                 nil,
+		DAOForkSupport:               false,
+		EIP150Block:                  big.NewInt(0),
+		EIP150Hash:                   common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:                  big.NewInt(0),
+		EIP158Block:                  big.NewInt(0),
 		ByzantiumBlock:               big.NewInt(0), //let's start from 1 block
-		ConstantinopleBlock:          nil,
+		ConstantinopleBlock:          big.NewInt(0),
+		PetersburgBlock:              big.NewInt(0),
+		IstanbulBlock:                MainnetIstanbulBlock,
+		MuirGlacierBlock:             MainnetMuirGlacierBlock,
+		BerlinBlock:                  MainnetBerlinBlock,
+		LondonBlock:                  MainnetLondonBlock,
 		Child0HashTimeLockContract:   common.HexToAddress("0x18c496af47eb1c0946f64a25d3f589f71934bf3d"),
-		OutOfStorageBlock:            big.NewInt(5890000),
-		Child0OutOfStorageBlock:      big.NewInt(13930000),
+		OutOfStorageBlock:            MainnetOutOfStorageBlock,
+		Child0OutOfStorageBlock:      MainnetChild0OutOfStorageBlock,
 		ExtractRewardMainBlock:       MainnetExtractRewardMainBlock,
 		ExtractRewardPatchMainBlock:  MainnetExtractRewardPatchMainBlock,
 		Sd2mcV1Block:                 MainnetSd2mcV1MainBlock,
 		ChildSd2mcWhenEpochEndsBlock: MainnetSd2mcWhenEpochEndsBlock,
-		ValidateHTLCBlock: MainnetValidateHTLCBlock,
-		HeaderHashWithoutTimeBlock: MainnetHeaderHashWithoutTimeBlock,
+		ValidateHTLCBlock:            MainnetValidateHTLCBlock,
+		HeaderHashWithoutTimeBlock:   MainnetHeaderHashWithoutTimeBlock,
 		MarkProposedInEpochMainBlock: MainnetMarkProposedInEpochMainBlock,
 
 		Tendermint: &TendermintConfig{
@@ -90,28 +115,32 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the test network.
 	TestnetChainConfig = &ChainConfig{
-		PChainId:                   "testnet",
-		ChainId:                    big.NewInt(2),
-		HomesteadBlock:             big.NewInt(0),
-		DAOForkBlock:               nil,
-		DAOForkSupport:             true,
-		EIP150Block:                big.NewInt(0),
-		EIP150Hash:                 common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
-		EIP155Block:                big.NewInt(10),
-		EIP158Block:                big.NewInt(10),
-		ByzantiumBlock:             big.NewInt(1700000),
-		ConstantinopleBlock:        nil,
-		Child0HashTimeLockContract: common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
-		OutOfStorageBlock:          big.NewInt(10),
-		Child0OutOfStorageBlock:    big.NewInt(10),
-		ExtractRewardMainBlock:     TestnetExtractRewardMainBlock,
-		ExtractRewardPatchMainBlock:TestnetExtractRewardPatchMainBlock,
-		Sd2mcV1Block:               TestnetSd2mcV1MainBlock,
+		PChainId:                     "testnet",
+		ChainId:                      big.NewInt(2),
+		HomesteadBlock:               big.NewInt(0),
+		DAOForkBlock:                 nil,
+		DAOForkSupport:               true,
+		EIP150Block:                  big.NewInt(0),
+		EIP150Hash:                   common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d"),
+		EIP155Block:                  big.NewInt(10),
+		EIP158Block:                  big.NewInt(10),
+		ByzantiumBlock:               big.NewInt(0),
+		ConstantinopleBlock:          big.NewInt(0),
+		PetersburgBlock:              big.NewInt(0),
+		IstanbulBlock:                TestnetIstanbulBlock,
+		MuirGlacierBlock:             TestnetMuirGlacierBlock,
+		BerlinBlock:                  TestnetBerlinBlock,
+		LondonBlock:                  TestnetLondonBlock,
+		Child0HashTimeLockContract:   common.HexToAddress("0x0429658b97a75f7160ca551f72b6f85d6fa10439"),
+		OutOfStorageBlock:            TestnetOutOfStorageBlock,
+		Child0OutOfStorageBlock:      TestnetChild0OutOfStorageBlock,
+		ExtractRewardMainBlock:       TestnetExtractRewardMainBlock,
+		ExtractRewardPatchMainBlock:  TestnetExtractRewardPatchMainBlock,
+		Sd2mcV1Block:                 TestnetSd2mcV1MainBlock,
 		ChildSd2mcWhenEpochEndsBlock: TestnetSd2mcWhenEpochEndsBlock,
-		ValidateHTLCBlock: TestnetValidateHTLCBlock,
-		HeaderHashWithoutTimeBlock: TestnetHeaderHashWithoutTimeBlock,
+		ValidateHTLCBlock:            TestnetValidateHTLCBlock,
+		HeaderHashWithoutTimeBlock:   TestnetHeaderHashWithoutTimeBlock,
 		MarkProposedInEpochMainBlock: TestnetMarkProposedInEpochMainBlock,
-
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -130,7 +159,9 @@ var (
 		EIP155Block:         big.NewInt(3),
 		EIP158Block:         big.NewInt(3),
 		ByzantiumBlock:      big.NewInt(1035301),
-		ConstantinopleBlock: nil,
+		ConstantinopleBlock: big.NewInt(3660663),
+		PetersburgBlock:     big.NewInt(4321234),
+		IstanbulBlock:       big.NewInt(5435345),
 		Clique: &CliqueConfig{
 			Period: 15,
 			Epoch:  30000,
@@ -139,17 +170,19 @@ var (
 
 	// OttomanChainConfig contains the chain parameters to run a node on the Ottoman test network.
 	OttomanChainConfig = &ChainConfig{
-		PChainId:       "",
-		ChainId:        big.NewInt(5),
-		HomesteadBlock: big.NewInt(1),
-		DAOForkBlock:   nil,
-		DAOForkSupport: true,
-		EIP150Block:    big.NewInt(2),
-		EIP150Hash:     common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
-		EIP155Block:    big.NewInt(3),
-		EIP158Block:    big.NewInt(3),
-		ByzantiumBlock: big.NewInt(math.MaxInt64), // Don't enable yet
-
+		PChainId:            "",
+		ChainId:             big.NewInt(5),
+		HomesteadBlock:      big.NewInt(1),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      true,
+		EIP150Block:         big.NewInt(2),
+		EIP150Hash:          common.HexToHash("0x9b095b36c15eaf13044373aef8ee0bd3a382a5abb92e402afa44b8249c3a90e9"),
+		EIP155Block:         big.NewInt(3),
+		EIP158Block:         big.NewInt(3),
+		ByzantiumBlock:      big.NewInt(math.MaxInt64), // Don't enable yet
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(1561651),
 		Istanbul: &IstanbulConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -161,22 +194,70 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil,nil,nil, nil, new(EthashConfig), nil, nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil,nil,nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil,nil,nil, new(EthashConfig), nil, nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
 func init() {
 	digest := crypto.Keccak256([]byte(MainnetChainConfig.PChainId))
 	MainnetChainConfig.ChainId = new(big.Int).SetBytes(digest[:])
+}
+
+// TrustedCheckpoint represents a set of post-processed trie roots (CHT and
+// BloomTrie) associated with the appropriate section index and head hash. It is
+// used to start light syncing from this checkpoint and avoid downloading the
+// entire header chain while still being able to securely access old headers/logs.
+type TrustedCheckpoint struct {
+	SectionIndex uint64      `json:"sectionIndex"`
+	SectionHead  common.Hash `json:"sectionHead"`
+	CHTRoot      common.Hash `json:"chtRoot"`
+	BloomRoot    common.Hash `json:"bloomRoot"`
+}
+
+// HashEqual returns an indicator comparing the itself hash with given one.
+func (c *TrustedCheckpoint) HashEqual(hash common.Hash) bool {
+	if c.Empty() {
+		return hash == common.Hash{}
+	}
+	return c.Hash() == hash
+}
+
+// Hash returns the hash of checkpoint's four key fields(index, sectionHead, chtRoot and bloomTrieRoot).
+func (c *TrustedCheckpoint) Hash() common.Hash {
+	var sectionIndex [8]byte
+	binary.BigEndian.PutUint64(sectionIndex[:], c.SectionIndex)
+
+	w := sha3.NewLegacyKeccak256()
+	w.Write(sectionIndex[:])
+	w.Write(c.SectionHead[:])
+	w.Write(c.CHTRoot[:])
+	w.Write(c.BloomRoot[:])
+
+	var h common.Hash
+	w.Sum(h[:0])
+	return h
+}
+
+// Empty returns an indicator whether the checkpoint is regarded as empty.
+func (c *TrustedCheckpoint) Empty() bool {
+	return c.SectionHead == (common.Hash{}) || c.CHTRoot == (common.Hash{}) || c.BloomRoot == (common.Hash{})
+}
+
+// CheckpointOracleConfig represents a set of checkpoint contract(which acts as an oracle)
+// config which used for light client checkpoint syncing.
+type CheckpointOracleConfig struct {
+	Address   common.Address   `json:"address"`
+	Signers   []common.Address `json:"signers"`
+	Threshold uint64           `json:"threshold"`
 }
 
 // ChainConfig is the core config which determines the blockchain settings.
@@ -202,21 +283,26 @@ type ChainConfig struct {
 
 	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
+	PetersburgBlock     *big.Int `json:"petersburgBlock,omitempty"`     // Petersburg switch block (nil = same as Constantinople)
+	IstanbulBlock       *big.Int `json:"istanbulBlock,omitempty"`       // Istanbul switch block (nil = no fork, 0 = already on istanbul)
+	MuirGlacierBlock    *big.Int `json:"muirGlacierBlock,omitempty"`    // Eip-2384 (bomb delay) switch block (nil = no fork, 0 = already activated)
+	BerlinBlock         *big.Int `json:"berlinBlock,omitempty"`         // Berlin switch block (nil = no fork, 0 = already on berlin)
+	LondonBlock         *big.Int `json:"londonBlock,omitempty"`         // London switch block (nil = no fork, 0 = already on london)
 
 	// PCHAIN HordFork
-	HashTimeLockContract   common.Address      `json:"htlc,omitempty"`     // Hash Time Lock Contract Address
-	OutOfStorageBlock      *big.Int            `json:"oosBlock,omitempty"` // Out of storage HardFork block
-	ExtractRewardMainBlock *big.Int            `json:"erBlock,omitempty"`  // Extract reward HardFork block
-	ExtractRewardPatchMainBlock *big.Int       `json:"erPatchBlock,omitempty"`  // Extract reward Patch HardFork block
-	Sd2mcV1Block           *big.Int            `json:"sd2mcV1Block, omitempty"`
+	HashTimeLockContract        common.Address `json:"htlc,omitempty"`         // Hash Time Lock Contract Address
+	OutOfStorageBlock           *big.Int       `json:"oosBlock,omitempty"`     // Out of storage HardFork block
+	ExtractRewardMainBlock      *big.Int       `json:"erBlock,omitempty"`      // Extract reward HardFork block
+	ExtractRewardPatchMainBlock *big.Int       `json:"erPatchBlock,omitempty"` // Extract reward Patch HardFork block
+	Sd2mcV1Block                *big.Int       `json:"sd2mcV1Block,omitempty"`
 
 	// For default setup propose
-	Child0HashTimeLockContract   common.Address
-	Child0OutOfStorageBlock      *big.Int
-	ChildSd2mcWhenEpochEndsBlock *big.Int
-	ValidateHTLCBlock *big.Int
-	HeaderHashWithoutTimeBlock *big.Int
-	MarkProposedInEpochMainBlock *big.Int
+	Child0HashTimeLockContract   common.Address `json:"child0HashTimeLockContract,omitempty"`
+	Child0OutOfStorageBlock      *big.Int       `json:"child0OutOfStorageBlock,omitempty"`
+	ChildSd2mcWhenEpochEndsBlock *big.Int       `json:"childSd2mcWhenEpochEndsBlock,omitempty"`
+	ValidateHTLCBlock            *big.Int       `json:"validateHTLCBlock,omitempty"`
+	HeaderHashWithoutTimeBlock   *big.Int       `json:"headerHashWithoutTimeBlock,omitempty"`
+	MarkProposedInEpochMainBlock *big.Int       `json:"markProposedInEpochMainBlock,omitempty"`
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
@@ -271,17 +357,18 @@ func (c *TendermintConfig) String() string {
 // Create a new Chain Config based on the Chain ID, for child chain creation purpose
 func NewChildChainConfig(childChainID string) *ChainConfig {
 	config := &ChainConfig{
-		PChainId:       childChainID,
-		HomesteadBlock: big.NewInt(0),
-		DAOForkBlock:   nil,
-		DAOForkSupport: false,
-		EIP150Block:    big.NewInt(0),
-		EIP150Hash:     common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
-		EIP155Block:    big.NewInt(0),
-		EIP158Block:    big.NewInt(0),
-		//ByzantiumBlock:      big.NewInt(4370000),
-		ByzantiumBlock:      big.NewInt(0), //let's start from 1 block
-		ConstantinopleBlock: nil,
+		PChainId:            childChainID,
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.HexToHash("0x2086799aeebeae135c246c65021c82b4e15a2c451340993aacfd2751886514f0"),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0), //let's start from block 0
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -309,7 +396,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{PChainId: %s ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Engine: %v}",
+	return fmt.Sprintf("{PChainId: %s ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Engine: %v}",
 		c.PChainId,
 		c.ChainId,
 		c.HomesteadBlock,
@@ -320,6 +407,11 @@ func (c *ChainConfig) String() string {
 		c.EIP158Block,
 		c.ByzantiumBlock,
 		c.ConstantinopleBlock,
+		c.PetersburgBlock,
+		c.IstanbulBlock,
+		c.MuirGlacierBlock,
+		c.BerlinBlock,
+		c.LondonBlock,
 		engine,
 	)
 }
@@ -329,29 +421,65 @@ func (c *ChainConfig) IsHomestead(num *big.Int) bool {
 	return isForked(c.HomesteadBlock, num)
 }
 
-// IsDAO returns whether num is either equal to the DAO fork block or greater.
+// IsDAOFork returns whether num is either equal to the DAO fork block or greater.
 func (c *ChainConfig) IsDAOFork(num *big.Int) bool {
 	return isForked(c.DAOForkBlock, num)
 }
 
+// IsEIP150 returns whether num is either equal to the EIP150 fork block or greater.
 func (c *ChainConfig) IsEIP150(num *big.Int) bool {
 	return isForked(c.EIP150Block, num)
 }
 
+// IsEIP155 returns whether num is either equal to the EIP155 fork block or greater.
 func (c *ChainConfig) IsEIP155(num *big.Int) bool {
 	return isForked(c.EIP155Block, num)
 }
 
+// IsEIP158 returns whether num is either equal to the EIP158 fork block or greater.
 func (c *ChainConfig) IsEIP158(num *big.Int) bool {
 	return isForked(c.EIP158Block, num)
 }
 
+// IsByzantium returns whether num is either equal to the Byzantium fork block or greater.
 func (c *ChainConfig) IsByzantium(num *big.Int) bool {
 	return isForked(c.ByzantiumBlock, num)
 }
 
+// IsConstantinople returns whether num is either equal to the Constantinople fork block or greater.
 func (c *ChainConfig) IsConstantinople(num *big.Int) bool {
 	return isForked(c.ConstantinopleBlock, num)
+}
+
+// IsMuirGlacier returns whether num is either equal to the Muir Glacier (EIP-2384) fork block or greater.
+func (c *ChainConfig) IsMuirGlacier(num *big.Int) bool {
+	return isForked(c.MuirGlacierBlock, num)
+}
+
+// IsPetersburg returns whether num is either
+// - equal to or greater than the PetersburgBlock fork block,
+// - OR is nil, and Constantinople is active
+func (c *ChainConfig) IsPetersburg(num *big.Int) bool {
+	return isForked(c.PetersburgBlock, num) || c.PetersburgBlock == nil && isForked(c.ConstantinopleBlock, num)
+}
+
+// IsIstanbul returns whether num is either equal to the Istanbul fork block or greater.
+func (c *ChainConfig) IsIstanbul(num *big.Int) bool {
+	return isForked(c.IstanbulBlock, num)
+}
+
+// IsBerlin returns whether num is either equal to the Berlin fork block or greater.
+func (c *ChainConfig) IsBerlin(num *big.Int) bool {
+	return isForked(c.BerlinBlock, num)
+}
+
+// IsLondon returns whether num is either equal to the London fork block or greater.
+func (c *ChainConfig) IsLondon(num *big.Int) bool {
+	return isForked(c.LondonBlock, num)
+}
+
+func (c *ChainConfig) IsEWASM(num *big.Int) bool {
+	return false
 }
 
 func (c *ChainConfig) IsHashTimeLockWithdraw(num *big.Int, contractAddress *common.Address, withdraw []byte) bool {
@@ -377,7 +505,7 @@ func (c *ChainConfig) IsSd2mcV1(mainBlockNumber *big.Int) bool {
 	return isForked(c.Sd2mcV1Block, mainBlockNumber)
 }
 
-func (c *ChainConfig)IsChildSd2mcWhenEpochEndsBlock(mainBlockNumber *big.Int) bool {
+func (c *ChainConfig) IsChildSd2mcWhenEpochEndsBlock(mainBlockNumber *big.Int) bool {
 	return isForked(c.ChildSd2mcWhenEpochEndsBlock, mainBlockNumber)
 }
 
@@ -390,7 +518,7 @@ func IsSelfRetrieveReward(mainChainId string, mainBlockNumber *big.Int) bool {
 	return false
 }
 
-func (c *ChainConfig)IsSelfRetrieveRewardPatch(blockNumber, mainBlockNumber *big.Int) bool {
+func (c *ChainConfig) IsSelfRetrieveRewardPatch(blockNumber, mainBlockNumber *big.Int) bool {
 	if c.IsMainChain() {
 		return isForked(c.ExtractRewardPatchMainBlock, blockNumber)
 	} else {
@@ -408,18 +536,17 @@ func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {
 	return false
 }
 
-func (c *ChainConfig)CeaseValidateHashTimeLockContract(mainBlockNumber *big.Int) bool {
+func (c *ChainConfig) CeaseValidateHashTimeLockContract(mainBlockNumber *big.Int) bool {
 	return isForked(c.ValidateHTLCBlock, mainBlockNumber)
 }
 
-func (c *ChainConfig)IsHeaderHashWithoutTimeBlock(mainBlockNumber *big.Int) bool {
+func (c *ChainConfig) IsHeaderHashWithoutTimeBlock(mainBlockNumber *big.Int) bool {
 	return isForked(c.HeaderHashWithoutTimeBlock, mainBlockNumber)
 }
 
 func (c *ChainConfig) IsMarkProposedInEpoch(mainBlockNumber *big.Int) bool {
 	return isForked(c.MarkProposedInEpochMainBlock, mainBlockNumber)
 }
-
 
 // Check whether is on main chain or not
 func (c *ChainConfig) IsMainChain() bool {
@@ -466,6 +593,50 @@ func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *Confi
 	return lasterr
 }
 
+// CheckConfigForkOrder checks that we don't "skip" any forks, geth isn't pluggable enough
+// to guarantee that forks can be implemented in a different order than on official networks
+func (c *ChainConfig) CheckConfigForkOrder() error {
+	type fork struct {
+		name     string
+		block    *big.Int
+		optional bool // if true, the fork may be nil and next fork is still allowed
+	}
+	var lastFork fork
+	for _, cur := range []fork{
+		{name: "homesteadBlock", block: c.HomesteadBlock},
+		{name: "daoForkBlock", block: c.DAOForkBlock, optional: true},
+		{name: "eip150Block", block: c.EIP150Block},
+		{name: "eip155Block", block: c.EIP155Block},
+		{name: "eip158Block", block: c.EIP158Block},
+		{name: "byzantiumBlock", block: c.ByzantiumBlock},
+		{name: "constantinopleBlock", block: c.ConstantinopleBlock},
+		{name: "petersburgBlock", block: c.PetersburgBlock},
+		{name: "istanbulBlock", block: c.IstanbulBlock},
+		{name: "muirGlacierBlock", block: c.MuirGlacierBlock, optional: true},
+		{name: "berlinBlock", block: c.BerlinBlock},
+		{name: "londonBlock", block: c.LondonBlock},
+	} {
+		if lastFork.name != "" {
+			// Next one must be higher number
+			if lastFork.block == nil && cur.block != nil {
+				return fmt.Errorf("unsupported fork ordering: %v not enabled, but %v enabled at %v",
+					lastFork.name, cur.name, cur.block)
+			}
+			if lastFork.block != nil && cur.block != nil {
+				if lastFork.block.Cmp(cur.block) > 0 {
+					return fmt.Errorf("unsupported fork ordering: %v enabled at %v, but %v enabled at %v",
+						lastFork.name, lastFork.block, cur.name, cur.block)
+				}
+			}
+		}
+		// If it was optional and not set, then ignore it
+		if !cur.optional || cur.block != nil {
+			lastFork = cur
+		}
+	}
+	return nil
+}
+
 func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *ConfigCompatError {
 	if isForkIncompatible(c.HomesteadBlock, newcfg.HomesteadBlock, head) {
 		return newCompatError("Homestead fork block", c.HomesteadBlock, newcfg.HomesteadBlock)
@@ -493,6 +664,25 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	}
 	if isForkIncompatible(c.ConstantinopleBlock, newcfg.ConstantinopleBlock, head) {
 		return newCompatError("Constantinople fork block", c.ConstantinopleBlock, newcfg.ConstantinopleBlock)
+	}
+	if isForkIncompatible(c.PetersburgBlock, newcfg.PetersburgBlock, head) {
+		// the only case where we allow Petersburg to be set in the past is if it is equal to Constantinople
+		// mainly to satisfy fork ordering requirements which state that Petersburg fork be set if Constantinople fork is set
+		if isForkIncompatible(c.ConstantinopleBlock, newcfg.PetersburgBlock, head) {
+			return newCompatError("Petersburg fork block", c.PetersburgBlock, newcfg.PetersburgBlock)
+		}
+	}
+	if isForkIncompatible(c.IstanbulBlock, newcfg.IstanbulBlock, head) {
+		return newCompatError("Istanbul fork block", c.IstanbulBlock, newcfg.IstanbulBlock)
+	}
+	if isForkIncompatible(c.MuirGlacierBlock, newcfg.MuirGlacierBlock, head) {
+		return newCompatError("Muir Glacier fork block", c.MuirGlacierBlock, newcfg.MuirGlacierBlock)
+	}
+	if isForkIncompatible(c.BerlinBlock, newcfg.BerlinBlock, head) {
+		return newCompatError("Berlin fork block", c.BerlinBlock, newcfg.BerlinBlock)
+	}
+	if isForkIncompatible(c.LondonBlock, newcfg.LondonBlock, head) {
+		return newCompatError("London fork block", c.LondonBlock, newcfg.LondonBlock)
 	}
 	return nil
 }
@@ -552,21 +742,37 @@ func (err *ConfigCompatError) Error() string {
 	return fmt.Sprintf("mismatching %s in database (have %d, want %d, rewindto %d)", err.What, err.StoredConfig, err.NewConfig, err.RewindTo)
 }
 
-// Rules wraps ChainConfig and is merely syntatic sugar or can be used for functions
+// Rules wraps ChainConfig and is merely syntactic sugar or can be used for functions
 // that do not have or require information about the block.
 //
 // Rules is a one time interface meaning that it shouldn't be used in between transition
 // phases.
 type Rules struct {
-	ChainId                                   *big.Int
-	IsHomestead, IsEIP150, IsEIP155, IsEIP158 bool
-	IsByzantium                               bool
+	ChainId                                                 *big.Int
+	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
+	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
+	IsBerlin, IsLondon, IsCatalyst                          bool
 }
 
-func (c *ChainConfig) Rules(num *big.Int) Rules {
+// Rules ensures c's ChainID is not nil.
+func (c *ChainConfig) Rules(mainchainNum *big.Int) Rules {
 	chainId := c.ChainId
 	if chainId == nil {
 		chainId = new(big.Int)
 	}
-	return Rules{ChainId: new(big.Int).Set(chainId), IsHomestead: c.IsHomestead(num), IsEIP150: c.IsEIP150(num), IsEIP155: c.IsEIP155(num), IsEIP158: c.IsEIP158(num), IsByzantium: c.IsByzantium(num)}
+	rules := Rules{
+		ChainId:          new(big.Int).Set(chainId),
+		IsHomestead:      c.IsHomestead(mainchainNum),
+		IsEIP150:         c.IsEIP150(mainchainNum),
+		IsEIP155:         c.IsEIP155(mainchainNum),
+		IsEIP158:         c.IsEIP158(mainchainNum),
+		IsByzantium:      c.IsByzantium(mainchainNum),
+		IsConstantinople: c.IsConstantinople(mainchainNum),
+		IsPetersburg:     c.IsPetersburg(mainchainNum),
+		IsIstanbul:       c.IsIstanbul(mainchainNum),
+		IsBerlin:         c.IsBerlin(mainchainNum),
+		IsLondon:         c.IsLondon(mainchainNum),
+	}
+
+	return rules
 }

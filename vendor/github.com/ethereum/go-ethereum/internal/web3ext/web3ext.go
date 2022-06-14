@@ -405,6 +405,11 @@ web3._extend({
 	property: 'eth',
 	methods: [
 		new web3._extend.Method({
+			name: 'chainId',
+			call: 'eth_chainId',
+			params: 0,
+		}),
+		new web3._extend.Method({
 			name: 'sign',
 			call: 'eth_sign',
 			params: 2,
@@ -852,10 +857,24 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'getNextEpochValidators',
 			call: 'tdm_getNextEpochValidators'
+		}),new web3._extend.Method({
+			name: 'getCurrentEpochNumberOfChildChain',
+			call: 'tdm_getCurrentEpochNumberOfChildChain',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getEpochOfChildChain',
+			call: 'tdm_getEpochOfChildChain',
+			params: 2
 		})
 	],
 	properties:
-	[]
+	[
+		new web3._extend.Property({
+			name: 'peers',
+			getter: 'tdm_peers'
+		})
+	]
 });
 `
 

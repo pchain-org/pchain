@@ -136,7 +136,7 @@ func init_cmd(ctx *cli.Context, config cfg.Config, chainId string, ethGenesisPat
 
 	init_eth_blockchain(chainId, ethGenesisPath, ctx)
 
-	init_em_files(config, chainId, ethGenesisPath, nil)
+	init_tdm_files(config, chainId, ethGenesisPath, nil)
 
 	return nil
 }
@@ -227,7 +227,7 @@ func init_eth_blockchain(chainId string, ethGenesisPath string, ctx *cli.Context
 	log.Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
 }
 
-func init_em_files(config cfg.Config, chainId string, genesisPath string, validators []types.GenesisValidator) error {
+func init_tdm_files(config cfg.Config, chainId string, genesisPath string, validators []types.GenesisValidator) error {
 	gensisFile, err := os.Open(genesisPath)
 	defer gensisFile.Close()
 	if err != nil {

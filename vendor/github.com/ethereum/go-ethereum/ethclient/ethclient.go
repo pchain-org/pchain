@@ -57,7 +57,33 @@ func Close(client *Client) {
 	}
 }
 
+// CreateAccessList tries to create an access list for a specific transaction based on the
+// current pending state of the blockchain.
+func (ec *Client) CreateAccessList(ctx context.Context, msg ethereum.CallMsg) (*types.AccessList, uint64, string, error) {
+	type accessListResult struct {
+		Accesslist *types.AccessList `json:"accessList"`
+		Error      string            `json:"error,omitempty"`
+		GasUsed    hexutil.Uint64    `json:"gasUsed"`
+	}
+	var result accessListResult
+	if err := ec.c.CallContext(ctx, &result, "eth_createAccessList", toCallArg(msg)); err != nil {
+		return nil, 0, "", err
+	}
+	return result.Accesslist, uint64(result.GasUsed), result.Error, nil
+}
+
+
 // Blockchain Access
+
+// ChainId retrieves the current chain ID for transaction replay protection.
+func (ec *Client) ChainID(ctx context.Context) (*big.Int, error) {
+	var result hexutil.Big
+	err := ec.c.CallContext(ctx, &result, "eth_chainId")
+	if err != nil {
+		return nil, err
+	}
+	return (*big.Int)(&result), err
+}
 
 // BlockByHash returns the given full block.
 //

@@ -130,9 +130,11 @@ type rawShortNode struct {
 	Val node
 }
 
-func (n rawShortNode) canUnload(uint16, uint16) bool { panic("this should never end up in a live trie") }
-func (n rawShortNode) cache() (hashNode, bool)       { panic("this should never end up in a live trie") }
-func (n rawShortNode) fstring(ind string) string     { panic("this should never end up in a live trie") }
+func (n rawShortNode) canUnload(uint16, uint16) bool {
+	panic("this should never end up in a live trie")
+}
+func (n rawShortNode) cache() (hashNode, bool)   { panic("this should never end up in a live trie") }
+func (n rawShortNode) fstring(ind string) string { panic("this should never end up in a live trie") }
 
 // cachedNode is all the information we know about a single cached node in the
 // memory database write layer.
@@ -872,7 +874,6 @@ func (db *Database) accumulate(hash common.Hash, reachable map[common.Hash]struc
 	}
 }
 
-
 func (db *Database) GetEpochReward(address common.Address, epoch uint64, height uint64) *big.Int {
 	reward, _ := db.diskdb.Get(append(append(common.RewardPrefix, address.Bytes()...), common.EncodeUint64(epoch)...))
 	if len(reward) == 0 {
@@ -882,7 +883,7 @@ func (db *Database) GetEpochReward(address common.Address, epoch uint64, height 
 		if err == nil {
 			closestIndex := 0
 			closestHeight := uint64(common.INV_HEIGHT)
-			for i:=0; i<common.OBR_SIZE; i++ {
+			for i := 0; i < common.OBR_SIZE; i++ {
 				key := obrArray.ObrArray[i].Height
 				if key == height {
 					return obrArray.ObrArray[i].Reward
@@ -937,7 +938,7 @@ func (db *Database) WriteEpochRewardExtracted(address common.Address, epoch uint
 		}
 	}
 
-	for i:=initIndex; i<common.XTR_SIZE; i++ {
+	for i := initIndex; i < common.XTR_SIZE; i++ {
 		xtr.XtrArray[i].Height = common.INV_HEIGHT
 		xtr.XtrArray[i].Epoch = common.INV_EPOCH
 	}
@@ -945,14 +946,14 @@ func (db *Database) WriteEpochRewardExtracted(address common.Address, epoch uint
 	minIndex := 0
 	minHeight := uint64(common.INV_HEIGHT)
 	settled := false
-	for i:=0; i<common.XTR_SIZE; i++ {
+	for i := 0; i < common.XTR_SIZE; i++ {
 		key := xtr.XtrArray[i].Height
 		if key >= height {
 			if !settled {
 				xtr.XtrArray[i].Height = height
 				xtr.XtrArray[i].Epoch = epoch
 				settled = true
-			} else if key != common.INV_HEIGHT{
+			} else if key != common.INV_HEIGHT {
 				xtr.XtrArray[i].Height = common.INV_HEIGHT
 				xtr.XtrArray[i].Epoch = common.INV_EPOCH
 			}
@@ -1000,7 +1001,7 @@ func (db *Database) GetEpochRewardExtracted(address common.Address, height uint6
 			closestIndex := 0
 			closestHeight := uint64(common.INV_HEIGHT)
 			hasInvalidKey := false
-			for i:=0; i<common.XTR_SIZE; i++ {
+			for i := 0; i < common.XTR_SIZE; i++ {
 				key := xtrArray.XtrArray[i].Height
 				if key == height {
 					return xtrArray.XtrArray[i].Epoch, nil

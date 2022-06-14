@@ -90,6 +90,10 @@ func newPeer(name string, version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer 
 	}
 }
 
+func (p *peer) P2PPeer() *p2p.Peer {
+	return p.Peer
+}
+
 // Info gathers and returns a collection of metadata known about a peer.
 func (p *peer) Info() *PeerInfo {
 	hash, td := p.Head()

@@ -1,6 +1,12 @@
 package chain
 
 import (
+	"io/ioutil"
+	"net"
+	"path"
+	"strconv"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -18,11 +24,6 @@ import (
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"gopkg.in/urfave/cli.v1"
-	"io/ioutil"
-	"net"
-	"path"
-	"strconv"
-	"sync"
 )
 
 type ChainManager struct {
