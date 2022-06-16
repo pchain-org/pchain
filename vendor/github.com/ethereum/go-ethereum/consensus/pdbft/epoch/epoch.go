@@ -484,11 +484,15 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 				nextEp := epoch.nextEpoch
 
 				oldVoteSet := nextEp.GetEpochValidatorVoteSet()
+				if oldVoteSet == nil {
+					oldVoteSet = NewEpochValidatorVoteSet()
+				}
 				newVoteSet := NewEpochValidatorVoteSet()
 
 				nextEp.Validators = newValidators
 				for _, v := range newValidators.Validators {
 					vAddr := common.BytesToAddress(v.Address)
+					//VotingPower will affect the VRF in PDBFT, update here
 					v.VotingPower = new(big.Int).Add(state.GetDepositBalance(vAddr), state.GetTotalDepositProxiedBalance(vAddr))
 
 					vote, exist := oldVoteSet.GetVoteByAddress(vAddr)
@@ -497,10 +501,10 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 						vote = &EpochValidatorVote{
 							Address:  vAddr,
 							PubKey:   v.PubKey,
-							Amount:   v.VotingPower,
 						}
-						log.Errorf("this should not happen, for all validator were saved in voteset")
+						log.Infof("this could happen because of no new candidate votes for validator")
 					}
+					vote.Amount = v.VotingPower
 					newVoteSet.StoreVote(vote)
 				}
 				nextEp.SetEpochValidatorVoteSet(newVoteSet)
