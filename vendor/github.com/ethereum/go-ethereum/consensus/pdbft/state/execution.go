@@ -115,12 +115,7 @@ func autoStartMining(bc *core.BlockChain, block *ethTypes.Block) {
 	// After Reveal Vote End stage, we should able to calculate the new validator
 	if block.NumberU64() == currentEpoch.GetRevealVoteEndHeight()+1 {
 
-		mainBlock := bc.CurrentBlock().Number()
-		if !bc.Config().IsMainChain() {
-			mainBlock = bc.CurrentBlock().Header().MainChainNumber
-		}
-
-		markProposedInEpoch := bc.Config().IsMarkProposedInEpoch(mainBlock)
+		markProposedInEpoch := bc.Config().IsMarkProposedInEpoch(bc.CurrentBlock().Header().MainChainNumber)
 
 		// Re-Calculate the next epoch validators
 		nextEp := currentEpoch.GetNextEpoch()

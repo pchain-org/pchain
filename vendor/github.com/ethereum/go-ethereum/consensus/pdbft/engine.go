@@ -480,12 +480,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 	selfRetrieveReward := consensus.IsSelfRetrieveReward(sb.GetEpoch(), chain, header)
 
-	mainBlock := header.Number
-	if !sb.chainConfig.IsMainChain() {
-		mainBlock = header.MainChainNumber
-	}
-
-	markProposedInEpoch := sb.chainConfig.IsMarkProposedInEpoch(mainBlock)
+	markProposedInEpoch := sb.chainConfig.IsMarkProposedInEpoch(header.MainChainNumber)
 
 	// Calculate the rewards
 	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward, markProposedInEpoch)

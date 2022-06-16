@@ -65,16 +65,17 @@ var (
 	MainnetIstanbulBlock = big.NewInt(24195000)
 	TestnetIstanbulBlock = big.NewInt(40)
 
-	MainnetMuirGlacierBlock = big.NewInt(100000000000)
-	TestnetMuirGlacierBlock = big.NewInt(100000000000)
+	MainnetMuirGlacierBlock *big.Int = nil //big.NewInt(100000000000)
+	TestnetMuirGlacierBlock *big.Int = nil //big.NewInt(100000000000)
 
-	MainnetBerlinBlock = big.NewInt(100000000000)
-	TestnetBerlinBlock = big.NewInt(100000000000)
+	MainnetBerlinBlock *big.Int = nil //big.NewInt(100000000000)
+	TestnetBerlinBlock *big.Int = nil //big.NewInt(100000000000)
 
-	MainnetMarkProposedInEpochMainBlock          = big.NewInt(20000000)
-	TestnetMarkProposedInEpochMainBlock          = big.NewInt(40)
-	MainnetLondonBlock                  *big.Int = nil
-	TestnetLondonBlock                  *big.Int = nil
+	MainnetLondonBlock *big.Int = nil
+	TestnetLondonBlock *big.Int = nil
+
+	MainnetMarkProposedInEpochMainBlock = big.NewInt(100000000000)
+	TestnetMarkProposedInEpochMainBlock = big.NewInt(40)
 )
 
 var (

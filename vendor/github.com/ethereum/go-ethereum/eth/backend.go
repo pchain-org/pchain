@@ -258,6 +258,18 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if chainConfig.IstanbulBlock == nil {
 			chainConfig.IstanbulBlock = params.MainnetChainConfig.IstanbulBlock
 		}
+		if chainConfig.MuirGlacierBlock == nil {
+			chainConfig.MuirGlacierBlock = params.MainnetChainConfig.MuirGlacierBlock
+		}
+		if chainConfig.BerlinBlock == nil {
+			chainConfig.BerlinBlock = params.MainnetChainConfig.BerlinBlock
+		}
+		if chainConfig.LondonBlock == nil {
+			chainConfig.LondonBlock = params.MainnetChainConfig.LondonBlock
+		}
+		if chainConfig.MarkProposedInEpochMainBlock == nil {
+			chainConfig.MarkProposedInEpochMainBlock = params.MainnetChainConfig.MarkProposedInEpochMainBlock
+		}
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
 		}
@@ -295,6 +307,18 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		}
 		if chainConfig.IstanbulBlock == nil {
 			chainConfig.IstanbulBlock = params.TestnetChainConfig.IstanbulBlock
+		}
+		if chainConfig.MuirGlacierBlock == nil {
+			chainConfig.MuirGlacierBlock = params.TestnetChainConfig.MuirGlacierBlock
+		}
+		if chainConfig.BerlinBlock == nil {
+			chainConfig.BerlinBlock = params.TestnetChainConfig.BerlinBlock
+		}
+		if chainConfig.LondonBlock == nil {
+			chainConfig.LondonBlock = params.TestnetChainConfig.LondonBlock
+		}
+		if chainConfig.MarkProposedInEpochMainBlock == nil {
+			chainConfig.MarkProposedInEpochMainBlock = params.TestnetChainConfig.MarkProposedInEpochMainBlock
 		}
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
