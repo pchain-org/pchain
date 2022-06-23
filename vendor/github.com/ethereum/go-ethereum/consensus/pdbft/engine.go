@@ -3,6 +3,7 @@ package pdbft
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -481,6 +482,8 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	selfRetrieveReward := consensus.IsSelfRetrieveReward(sb.GetEpoch(), chain, header)
 
 	markProposedInEpoch := sb.chainConfig.IsMarkProposedInEpoch(header.MainChainNumber)
+	fmt.Printf("config.MarkProposedInEpochMainBlock is %v, headerNumber is %v, markProposedInEpoch is %v\n",
+		sb.chainConfig.MarkProposedInEpochMainBlock, header.MainChainNumber, markProposedInEpoch)
 
 	// Calculate the rewards
 	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward, markProposedInEpoch)
@@ -864,12 +867,15 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	if markProposedInEpoch {
 
-		_, err := state.GetProposalStartInEpoch()
+		startEp, err := state.GetProposalStartInEpoch()
 		if err != nil {
 			state.MarkProposalStartInEpoch(ep.Number)
 		}
 
 		state.MarkProposedInEpoch(header.Coinbase, ep.Number)
+
+		fmt.Printf("accumulateRewards() for %x in epochNo %v, startEp is %v\n",
+			header.Coinbase, ep.Number, startEp)
 	}
 }
 
