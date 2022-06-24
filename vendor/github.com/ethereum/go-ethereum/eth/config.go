@@ -57,6 +57,7 @@ var DefaultConfig = Config{
 	MinerGasPrice:  big.NewInt(params.GWei),
 
 	TxPool: core.DefaultTxPoolConfig,
+	RPCGasCap:   50000000,
 	GPO: gasprice.Config{
 		Blocks:     20,
 		Percentile: 60,
@@ -135,6 +136,9 @@ type Config struct {
 
 	// Miscellaneous options
 	DocRoot string `toml:"-"`
+	
+	// RPCGasCap is the global gas cap for eth-call variants.
+	RPCGasCap uint64
 
 	// Data Reduction options
 	PruneStateData bool

@@ -421,6 +421,11 @@ func (lc *LightChain) HasHeader(hash common.Hash, number uint64) bool {
 	return lc.hc.HasHeader(hash, number)
 }
 
+// GetCanonicalHash returns the canonical hash for a given block number
+func (lc *LightChain) GetCanonicalHash(number uint64) common.Hash {
+	return lc.hc.GetCanonicalHash(number)
+}
+
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given
 // hash, fetching towards the genesis block.
 func (lc *LightChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash {
@@ -501,5 +506,11 @@ func (lc *LightChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 // SubscribeRemovedLogsEvent implements the interface of filters.Backend
 // LightChain does not send core.RemovedLogsEvent, so return an empty subscription.
 func (lc *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
+	return lc.scope.Track(new(event.Feed).Subscribe(ch))
+}
+
+// SubscribePendingLogs starts delivering logs from pending transactions
+// to the given channel.
+func (lc *LightChain) SubscribePendingLogs(ch chan<- []*types.Log) event.Subscription {
 	return lc.scope.Track(new(event.Feed).Subscribe(ch))
 }
