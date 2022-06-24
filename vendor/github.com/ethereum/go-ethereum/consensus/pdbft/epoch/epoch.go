@@ -356,9 +356,9 @@ func (epoch *Epoch) GetPreviousEpoch() *Epoch {
 func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *state.StateDB,
 			outsideReward, selfRetrieveReward, markProposedInEpoch bool) (bool, *tmTypes.ValidatorSet, error) {
 
-	log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
-
 	if height == epoch.EndBlock {
+		log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
+
 		epoch.nextEpoch = epoch.GetNextEpoch()
 		if epoch.nextEpoch != nil {
 
@@ -556,7 +556,12 @@ func updateEpochValidatorSet(state *state.StateDB, epochNo uint64, validators *t
 
 	// Refund List will be vaildators contain from Vote (exit validator or less amount than previous amount) and Knockout after sort by amount
 	var refund []*tmTypes.RefundValidatorAmount
-	newValSize := 0
+	oldValSize, newValSize := validators.Size(), 0
+	oldValAddrArray := make([][]byte, 0)
+	for _, v := range validators.Validators {
+		oldValAddrArray = append(oldValAddrArray, v.Address)
+	}
+
 	// Process the Vote if vote set not empty
 	if !voteSet.IsEmpty() {
 		// Process the Votes and merge into the Validator Set
@@ -590,8 +595,6 @@ func updateEpochValidatorSet(state *state.StateDB, epochNo uint64, validators *t
 						fmt.Printf("markProposedInEpoch is true, err is %v, epochNo is %v, startEp is %v\n",
 							err, epochNo, startEp)
 					}
-					fmt.Printf("CheckProposedInEpoch for %x in epochNo %v, startEp is %v, should vote-out: %v\n",
-						v.Address, epochNo, startEp, shouldVoteOut)
 				}
 
 				if shouldVoteOut {
@@ -628,36 +631,27 @@ func updateEpochValidatorSet(state *state.StateDB, epochNo uint64, validators *t
 	//remove the not-proposed nodes which did not vote for next epoch
 	if markProposedInEpoch {
 		startEp, err := state.GetProposalStartInEpoch()
-		fmt.Printf("markProposedInEpoch is true, err is %v, epochNo is %v, startEp is %v\n",
-				err, epochNo, startEp)
 		if err == nil && epochNo > startEp {
-			addrArray := make([][]byte, 0)
-			for _, v := range validators.Validators {
-				addrArray = append(addrArray, v.Address)
-			}
-			shouldVoteOut := false
-
-			for _, addr := range addrArray {
+			for _, addr := range oldValAddrArray {
 				//only when epochNo is bigger than startEp, the check is validate, because the mark
 				//could start in the middle of an epoch
 				commonAddr := common.BytesToAddress(addr)
-				shouldVoteOut = !state.CheckProposedInEpoch(commonAddr, epochNo)
-				if shouldVoteOut {
-					refund = append(refund, &tmTypes.RefundValidatorAmount{Address: commonAddr, Amount: nil, Voteout: true})
-					_, removed := validators.Remove(addr)
-					if !removed {
-						return nil, fmt.Errorf("Failed to remove validator %x", addr)
+				_, validator := validators.GetByAddress(addr)
+				if validator != nil {
+					shouldVoteOut := !state.CheckProposedInEpoch(commonAddr, epochNo)
+					if shouldVoteOut {
+						refund = append(refund, &tmTypes.RefundValidatorAmount{Address: commonAddr, Amount: nil, Voteout: true})
+						_, removed := validators.Remove(addr)
+						if !removed {
+							return nil, fmt.Errorf("Failed to remove validator %x", addr)
+						}
 					}
 				}
-
-				fmt.Printf("CheckProposedInEpoch1 for %x in epochNo %v, startEp is %v, should vote-out: %v\n",
-					addr, epochNo, startEp, shouldVoteOut)
 			}
 		}
 	}
 
 	// Determine the Validator Size
-	oldValSize := validators.Size()
 	valSize := oldValSize + newValSize/2
 	if valSize > MaximumValidatorsSize {
 		valSize = MaximumValidatorsSize
