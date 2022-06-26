@@ -204,7 +204,7 @@ func SendDataToMainChain(chainUrl string, data []byte, prv *ecdsa.PrivateKey, ma
 
 // BroadcastDataToMainChain send tx3 proof data to MainChain via rpc call, then broadcast it via p2p network
 func BroadcastDataToMainChain(chainUrl string, chainId string, data []byte) error {
-	if chainId == "" || chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
+	if chainId == "" || params.IsMainChain(chainId) {
 		return errors.New("invalid child chainId")
 	}
 
