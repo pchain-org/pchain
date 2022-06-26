@@ -91,7 +91,7 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
 	}
 
-	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
+	if params.IsMainChain(chainId) {
 		return common.Hash{}, errors.New("chainId should not be " + params.MainnetChainConfig.PChainId + " or " + params.TestnetChainConfig.PChainId)
 	}
 
@@ -163,8 +163,8 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 
 func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.Address, amount *hexutil.Big, chainId string, txHash common.Hash) (common.Hash, error) {
 
-	if chainId == params.MainnetChainConfig.PChainId || chainId == params.TestnetChainConfig.PChainId {
-		return common.Hash{}, errors.New("argument can't be the main chain")
+	if params.IsMainChain(chainId) {
+		return common.Hash{}, errors.New("child chainId can't be the main chain")
 	}
 
 	input, err := pabi.ChainABI.Pack(pabi.WithdrawFromMainChain.String(), chainId, (*big.Int)(amount), txHash)
@@ -226,7 +226,7 @@ func (s *PublicChainAPI) GetAllTX3(ctx context.Context, from common.Address, blo
 
 func (s *PublicChainAPI) BroadcastTX3ProofData(ctx context.Context, bs hexutil.Bytes) error {
 	chainId := s.b.ChainConfig().PChainId
-	if chainId != params.MainnetChainConfig.PChainId && chainId != params.TestnetChainConfig.PChainId {
+	if !params.IsMainChain(chainId) {
 		return errors.New("this api can only be called in the main chain")
 	}
 

@@ -372,8 +372,8 @@ func makeDifficultyCalculator(bombDelay *big.Int) func(time uint64, parent *type
 		//         (parent_diff / 2048 * max((2 if len(parent.uncles) else 1) - ((timestamp - parent.timestamp) // 9), -99))
 		//        ) + 2^(periodCount - 2)
 
-	bigTime := new(big.Int).SetUint64(time)
-	bigParentTime := new(big.Int).Set(parent.Time)
+		bigTime := new(big.Int).SetUint64(time)
+		bigParentTime := new(big.Int).Set(parent.Time)
 
 		// holds intermediate values to make the algo easier to read & audit
 		x := new(big.Int)
