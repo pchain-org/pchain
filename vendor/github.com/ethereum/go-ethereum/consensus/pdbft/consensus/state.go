@@ -2305,7 +2305,6 @@ func (cs *ConsensusState) SendDataToMainChain(data []byte, prv *ecdsa.PrivateKey
 			log.Errorf("SendDataToMainChain, WrpSendTransaction err: %v", err)
 			return err
 		}
-		nonce, err = apiBridge.GetTransactionCount(ctx, account, rpc.PendingBlockNumber)
 
 		return nil
 	})
