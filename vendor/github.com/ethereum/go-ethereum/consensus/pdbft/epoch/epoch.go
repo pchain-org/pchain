@@ -590,7 +590,8 @@ func updateEpochValidatorSet(state *state.StateDB, epochNo uint64, validators *t
 					//only when epochNo is bigger than startEp, the check is validate, because the mark
 					//could start in the middle of an epoch
 					if err == nil && epochNo > startEp {
-						shouldVoteOut = !state.CheckProposedInEpoch(v.Address, epochNo)
+						_, proposed := state.CheckProposedInEpoch(v.Address, epochNo)
+						shouldVoteOut = !proposed
 					} else {
 						fmt.Printf("markProposedInEpoch is true, err is %v, epochNo is %v, startEp is %v\n",
 							err, epochNo, startEp)
@@ -638,7 +639,8 @@ func updateEpochValidatorSet(state *state.StateDB, epochNo uint64, validators *t
 				commonAddr := common.BytesToAddress(addr)
 				_, validator := validators.GetByAddress(addr)
 				if validator != nil {
-					shouldVoteOut := !state.CheckProposedInEpoch(commonAddr, epochNo)
+					_, proposed := state.CheckProposedInEpoch(commonAddr, epochNo)
+					shouldVoteOut := !proposed
 					if shouldVoteOut {
 						refund = append(refund, &tmTypes.RefundValidatorAmount{Address: commonAddr, Amount: nil, Voteout: true})
 						_, removed := validators.Remove(addr)

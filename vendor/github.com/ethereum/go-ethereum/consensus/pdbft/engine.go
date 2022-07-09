@@ -482,7 +482,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 	markProposedInEpoch := sb.chainConfig.IsMarkProposedInEpoch(header.MainChainNumber)
 	// Calculate the rewards
-	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward, markProposedInEpoch)
+	sb.accumulateRewards(state, header, epoch, totalGasFee, selfRetrieveReward, markProposedInEpoch)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
@@ -734,10 +734,11 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 // The total reward consists of the static block reward of Owner setup and total tx gas fee.
 //
 // If the coinbase is Candidate, divide the rewards by weight
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch,
+func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header, ep *epoch.Epoch,
 	totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
+	config := sb.chainConfig
 	if config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId {
 		// Main Chain
 
@@ -868,7 +869,18 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			state.MarkProposalStartInEpoch(ep.Number)
 		}
 
-		state.MarkProposedInEpoch(header.Coinbase, ep.Number)
+		//if this chain rewinds or the self-proposed head block is overwritten by external block
+		//it needs clear the mark of self-address
+		selfAddress := sb.core.privValidator.Address
+		if header.Coinbase != selfAddress {
+			firstProposedBlock, proposed := state.CheckProposedInEpoch(selfAddress, ep.Number)
+			if proposed && height <= firstProposedBlock {
+				state.ClearProposedInEpoch(selfAddress, ep.Number)
+				sb.logger.Infof("the address %x encouters the rewind or block overwritten, clear its proposal record", selfAddress)
+			}
+		}
+
+		state.MarkProposedInEpoch(header.Coinbase, ep.Number, height)
 	}
 }
 

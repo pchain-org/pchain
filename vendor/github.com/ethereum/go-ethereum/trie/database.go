@@ -1047,18 +1047,65 @@ func (db *Database) WriteOOSLastBlock(blockNumber *big.Int) error {
 	return db.diskdb.Put(common.OosLastBlockKey, blockNumber.Bytes())
 }
 
-func (db *Database) MarkProposedInEpoch(address common.Address, epoch uint64) error {
+func (db *Database) MarkProposedInEpoch(address common.Address, epoch, height uint64) error {
+
+	epochBytes, err := db.diskdb.Get(append(append(common.ProposedInEpochPrefix, address.Bytes()...), common.EncodeUint64(epoch)...))
+	countValue := uint64(0)
+	firstProposedBlock := uint64(0)
+	if err == nil && len(epochBytes) % 8 == 0 {
+		countBytes := make([]byte, 8)
+		copy(countBytes, epochBytes[0:8])
+		countValue = common.DecodeUint64(countBytes)
+		if len(epochBytes) == 16 {
+			firstProposedBlockBytes := make([]byte, 8)
+			copy(firstProposedBlockBytes, epochBytes[8:])
+			firstProposedBlock = common.DecodeUint64(firstProposedBlockBytes)
+		}
+	}
+
+	countValue ++
+	if firstProposedBlock == 0 || firstProposedBlock > height {
+		firstProposedBlock = height
+	}
+
 	return db.diskdb.Put(append(
 		append(common.ProposedInEpochPrefix, address.Bytes()...), common.EncodeUint64(epoch)...),
-		common.EncodeUint64(1))
+		append(common.EncodeUint64(countValue), common.EncodeUint64(firstProposedBlock)...))
 }
 
-func (db *Database) CheckProposedInEpoch(address common.Address, epoch uint64) bool {
-	_, err := db.diskdb.Get(append(append(common.ProposedInEpochPrefix, address.Bytes()...), common.EncodeUint64(epoch)...))
+func (db *Database) CheckProposedInEpoch(address common.Address, epoch uint64) (uint64, bool) {
+	epochBytes, err := db.diskdb.Get(append(append(common.ProposedInEpochPrefix, address.Bytes()...), common.EncodeUint64(epoch)...))
 	if err != nil {
-		return false
+		return 0, false
 	}
-	return true
+
+	length := len(epochBytes)
+	if length == 8 {
+		countValue := common.DecodeUint64(epochBytes)
+		if countValue != 1 {
+			log.Error("value for count of proposed block must be 1, now is %v", countValue)
+			return 0, false
+		}
+		return 0, true
+	} else if length == 16 {
+		countBytes := make([]byte, 8)
+		copy(countBytes, epochBytes[0:8])
+		firstProposedBlockBytes := make([]byte, 8)
+		copy(firstProposedBlockBytes, epochBytes[8:])
+		countValue := common.DecodeUint64(countBytes)
+		firstProposedBlock := common.DecodeUint64(firstProposedBlockBytes)
+		if countValue <= 0 {
+			log.Error("value for count of proposed block must be larger then 0, now is %v", countValue)
+			return 0, false
+		}
+		return firstProposedBlock, true
+	}
+	log.Error("value for count of proposed block does not get, return true to continue")
+	return 0, true
+}
+
+func (db *Database) ClearProposedInEpoch(address common.Address, epoch uint64) error {
+	return db.diskdb.Delete(append(append(common.ProposedInEpochPrefix, address.Bytes()...), common.EncodeUint64(epoch)...))
 }
 
 func (db *Database) MarkProposalStartInEpoch(epoch uint64) error {
