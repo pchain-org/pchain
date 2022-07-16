@@ -871,8 +871,8 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 
 		//if this chain rewinds or the self-proposed head block is overwritten by external block
 		//it needs clear the mark of self-address
-		selfAddress := sb.core.privValidator.Address
-		if header.Coinbase != selfAddress {
+		selfAddress := sb.PrivateValidator()
+		if sb.IsStarted() && (selfAddress != common.Address{}) && header.Coinbase != selfAddress {
 			firstProposedBlock, proposed := state.CheckProposedInEpoch(selfAddress, ep.Number)
 			if proposed && height <= firstProposedBlock {
 				state.ClearProposedInEpoch(selfAddress, ep.Number)
