@@ -108,7 +108,6 @@ var (
 		ChildSd2mcWhenEpochEndsBlock: MainnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock:            MainnetValidateHTLCBlock,
 		HeaderHashWithoutTimeBlock:   MainnetHeaderHashWithoutTimeBlock,
-		MarkProposedInEpochMainBlock: MainnetMarkProposedInEpochMainBlock,
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -143,7 +142,6 @@ var (
 		ChildSd2mcWhenEpochEndsBlock: TestnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock:            TestnetValidateHTLCBlock,
 		HeaderHashWithoutTimeBlock:   TestnetHeaderHashWithoutTimeBlock,
-		MarkProposedInEpochMainBlock: TestnetMarkProposedInEpochMainBlock,
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
