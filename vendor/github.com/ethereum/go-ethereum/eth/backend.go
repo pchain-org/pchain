@@ -20,6 +20,12 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"math/big"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -51,11 +57,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
-	"math/big"
-	"runtime"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 type LesServer interface {
@@ -257,6 +258,18 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if chainConfig.IstanbulBlock == nil {
 			chainConfig.IstanbulBlock = params.MainnetChainConfig.IstanbulBlock
 		}
+		if chainConfig.MuirGlacierBlock == nil {
+			chainConfig.MuirGlacierBlock = params.MainnetChainConfig.MuirGlacierBlock
+		}
+		if chainConfig.BerlinBlock == nil {
+			chainConfig.BerlinBlock = params.MainnetChainConfig.BerlinBlock
+		}
+		if chainConfig.LondonBlock == nil {
+			chainConfig.LondonBlock = params.MainnetChainConfig.LondonBlock
+		}
+		if chainConfig.MarkProposedInEpochMainBlock == nil {
+			chainConfig.MarkProposedInEpochMainBlock = params.MainnetChainConfig.MarkProposedInEpochMainBlock
+		}
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
 		}
@@ -294,6 +307,18 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		}
 		if chainConfig.IstanbulBlock == nil {
 			chainConfig.IstanbulBlock = params.TestnetChainConfig.IstanbulBlock
+		}
+		if chainConfig.MuirGlacierBlock == nil {
+			chainConfig.MuirGlacierBlock = params.TestnetChainConfig.MuirGlacierBlock
+		}
+		if chainConfig.BerlinBlock == nil {
+			chainConfig.BerlinBlock = params.TestnetChainConfig.BerlinBlock
+		}
+		if chainConfig.LondonBlock == nil {
+			chainConfig.LondonBlock = params.TestnetChainConfig.LondonBlock
+		}
+		if chainConfig.MarkProposedInEpochMainBlock == nil {
+			chainConfig.MarkProposedInEpochMainBlock = params.TestnetChainConfig.MarkProposedInEpochMainBlock
 		}
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
@@ -566,7 +591,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	go s.loopForMiningEvent()
 
 	// Start the Data Reduction
-	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0"{
+	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0" {
 		go s.StartScanAndPrune(0)
 	}
 

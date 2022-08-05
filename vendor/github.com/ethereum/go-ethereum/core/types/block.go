@@ -85,10 +85,10 @@ type Header struct {
 	Nonce       BlockNonce     `json:"nonce"`
 
 	// For Child Chain only
-	MainChainNumber *big.Int    `json:"mainNumber"      gencodec:"required"`
-	
+	MainChainNumber *big.Int `json:"mainNumber"      gencodec:"required"`
+
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
-	BaseFee *big.Int            `json:"baseFeePerGas"   rlp:"optional"`
+	BaseFee *big.Int `json:"baseFeePerGas"   rlp:"optional"`
 }
 
 // field type overrides for gencodec
@@ -208,7 +208,6 @@ func (h *Header) EmptyBody() bool {
 func (h *Header) EmptyReceipts() bool {
 	return h.ReceiptHash == EmptyRootHash
 }
-
 
 // Body is a simple (mutable, non-safe) data container for storing and moving
 // a block's data contents (transactions and uncles) together.
@@ -330,7 +329,6 @@ func CopyWithoutTimeHeader(h *Header) *Header {
 	}
 	return &cpy
 }
-
 
 // DecodeRLP decodes the Ethereum
 func (b *Block) DecodeRLP(s *rlp.Stream) error {

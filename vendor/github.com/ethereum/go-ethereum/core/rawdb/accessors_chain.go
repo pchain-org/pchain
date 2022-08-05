@@ -20,13 +20,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"math/big"
 )
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
@@ -453,14 +454,13 @@ func ReadReward(db ethdb.Database, address common.Address, epoch uint64) *big.In
 //the OBR_SIZE is 5 now, so the implemetation is just iterate all items, if it is bigger, could consider sorting
 func WriteReward(db ethdb.Database, address common.Address, epoch uint64, height uint64, reward *big.Int) {
 	/*
-	if err := db.Put(rewardKey(address, epoch), reward.Bytes()); err != nil {
-		log.Crit("Failed to store epoch reward", "err", err)
-	}
+		if err := db.Put(rewardKey(address, epoch), reward.Bytes()); err != nil {
+			log.Crit("Failed to store epoch reward", "err", err)
+		}
 	*/
 	oriReward, _ := db.Get(common.RewardKey(address, epoch))
 	obr := common.OBRArray{}
 	initIndex := 0
-
 
 	err := errors.New("")
 	if len(oriReward) != 0 {
@@ -469,11 +469,11 @@ func WriteReward(db ethdb.Database, address common.Address, epoch uint64, height
 			obr.ObrArray[0].Height = common.DFLT_START
 			obr.ObrArray[0].Reward = new(big.Int).SetBytes(oriReward)
 			initIndex = 1
-		}else {
+		} else {
 			initIndex = common.OBR_SIZE
 		}
 	}
-	for i:=initIndex; i<common.OBR_SIZE; i++ {
+	for i := initIndex; i < common.OBR_SIZE; i++ {
 		obr.ObrArray[i].Height = common.INV_HEIGHT
 		obr.ObrArray[i].Reward = big.NewInt(common.NONE_REWARD)
 	}
@@ -481,14 +481,14 @@ func WriteReward(db ethdb.Database, address common.Address, epoch uint64, height
 	minIndex := 0
 	minHeight := uint64(common.INV_HEIGHT)
 	settled := false
-	for i:=0; i<common.OBR_SIZE; i++ {
+	for i := 0; i < common.OBR_SIZE; i++ {
 		key := obr.ObrArray[i].Height
 		if key >= height {
 			if !settled {
 				obr.ObrArray[i].Height = height
 				obr.ObrArray[i].Reward = reward
 				settled = true
-			} else if key != common.INV_HEIGHT{
+			} else if key != common.INV_HEIGHT {
 				obr.ObrArray[i].Height = common.INV_HEIGHT
 				obr.ObrArray[i].Reward = big.NewInt(common.NONE_REWARD)
 
