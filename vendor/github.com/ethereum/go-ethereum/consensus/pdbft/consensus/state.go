@@ -2260,7 +2260,7 @@ func (cs *ConsensusState) SendDataToMainChain(data []byte, prv *ecdsa.PrivateKey
 
 	// tx signer for the main chain
 	digest := crypto.Keccak256([]byte(mainChainId))
-	signer := ethTypes.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
+	signer := ethTypes.LatestSignerForChainID(new(big.Int).SetBytes(digest[:]))
 
 	var hash = common.Hash{}
 	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)

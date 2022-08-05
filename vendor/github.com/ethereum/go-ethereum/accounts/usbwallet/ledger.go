@@ -351,7 +351,7 @@ func (w *ledgerDriver) ledgerSign(derivationPath []uint32, tx *types.Transaction
 	if chainID == nil {
 		signer = new(types.HomesteadSigner)
 	} else {
-		signer = types.NewEIP155Signer(chainID)
+		signer = types.NewEIP155Signer(chainID, true)
 		signature[64] = signature[64] - byte(chainID.Uint64()*2+35)
 	}
 	signed, err := tx.WithSignature(signer, signature)
