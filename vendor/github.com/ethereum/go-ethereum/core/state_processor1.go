@@ -222,8 +222,7 @@ func applyTransactionEx(msg types.Message, config *params.ChainConfig, bc *Block
 // indicating the block was invalid.
 func ApplyTransactionEx(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, ops *types.PendingOps, header *types.Header,
 	tx *types.Transaction, usedGas *uint64, totalUsedMoney *big.Int, cfg vm.Config, cch CrossChainHelper, mining bool) (*types.Receipt, uint64, error) {
-
-	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
+	msg, err := tx.AsMessage(types.MakeSignerWithMainBlock(config, header.MainChainNumber), header.BaseFee)
 	if err != nil {
 		return nil, 0, err
 	}

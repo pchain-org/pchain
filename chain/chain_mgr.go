@@ -1,6 +1,12 @@
 package chain
 
 import (
+	"io/ioutil"
+	"net"
+	"path"
+	"strconv"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -18,11 +24,6 @@ import (
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"gopkg.in/urfave/cli.v1"
-	"io/ioutil"
-	"net"
-	"path"
-	"strconv"
-	"sync"
 )
 
 type ChainManager struct {
@@ -130,7 +131,7 @@ func (cm *ChainManager) LoadChains(childIds []string) error {
 }
 
 func (cm *ChainManager) InitCrossChainHelper() {
-		cm.cch.chainInfoDB = dbm.NewDB("chaininfo", "leveldb",
+	cm.cch.chainInfoDB = dbm.NewDB("chaininfo", "leveldb",
 		cm.ctx.GlobalString(utils.DataDirFlag.Name))
 	cm.cch.localTX3CacheDB, _ = rawdb.NewLevelDBDatabase(path.Join(cm.ctx.GlobalString(utils.DataDirFlag.Name), "tx3cache"), 0, 0, "pchain/db/tx3/")
 

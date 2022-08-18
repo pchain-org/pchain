@@ -12,7 +12,6 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
@@ -480,13 +479,14 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 	selfRetrieveReward := consensus.IsSelfRetrieveReward(sb.GetEpoch(), chain, header)
 
+	markProposedInEpoch := sb.chainConfig.IsMarkProposedInEpoch(header.MainChainNumber)
 	// Calculate the rewards
-	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
+	sb.accumulateRewards(state, header, epoch, totalGasFee, selfRetrieveReward, markProposedInEpoch)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
 		sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
-		selfRetrieveReward); ok {
+		selfRetrieveReward, markProposedInEpoch); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
@@ -497,8 +497,8 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 				header.Extra = epochInfo.Bytes()
 			}
 		}
-
 	}
+
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
 	// Assemble and return the final block for sealing
@@ -733,11 +733,12 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 // The total reward consists of the static block reward of Owner setup and total tx gas fee.
 //
 // If the coinbase is Candidate, divide the rewards by weight
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch,
-						totalGasFee *big.Int, selfRetrieveReward bool) {
+func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header, ep *epoch.Epoch,
+	totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
-	if config.IsMainChain() {
+	config := sb.chainConfig
+	if sb.chainConfig.IsMainChain() {
 		// Main Chain
 
 		// Coinbase Reward   = 80% of Total Reward
@@ -813,9 +814,9 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		}
 	}
 
-	// Move the self reward to Reward Trie
-	//divideRewardByEpoch(state, header.Coinbase, ep.Number, selfReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 	height := header.Number.Uint64()
+
+	// Move the self reward to Reward Trie
 	divideRewardByEpoch(state, header.Coinbase, ep.Number, height, selfReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 
 	// Calculate the Delegate Reward
@@ -859,10 +860,31 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			}
 		}
 	}
+
+	if markProposedInEpoch {
+
+		_, err := state.GetProposalStartInEpoch()
+		if err != nil {
+			state.MarkProposalStartInEpoch(ep.Number)
+		}
+
+		//if this chain rewinds or the self-proposed head block is overwritten by external block
+		//it needs clear the mark of self-address
+		selfAddress := sb.PrivateValidator()
+		if sb.IsStarted() && (selfAddress != common.Address{}) && header.Coinbase != selfAddress {
+			firstProposedBlock, proposed := state.CheckProposedInEpoch(selfAddress, ep.Number)
+			if proposed && height <= firstProposedBlock {
+				state.ClearProposedInEpoch(selfAddress, ep.Number)
+				sb.logger.Infof("the address %x encouters the rewind or block overwritten, clear its proposal record", selfAddress)
+			}
+		}
+
+		state.MarkProposedInEpoch(header.Coinbase, ep.Number, height)
+	}
 }
 
-func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64,height uint64, reward *big.Int,
-						outsideReward, selfRetrieveReward, rollbackCatchup bool) {
+func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64, height uint64,
+	reward *big.Int, outsideReward, selfRetrieveReward, rollbackCatchup bool) {
 	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
 	lastEpochReward := new(big.Int).Set(reward)
 	for i := epochNumber; i < epochNumber+12; i++ {

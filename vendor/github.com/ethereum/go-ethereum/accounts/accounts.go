@@ -113,9 +113,6 @@ type Wallet interface {
 	// the account in a keystore).
 	SignTx(account Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error)
 
-	//same as SignTx, just cache from to the tx
-	SignTxWithAddress(account Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error)
-
 	// SignHashWithPassphrase requests the wallet to sign the given hash with the
 	// given passphrase as extra authentication information.
 	//

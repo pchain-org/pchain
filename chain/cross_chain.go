@@ -553,7 +553,7 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 
 func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transaction, tx3ProofData *types.TX3ProofData) error {
 	// TX4
-	signer := types.NewEIP155Signer(tx4.ChainId())
+	signer := types.LatestSignerForChainID(tx4.ChainId())
 	from, err := types.Sender(signer, tx4)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -597,7 +597,7 @@ func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transac
 		return err
 	}
 
-	signer2 := types.NewEIP155Signer(tx3.ChainId())
+	signer2 := types.LatestSignerForChainID(tx3.ChainId())
 	tx3From, err := types.Sender(signer2, &tx3)
 	if err != nil {
 		return core.ErrInvalidSender
