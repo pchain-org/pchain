@@ -20,6 +20,12 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"math/big"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -51,10 +57,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
-	"math/big"
-	"runtime"
-	"sync"
-	"sync/atomic"
 )
 
 type LesServer interface {
@@ -128,7 +130,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	}
 
 	isMainChain := params.IsMainChain(ctx.ChainId())
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithDefault(chainDb, config.Genesis, isMainChain, isTestnet)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithDefault(chainDb, config.Genesis, isMainChain, isTestnet, nil)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
@@ -256,7 +258,19 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if chainConfig.IstanbulBlock == nil {
 			chainConfig.IstanbulBlock = params.MainnetChainConfig.IstanbulBlock
 		}
-		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == params.CHILD0PCHAINID {
+		if chainConfig.MuirGlacierBlock == nil {
+			chainConfig.MuirGlacierBlock = params.MainnetChainConfig.MuirGlacierBlock
+		}
+		if chainConfig.BerlinBlock == nil {
+			chainConfig.BerlinBlock = params.MainnetChainConfig.BerlinBlock
+		}
+		if chainConfig.LondonBlock == nil {
+			chainConfig.LondonBlock = params.MainnetChainConfig.LondonBlock
+		}
+		if chainConfig.MarkProposedInEpochMainBlock == nil {
+			chainConfig.MarkProposedInEpochMainBlock = params.MainnetChainConfig.MarkProposedInEpochMainBlock
+		}
+		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
 		}
 		if (chainConfig.Child0AutoRewardBlock == nil) && chainId == params.CHILD0PCHAINID {
@@ -296,6 +310,18 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		}
 		if chainConfig.IstanbulBlock == nil {
 			chainConfig.IstanbulBlock = params.TestnetChainConfig.IstanbulBlock
+		}
+		if chainConfig.MuirGlacierBlock == nil {
+			chainConfig.MuirGlacierBlock = params.TestnetChainConfig.MuirGlacierBlock
+		}
+		if chainConfig.BerlinBlock == nil {
+			chainConfig.BerlinBlock = params.TestnetChainConfig.BerlinBlock
+		}
+		if chainConfig.LondonBlock == nil {
+			chainConfig.LondonBlock = params.TestnetChainConfig.LondonBlock
+		}
+		if chainConfig.MarkProposedInEpochMainBlock == nil {
+			chainConfig.MarkProposedInEpochMainBlock = params.TestnetChainConfig.MarkProposedInEpochMainBlock
 		}
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == params.CHILD0PCHAINID {
 			chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
@@ -444,7 +470,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.ApiBackend, false),
+			Service:   filters.NewPublicFilterAPI(s.ApiBackend, false, 5*time.Minute),
 			Public:    true,
 		}, {
 			Namespace: "admin",

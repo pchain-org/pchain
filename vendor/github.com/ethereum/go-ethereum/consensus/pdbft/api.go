@@ -2,6 +2,8 @@ package pdbft
 
 import (
 	"errors"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -9,8 +11,6 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/params"
-	"math/big"
 )
 
 // API is a user facing RPC API of Tendermint
@@ -30,7 +30,7 @@ func (api *API) GetEpoch(num hexutil.Uint64) (*tdmTypes.EpochApi, error) {
 	number := uint64(num)
 	var resultEpoch *epoch.Epoch
 	curEpoch := api.tendermint.core.consensusState.Epoch
-	if number < 0 || number > curEpoch.Number {
+	if number > curEpoch.Number {
 		return nil, errors.New("epoch number out of range")
 	}
 
@@ -124,8 +124,12 @@ func (api *API) GetNextEpochValidators() ([]*tdmTypes.EpochValidator, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		markProposedInEpoch := api.chain.Config().IsMarkProposedInEpoch(api.chain.CurrentBlock().Header().MainChainNumber)
+
 		nextValidators := ep.Validators.Copy()
-		err = epoch.DryRunUpdateEpochValidatorSet(state, nextValidators,nextEp.GetEpochValidatorVoteSet())
+		err = epoch.DryRunUpdateEpochValidatorSet(state, ep.Number, nextValidators,
+			nextEp.GetEpochValidatorVoteSet(), markProposedInEpoch)
 		if err != nil {
 			return nil, err
 		}
@@ -156,7 +160,7 @@ func (api *API) GeneratePrivateValidator(from common.Address) (*tdmTypes.PrivVal
 
 // GetCurrentEpochNumber retrieves the current epoch number.
 func (api *API) GetCurrentEpochNumberOfChildChain(chainId string) (hexutil.Uint64, error) {
-	if !params.IsMainChain(api.chain.Config().PChainId) {
+	if !api.chain.Config().IsMainChain() {
 		return hexutil.Uint64(0), errors.New("this api is only supported by main chain")
 	}
 
@@ -172,7 +176,7 @@ func (api *API) GetCurrentEpochNumberOfChildChain(chainId string) (hexutil.Uint6
 // GetEpoch retrieves the Epoch Detail by Number
 func (api *API) GetEpochOfChildChain(chainId string, num hexutil.Uint64) (*tdmTypes.EpochApi, error) {
 
-	if params.IsMainChain(api.chain.Config().PChainId) {
+	if !api.chain.Config().IsMainChain() {
 		return nil, errors.New("this api is only supported by main chain")
 	}
 
@@ -184,7 +188,7 @@ func (api *API) GetEpochOfChildChain(chainId string, num hexutil.Uint64) (*tdmTy
 		return nil, errors.New("child chain not found")
 	}
 
-	if number < 0 || number > ci.EpochNumber {
+	if number > ci.EpochNumber {
 		return nil, errors.New("epoch number out of range")
 	}
 

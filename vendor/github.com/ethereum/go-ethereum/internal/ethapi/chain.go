@@ -165,7 +165,7 @@ func (s *PublicChainAPI) WithdrawFromChildChain(ctx context.Context, from common
 func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.Address, amount *hexutil.Big, chainId string, txHash common.Hash) (common.Hash, error) {
 
 	if params.IsMainChain(chainId) {
-		return common.Hash{}, errors.New("argument can't be the main chain")
+		return common.Hash{}, errors.New("child chainId can't be the main chain")
 	}
 
 	input, err := pabi.ChainABI.Pack(pabi.WithdrawFromMainChain.String(), chainId, (*big.Int)(amount), txHash)
@@ -393,7 +393,7 @@ func init() {
 
 func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -419,7 +419,7 @@ func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 
 func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -461,7 +461,7 @@ func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 
 func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -482,7 +482,7 @@ func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 
 func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -538,7 +538,7 @@ func dimc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 
 func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -569,7 +569,7 @@ func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 
 func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -590,7 +590,7 @@ func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 		return fmt.Errorf("tx %x already used in child chain", args.TxHash)
 	}
 
-	signer2 := types.NewEIP155Signer(dimcTx.ChainId())
+	signer2 := types.LatestSignerForChainID(dimcTx.ChainId())
 	dimcFrom, err := types.Sender(signer2, dimcTx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -611,7 +611,7 @@ func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 
 func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -632,7 +632,7 @@ func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 		return fmt.Errorf("tx %x already used in child chain", args.TxHash)
 	}
 
-	signer2 := types.NewEIP155Signer(dimcTx.ChainId())
+	signer2 := types.LatestSignerForChainID(dimcTx.ChainId())
 	dimcFrom, err := types.Sender(signer2, dimcTx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -669,7 +669,7 @@ func wfcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 
 func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -823,7 +823,7 @@ func setBlockRewardValidation(from common.Address, tx *types.Transaction, cch co
 
 func wfmcValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -858,7 +858,7 @@ func wfmcValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 //for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
 func wfmcApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidTx4
@@ -883,7 +883,7 @@ func wfmcApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 			return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
 		}
 
-		signer2 := types.NewEIP155Signer(wfccTx.ChainId())
+		signer2 := types.LatestSignerForChainID(wfccTx.ChainId())
 		wfccFrom, err := types.Sender(signer2, wfccTx)
 		if err != nil {
 			return core.ErrInvalidTx4
@@ -922,7 +922,7 @@ func wfmcApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 
 func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -954,7 +954,7 @@ func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.Cros
 //for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
 func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -976,7 +976,7 @@ func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 			return fmt.Errorf("tx %x does not exist in child chain %s", args.TxHash, args.ChainId)
 		}
 
-		signer2 := types.NewEIP155Signer(wfccTx.ChainId())
+		signer2 := types.LatestSignerForChainID(wfccTx.ChainId())
 		wfccFrom, err := types.Sender(signer2, wfccTx)
 		if err != nil {
 			return core.ErrInvalidSender

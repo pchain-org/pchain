@@ -169,6 +169,10 @@ func (epoch *Epoch) GetEpochValidatorVoteSet() *EpochValidatorVoteSet {
 	return epoch.validatorVoteSet
 }
 
+func (epoch *Epoch) SetEpochValidatorVoteSet(validatorVoteSet *EpochValidatorVoteSet) {
+	epoch.validatorVoteSet = validatorVoteSet
+}
+
 func (epoch *Epoch) GetRewardScheme() *RewardScheme {
 	return epoch.rs
 }
@@ -364,11 +368,11 @@ func (epoch *Epoch) GetPreviousEpoch() *Epoch {
 }
 
 func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *state.StateDB,
-			outsideReward, selfRetrieveReward bool) (bool, *tmTypes.ValidatorSet, error) {
-
-	log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
+			outsideReward, selfRetrieveReward, markProposedInEpoch bool) (bool, *tmTypes.ValidatorSet, error) {
 
 	if height == epoch.EndBlock {
+		log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
+
 		epoch.nextEpoch = epoch.GetNextEpoch()
 		if epoch.nextEpoch != nil {
 
@@ -441,7 +445,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 
 
 			// Update Validators with vote
-			refunds, err := updateEpochValidatorSet(newValidators, epoch.nextEpoch.validatorVoteSet)
+			refunds, err := updateEpochValidatorSet(state, epoch.Number, newValidators, epoch.nextEpoch.validatorVoteSet, markProposedInEpoch)
 
 
 			if err != nil {
@@ -490,6 +494,17 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 				}
 			}
 
+			if markProposedInEpoch {
+				nextEp := epoch.nextEpoch
+
+				nextEp.Validators = newValidators
+				for _, v := range newValidators.Validators {
+					vAddr := common.BytesToAddress(v.Address)
+					//VotingPower will affect the VRF in PDBFT, update here
+					v.VotingPower = new(big.Int).Add(state.GetDepositBalance(vAddr), state.GetTotalDepositProxiedBalance(vAddr))
+				}
+			}
+
 			return true, newValidators, nil
 		} else {
 			return false, nil, NextEpochNotExist
@@ -526,7 +541,7 @@ func (epoch *Epoch) EnterNewEpoch(newValidators *tmTypes.ValidatorSet) (*Epoch, 
 }
 
 // DryRunUpdateEpochValidatorSet Re-calculate the New Validator Set base on the current state db and vote set
-func DryRunUpdateEpochValidatorSet(state *state.StateDB, validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet) error {
+func DryRunUpdateEpochValidatorSet(state *state.StateDB, epochNo uint64, validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet, markProposedInEpoch bool) error {
 
 	for _, v := range validators.Validators {
 		vAddr := common.BytesToAddress(v.Address)
@@ -544,17 +559,23 @@ func DryRunUpdateEpochValidatorSet(state *state.StateDB, validators *tmTypes.Val
 		}
 	}
 
-	_, err := updateEpochValidatorSet(validators, voteSet)
+	_, err := updateEpochValidatorSet(state, epochNo, validators, voteSet, markProposedInEpoch)
 	return err
 }
 
 // updateEpochValidatorSet Update the Current Epoch Validator by vote
 //
-func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet) ([]*tmTypes.RefundValidatorAmount, error) {
+func updateEpochValidatorSet(state *state.StateDB, epochNo uint64, validators *tmTypes.ValidatorSet,
+	voteSet *EpochValidatorVoteSet, markProposedInEpoch bool) ([]*tmTypes.RefundValidatorAmount, error) {
 
 	// Refund List will be vaildators contain from Vote (exit validator or less amount than previous amount) and Knockout after sort by amount
 	var refund []*tmTypes.RefundValidatorAmount
 	oldValSize, newValSize := validators.Size(), 0
+	oldValAddrArray := make([][]byte, 0)
+	for _, v := range validators.Validators {
+		oldValAddrArray = append(oldValAddrArray, v.Address)
+	}
+
 	// Process the Vote if vote set not empty
 	if !voteSet.IsEmpty() {
 		// Process the Votes and merge into the Validator Set
@@ -574,26 +595,73 @@ func updateEpochValidatorSet(validators *tmTypes.ValidatorSet, voteSet *EpochVal
 					return nil, fmt.Errorf("Failed to add new validator %x with voting power %d", v.Address, v.Amount)
 				}
 				newValSize++
-			} else if v.Amount.Sign() == 0 {
-				refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: validator.VotingPower, Voteout: false})
-				// Remove the Validator
-				_, removed := validators.Remove(validator.Address)
-
-				if !removed {
-					return nil, fmt.Errorf("Failed to remove validator %x", validator.Address)
-				}
 			} else {
-				//refund if new amount less than the voting power
-				if v.Amount.Cmp(validator.VotingPower) == -1 {
-					refundAmount := new(big.Int).Sub(validator.VotingPower, v.Amount)
-					refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: refundAmount, Voteout: false})
+				//if this validator did not proposed one block in this epoch, it will lose vote priority for next epoch
+				//treat it as a knock-out one
+				shouldVoteOut := false
+				if markProposedInEpoch {
+					startEp, err := state.GetProposalStartInEpoch()
+					//only when epochNo is bigger than startEp, the check is validate, because the mark
+					//could start in the middle of an epoch
+					if err == nil && epochNo > startEp {
+						_, proposed := state.CheckProposedInEpoch(v.Address, epochNo)
+						shouldVoteOut = !proposed
+					} else {
+						fmt.Printf("markProposedInEpoch is true, err is %v, epochNo is %v, startEp is %v\n",
+							err, epochNo, startEp)
+					}
 				}
 
-				// Update the Validator Amount
-				validator.VotingPower = v.Amount
-				updated := validators.Update(validator)
-				if !updated {
-					return nil, fmt.Errorf("Failed to update validator %x with voting power %d", validator.Address, v.Amount)
+				if shouldVoteOut {
+					refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: nil, Voteout: true})
+					_, removed := validators.Remove(validator.Address)
+					if !removed {
+						return nil, fmt.Errorf("Failed to remove validator %x", validator.Address)
+					}
+				} else if v.Amount.Sign() == 0 {
+					refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: validator.VotingPower, Voteout: false})
+					// Remove the Validator
+					_, removed := validators.Remove(validator.Address)
+					if !removed {
+						return nil, fmt.Errorf("Failed to remove validator %x", validator.Address)
+					}
+				} else {
+					//refund if new amount less than the voting power
+					if v.Amount.Cmp(validator.VotingPower) == -1 {
+						refundAmount := new(big.Int).Sub(validator.VotingPower, v.Amount)
+						refund = append(refund, &tmTypes.RefundValidatorAmount{Address: v.Address, Amount: refundAmount, Voteout: false})
+					}
+
+					// Update the Validator Amount
+					validator.VotingPower = v.Amount
+					updated := validators.Update(validator)
+					if !updated {
+						return nil, fmt.Errorf("Failed to update validator %x with voting power %d", validator.Address, v.Amount)
+					}
+				}
+			}
+		}
+	}
+
+	//remove the not-proposed nodes which did not vote for next epoch
+	if markProposedInEpoch {
+		startEp, err := state.GetProposalStartInEpoch()
+		if err == nil && epochNo > startEp {
+			for _, addr := range oldValAddrArray {
+				//only when epochNo is bigger than startEp, the check is validate, because the mark
+				//could start in the middle of an epoch
+				commonAddr := common.BytesToAddress(addr)
+				_, validator := validators.GetByAddress(addr)
+				if validator != nil {
+					_, proposed := state.CheckProposedInEpoch(commonAddr, epochNo)
+					shouldVoteOut := !proposed
+					if shouldVoteOut {
+						refund = append(refund, &tmTypes.RefundValidatorAmount{Address: commonAddr, Amount: nil, Voteout: true})
+						_, removed := validators.Remove(addr)
+						if !removed {
+							return nil, fmt.Errorf("Failed to remove validator %x", addr)
+						}
+					}
 				}
 			}
 		}
@@ -667,11 +735,12 @@ func (epoch *Epoch) Copy() *Epoch {
 
 func (epoch *Epoch) copy(deepcopy bool) *Epoch {
 
-	result :=  &Epoch{
+	result := &Epoch{
 		mtx:    epoch.mtx,
 		db:     epoch.db,
 		logger: epoch.logger,
-		rs:     epoch.rs,
+
+		rs: epoch.rs,
 
 		Number:           epoch.Number,
 		RewardPerBlock:   new(big.Int).Set(epoch.RewardPerBlock),

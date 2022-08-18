@@ -2,21 +2,17 @@ package rawdb
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 	pabi "github.com/pchain/abi"
 )
 
 var (
 	tx3Prefix       = []byte("t") // tx3Prefix + chainId + txHash -> tx3
 	tx3LookupPrefix = []byte("k") // tx3LookupPrefix + chainId + txHash -> tx3 lookup metadata
-	tx3ProofPrefix  = []byte("p") // tx3ProofPrefix + chainId + height -> proof data
+	Tx3ProofPrefix  = []byte("p") // tx3ProofPrefix + chainId + height -> proof data
 )
 
 // TX3LookupEntry is a positional metadata to help looking up the tx3 proof content given only its chainId and hash.
@@ -48,7 +44,7 @@ func GetTX3ProofData(db ethdb.Reader, chainId string, txHash common.Hash) *types
 	}
 
 	encNum := encodeBlockNumber(blockNumber)
-	key := append(tx3ProofPrefix, append([]byte(chainId), encNum...)...)
+	key := append(Tx3ProofPrefix, append([]byte(chainId), encNum...)...)
 	bs, err := db.Get(key)
 	if len(bs) == 0 || err != nil {
 		return nil
@@ -99,12 +95,12 @@ func GetTX3LookupEntry(db ethdb.Reader, chainId string, txHash common.Hash) (com
 
 func GetAllTX3ProofData(db ethdb.Database) []*types.TX3ProofData {
 	var ret []*types.TX3ProofData
-	iter := db.NewIteratorWithPrefix(tx3ProofPrefix)
+	iter := db.NewIteratorWithPrefix(Tx3ProofPrefix)
 	for iter.Next() {
 		key := iter.Key()
 		value := iter.Value()
 
-		if !bytes.HasPrefix(key, tx3ProofPrefix) {
+		if !bytes.HasPrefix(key, Tx3ProofPrefix) {
 			break
 		}
 
@@ -119,84 +115,10 @@ func GetAllTX3ProofData(db ethdb.Database) []*types.TX3ProofData {
 	return ret
 }
 
-// WriteTX3ProofData serializes TX3ProofData into the database.
-func WriteTX3ProofData(db ethdb.Database, proofData *types.TX3ProofData) error {
-	header := proofData.Header
-	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
-	if err != nil {
-		return err
-	}
-
-	chainId := tdmExtra.ChainID
-	if chainId == "" || params.IsMainChain(chainId) {
-		return fmt.Errorf("invalid child chain id: %s", chainId)
-	}
-
-	num := header.Number.Uint64()
-	encNum := encodeBlockNumber(num)
-	key1 := append(tx3ProofPrefix, append([]byte(chainId), encNum...)...)
-	bs, err := db.Get(key1)
-	if len(bs) == 0 || err != nil { // not exists yet.
-		bss, _ := rlp.EncodeToBytes(proofData)
-		if err := db.Put(key1, bss); err != nil {
-			return err
-		}
-
-		for i, txIndex := range proofData.TxIndexs {
-			if err := WriteTX3(db, chainId, header, txIndex, proofData.TxProofs[i]); err != nil {
-				return err
-			}
-		}
-	} else { // merge to the existing one.
-		var existProofData types.TX3ProofData
-		err = rlp.DecodeBytes(bs, &existProofData)
-		if err != nil {
-			return err
-		}
-
-		var update bool
-		for i, txIndex := range proofData.TxIndexs {
-			if !hasTxIndex(&existProofData, txIndex) {
-				if err := WriteTX3(db, chainId, header, txIndex, proofData.TxProofs[i]); err != nil {
-					return err
-				}
-
-				existProofData.TxIndexs = append(existProofData.TxIndexs, txIndex)
-				existProofData.TxProofs = append(existProofData.TxProofs, proofData.TxProofs[i])
-				update = true
-			}
-		}
-
-		if update {
-			bss, _ := rlp.EncodeToBytes(existProofData)
-			if err := db.Put(key1, bss); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func hasTxIndex(proofData *types.TX3ProofData, target uint) bool {
-	for _, txIndex := range proofData.TxIndexs {
-		if txIndex == target {
-			return true
-		}
-	}
-	return false
-}
-
-func WriteTX3(db ethdb.Writer, chainId string, header *types.Header, txIndex uint, txProofData *types.BSKeyValueSet) error {
-	keybuf := new(bytes.Buffer)
-	rlp.Encode(keybuf, txIndex)
-	val, _, err := trie.VerifyProof(header.TxHash, keybuf.Bytes(), txProofData)
-	if err != nil {
-		return err
-	}
+func WriteTX3(db ethdb.Writer, chainId string, header *types.Header, txIndex uint, val []byte) error {
 
 	var tx types.Transaction
-	err = rlp.DecodeBytes(val, &tx)
+	err := rlp.DecodeBytes(val, &tx)
 	if err != nil {
 		return err
 	}
@@ -247,7 +169,7 @@ func DeleteTX3(db ethdb.Database, chainId string, txHash common.Hash) {
 	db.Delete(key2)
 
 	encNum := encodeBlockNumber(blockNumber)
-	key3 := append(tx3ProofPrefix, append([]byte(chainId), encNum...)...)
+	key3 := append(Tx3ProofPrefix, append([]byte(chainId), encNum...)...)
 	bs, err := db.Get(key3)
 	if len(bs) == 0 || err != nil {
 		return

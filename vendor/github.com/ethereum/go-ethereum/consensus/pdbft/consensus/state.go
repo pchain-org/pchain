@@ -7,6 +7,12 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"math/big"
+	"math/rand"
+	"reflect"
+	"sync"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	consss "github.com/ethereum/go-ethereum/consensus"
 	ep "github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
@@ -20,15 +26,11 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 	pabi "github.com/pchain/abi"
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	tmdcrypto "github.com/tendermint/go-crypto"
-	"math/big"
-	"math/rand"
-	"reflect"
-	"sync"
-	"time"
 )
 
 const ROUND_NOT_PROPOSED int = 0
@@ -299,7 +301,7 @@ type ConsensusState struct {
 	privValidator PrivValidator // for signing votes
 	cch           core.CrossChainHelper
 
-	mtx             sync.Mutex
+	mtx sync.Mutex
 	RoundState
 	Epoch           *ep.Epoch // Current Epoch
 	state           *sm.State // State until height-1.
@@ -320,7 +322,7 @@ type ConsensusState struct {
 	doPrevote      func(height uint64, round int)
 	setProposal    func(proposal *types.Proposal) error
 
-	wg   sync.WaitGroup
+	wg sync.WaitGroup
 
 	blockFromMiner *ethTypes.Block
 	backend        Backend
@@ -333,10 +335,10 @@ type ConsensusState struct {
 func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.ChainConfig,
 	cch core.CrossChainHelper, epoch *ep.Epoch) *ConsensusState {
 	cs := &ConsensusState{
-		chainConfig:      chainConfig,
-		cch:              cch,
-		timeoutTicker:    NewTimeoutTicker(backend.GetLogger()),
-		timeoutParams:    InitTimeoutParamsFromConfig(config),
+		chainConfig:   chainConfig,
+		cch:           cch,
+		timeoutTicker: NewTimeoutTicker(backend.GetLogger()),
+		timeoutParams: InitTimeoutParamsFromConfig(config),
 		//done:             make(chan struct{}),
 		blockFromMiner: nil,
 		backend:        backend,
@@ -496,10 +498,9 @@ func (cs *ConsensusState) proposersByVRF() (lastProposer int, curProposer int) {
 	var headerHash common.Hash
 	if !cs.chainConfig.IsHeaderHashWithoutTimeBlock(cs.getMainBlock()) {
 		headerHash = header.Hash()
-	}else{
+	} else {
 		headerHash = header.HashWithoutTime()
 	}
-
 
 	curProposer = cs.proposerByVRF(headerHash, cs.Validators.Validators)
 
@@ -1119,40 +1120,34 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 
 		ethBlock := cs.blockFromMiner
 		var commit = &types.Commit{}
-		var epochToSave *ep.Epoch = nil
 		var epochBytes []byte
 
 		// After Reveal vote end height + 1, next epoch validator will be updated at end of block insert
 		// at height + 2, we should put the new epoch bytes into New Block
 		if cs.Height == cs.Epoch.GetRevealVoteEndHeight()+2 {
 			// Save the next epoch data into block and tell the main chain
-			epochToSave = cs.Epoch.GetNextEpoch()
-			if epochToSave == nil {
+			nextEp := cs.Epoch.GetNextEpoch()
+			if nextEp == nil {
 				panic("missing next epoch after reveal vote")
 			}
+			epochBytes = nextEp.Bytes()
+
 		} else if cs.Height == cs.Epoch.StartBlock || cs.Height == 1 {
 			// We're save the epoch data into block so that it'll be sent to the main chain.
 			// When block height equal to first block of Chain or Epoch
-			epochToSave = cs.Epoch
+			epochBytes = cs.Epoch.Bytes()
 
-		}else if cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(cs.getMainBlock()) && cs.Height==cs.Epoch.EndBlock{
+		} else if cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(cs.getMainBlock()) && cs.Height == cs.Epoch.EndBlock {
 			//At the end block of epoch, save epoch data into block, epcoh data is taken from herder
-			epochToSave = cs.Epoch.GetNextEpoch()
+			epochBytes = cs.blockFromMiner.Header().Extra
+
 		} else {
 			shouldProposeEpoch := cs.Epoch.ShouldProposeNextEpoch(cs.Height)
 			if shouldProposeEpoch {
 				lastHeight := cs.backend.ChainReader().CurrentBlock().Number().Uint64()
 				lastBlockTime := time.Unix(int64(cs.backend.ChainReader().CurrentBlock().Time()), 0)
-				epochToSave = cs.Epoch.ProposeNextEpoch(lastHeight, lastBlockTime)
-			}
-		}
+				epochBytes = cs.Epoch.ProposeNextEpoch(lastHeight, lastBlockTime).Bytes()
 
-		if epochToSave != nil {
-			if cs.chainConfig.IsChild0AutoReward(ethBlock.Number()) &&
-				epochToSave.CanApplyAutoReward(cs.chainConfig.Child0AutoRewardBlock) {
-				epochBytes = epochToSave.BytesWithAutoReward()
-			} else {
-				epochBytes = epochToSave.Bytes()
 			}
 		}
 
@@ -1161,7 +1156,7 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 		//This block could be used for later round
 		//cs.blockFromMiner = nil
 
-		var tx3ProofData []*ethTypes.TX3ProofData = nil;
+		var tx3ProofData []*ethTypes.TX3ProofData = nil
 		if !cs.chainConfig.IsSd2mcV1(cs.getMainBlock()) {
 			// retrieve TX3ProofData for TX4
 			tx3ProofData = cs.GetTX3ProofDataForTx4(ethBlock)
@@ -1278,16 +1273,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 		}
 	} else if cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(cs.getMainBlock()) && cs.Height == cs.Epoch.EndBlock {
 		if cs.Height == cs.blockFromMiner.Number().Uint64() {
-			var selfEpochBytes []byte
-			epochToSave := cs.Epoch.GetNextEpoch()
-			if epochToSave != nil {
-				if cs.chainConfig.IsChild0AutoReward(cs.blockFromMiner.Number()) &&
-					epochToSave.CanApplyAutoReward(cs.chainConfig.Child0AutoRewardBlock) {
-					selfEpochBytes = epochToSave.BytesWithAutoReward()
-				} else {
-					selfEpochBytes = epochToSave.Bytes()
-				}
-			}
+			selfEpochBytes := cs.blockFromMiner.Header().Extra
 			proposedEpochBytes := cs.ProposalBlock.TdmExtra.EpochBytes
 			if bytes.Equal(selfEpochBytes, proposedEpochBytes) {
 				cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header())
@@ -2060,16 +2046,16 @@ func CompareHRS(h1 uint64, r1 int, s1 RoundStepType, h2 uint64, r2 int, s2 Round
 		return 1
 	}
 	/*
-	if r1 < r2 {
-		return -1
-	} else if r1 > r2 {
-		return 1
-	}
-	if s1 < s2 {
-		return -1
-	} else if s1 > s2 {
-		return 1
-	}
+		if r1 < r2 {
+			return -1
+		} else if r1 > r2 {
+			return 1
+		}
+		if s1 < s2 {
+			return -1
+		} else if s1 > s2 {
+			return 1
+		}
 	*/
 	return 1
 }
@@ -2107,7 +2093,7 @@ func (cs *ConsensusState) HasTx3(block *ethTypes.Block) bool {
 
 func (cs *ConsensusState) GetTX3ProofDataForTx4(block *ethTypes.Block) []*ethTypes.TX3ProofData {
 
-	var tx3ProofData []*ethTypes.TX3ProofData = nil;
+	var tx3ProofData []*ethTypes.TX3ProofData = nil
 	txs := block.Transactions()
 	for _, tx := range txs {
 		if pabi.IsPChainContractAddr(tx.To()) {
@@ -2185,7 +2171,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block, version in
 		}
 
 	} else {
-		proofData, err := ethTypes.NewChildChainProofDataV1(block)
+		proofData, err := newChildChainProofDataV1(block)
 		if err != nil {
 			cs.logger.Error("saveDataToMainChain: failed to create proof data", "block", block, "err", err)
 			return
@@ -2216,7 +2202,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block, version in
 
 		//we wait for 15 seconds, if not write to main chain, just return
 		seconds := 0
-		for ; seconds < 15;  {
+		for seconds < 15 {
 
 			ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
 			isPending, err := cs.cch.GetApiBridgeFromMainChain().GetTransactionByHash(ctx, hash)
@@ -2240,7 +2226,7 @@ func (cs *ConsensusState) broadcastTX3ProofDataToMainChain(block *ethTypes.Block
 
 	mainChainUrl := cs.cch.GetMainChainUrl()
 
-	proofData, err := ethTypes.NewTX3ProofData(block)
+	proofData, err := newTX3ProofData(block)
 	if err != nil {
 		cs.logger.Error("broadcastTX3ProofDataToMainChain: failed to create proof data", "block", block, "err", err)
 		return
@@ -2260,7 +2246,6 @@ func (cs *ConsensusState) broadcastTX3ProofDataToMainChain(block *ethTypes.Block
 	}
 }
 
-
 // SendDataToMainChain send epoch data to main chain through eth_sendRawTransaction
 func (cs *ConsensusState) SendDataToMainChain(data []byte, prv *ecdsa.PrivateKey, mainChainId string) (common.Hash, error) {
 
@@ -2275,12 +2260,12 @@ func (cs *ConsensusState) SendDataToMainChain(data []byte, prv *ecdsa.PrivateKey
 
 	// tx signer for the main chain
 	digest := crypto.Keccak256([]byte(mainChainId))
-	signer := ethTypes.NewEIP155Signer(new(big.Int).SetBytes(digest[:]))
+	signer := ethTypes.LatestSignerForChainID(new(big.Int).SetBytes(digest[:]))
 
 	var hash = common.Hash{}
 	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
 	apiBridge := cs.cch.GetApiBridgeFromMainChain()
-	
+
 	err = retry(3, time.Second*3, func() error {
 		// gasPrice
 		gasPrice, err := apiBridge.GasPrice(ctx)
@@ -2303,7 +2288,7 @@ func (cs *ConsensusState) SendDataToMainChain(data []byte, prv *ecdsa.PrivateKey
 		signedTx, err := ethTypes.SignTx(tx, signer, prv)
 		if err != nil {
 			log.Errorf("SendDataToMainChain, SignTx err: %v", err)
-			return  err
+			return err
 		}
 
 		// eth_sendRawTransaction
@@ -2317,7 +2302,6 @@ func (cs *ConsensusState) SendDataToMainChain(data []byte, prv *ecdsa.PrivateKey
 			log.Errorf("SendDataToMainChain, WrpSendTransaction err: %v", err)
 			return err
 		}
-		nonce, err = apiBridge.GetTransactionCount(ctx, account, rpc.PendingBlockNumber)
 
 		return nil
 	})
@@ -2331,18 +2315,98 @@ func (cs *ConsensusState) SendDataToMainChain(data []byte, prv *ecdsa.PrivateKey
 	return hash, err
 }
 
+func newTX3ProofData(block *ethTypes.Block) (*ethTypes.TX3ProofData, error) {
+	ret := &ethTypes.TX3ProofData{
+		Header: block.Header(),
+	}
+
+	txs := block.Transactions()
+	// build the Trie (see derive_sha.go)
+	keybuf := new(bytes.Buffer)
+	trie := new(trie.Trie)
+	for i := 0; i < txs.Len(); i++ {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(i))
+		trie.Update(keybuf.Bytes(), txs.GetRlp(i))
+	}
+	// do the Merkle Proof for the specific tx
+	for i, tx := range txs {
+		if pabi.IsPChainContractAddr(tx.To()) {
+			data := tx.Data()
+			function, err := pabi.FunctionTypeFromId(data[:4])
+			if err != nil {
+				continue
+			}
+
+			if function == pabi.WithdrawFromChildChain {
+				kvSet := ethTypes.MakeBSKeyValueSet()
+				keybuf.Reset()
+				rlp.Encode(keybuf, uint(i))
+				if err := trie.Prove(keybuf.Bytes(), 0, kvSet); err != nil {
+					return nil, err
+				}
+
+				ret.TxIndexs = append(ret.TxIndexs, uint(i))
+				ret.TxProofs = append(ret.TxProofs, kvSet)
+			}
+		}
+	}
+
+	return ret, nil
+}
+
+func newChildChainProofDataV1(block *ethTypes.Block) (*ethTypes.ChildChainProofDataV1, error) {
+
+	ret := &ethTypes.ChildChainProofDataV1{
+		Header: block.Header(),
+	}
+
+	txs := block.Transactions()
+	// build the Trie (see derive_sha.go)
+	keybuf := new(bytes.Buffer)
+	trie := new(trie.Trie)
+	for i := 0; i < txs.Len(); i++ {
+		keybuf.Reset()
+		rlp.Encode(keybuf, uint(i))
+		trie.Update(keybuf.Bytes(), txs.GetRlp(i))
+	}
+	// do the Merkle Proof for the specific tx
+	for i, tx := range txs {
+		if pabi.IsPChainContractAddr(tx.To()) {
+			data := tx.Data()
+			function, err := pabi.FunctionTypeFromId(data[:4])
+			if err != nil {
+				continue
+			}
+
+			if function == pabi.WithdrawFromChildChain {
+				kvSet := ethTypes.MakeBSKeyValueSet()
+				keybuf.Reset()
+				rlp.Encode(keybuf, uint(i))
+				if err := trie.Prove(keybuf.Bytes(), 0, kvSet); err != nil {
+					return nil, err
+				}
+
+				ret.TxIndexs = append(ret.TxIndexs, uint(i))
+				ret.TxProofs = append(ret.TxProofs, kvSet)
+			}
+		}
+	}
+
+	return ret, nil
+}
 
 //attemps: this parameter means the total amount of operations
 func retry(attemps int, sleep time.Duration, fn func() error) error {
 
-	for ; attemps > 0; {
+	for attemps > 0 {
 
 		err := fn()
 		if err == nil {
 			return nil
 		}
 
-		attemps --
+		attemps--
 		if attemps == 0 {
 			return err
 		}

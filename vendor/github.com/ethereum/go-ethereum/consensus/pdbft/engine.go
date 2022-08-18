@@ -3,6 +3,9 @@ package pdbft
 import (
 	"bytes"
 	"errors"
+	"math/big"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
@@ -11,10 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/hashicorp/golang-lru"
+	"github.com/ethereum/go-ethereum/trie"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/tendermint/go-wire"
-	"math/big"
-	"time"
 )
 
 const (
@@ -438,8 +440,10 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	//}
 
 	// Add Main Chain Height if running on Child Chain
-	if !params.IsMainChain(sb.chainConfig.PChainId) {
+	if !sb.chainConfig.IsMainChain() {
 		header.MainChainNumber = sb.core.cch.GetHeightFromMainChain()
+	} else {
+		header.MainChainNumber = header.Number
 	}
 
 	return nil
@@ -456,7 +460,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	sb.logger.Debugf("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
 	// Check if any Child Chain need to be launch and Update their account balance accordingly
-	if params.IsMainChain(sb.chainConfig.PChainId) {
+	if sb.chainConfig.IsMainChain() {
 		// Check the Child Chain Start
 		readyId, updateBytes, removedId := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
 		if len(readyId) > 0 || updateBytes != nil || len(removedId) > 0 {
@@ -476,23 +480,30 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 	selfRetrieveReward := consensus.IsSelfRetrieveReward(sb.GetEpoch(), chain, header)
 
-
+	markProposedInEpoch := sb.chainConfig.IsMarkProposedInEpoch(header.MainChainNumber)
 	// Calculate the rewards
-	accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
+	sb.accumulateRewards(state, header, epoch, totalGasFee, selfRetrieveReward, markProposedInEpoch)
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
-										sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
-										selfRetrieveReward); ok {
+		sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
+		selfRetrieveReward, markProposedInEpoch); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
 		})
+		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber) {
+			epochInfo := epoch.GetNextEpoch()
+			if epochInfo != nil {
+				header.Extra = epochInfo.Bytes()
+			}
+		}
 	}
+
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts), nil
+	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
 }
 
 // Seal generates a new block for the given input block with the local miner's
@@ -701,7 +712,7 @@ func prepareExtra(header *types.Header, vals []common.Address) ([]byte, error) {
 func writeSeal(h *types.Header, seal []byte) error {
 
 	//logger.Info("Tendermint (backend) writeSeal, add logic here")
-	if h.Extra==nil{
+	if h.Extra == nil {
 		payload := types.MagicExtra
 		h.Extra = payload
 	}
@@ -723,15 +734,16 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 // The total reward consists of the static block reward of Owner setup and total tx gas fee.
 //
 // If the coinbase is Candidate, divide the rewards by weight
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch,
-						totalGasFee *big.Int, selfRetrieveReward bool) {
+func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header, ep *epoch.Epoch,
+	totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
+	config := sb.chainConfig
 
 	//the chain can reward its block proposer if:
 	//1, it is mainnet chain or testnet main chain
 	//2, it is child_0 and it current epoch is after the epoch which includes the Child0PatchAutoRewardBlock
-	autoReward := params.IsMainChain(config.PChainId) ||
+	autoReward := sb.chainConfig.IsMainChain() ||
 				(config.IsChild0AutoReward(header.Number) && ep.CanApplyAutoReward(config.Child0AutoRewardBlock))
 	if  autoReward {
 		rewardPerBlock := ep.RewardPerBlock
@@ -805,17 +817,16 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	rollbackCatchup := false
 	if outsideReward {
-		lastBlock, err := state.ReadOOSLastBlock();
+		lastBlock, err := state.ReadOOSLastBlock()
 		if err == nil && header.Number.Cmp(lastBlock) <= 0 {
 			rollbackCatchup = true
 		}
 	}
 
-	// Move the self reward to Reward Trie
-	//divideRewardByEpoch(state, header.Coinbase, ep.Number, selfReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 	height := header.Number.Uint64()
-	divideRewardByEpoch(state, header.Coinbase, ep.Number, height, selfReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 
+	// Move the self reward to Reward Trie
+	divideRewardByEpoch(state, header.Coinbase, ep.Number, height, selfReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 
 	// Calculate the Delegate Reward
 	if delegateReward != nil && delegateReward.Sign() > 0 {
@@ -825,7 +836,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			if depositProxiedBalance.Sign() == 1 {
 				// deposit * delegateReward / total deposit
 				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
-				divideRewardByEpoch(state, key, ep.Number, height,individualReward, outsideReward, selfRetrieveReward, rollbackCatchup)
+				divideRewardByEpoch(state, key, ep.Number, height, individualReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 				totalIndividualReward.Add(totalIndividualReward, individualReward)
 			}
 			return true
@@ -837,7 +848,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			diff := new(big.Int).Sub(delegateReward, totalIndividualReward)
 			if outsideReward {
 				if !rollbackCatchup {
-					state.AddOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number,height, diff)
+					state.AddOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, height, diff)
 				} else {
 					state.AddRewardBalance(header.Coinbase, diff)
 				}
@@ -849,7 +860,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			diff := new(big.Int).Sub(totalIndividualReward, delegateReward)
 			if outsideReward {
 				if !rollbackCatchup {
-					state.SubOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number,height, diff)
+					state.SubOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, height, diff)
 				} else {
 					state.SubRewardBalance(header.Coinbase, diff)
 				}
@@ -858,17 +869,38 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 			}
 		}
 	}
+
+	if markProposedInEpoch {
+
+		_, err := state.GetProposalStartInEpoch()
+		if err != nil {
+			state.MarkProposalStartInEpoch(ep.Number)
+		}
+
+		//if this chain rewinds or the self-proposed head block is overwritten by external block
+		//it needs clear the mark of self-address
+		selfAddress := sb.PrivateValidator()
+		if sb.IsStarted() && (selfAddress != common.Address{}) && header.Coinbase != selfAddress {
+			firstProposedBlock, proposed := state.CheckProposedInEpoch(selfAddress, ep.Number)
+			if proposed && height <= firstProposedBlock {
+				state.ClearProposedInEpoch(selfAddress, ep.Number)
+				sb.logger.Infof("the address %x encouters the rewind or block overwritten, clear its proposal record", selfAddress)
+			}
+		}
+
+		state.MarkProposedInEpoch(header.Coinbase, ep.Number, height)
+	}
 }
 
-func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64,height uint64, reward *big.Int,
-						outsideReward, selfRetrieveReward, rollbackCatchup bool) {
+func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64, height uint64,
+	reward *big.Int, outsideReward, selfRetrieveReward, rollbackCatchup bool) {
 	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
 	lastEpochReward := new(big.Int).Set(reward)
 	for i := epochNumber; i < epochNumber+12; i++ {
 		if i == epochNumber+11 {
 			if outsideReward {
 				if !rollbackCatchup {
-					state.AddOutsideRewardBalanceByEpochNumber(addr, i, height,lastEpochReward)
+					state.AddOutsideRewardBalanceByEpochNumber(addr, i, height, lastEpochReward)
 				} else {
 					state.AddRewardBalance(addr, lastEpochReward)
 				}
@@ -878,7 +910,7 @@ func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber 
 		} else {
 			if outsideReward {
 				if !rollbackCatchup {
-					state.AddOutsideRewardBalanceByEpochNumber(addr, i, height,epochReward)
+					state.AddOutsideRewardBalanceByEpochNumber(addr, i, height, epochReward)
 				} else {
 					state.AddRewardBalance(addr, epochReward)
 				}

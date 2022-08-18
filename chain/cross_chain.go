@@ -553,7 +553,7 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 
 func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transaction, tx3ProofData *types.TX3ProofData) error {
 	// TX4
-	signer := types.NewEIP155Signer(tx4.ChainId())
+	signer := types.LatestSignerForChainID(tx4.ChainId())
 	from, err := types.Sender(signer, tx4)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -597,7 +597,7 @@ func (cch *CrossChainHelper) ValidateTX4WithInMemTX3ProofData(tx4 *types.Transac
 		return err
 	}
 
-	signer2 := types.NewEIP155Signer(tx3.ChainId())
+	signer2 := types.LatestSignerForChainID(tx3.ChainId())
 	tx3From, err := types.Sender(signer2, &tx3)
 	if err != nil {
 		return core.ErrInvalidSender
@@ -806,7 +806,87 @@ func (cch *CrossChainHelper) DeleteTX3(chainId string, txHash common.Hash) {
 }
 
 func (cch *CrossChainHelper) WriteTX3ProofData(proofData *types.TX3ProofData) error {
-	return rawdb.WriteTX3ProofData(cch.localTX3CacheDB, proofData)
+
+	header := proofData.Header
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
+	if err != nil {
+		return err
+	}
+
+	chainId := tdmExtra.ChainID
+	if chainId == "" || chainId == MainChain || chainId == TestnetChain {
+		return fmt.Errorf("invalid child chain id: %s", chainId)
+	}
+
+	num := header.Number.Uint64()
+	encNum := rawdb.EncodeBlockNumber(num)
+	key1 := append(rawdb.Tx3ProofPrefix, append([]byte(chainId), encNum...)...)
+	bs, err := cch.localTX3CacheDB.Get(key1)
+	if len(bs) == 0 || err != nil { // not exists yet.
+		bss, _ := rlp.EncodeToBytes(proofData)
+		if err := cch.localTX3CacheDB.Put(key1, bss); err != nil {
+			return err
+		}
+
+		for i, txIndex := range proofData.TxIndexs {
+
+			keybuf := new(bytes.Buffer)
+			rlp.Encode(keybuf, txIndex)
+			val, _, err := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
+			if err != nil {
+				return err
+			}
+
+			if err := rawdb.WriteTX3(cch.localTX3CacheDB, chainId, header, txIndex, val); err != nil {
+				return err
+			}
+		}
+	} else { // merge to the existing one.
+		var existProofData types.TX3ProofData
+		err = rlp.DecodeBytes(bs, &existProofData)
+		if err != nil {
+			return err
+		}
+
+		var update bool
+		for i, txIndex := range proofData.TxIndexs {
+			if !hasTxIndex(&existProofData, txIndex) {
+
+				keybuf := new(bytes.Buffer)
+				rlp.Encode(keybuf, txIndex)
+				val, _, err := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
+				if err != nil {
+					return err
+				}
+
+				if err := rawdb.WriteTX3(cch.localTX3CacheDB, chainId, header, txIndex, val); err != nil {
+					return err
+				}
+
+				existProofData.TxIndexs = append(existProofData.TxIndexs, txIndex)
+				existProofData.TxProofs = append(existProofData.TxProofs, proofData.TxProofs[i])
+				update = true
+			}
+		}
+
+		if update {
+			bss, _ := rlp.EncodeToBytes(existProofData)
+			if err := cch.localTX3CacheDB.Put(key1, bss); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func hasTxIndex(proofData *types.TX3ProofData, target uint) bool {
+	for _, txIndex := range proofData.TxIndexs {
+		if txIndex == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (cch *CrossChainHelper) GetTX3ProofData(chainId string, txHash common.Hash) *types.TX3ProofData {

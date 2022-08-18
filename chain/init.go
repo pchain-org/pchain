@@ -179,6 +179,12 @@ func init_eth_genesis(config cfg.Config, balStr string) error {
 		Coinbase:   common.Address{},
 		Alloc:      core.GenesisAlloc{},
 	}
+
+	chainId := config.GetString("chain_id")
+	if chainId == params.TestnetChainConfig.PChainId {
+		coreGenesis.Config = params.TestnetChainConfig
+	}
+
 	for i, validator := range validators {
 		coreGenesis.Alloc[validator.Address] = core.GenesisAccount{
 			Balance: math.MustParseBig256(balanceAmounts[i].balance),

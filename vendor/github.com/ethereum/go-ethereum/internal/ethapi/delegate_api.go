@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"math/big"
@@ -303,7 +302,7 @@ func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 		if depositProxiedBalance.Sign() > 0 {
 			allRefund = false
 			mainChainHeight := bc.CurrentHeader().Number
-			if !params.IsMainChain(bc.Config().PChainId) {
+			if !bc.Config().IsMainChain() {
 				mainChainHeight = bc.CurrentHeader().MainChainNumber
 			}
 			if !bc.Config().IsChildSd2mcWhenEpochEndsBlock(mainChainHeight) {
@@ -588,7 +587,7 @@ func cancelCandidateValidation(from common.Address, tx *types.Transaction, state
 
 // Common
 func derivedAddressFromTx(tx *types.Transaction) (from common.Address) {
-	signer := types.NewEIP155Signer(tx.ChainId())
+	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, _ = types.Sender(signer, tx)
 	return
 }
