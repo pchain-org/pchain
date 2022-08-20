@@ -285,13 +285,6 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 				EpochNumberPerYear: 12,
 				TotalYear:          23,
 			}
-		} else if params.LocalChainTest {
-			rewardScheme = types.RewardSchemeDoc{
-				TotalReward:        big.NewInt(0),
-				RewardFirstYear:    big.NewInt(0),
-				EpochNumberPerYear: 8760, //one epoch each hour
-				TotalYear:          23,
-			}
 		} else {
 			rewardScheme = types.RewardSchemeDoc{
 				TotalReward:        big.NewInt(0),
@@ -322,7 +315,8 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 			},
 		}
 
-		if params.LocalChainTest && !params.IsMainChain(chainId) {
+		if params.LocalChainTest {
+			genDoc.RewardScheme.EpochNumberPerYear = 8760
 			genDoc.CurrentEpoch.EndBlock = 7200
 		}
 
