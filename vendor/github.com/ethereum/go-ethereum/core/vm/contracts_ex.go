@@ -88,6 +88,9 @@ func init() {
 		case "callKeccak256":      pc = &callKeccak256{}
 		case "generateRandomness": pc = &generateRandomness{}
 		case "numberAdd":          pc = &numberAdd{}
+		case "stringAdd":          pc = &stringAdd{}
+		case "bytes32Add":         pc = &bytes32Add{}
+		case "mixAdd":             pc = &mixAdd{}
 		}
 		esfMap[BytesToID(method.ID()[:4])] = pc
 	}
@@ -122,6 +125,43 @@ const jsonExtendSolFunctionsABI = `
 		"name": "numberAdd",
 		"constant": false,
 		"inputs": [
+			{
+				"name": "num",
+				"type": "uint256"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "stringAdd",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "str",
+				"type": "string"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "bytes32Add",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "by",
+				"type": "bytes32"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "mixAdd",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "str",
+				"type": "string"
+			},
 			{
 				"name": "num",
 				"type": "uint256"
@@ -209,4 +249,100 @@ func (c *numberAdd) Run(input []byte) ([]byte, error) {
 	sum := new(big.Int).Add(args.Num, big.NewInt(1))
 
 	return common.LeftPadBytes(sum.Bytes(), 32), nil
+}
+
+
+type stringAdd struct{}
+
+type stringAddArgs struct {
+	Str   string	//!! first letter of the field name should be Capital !!
+}
+
+const StrAddGas uint64=1
+func (c *stringAdd) RequiredGas(input []byte) uint64 {
+	return StrAddGas
+}
+
+func (c *stringAdd) Run(input []byte) ([]byte, error) {
+	var args stringAddArgs
+	method, err := esfABI.MethodById(input[:4])
+	if err != nil {
+		return nil, errors.New("should not happen in stringAdd")
+	}
+	if err = esfABI.UnpackMethodInputs(&args, method.Name, input[4:]); err != nil {
+		return nil, err
+	}
+
+	sum := args.Str + "a"
+
+	stringType, _ := abi.NewType("string", "", nil)
+	retArgs := abi.Arguments{abi.Argument{
+		Name:    "string",
+		Type:    stringType,
+		Indexed: false,
+	}}
+
+	return retArgs.Pack(sum)
+}
+
+
+type bytes32Add struct{}
+
+type bytes32AddArgs struct {
+	By   [32]byte	//!! first letter of the field name should be Capital !!
+}
+
+func (c *bytes32Add) RequiredGas(input []byte) uint64 {
+	return AddGas
+}
+
+func (c *bytes32Add) Run(input []byte) ([]byte, error) {
+	var args bytes32AddArgs
+	method, err := esfABI.MethodById(input[:4])
+	if err != nil {
+		return nil, errors.New("should not happen in stringAdd")
+	}
+	if err = esfABI.UnpackMethodInputs(&args, method.Name, input[4:]); err != nil {
+		return nil, err
+	}
+
+	num := new(big.Int).SetBytes(args.By[:])
+	sum := new(big.Int).Add(num, big.NewInt(1))
+
+	return common.LeftPadBytes(sum.Bytes(), 32), nil
+}
+
+
+type mixAdd struct{}
+
+type mixAddArgs struct {
+	Str   string
+	Num   *big.Int	//!! first letter of the field name should be Capital !!
+}
+
+func (c *mixAdd) RequiredGas(input []byte) uint64 {
+	return AddGas+StrAddGas
+}
+
+func (c *mixAdd) Run(input []byte) ([]byte, error) {
+	var args mixAddArgs
+	method, err := esfABI.MethodById(input[:4])
+	if err != nil {
+		return nil, errors.New("should not happen in stringAdd")
+	}
+	if err = esfABI.UnpackMethodInputs(&args, method.Name, input[4:]); err != nil {
+		return nil, err
+	}
+
+	sum := new(big.Int).Add(args.Num, big.NewInt(1))
+	StrSum := args.Str + sum.String()
+
+	stringType, _ := abi.NewType("string", "", nil)
+	retArgs := abi.Arguments{abi.Argument{
+		Name:    "string",
+		Type:    stringType,
+		Indexed: false,
+	}}
+
+	return retArgs.Pack(StrSum)
 }
