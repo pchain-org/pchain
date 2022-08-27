@@ -141,3 +141,21 @@ For a full guide on how to set up and become a validator node on the Pchain Netw
 ### How To Delegate Your Stake
 
 To learn how to delegate your PI to validators to receive rewards, read [How To Delegate or Stake](https://pliangroup.gitbook.io/plian/using-the-blockchain/delegating-or-staking)
+
+### sol_native_function
+
+This branch is to support Pchain native solidity functions.
+
+The new changes shows a way to supply solidity functions within Pchain's Go environment. With this way, Pchain does not need writing solidity contracts and then deploying them to specific child chain, any new contract can use the native-implemented solidity functions.
+
+Here is the example of contract.
+
+[invoke.sol](https://github.com/pchain-org/pchain/blob/sol_native_function/invoke.sol)
+
+As shown in the example, after two steps, a solidity contract can call Pchain native solidity functions:
+
+1, copy the interface with necessary functions
+
+2, uses "0x00..0066" as the address to initialize an interface
+
+Then use the interface to call different functions.
