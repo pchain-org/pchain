@@ -568,6 +568,8 @@ func (self *worker) commitNewWork() {
 		misc.ApplyDAOHardFork(work.state)
 	}
 
+	vm.InjectESFContractAddress(work.state, header.MainChainNumber)
+
 	// Fill the block with all available pending transactions.
 	pending, err := self.eth.TxPool().Pending()
 	if err != nil {

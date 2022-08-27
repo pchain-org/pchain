@@ -78,6 +78,9 @@ var (
 	//must be less than MainnetMuirGlacierBlock, MainnetBerlinBlock and MainnetLondonBlock if they are enabled
 	EIP155PatchStartBlock = big.NewInt(41168974)
 	EIP155PatchEndBlock   = big.NewInt(41168974)
+
+	MainnetAddExPCBlock = big.NewInt(100000000000)
+	TestnetAddExPCBlock = big.NewInt(40)
 )
 
 var (

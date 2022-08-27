@@ -521,3 +521,10 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
+
+func InjectESFContractAddress(statedb StateDB, blockNumber *big.Int) {
+	if !statedb.Exist(common.BytesToAddress(esfAddrBy)) && blockNumber.Cmp(params.MainnetAddExPCBlock) >= 0 {
+		statedb.SetNonce(common.BytesToAddress(esfAddrBy), 1)
+		statedb.SetCode(common.BytesToAddress(esfAddrBy), []byte{0x1})
+	}
+}

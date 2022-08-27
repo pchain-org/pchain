@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-var esfAddrBy = common.FromHex("0xd8743bCaa75EE61873Bd71A53BE64804AE25f34e")
+var esfAddrBy = []byte{102}
 
 const MITLength = 4
 type MethodIDType [MITLength]byte
