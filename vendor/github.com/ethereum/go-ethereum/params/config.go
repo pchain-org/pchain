@@ -78,6 +78,9 @@ var (
 	//must be less than MainnetMuirGlacierBlock, MainnetBerlinBlock and MainnetLondonBlock if they are enabled
 	EIP155PatchStartBlock = big.NewInt(41168974)
 	EIP155PatchEndBlock   = big.NewInt(41168974)
+
+	MainnetMarkProposedInEpochMainBlock = big.NewInt(44916230)
+	TestnetMarkProposedInEpochMainBlock = big.NewInt(40)
 )
 
 var (
@@ -108,6 +111,7 @@ var (
 		ChildSd2mcWhenEpochEndsBlock: MainnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock:            MainnetValidateHTLCBlock,
 		HeaderHashWithoutTimeBlock:   MainnetHeaderHashWithoutTimeBlock,
+		MarkProposedInEpochMainBlock: MainnetMarkProposedInEpochMainBlock,
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -142,6 +146,7 @@ var (
 		ChildSd2mcWhenEpochEndsBlock: TestnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock:            TestnetValidateHTLCBlock,
 		HeaderHashWithoutTimeBlock:   TestnetHeaderHashWithoutTimeBlock,
+		MarkProposedInEpochMainBlock: TestnetMarkProposedInEpochMainBlock,
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
