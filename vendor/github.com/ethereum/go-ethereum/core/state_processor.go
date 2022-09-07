@@ -164,6 +164,9 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc *BlockCh
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
+	if *tx.To() == pabi.ChainContractMagicAddr && !params.IsCorrectNonce(bc.Config().PChainId, evm.Context.MainChainNumber) {
+		statedb.SetNonce(msg.From(), statedb.GetNonce(msg.From())+1)
+	}
 	return receipt, err
 }
 

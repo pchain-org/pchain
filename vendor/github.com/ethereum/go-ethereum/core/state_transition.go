@@ -309,7 +309,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, *big.Int, error) {
 
 	gas := uint64(0)
 	err := error(nil)
-	if st.to() != pabi.ChainContractMagicAddr {
+	if st.to() != pabi.ChainContractMagicAddr || params.IsCorrectNonce(st.evm.ChainConfig().PChainId, st.evm.Context.MainChainNumber) {
 		// Check clauses 4-5, subtract intrinsic gas if everything is correct
 		gas, err = IntrinsicGas(st.data, st.msg.AccessList(), contractCreation, homestead, istanbul)
 		if err != nil {
@@ -339,7 +339,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, *big.Int, error) {
 		ret, _, st.gas, vmerr = st.evm.Create(sender, st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
-		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		if st.to() != pabi.ChainContractMagicAddr || params.IsCorrectNonce(st.evm.ChainConfig().PChainId, st.evm.Context.MainChainNumber) {
+			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		}
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value, st.inputPacket)
 	}
 
