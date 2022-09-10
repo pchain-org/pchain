@@ -146,8 +146,14 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc *BlockCh
 	} else {
 		receipt.Status = types.ReceiptStatusSuccessful
 		//fix receipt status value
-		if *tx.To() == pabi.ChainContractMagicAddr && !bc.Config().IsSelfRetrieveReward(header.MainChainNumber){
-			receipt.Status = types.ReceiptStatusFailed
+		if *tx.To() == pabi.ChainContractMagicAddr {
+			mainBlock := blockNumber
+			if !bc.chainConfig.IsMainChain() {
+				mainBlock = header.MainChainNumber
+			}
+			if !bc.Config().IsSelfRetrieveReward(mainBlock) {
+				receipt.Status = types.ReceiptStatusFailed
+			}
 		}
 	}
 	receipt.TxHash = tx.Hash()
@@ -164,7 +170,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc *BlockCh
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
-	if *tx.To() == pabi.ChainContractMagicAddr && !params.IsCorrectNonce(bc.Config().PChainId, evm.Context.MainChainNumber) {
+	if *tx.To() == pabi.ChainContractMagicAddr {
 		statedb.SetNonce(msg.From(), statedb.GetNonce(msg.From())+1)
 	}
 	return receipt, err

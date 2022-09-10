@@ -81,9 +81,6 @@ var (
 
 	MainnetMarkProposedInEpochMainBlock = big.NewInt(44916230)
 	TestnetMarkProposedInEpochMainBlock = big.NewInt(40)
-
-	MainnetCorrectNonceBlock = big.NewInt(100000000000)
-	TestnetCorrectNonceBlock = big.NewInt(40)
 )
 
 var (
@@ -540,15 +537,6 @@ func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {
 		return isForked(MainnetSd2mcV1MainBlock, mainBlockNumber)
 	} else if mainChainId == TestnetChainConfig.PChainId {
 		return isForked(TestnetSd2mcV1MainBlock, mainBlockNumber)
-	}
-	return false
-}
-
-func IsCorrectNonce(mainChainId string, mainBlockNumber *big.Int) bool {
-	if mainChainId == MainnetChainConfig.PChainId {
-		return isForked(MainnetCorrectNonceBlock, mainBlockNumber)
-	} else if mainChainId == TestnetChainConfig.PChainId {
-		return isForked(TestnetCorrectNonceBlock, mainBlockNumber)
 	}
 	return false
 }
