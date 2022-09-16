@@ -146,7 +146,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc *BlockCh
 	} else {
 		receipt.Status = types.ReceiptStatusSuccessful
 		//fix receipt status value
-		if *tx.To() == pabi.ChainContractMagicAddr {
+		if pabi.IsPChainContractAddr(tx.To()) {
 			mainBlock := blockNumber
 			if !bc.chainConfig.IsMainChain() {
 				mainBlock = header.MainChainNumber
@@ -170,7 +170,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc *BlockCh
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber
 	receipt.TransactionIndex = uint(statedb.TxIndex())
-	if *tx.To() == pabi.ChainContractMagicAddr {
+	if pabi.IsPChainContractAddr(tx.To()) {
 		statedb.SetNonce(msg.From(), statedb.GetNonce(msg.From())+1)
 	}
 	return receipt, err
