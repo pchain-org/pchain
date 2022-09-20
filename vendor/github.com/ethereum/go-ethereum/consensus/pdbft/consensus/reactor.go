@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -147,11 +148,25 @@ func (conR *ConsensusReactor) PeersInfo() []*p2p.PeerInfo {
 
 	// Gather all the generic and sub-protocol specific infos
 	infos := make([]*p2p.PeerInfo, 0)
+
+	validators := conR.conS.GetValidators()
 	conR.peerStates.Range(func(_, val interface{}) bool{
 
-		peer := val.(*PeerState).Peer.P2PPeer()
+		ps := val.(*PeerState).Peer
+		consensusKey := ps.GetConsensusKey()
+
+		peer := ps.P2PPeer()
 		if peer != nil {
-			infos = append(infos, peer.Info())
+			isValidator := false
+			valAddr := common.Address{}
+			for _, validator:= range validators {
+				if consensusKey == validator.PubKey.KeyString() {
+					valAddr = common.BytesToAddress(validator.Address)
+					isValidator = true
+					break
+				}
+			}
+			infos = append(infos, peer.Info2(valAddr, consensusKey, isValidator))
 			return true
 		}
 

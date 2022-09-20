@@ -388,12 +388,11 @@ func (cs *ConsensusState) getRoundState() *RoundState {
 	return &rs
 }
 
-func (cs *ConsensusState) GetValidators() (uint64, []*types.Validator) {
+func (cs *ConsensusState) GetValidators() []*types.Validator {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	_, val, _ := cs.state.GetValidators()
-	return cs.state.TdmExtra.Height, val.Copy().Validators
+	return cs.Epoch.Validators.Validators
 }
 
 // Sets our private validator account for signing votes.
