@@ -149,24 +149,11 @@ func (conR *ConsensusReactor) PeersInfo() []*p2p.PeerInfo {
 	// Gather all the generic and sub-protocol specific infos
 	infos := make([]*p2p.PeerInfo, 0)
 
-	validators := conR.conS.GetValidators()
 	conR.peerStates.Range(func(_, val interface{}) bool{
-
-		ps := val.(*PeerState).Peer
-		consensusKey := ps.GetConsensusKey()
-
-		peer := ps.P2PPeer()
+		ps := val.(*PeerState)
+		peer := ps.Peer.P2PPeer()
 		if peer != nil {
-			isValidator := false
-			valAddr := common.Address{}
-			for _, validator:= range validators {
-				if consensusKey == validator.PubKey.KeyString() {
-					valAddr = common.BytesToAddress(validator.Address)
-					isValidator = true
-					break
-				}
-			}
-			infos = append(infos, peer.Info2(valAddr, consensusKey, isValidator))
+			infos = append(infos, peer.Info2(ps.ValAddress, ps.HasBeenProposer, ps.LastActiveEpoch))
 			return true
 		}
 
@@ -394,7 +381,14 @@ func (conR *ConsensusReactor) sendVote2Proposer(vote *types.Vote, proposerKey st
 		peerState, ok := conR.peerStates.Load(proposerKey)
 		if ok {
 			msg := &VoteMessage{vote}
-			peerState.(*PeerState).Peer.Send(VoteChannel, struct{ ConsensusMessage }{msg})
+			vrfProposer := conR.conS.proposerByRound(int(vote.Round)).Proposer
+
+			ps := peerState.(*PeerState)
+			ps.ValAddress = common.BytesToAddress(vrfProposer.Address)
+			ps.HasBeenProposer =  true
+			ps.LastActiveEpoch = int(conR.conS.Epoch.Number)
+
+			ps.Peer.Send(VoteChannel, struct{ ConsensusMessage }{msg})
 		} else {
 			conR.logger.Infof("proposerKey is :%+v, proposer could be offline\n", proposerKey)
 		}
@@ -701,6 +695,10 @@ type PeerState struct {
 	mtx sync.Mutex
 	PeerRoundState
 
+	ValAddress         common.Address
+	HasBeenProposer    bool
+	LastActiveEpoch    int
+
 	Connected bool
 	logger    log.Logger
 }
@@ -712,6 +710,9 @@ func NewPeerState(peer consensus.Peer, logger log.Logger) *PeerState {
 			Round:              -1,
 			ProposalPOLRound:   -1,
 		},
+		ValAddress: common.Address{},
+		HasBeenProposer:    false,
+		LastActiveEpoch:    -1,
 		Connected: true,
 		logger:    logger,
 	}

@@ -598,12 +598,12 @@ func (rw *protoRW) ReadMsg() (Msg, error) {
 // peer. Sub-protocol independent fields are contained and initialized here, with
 // protocol specifics delegated to all connected sub-protocols.
 type PeerInfo struct {
-	ID           string   `json:"id"`   // Unique node identifier (also the encryption key)
-	PIAddress    string   `json:"piAddress"`   // consensus pub key
-	ConsensusKey string   `json:"consensusPubKey"`   // consensus pub key
-	IsValidator  bool     `json:"isValidator"`   // is validator in current epoch current chain
-	Name         string   `json:"name"` // Name of the node, including client type, version, OS, custom data
-	Caps         []string `json:"caps"` // Sum-protocols advertised by this particular peer
+	ID              string   `json:"id"`   // Unique node identifier (also the encryption key)
+	PIAddress       string   `json:"piAddress"`   // consensus pub key
+	LastActiveEpoch int      `json:"lastActiveEpoch"`   // consensus pub key
+	IsValidator     bool     `json:"isValidator"`   // is validator in current epoch current chain
+	Name            string   `json:"name"` // Name of the node, including client type, version, OS, custom data
+	Caps            []string `json:"caps"` // Sum-protocols advertised by this particular peer
 	Network struct {
 		LocalAddress  string `json:"localAddress"`  // Local endpoint of the TCP data connection
 		RemoteAddress string `json:"remoteAddress"` // Remote endpoint of the TCP data connection
@@ -651,7 +651,7 @@ func (p *Peer) Info() *PeerInfo {
 
 
 // Info gathers and returns a collection of metadata known about a peer.
-func (p *Peer) Info2(piAddr common.Address, consensusKey string, isValidator  bool) *PeerInfo {
+func (p *Peer) Info2(piAddr common.Address, isValidator  bool, lastActiveEpoch int) *PeerInfo {
 	// Gather the protocol capabilities
 	var caps []string
 	for _, cap := range p.Caps() {
@@ -659,11 +659,11 @@ func (p *Peer) Info2(piAddr common.Address, consensusKey string, isValidator  bo
 	}
 	// Assemble the generic peer metadata
 	info := &PeerInfo{
-		ID:        p.ID().String(),
-		Name:      p.Name(),
+		ID:              p.ID().String(),
+		Name:            p.Name(),
 		PIAddress: piAddr.Hex(),
-		ConsensusKey: consensusKey,
-		IsValidator: isValidator,
+		LastActiveEpoch: lastActiveEpoch,
+		IsValidator:     isValidator,
 		Caps:      caps,
 		Protocols: make(map[string]interface{}),
 	}
