@@ -511,7 +511,12 @@ func (cs *ConsensusState) proposersByVRF() (lastProposer int, curProposer int) {
 
 	if headerHeight > 0 {
 		lastHeader := chainReader.GetHeaderByNumber(headerHeight - 1)
-		lastHeaderHash := lastHeader.Hash()
+		var lastHeaderHash common.Hash
+		if !cs.chainConfig.IsHeaderHashWithoutTimeBlock(cs.getMainBlock()) {
+			lastHeaderHash = lastHeader.Hash()
+		} else {
+			lastHeaderHash = lastHeader.HashWithoutTime()
+		}
 		lastProposer = cs.proposerByVRF(lastHeaderHash, cs.Validators.Validators)
 		return lastProposer, curProposer
 	}
