@@ -342,11 +342,8 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 		conR.logger.Info("registerEventCallbacks received Final Committed Event", "conR.conS.Height", conR.conS.Height, "conR.conS.Step", conR.conS.Step)
 		
 		edfc := data.(types.EventDataFinalCommitted)
-		
-		if edfc.BlockNumber == conR.conS.Height {
-			conR.logger.Info("start new height to apply this commit", "new height", edfc.BlockNumber + 1)
-			conR.conS.StartNewHeight()
-		}
+		conR.logger.Info("record this externally committed block to avoid successor commit", "height", edfc.BlockNumber)
+		conR.conS.SetExternalCommitted(edfc.BlockNumber)
 	})
 }
 
