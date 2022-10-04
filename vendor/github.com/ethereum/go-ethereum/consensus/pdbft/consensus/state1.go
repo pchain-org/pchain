@@ -87,6 +87,8 @@ func (cs *ConsensusState) Initialize() {
 	cs.PrecommitMaj23SignAggr = nil
 	cs.CommitRound = -1
 	cs.state = nil
+
+	cs.externalCommitted = make(map[uint64]bool)
 }
 
 // Updates ConsensusState and increments height to match thatRewardScheme of state.

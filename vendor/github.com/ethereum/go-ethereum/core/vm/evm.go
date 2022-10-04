@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
+	pabi "github.com/pchain/abi"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -54,6 +55,11 @@ func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 		precompiles = PrecompiledContractsHomestead
 	}
 	p, ok := precompiles[addr]
+	return p, ok
+}
+
+func (evm *EVM) endhancedPrecompile(addr common.Address) (EnhancedPrecompiledContract, bool) {
+	p, ok := enhancedPrecompilesContracts[addr]
 	return p, ok
 }
 
@@ -165,7 +171,7 @@ func (evm *EVM) Interpreter() *EVMInterpreter {
 // parameters. It also handles any necessary value transfer required and takes
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
-func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas uint64, value *big.Int, inputPacket interface{}) (ret []byte, leftOverGas uint64, err error) {
 	if evm.Config.NoRecursion && evm.depth > 0 {
 		return nil, gas, nil
 	}
@@ -179,19 +185,22 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
+	pEnh, isEnhPrecompile := evm.endhancedPrecompile(addr)
 
-	if !evm.StateDB.Exist(addr) {
-		if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
-			// Calling a non existing account, don't do anything, but ping the tracer
-			if evm.Config.Debug && evm.depth == 0 {
-				evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
-				evm.Config.Tracer.CaptureEnd(ret, 0, 0, nil)
+	if addr != pabi.ChainContractMagicAddr {
+		if !evm.StateDB.Exist(addr) {
+			if !isPrecompile && evm.chainRules.IsEIP158 && value.Sign() == 0 {
+				// Calling a non existing account, don't do anything, but ping the tracer
+				if evm.Config.Debug && evm.depth == 0 {
+					evm.Config.Tracer.CaptureStart(evm, caller.Address(), addr, false, input, gas, value)
+					evm.Config.Tracer.CaptureEnd(ret, 0, 0, nil)
+				}
+				return nil, gas, nil
 			}
-			return nil, gas, nil
+			evm.StateDB.CreateAccount(addr)
 		}
-		evm.StateDB.CreateAccount(addr)
+		evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
 	}
-	evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
 
 	// Capture the tracer start/end events in debug mode
 	if evm.Config.Debug {
@@ -211,6 +220,8 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	if isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
+	} else if isEnhPrecompile {
+		ret, gas, err = RunEnhancedPrecompiledContract(pEnh, inputPacket, gas)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
