@@ -55,7 +55,6 @@ type PeerInfo struct {
 
 type peer struct {
 	id                string
-	consensus_pub_key string
 
 	*p2p.Peer
 	rw p2p.MsgReadWriter
@@ -103,10 +102,6 @@ func (p *peer) Info() *PeerInfo {
 		Difficulty: td,
 		Head:       hash.Hex(),
 	}
-}
-
-func (p *peer) GetConsensusKey() string {
-	return p.consensus_pub_key
 }
 
 // Head retrieves a copy of the current head hash and total difficulty of the

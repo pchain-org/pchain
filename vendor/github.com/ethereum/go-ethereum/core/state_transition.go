@@ -343,6 +343,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, *big.Int, error) {
 			st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 		}
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value, st.inputPacket)
+		if pabi.IsPChainContractAddr(msg.To()) && vmerr != nil {
+			err = vmerr
+		}
 	}
 
 	if !london {
