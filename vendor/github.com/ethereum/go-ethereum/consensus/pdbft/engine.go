@@ -12,7 +12,6 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
@@ -739,7 +738,7 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
 	config := sb.chainConfig
-	if config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId {
+	if sb.chainConfig.IsMainChain() {
 		// Main Chain
 
 		// Coinbase Reward   = 80% of Total Reward

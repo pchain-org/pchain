@@ -315,6 +315,9 @@ type ConsensusState struct {
 
 	evsw types.EventSwitch
 
+	ecMtx             sync.Mutex
+	externalCommitted map[uint64]bool
+
 	nSteps int // used for testing to limit the number of transitions the state makes
 
 	// allow certain function to be overwritten for testing
@@ -388,14 +391,6 @@ func (cs *ConsensusState) getRoundState() *RoundState {
 	return &rs
 }
 
-func (cs *ConsensusState) GetValidators() (uint64, []*types.Validator) {
-	cs.mtx.Lock()
-	defer cs.mtx.Unlock()
-
-	_, val, _ := cs.state.GetValidators()
-	return cs.state.TdmExtra.Height, val.Copy().Validators
-}
-
 // Sets our private validator account for signing votes.
 func (cs *ConsensusState) SetPrivValidator(priv PrivValidator) {
 	cs.mtx.Lock()
@@ -403,10 +398,22 @@ func (cs *ConsensusState) SetPrivValidator(priv PrivValidator) {
 	cs.privValidator = priv
 }
 
-func BytesToBig(data []byte) *big.Int {
-	n := new(big.Int)
-	n.SetBytes(data)
-	return n
+func (cs *ConsensusState) SetExternalCommitted(blockCommited uint64)  {
+	cs.ecMtx.Lock()
+	defer cs.ecMtx.Unlock()
+	cs.externalCommitted[blockCommited] = true
+}
+
+func (cs *ConsensusState) GetExternalCommitted() map[uint64]bool {
+	cs.ecMtx.Lock()
+	defer cs.ecMtx.Unlock()
+
+	tmpEC := map[uint64]bool{}
+	for block, commited := range cs.externalCommitted {
+		tmpEC[block] = commited
+	}
+
+	return tmpEC
 }
 
 //PDBFT VRF proposer selection
@@ -1568,10 +1575,15 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 		types.FireEventNewBlock(cs.evsw, types.EventDataNewBlock{block})
 		types.FireEventNewBlockHeader(cs.evsw, types.EventDataNewBlockHeader{int(block.TdmExtra.Height)})
 
-		//the second parameter as signature has been set above
-		err := cs.backend.Commit(block, [][]byte{}, cs.IsProposer)
-		if err != nil {
-			cs.logger.Errorf("Commit fail. error: %v", err)
+		ec := cs.GetExternalCommitted()
+		if _, ok := ec[cs.Height]; !ok {
+			//the second parameter as signature has been set above
+			err := cs.backend.Commit(block, [][]byte{}, cs.IsProposer)
+			if err != nil {
+				cs.logger.Errorf("Commit fail. error: %v", err)
+			}
+		} else if cs.IsProposer() {
+			cs.logger.Errorf("Should not happen, other validator committed faster than proposer")
 		}
 	} else {
 		cs.logger.Warn("Calling finalizeCommit on already stored block", "height", block.TdmExtra.Height)
