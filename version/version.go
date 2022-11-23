@@ -7,7 +7,7 @@ import (
 const (
 	Major = 1  // Major version component of the current release
 	Minor = 5  // Minor version component of the current release
-	Patch = 0  // Patch version component of the current release
+	Patch = 00 // Patch version component of the current release
 	Meta  = "" // Version metadata to append to the version string
 )
 
@@ -20,7 +20,7 @@ var (
 )
 
 func init() {
-	Version = fmt.Sprintf("%d.%d.%d", Major, Minor, Patch)
+	Version = fmt.Sprintf("%d.%d.%02d", Major, Minor, Patch)
 	if Meta != "" {
 		Version += "-" + Meta
 	}
