@@ -14,9 +14,9 @@ import (
 var (
 	//out of storage
 	RewardPrefix                   = []byte("w") // rewardPrefix + address + num (uint64 big endian) -> reward value
-	RewardExtractPrefix            = []byte("extrRwd-epoch-")
+	RewardExtractPrefix            = []byte("extrRwd-epoch-") // rewardExtractPrefix + address -> rewardExtract value
 	OosLastBlockKey                = []byte("oos-last-block")
-	ProposedInEpochPrefix          = []byte("proposed-in-epoch-")
+	ProposedInEpochPrefix          = []byte("proposed-in-epoch-") // proposedInEpochPrefix + address + num (uint64 big endian) -> proposedInEpoch value
 	StartMarkProposalInEpochPrefix = []byte("sp-in-epoch-")
 )
 

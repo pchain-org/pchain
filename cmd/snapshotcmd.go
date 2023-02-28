@@ -277,7 +277,7 @@ func copyOutOfStorage(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Dat
 	it0 := srcDiskDb.NewIteratorWithPrefix(rawdb.RewardPrefix)
 	for it0.Next() {
 		if len(it0.Key()) < len(rawdb.RewardPrefix)+common.AddressLength+rawdb.Uint64Len {
-			return errors.New("RewardExtractPrefix key length is shorter than 21, no address included")
+			return errors.New("RewardExtractPrefix key length is shorter than 29, no address included")
 		}
 		if err := dstDiskDb.Put(it0.Key(), it0.Value()); err != nil {
 			return err
@@ -285,11 +285,11 @@ func copyOutOfStorage(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Dat
 	}
 	it0.Release()
 
-	//RewardExtractPrefix = []byte("extrRwd-epoch-")
+	//RewardExtractPrefix = []byte("extrRwd-epoch-") // rewardExtractPrefix + address -> rewardExtract value
 	it1 := srcDiskDb.NewIteratorWithPrefix(rawdb.RewardExtractPrefix)
 	for it1.Next() {
 		if len(it1.Key()) < len(rawdb.RewardExtractPrefix)+common.AddressLength {
-			return errors.New("RewardExtractPrefix key length is shorter than 21, no address included")
+			return errors.New("RewardExtractPrefix key length is shorter than 34, no address included")
 		}
 		if err := dstDiskDb.Put(it1.Key(), it1.Value()); err != nil {
 			return err
@@ -306,9 +306,26 @@ func copyOutOfStorage(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Dat
 		return nil
 	}
 
-	/*TODO*/
-	//ProposedInEpochPrefix          = []byte("proposed-in-epoch-")
+	//ProposedInEpochPrefix = []byte("proposed-in-epoch-") // proposedInEpochPrefix + address + num (uint64 big endian) -> proposedInEpoch value
+	it2 := srcDiskDb.NewIteratorWithPrefix(rawdb.ProposedInEpochPrefix)
+	for it2.Next() {
+		if len(it2.Key()) < len(rawdb.ProposedInEpochPrefix)+common.AddressLength+rawdb.Uint64Len {
+			return errors.New("ProposedInEpochPrefix key length is shorter than 46, no address included")
+		}
+		if err := dstDiskDb.Put(it2.Key(), it2.Value()); err != nil {
+			return err
+		}
+	}
+	it2.Release()
+
 	//StartMarkProposalInEpochPrefix = []byte("sp-in-epoch-")
+	epochBytes, err := srcDiskDb.Get(rawdb.StartMarkProposalInEpochPrefix)
+	if err != nil {
+		return err
+	}
+	if err := dstDiskDb.Put(rawdb.StartMarkProposalInEpochPrefix, epochBytes); err != nil {
+		return nil
+	}
 
 	return nil
 }
