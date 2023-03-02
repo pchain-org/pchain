@@ -564,7 +564,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 
 		case iresult, ok := <-sb.vcommitCh:
 
-			if ok {
+			if ok && iresult != nil {
 				sb.logger.Debugf("Tendermint (backend) Seal, v got result with block.Hash: %x, result.Hash: %x", block.Hash(), iresult.Block.Hash())
 				if block.Hash() != iresult.Block.Hash() {
 					return iresult, nil
@@ -594,6 +594,14 @@ func (sb *backend) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 
 // Commit implements istanbul.Backend.Commit
 func (sb *backend) Commit(proposal *tdmTypes.TdmBlock, seals [][]byte, isProposer func() bool) error {
+
+	//block imported outside, abort
+	if proposal == nil {
+		sb.logger.Infof("(sb *backend) Commit() receive nil block, abort\n")
+		sb.vcommitCh <- nil
+		return nil
+	}
+
 	// Check if the proposal is a valid block
 	block := proposal.Block
 

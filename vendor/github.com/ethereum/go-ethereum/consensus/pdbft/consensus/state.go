@@ -886,6 +886,15 @@ func (cs *ConsensusState) handleTimeout(ti timeoutInfo, rs RoundState) {
 // Enter: `startTime = commitTime+timeoutCommit` from NewHeight(height)
 // NOTE: cs.StartTime was already set for height.
 func (cs *ConsensusState) enterNewRound(height uint64, round int) {
+
+	cr := cs.backend.ChainReader()
+	curEthBlock := cr.CurrentBlock()
+	curHeight := curEthBlock.NumberU64()
+	if curHeight >= cs.Height {
+		cs.logger.Infof("enterNewRound() block imported outside, abort\n")
+		cs.backend.Commit(nil, nil, nil)
+	}
+
 	if cs.Height != height || round < cs.Round || (cs.Round == round && cs.Step != RoundStepNewHeight) {
 		cs.logger.Warnf("enterNewRound(%v/%v): Invalid args. Current step: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step)
 		return
