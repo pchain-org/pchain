@@ -11,10 +11,12 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pchain/chain"
+	"github.com/syndtr/goleveldb/leveldb"
 	"gopkg.in/urfave/cli.v1"
 	"math/big"
 	"os"
@@ -74,10 +76,15 @@ func snapshot(ctx *cli.Context) error {
 	var ethereum *eth.Ethereum
 	pchain.EthNode.ServiceRegistered(&ethereum)
 	if ethereum == nil {
-		log.Errorf("copyLastestData(), ethereum is nil")
+		log.Errorf("snapshot(), ethereum is nil")
 		return errors.New("ethereum is nil")
 	}
+
 	chain := ethereum.BlockChain()
+	if chain.CurrentBlock().NumberU64() == uint64(0) {
+		fmt.Printf("only one block, no need do snapshot\n")
+		os.Exit(0)
+	}
 
 	if !continueWork(chain.CurrentBlock().NumberU64()) {
 		os.Exit(0)
@@ -107,8 +114,8 @@ func doSnapshot(ctx *cli.Context, chainId string, chain *core.BlockChain) error 
 	fmt.Println("done.")
 
 	//2. copy the lastest block
-	fmt.Println("start copying last block")
-	if err := copyLastBlock(ctx, chain, dstDiskDb); err != nil {
+	fmt.Println("start copying last 2 blocks")
+	if err := copyLastTwoBlocks(ctx, chain, dstDiskDb); err != nil {
 		log.Errorf("err :%v", err)
 		return err
 	}
@@ -224,7 +231,7 @@ func copyCommonBlock(ctx *cli.Context, number uint64, bc *core.BlockChain, dstDi
 	//rawdb.WriteHeadBlockHash(dstDiskDb, block.Hash())
 	//rawdb.WriteHeadHeaderHash(dstDiskDb, block.Hash())
 
-	if number == uint64(0) {
+	if number == uint64(0) { //for first epoch's start block
 		srcStateDb, err := bc.State()
 		if err != nil {
 			return err
@@ -239,28 +246,42 @@ func copyCommonBlock(ctx *cli.Context, number uint64, bc *core.BlockChain, dstDi
 	return nil
 }
 
-//copy last block(headers/tx/receips, not include the state
-func copyLastBlock(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Database) error {
+//copy last 2 blocks(headers/tx/receips, not include the state
+func copyLastTwoBlocks(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Database) error {
 
-	//1. write block
+	//copy 2nd last block
 	block := bc.CurrentBlock()
-	//localTd := bc.GetTd(block.Hash(), block.NumberU64())
-	ptd := bc.GetTd(block.ParentHash(), block.NumberU64()-1)
+	blockNumber := block.NumberU64()
+	if err := copyCommonBlock(ctx, blockNumber-1, bc, dstDiskDb); err != nil {
+		return err
+	}
+
+	//copy last block
+	ptd := bc.GetTd(block.ParentHash(), blockNumber-1)
 	if ptd == nil {
 		return consensus.ErrUnknownAncestor
 	}
+	if err := copyLastBlock(ctx, ptd, block, dstDiskDb); err != nil {
+		return err
+	}
+	return nil
+}
+
+//copy last block(headers/tx/receips, not include the state
+func copyLastBlock(ctx *cli.Context, ptd *big.Int, block *types.Block, dstDiskDb ethdb.Database) error {
+
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)
 
 	rawdb.WriteTd(dstDiskDb, block.Hash(), block.NumberU64(), externTd)
 	rawdb.WriteBlock(dstDiskDb, block)
 	rawdb.WriteCanonicalHash(dstDiskDb, block.Hash(), block.NumberU64())
-	/*TODO*/
+	//TODO
 	//rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
 	rawdb.WriteHeadBlockHash(dstDiskDb, block.Hash())
 	rawdb.WriteHeadHeaderHash(dstDiskDb, block.Header().Hash())
 	rawdb.WriteHeadFastBlockHash(dstDiskDb, block.Hash())
 
-	/*TODO*/
+	//TODO
 	//rawdb.WriteTxLookupEntries(batch, block) //!! txes in latest block also needed to snapshot
 
 	return nil
@@ -299,11 +320,14 @@ func copyOutOfStorage(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Dat
 
 	//OosLastBlockKey = []byte("oos-last-block")
 	blockBytes, err := srcDiskDb.Get(rawdb.OosLastBlockKey)
-	if err != nil {
+	if err == nil {
+		if err := dstDiskDb.Put(rawdb.OosLastBlockKey, blockBytes); err != nil {
+			return err
+		}
+	} else if err == leveldb.ErrNotFound {
+		fmt.Println("OOS not support yet")
+	} else {
 		return err
-	}
-	if err := dstDiskDb.Put(rawdb.OosLastBlockKey, blockBytes); err != nil {
-		return nil
 	}
 
 	//ProposedInEpochPrefix = []byte("proposed-in-epoch-") // proposedInEpochPrefix + address + num (uint64 big endian) -> proposedInEpoch value
@@ -320,11 +344,14 @@ func copyOutOfStorage(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Dat
 
 	//StartMarkProposalInEpochPrefix = []byte("sp-in-epoch-")
 	epochBytes, err := srcDiskDb.Get(rawdb.StartMarkProposalInEpochPrefix)
-	if err != nil {
+	if err == nil {
+		if err := dstDiskDb.Put(rawdb.StartMarkProposalInEpochPrefix, epochBytes); err != nil {
+			return err
+		}
+	} else if err == leveldb.ErrNotFound {
+		fmt.Println("MarkProposalInEpoch not support yet")
+	} else {
 		return err
-	}
-	if err := dstDiskDb.Put(rawdb.StartMarkProposalInEpochPrefix, epochBytes); err != nil {
-		return nil
 	}
 
 	return nil
