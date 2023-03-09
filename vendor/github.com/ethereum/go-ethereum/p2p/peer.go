@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -597,9 +598,12 @@ func (rw *protoRW) ReadMsg() (Msg, error) {
 // peer. Sub-protocol independent fields are contained and initialized here, with
 // protocol specifics delegated to all connected sub-protocols.
 type PeerInfo struct {
-	ID      string   `json:"id"`   // Unique node identifier (also the encryption key)
-	Name    string   `json:"name"` // Name of the node, including client type, version, OS, custom data
-	Caps    []string `json:"caps"` // Sum-protocols advertised by this particular peer
+	ID              string   `json:"id"`   // Unique node identifier (also the encryption key)
+	PIAddress       string   `json:"piAddress"`   // consensus pub key
+	LastActiveEpoch int      `json:"lastActiveEpoch"`   // consensus pub key
+	IsValidator     bool     `json:"isValidator"`   // is validator in current epoch current chain
+	Name            string   `json:"name"` // Name of the node, including client type, version, OS, custom data
+	Caps            []string `json:"caps"` // Sum-protocols advertised by this particular peer
 	Network struct {
 		LocalAddress  string `json:"localAddress"`  // Local endpoint of the TCP data connection
 		RemoteAddress string `json:"remoteAddress"` // Remote endpoint of the TCP data connection
@@ -621,6 +625,45 @@ func (p *Peer) Info() *PeerInfo {
 	info := &PeerInfo{
 		ID:        p.ID().String(),
 		Name:      p.Name(),
+		Caps:      caps,
+		Protocols: make(map[string]interface{}),
+	}
+	info.Network.LocalAddress = p.LocalAddr().String()
+	info.Network.RemoteAddress = p.RemoteAddr().String()
+	info.Network.Inbound = p.rw.is(inboundConn)
+	info.Network.Trusted = p.rw.is(trustedConn)
+	info.Network.Static = p.rw.is(staticDialedConn)
+
+	// Gather all the running protocol infos
+	for _, proto := range p.running {
+		protoInfo := interface{}("unknown")
+		if query := proto.Protocol.PeerInfo; query != nil {
+			if metadata := query(p.ID()); metadata != nil {
+				protoInfo = metadata
+			} else {
+				protoInfo = "handshake"
+			}
+		}
+		info.Protocols[proto.Name] = protoInfo
+	}
+	return info
+}
+
+
+// Info gathers and returns a collection of metadata known about a peer.
+func (p *Peer) Info2(piAddr common.Address, isValidator  bool, lastActiveEpoch int) *PeerInfo {
+	// Gather the protocol capabilities
+	var caps []string
+	for _, cap := range p.Caps() {
+		caps = append(caps, cap.String())
+	}
+	// Assemble the generic peer metadata
+	info := &PeerInfo{
+		ID:              p.ID().String(),
+		Name:            p.Name(),
+		PIAddress: piAddr.Hex(),
+		LastActiveEpoch: lastActiveEpoch,
+		IsValidator:     isValidator,
 		Caps:      caps,
 		Protocols: make(map[string]interface{}),
 	}

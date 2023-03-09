@@ -87,6 +87,8 @@ func (cs *ConsensusState) Initialize() {
 	cs.PrecommitMaj23SignAggr = nil
 	cs.CommitRound = -1
 	cs.state = nil
+
+	cs.externalCommitted = make(map[uint64]bool)
 }
 
 // Updates ConsensusState and increments height to match thatRewardScheme of state.
@@ -108,13 +110,9 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	// RoundState fields
 	cs.updateRoundStep(0, RoundStepNewHeight)
 	//cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
-	if state.TdmExtra.ChainID == params.MainnetChainConfig.PChainId ||
-		state.TdmExtra.ChainID == params.TestnetChainConfig.PChainId {
-
+	if params.IsMainChain(state.TdmExtra.ChainID) {
 		cs.StartTime = cs.timeoutParams.Commit(time.Now())
-
 	} else {
-
 		if cs.CommitTime.IsZero() {
 			cs.StartTime = cs.timeoutParams.Commit(time.Now())
 		} else {

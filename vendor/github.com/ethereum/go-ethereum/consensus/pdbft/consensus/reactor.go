@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -147,11 +148,12 @@ func (conR *ConsensusReactor) PeersInfo() []*p2p.PeerInfo {
 
 	// Gather all the generic and sub-protocol specific infos
 	infos := make([]*p2p.PeerInfo, 0)
-	conR.peerStates.Range(func(_, val interface{}) bool{
 
-		peer := val.(*PeerState).Peer.P2PPeer()
+	conR.peerStates.Range(func(_, val interface{}) bool{
+		ps := val.(*PeerState)
+		peer := ps.Peer.P2PPeer()
 		if peer != nil {
-			infos = append(infos, peer.Info())
+			infos = append(infos, peer.Info2(ps.ValAddress, ps.HasBeenProposer, ps.LastActiveEpoch))
 			return true
 		}
 
@@ -314,9 +316,14 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 				conR.conS.StartNewHeight()
 			}
 
-			//set block here
-			conR.conS.blockFromMiner = re.Proposal
-			conR.logger.Infof("registerEventCallbacks received Request Event conR.conS.blockFromMiner has been set with height: %v", conR.conS.blockFromMiner.NumberU64())
+			if block.NumberU64() >= conR.conS.Height {
+				//start locking
+				conR.conS.mtx.Lock()
+				//set block here
+				conR.conS.blockFromMiner = block
+				conR.logger.Infof("registerEventCallbacks received Request Event conR.conS.blockFromMiner has been set with height: %v", conR.conS.blockFromMiner.NumberU64())
+				conR.conS.mtx.Unlock()
+			}
 		} else {
 			conR.logger.Info("registerEventCallbacks received Request Event", "conR.conS.Height", conR.conS.Height, "conR.conS.Step", conR.conS.Step)
 		}
@@ -336,11 +343,8 @@ func (conR *ConsensusReactor) registerEventCallbacks() {
 		conR.logger.Info("registerEventCallbacks received Final Committed Event", "conR.conS.Height", conR.conS.Height, "conR.conS.Step", conR.conS.Step)
 		
 		edfc := data.(types.EventDataFinalCommitted)
-		
-		if edfc.BlockNumber == conR.conS.Height {
-			conR.logger.Info("start new height to apply this commit", "new height", edfc.BlockNumber + 1)
-			conR.conS.StartNewHeight()
-		}
+		conR.logger.Info("record this externally committed block to avoid successor commit", "height", edfc.BlockNumber)
+		conR.conS.SetExternalCommitted(edfc.BlockNumber)
 	})
 }
 
@@ -375,7 +379,14 @@ func (conR *ConsensusReactor) sendVote2Proposer(vote *types.Vote, proposerKey st
 		peerState, ok := conR.peerStates.Load(proposerKey)
 		if ok {
 			msg := &VoteMessage{vote}
-			peerState.(*PeerState).Peer.Send(VoteChannel, struct{ ConsensusMessage }{msg})
+			vrfProposer := conR.conS.proposerByRound(int(vote.Round)).Proposer
+
+			ps := peerState.(*PeerState)
+			ps.ValAddress = common.BytesToAddress(vrfProposer.Address)
+			ps.HasBeenProposer =  true
+			ps.LastActiveEpoch = int(conR.conS.Epoch.Number)
+
+			ps.Peer.Send(VoteChannel, struct{ ConsensusMessage }{msg})
 		} else {
 			conR.logger.Infof("proposerKey is :%+v, proposer could be offline\n", proposerKey)
 		}
@@ -682,6 +693,10 @@ type PeerState struct {
 	mtx sync.Mutex
 	PeerRoundState
 
+	ValAddress         common.Address
+	HasBeenProposer    bool
+	LastActiveEpoch    int
+
 	Connected bool
 	logger    log.Logger
 }
@@ -693,6 +708,9 @@ func NewPeerState(peer consensus.Peer, logger log.Logger) *PeerState {
 			Round:              -1,
 			ProposalPOLRound:   -1,
 		},
+		ValAddress: common.Address{},
+		HasBeenProposer:    false,
+		LastActiveEpoch:    -1,
 		Connected: true,
 		logger:    logger,
 	}

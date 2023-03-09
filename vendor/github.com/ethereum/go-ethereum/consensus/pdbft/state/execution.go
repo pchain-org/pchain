@@ -2,6 +2,7 @@ package state
 
 import (
 	"errors"
+
 	"github.com/ethereum/go-ethereum/consensus"
 
 	//"fmt"
@@ -113,12 +114,16 @@ func autoStartMining(bc *core.BlockChain, block *ethTypes.Block) {
 	currentEpoch := eng.GetEpoch()
 	// After Reveal Vote End stage, we should able to calculate the new validator
 	if block.NumberU64() == currentEpoch.GetRevealVoteEndHeight()+1 {
+
+		markProposedInEpoch := bc.Config().IsMarkProposedInEpoch(bc.CurrentBlock().Header().MainChainNumber)
+
 		// Re-Calculate the next epoch validators
 		nextEp := currentEpoch.GetNextEpoch()
 		state, _ := bc.State()
+		epochNo := currentEpoch.Number
 		nextValidators := currentEpoch.Validators.Copy()
-
-		dryrunErr := ep.DryRunUpdateEpochValidatorSet(state,nextValidators, nextEp.GetEpochValidatorVoteSet())
+		dryrunErr := ep.DryRunUpdateEpochValidatorSet(state, epochNo, nextValidators,
+			nextEp.GetEpochValidatorVoteSet(), markProposedInEpoch)
 		if dryrunErr != nil {
 			panic("can not update the validator set base on the vote, error: " + dryrunErr.Error())
 		}

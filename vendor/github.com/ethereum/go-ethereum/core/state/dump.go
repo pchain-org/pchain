@@ -145,7 +145,6 @@ func (self *StateDB)String() string {
 		"dbErr : %x,\n"+
 		"refund : %v,\n"+
 		"thash : %x,\n"+
-		"bhash : %x,\n"+
 		"txIndex : %v,\n"+
 		"logs : %v,\n"+
 		"logSize : %v,\n"+
@@ -166,7 +165,6 @@ func (self *StateDB)String() string {
 		self.dbErr,// error
 		self.refund,// uint64
 		self.thash,//
-		self.bhash,// common.Hash
 		self.txIndex,//      int
 		self.logs,//         map[common.Hash][]*types.Log
 		self.logSize,//      uint

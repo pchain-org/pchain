@@ -81,12 +81,13 @@ func snapshot(ctx *cli.Context) error {
 	}
 
 	chain := ethereum.BlockChain()
-	if chain.CurrentBlock().NumberU64() == uint64(0) {
+	curBlock := chain.CurrentBlock().NumberU64()
+	if curBlock == uint64(0) {
 		fmt.Printf("only one block, no need do snapshot\n")
 		os.Exit(0)
 	}
 
-	if !continueWork(chain.CurrentBlock().NumberU64()) {
+	if !continueWork(curBlock) {
 		os.Exit(0)
 	}
 
@@ -193,9 +194,15 @@ func copyEpochEndpointBlock(ctx *cli.Context, bc *core.BlockChain, dstDiskDb eth
 	backLen = len(content)
 
 	epoch := currentEpoch
+	curBlock := bc.CurrentBlock().NumberU64()
 	for epoch != nil {
 
-		if epoch != currentEpoch {
+		if epoch.StartBlock > curBlock {
+			epoch = epoch.GetPreviousEpoch()
+			continue
+		}
+
+		if epoch.EndBlock <= curBlock {
 			copyCommonBlock(ctx, epoch.EndBlock, bc, dstDiskDb)
 		}
 

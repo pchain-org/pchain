@@ -1,6 +1,12 @@
 package chain
 
 import (
+	"io/ioutil"
+	"net"
+	"path"
+	"strconv"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -18,11 +24,6 @@ import (
 	"github.com/tendermint/go-crypto"
 	dbm "github.com/tendermint/go-db"
 	"gopkg.in/urfave/cli.v1"
-	"io/ioutil"
-	"net"
-	"path"
-	"strconv"
-	"sync"
 )
 
 type ChainManager struct {
@@ -138,9 +139,8 @@ func (cm *ChainManager) LoadChildChains(childIds []string) error {
 }
 
 func (cm *ChainManager) InitCrossChainHelper() {
-	cm.cch.chainInfoDB = dbm.NewDB("chaininfo", "leveldb",
-		cm.ctx.GlobalString(utils.DataDirFlag.Name))
-	cm.cch.localTX3CacheDB, _ = rawdb.NewLevelDBDatabase(path.Join(cm.ctx.GlobalString(utils.DataDirFlag.Name), "tx3cache"), 0, 0, "pchain/db/tx3/")
+	cm.cch.chainInfoDB = dbm.NewDB("chaininfo", "leveldb", cm.ctx.GlobalString(utils.DataDirFlag.Name))
+	cm.cch.localTX3CacheDB, _ = rawdb.NewLevelDBDatabase(path.Join(cm.ctx.GlobalString(utils.DataDirFlag.Name), "tx3cache"), 512, 1024, "pchain/db/tx3/")
 
 	chainId := MainChain
 	if cm.ctx.GlobalBool(utils.TestnetFlag.Name) {
@@ -431,7 +431,7 @@ func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainIn
 
 func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool {
 	var ethereum *eth.Ethereum
-	cm.mainChain.EthNode.ServiceRegistered(&ethereum)
+	cm.mainChain.EthNode.Service(&ethereum)
 
 	var localEtherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {

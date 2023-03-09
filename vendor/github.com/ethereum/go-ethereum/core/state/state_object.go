@@ -79,6 +79,7 @@ type stateObject struct {
 
 	originStorage Storage // Storage cache of original entries to dedup rewrites
 	dirtyStorage  Storage // Storage entries that need to be flushed to disk
+	fakeStorage    Storage // Fake storage which constructed by caller for debugging purpose.
 
 	// Cross Chain TX trie
 	tx1Trie Trie // tx1 trie, which become non-nil on first access
@@ -466,8 +467,12 @@ func (c *stateObject) getTrie(db Database) Trie {
 	return c.trie
 }
 
-// GetState returns a value in account storage.
+// GetState retrieves a value from the account storage trie.
 func (self *stateObject) GetState(db Database, key common.Hash) common.Hash {
+	// If the fake storage is set, only lookup the state here(in the debugging mode)
+	if self.fakeStorage != nil {
+		return self.fakeStorage[key]
+	}
 	// If we have a dirty value for this state entry, return it
 	value, dirty := self.dirtyStorage[key]
 	if dirty {
@@ -479,7 +484,10 @@ func (self *stateObject) GetState(db Database, key common.Hash) common.Hash {
 
 // GetCommittedState retrieves a value from the committed account storage trie.
 func (self *stateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
-
+	// If the fake storage is set, only lookup the state here(in the debugging mode)
+	if self.fakeStorage != nil {
+		return self.fakeStorage[key]
+	}
 	// If we have the original value cached, return that
 	value, cached := self.originStorage[key]
 	if cached {
@@ -504,12 +512,41 @@ func (self *stateObject) GetCommittedState(db Database, key common.Hash) common.
 
 // SetState updates a value in account storage.
 func (self *stateObject) SetState(db Database, key, value common.Hash) {
+	// If the fake storage is set, put the temporary state update here.
+	if self.fakeStorage != nil {
+		self.fakeStorage[key] = value
+		return
+	}
+	// If the new value is the same as old, don't set
+	prev := self.GetState(db, key)
+	if prev == value {
+		return
+	}
+	// New value is different, update and journal the change
 	self.db.journal = append(self.db.journal, storageChange{
 		account:  &self.address,
 		key:      key,
 		prevalue: self.GetState(db, key),
 	})
 	self.setState(key, value)
+}
+
+// SetStorage replaces the entire state storage with the given one.
+//
+// After this function is called, all original state will be ignored and state
+// lookup only happens in the fake state storage.
+//
+// Note this function should only be used for debugging purpose.
+func (s *stateObject) SetStorage(storage map[common.Hash]common.Hash) {
+	// Allocate fake storage if it's nil.
+	if s.fakeStorage == nil {
+		s.fakeStorage = make(Storage)
+	}
+	for key, value := range storage {
+		s.fakeStorage[key] = value
+	}
+	// Don't bother journal since this function should only be used for
+	// debugging and the `fake` storage won't be committed to database.
 }
 
 func (self *stateObject) setState(key, value common.Hash) {

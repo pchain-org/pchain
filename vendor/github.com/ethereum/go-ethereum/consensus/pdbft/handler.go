@@ -22,7 +22,6 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -36,7 +35,7 @@ func (sb *backend) Protocol() consensus.Protocol {
 	sb.logger.Info("Tendermint (backend) Protocol, add logic here")
 
 	var protocolName string
-	if sb.chainConfig.PChainId == params.MainnetChainConfig.PChainId || sb.chainConfig.PChainId == params.TestnetChainConfig.PChainId {
+	if sb.chainConfig.IsMainChain() {
 		protocolName = "pchain" //we also use "pchain" if the net is "testnet"
 	} else {
 		protocolName = "pchain_" + sb.chainConfig.PChainId

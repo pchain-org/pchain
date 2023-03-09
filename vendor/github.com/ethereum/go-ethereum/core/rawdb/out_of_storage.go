@@ -342,8 +342,79 @@ func WriteOOSLastBlock(db ethdb.Database, blockNumber *big.Int) error {
 	return db.Put(OosLastBlockKey, blockNumber.Bytes())
 }
 
-func MarkProposedInEpoch(db ethdb.Database, address common.Address, epoch uint64) error {
+func MarkProposedInEpoch(db ethdb.Database, address common.Address, epoch, height uint64) error {
+
+	epochBytes, err := db.Get(append(append(ProposedInEpochPrefix, address.Bytes()...), EncodeUint64(epoch)...))
+	countValue := uint64(0)
+	firstProposedBlock := uint64(0)
+	if err == nil && len(epochBytes) % 8 == 0 {
+		countBytes := make([]byte, 8)
+		copy(countBytes, epochBytes[0:8])
+		countValue = DecodeUint64(countBytes)
+		if len(epochBytes) == 16 {
+			firstProposedBlockBytes := make([]byte, 8)
+			copy(firstProposedBlockBytes, epochBytes[8:])
+			firstProposedBlock = DecodeUint64(firstProposedBlockBytes)
+		}
+	}
+
+	countValue ++
+	if firstProposedBlock == 0 || firstProposedBlock > height {
+		firstProposedBlock = height
+	}
+
 	return db.Put(append(
 		append(ProposedInEpochPrefix, address.Bytes()...), EncodeUint64(epoch)...),
-		EncodeUint64(1))
+		append(EncodeUint64(countValue), EncodeUint64(firstProposedBlock)...))
 }
+
+func CheckProposedInEpoch(db ethdb.Database, address common.Address, epoch uint64) (uint64, bool) {
+	epochBytes, err := db.Get(append(append(ProposedInEpochPrefix, address.Bytes()...), EncodeUint64(epoch)...))
+	if err != nil {
+		return 0, false
+	}
+
+	length := len(epochBytes)
+	if length == 8 {
+		countValue := DecodeUint64(epochBytes)
+		if countValue != 1 {
+			log.Error("value for count of proposed block must be 1, now is %v", countValue)
+			return 0, false
+		}
+		return 0, true
+	} else if length == 16 {
+		countBytes := make([]byte, 8)
+		copy(countBytes, epochBytes[0:8])
+		firstProposedBlockBytes := make([]byte, 8)
+		copy(firstProposedBlockBytes, epochBytes[8:])
+		countValue := DecodeUint64(countBytes)
+		firstProposedBlock := DecodeUint64(firstProposedBlockBytes)
+		if countValue <= 0 {
+			log.Error("value for count of proposed block must be larger then 0, now is %v", countValue)
+			return 0, false
+		}
+		return firstProposedBlock, true
+	}
+	log.Error("value for count of proposed block does not get, return true to continue")
+	return 0, true
+}
+
+func ClearProposedInEpoch(db ethdb.Database, address common.Address, epoch uint64) error {
+	return db.Delete(append(append(ProposedInEpochPrefix, address.Bytes()...), EncodeUint64(epoch)...))
+}
+
+func MarkProposalStartInEpoch(db ethdb.Database, epoch uint64) error {
+	return db.Put(StartMarkProposalInEpochPrefix, EncodeUint64(epoch))
+}
+
+func GetProposalStartInEpoch(db ethdb.Database) (uint64, error) {
+
+	epochBytes, err := db.Get(StartMarkProposalInEpochPrefix)
+
+	if err != nil {
+		return 0xffffffffffffffff, err
+	}
+
+	return DecodeUint64(epochBytes), nil
+}
+

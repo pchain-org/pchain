@@ -20,6 +20,12 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"math/big"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -51,10 +57,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
-	"math/big"
-	"runtime"
-	"sync"
-	"sync/atomic"
 )
 
 type LesServer interface {
@@ -128,82 +130,13 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	}
 
 	isMainChain := params.IsMainChain(ctx.ChainId())
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithDefault(chainDb, config.Genesis, isMainChain, isTestnet)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithDefault(chainDb, config.Genesis, isMainChain, isTestnet, nil)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
 
 	// Update HTLC Hard Fork and Contract if any one blank
-	switch ctx.ChainId() {
-	case "pchain":
-		if chainConfig.OutOfStorageBlock == nil {
-			chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
-		}
-		chainConfig.ExtractRewardMainBlock        = params.MainnetChainConfig.ExtractRewardMainBlock
-		chainConfig.ExtractRewardPatchMainBlock   = params.MainnetChainConfig.ExtractRewardPatchMainBlock
-		chainConfig.Sd2mcV1Block                  = params.MainnetChainConfig.Sd2mcV1Block
-		chainConfig.ChildSd2mcWhenEpochEndsBlock  = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
-		chainConfig.ValidateHTLCBlock             = params.MainnetChainConfig.ValidateHTLCBlock
-		chainConfig.HeaderHashWithoutTimeBlock    = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
-	case "testnet":
-		if chainConfig.OutOfStorageBlock == nil {
-			chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
-		}
-		chainConfig.ExtractRewardMainBlock        = params.TestnetChainConfig.ExtractRewardMainBlock
-		chainConfig.ExtractRewardPatchMainBlock   = params.TestnetChainConfig.ExtractRewardPatchMainBlock
-		chainConfig.Sd2mcV1Block                  = params.TestnetChainConfig.Sd2mcV1Block
-		chainConfig.ChildSd2mcWhenEpochEndsBlock  = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
-		chainConfig.ValidateHTLCBlock             = params.TestnetChainConfig.ValidateHTLCBlock
-		chainConfig.HeaderHashWithoutTimeBlock    = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
-	case "child_0":
-		if (chainConfig.HashTimeLockContract == common.Address{}) {
-			if isTestnet {
-				chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
-			} else {
-				chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
-			}
-		}
-		if isTestnet {
-			chainConfig.OutOfStorageBlock            = params.TestnetChainConfig.Child0OutOfStorageBlock
-			chainConfig.ExtractRewardMainBlock       = params.TestnetChainConfig.ExtractRewardMainBlock
-			chainConfig.ExtractRewardPatchMainBlock  = params.TestnetChainConfig.ExtractRewardPatchMainBlock
-			chainConfig.Sd2mcV1Block                 = params.TestnetChainConfig.Sd2mcV1Block
-			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
-			chainConfig.ValidateHTLCBlock            = params.TestnetChainConfig.ValidateHTLCBlock
-			chainConfig.HeaderHashWithoutTimeBlock   = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
-		} else {
-			chainConfig.OutOfStorageBlock            = params.MainnetChainConfig.Child0OutOfStorageBlock
-			chainConfig.ExtractRewardMainBlock       = params.MainnetChainConfig.ExtractRewardMainBlock
-			chainConfig.ExtractRewardPatchMainBlock  = params.MainnetChainConfig.ExtractRewardPatchMainBlock
-			chainConfig.Sd2mcV1Block                 = params.MainnetChainConfig.Sd2mcV1Block
-			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
-			chainConfig.ValidateHTLCBlock            = params.MainnetChainConfig.ValidateHTLCBlock
-			chainConfig.HeaderHashWithoutTimeBlock   = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
-		}
-	default:
-		if isTestnet {
-			chainConfig.OutOfStorageBlock            = params.TestnetChainConfig.OutOfStorageBlock
-			chainConfig.ExtractRewardMainBlock       = params.TestnetChainConfig.ExtractRewardMainBlock
-			chainConfig.ExtractRewardPatchMainBlock  = params.TestnetChainConfig.ExtractRewardPatchMainBlock
-			chainConfig.Sd2mcV1Block                 = params.TestnetChainConfig.Sd2mcV1Block
-			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
-			chainConfig.ValidateHTLCBlock            = params.TestnetChainConfig.ValidateHTLCBlock
-			chainConfig.HeaderHashWithoutTimeBlock   = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
-		} else {
-			chainConfig.OutOfStorageBlock            = params.MainnetChainConfig.OutOfStorageBlock
-			chainConfig.ExtractRewardMainBlock       = params.MainnetChainConfig.ExtractRewardMainBlock
-			chainConfig.ExtractRewardPatchMainBlock  = params.MainnetChainConfig.ExtractRewardPatchMainBlock
-			chainConfig.Sd2mcV1Block                 = params.MainnetChainConfig.Sd2mcV1Block
-			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
-			chainConfig.ValidateHTLCBlock            = params.MainnetChainConfig.ValidateHTLCBlock
-			chainConfig.HeaderHashWithoutTimeBlock   = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
-		}
-	}
-
-	//directly support corresponding instruction set
-	chainConfig.ConstantinopleBlock = big.NewInt(0)
-	chainConfig.PetersburgBlock     = big.NewInt(0)
-	chainConfig.IstanbulBlock       = big.NewInt(0)
+	initBlocksInChainConfig(chainConfig, isTestnet, ctx.ChainId())
 
 	chainConfig.ChainLogger = logger
 	logger.Info("Initialised chain configuration", "config", chainConfig)
@@ -286,6 +219,111 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
 
 	return eth, nil
+}
+
+func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, chainId string) {
+
+	if !isTestnet {
+		if chainConfig.OutOfStorageBlock == nil {
+			if chainId == "child_0" {
+				chainConfig.OutOfStorageBlock = params.MainnetChainConfig.Child0OutOfStorageBlock
+			} else {
+				chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
+			}
+		}
+		if chainConfig.ExtractRewardMainBlock == nil {
+			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
+		}
+		if chainConfig.ExtractRewardPatchMainBlock == nil {
+			chainConfig.ExtractRewardPatchMainBlock = params.MainnetChainConfig.ExtractRewardPatchMainBlock
+		}
+		if chainConfig.Sd2mcV1Block == nil {
+			chainConfig.Sd2mcV1Block = params.MainnetChainConfig.Sd2mcV1Block
+		}
+		if chainConfig.ChildSd2mcWhenEpochEndsBlock == nil {
+			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.MainnetChainConfig.ChildSd2mcWhenEpochEndsBlock
+		}
+		if chainConfig.ValidateHTLCBlock == nil {
+			chainConfig.ValidateHTLCBlock = params.MainnetChainConfig.ValidateHTLCBlock
+		}
+		if chainConfig.HeaderHashWithoutTimeBlock == nil {
+			chainConfig.HeaderHashWithoutTimeBlock = params.MainnetChainConfig.HeaderHashWithoutTimeBlock
+		}
+		if chainConfig.ConstantinopleBlock == nil {
+			chainConfig.ConstantinopleBlock = params.MainnetChainConfig.ConstantinopleBlock
+		}
+		if chainConfig.PetersburgBlock == nil {
+			chainConfig.PetersburgBlock = params.MainnetChainConfig.PetersburgBlock
+		}
+		if chainConfig.IstanbulBlock == nil {
+			chainConfig.IstanbulBlock = params.MainnetChainConfig.IstanbulBlock
+		}
+		if chainConfig.MuirGlacierBlock == nil {
+			chainConfig.MuirGlacierBlock = params.MainnetChainConfig.MuirGlacierBlock
+		}
+		if chainConfig.BerlinBlock == nil {
+			chainConfig.BerlinBlock = params.MainnetChainConfig.BerlinBlock
+		}
+		if chainConfig.LondonBlock == nil {
+			chainConfig.LondonBlock = params.MainnetChainConfig.LondonBlock
+		}
+		if chainConfig.MarkProposedInEpochMainBlock == nil {
+			chainConfig.MarkProposedInEpochMainBlock = params.MainnetChainConfig.MarkProposedInEpochMainBlock
+		}
+		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
+			chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
+		}
+	} else {
+		if chainConfig.OutOfStorageBlock == nil {
+			if chainId == "child_0" {
+				chainConfig.OutOfStorageBlock = params.TestnetChainConfig.Child0OutOfStorageBlock
+			} else {
+				chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
+			}
+		}
+		if chainConfig.ExtractRewardMainBlock == nil {
+			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
+		}
+		if chainConfig.ExtractRewardPatchMainBlock == nil {
+			chainConfig.ExtractRewardPatchMainBlock = params.TestnetChainConfig.ExtractRewardPatchMainBlock
+		}
+		if chainConfig.Sd2mcV1Block == nil {
+			chainConfig.Sd2mcV1Block = params.TestnetChainConfig.Sd2mcV1Block
+		}
+		if chainConfig.ChildSd2mcWhenEpochEndsBlock == nil {
+			chainConfig.ChildSd2mcWhenEpochEndsBlock = params.TestnetChainConfig.ChildSd2mcWhenEpochEndsBlock
+		}
+		if chainConfig.ValidateHTLCBlock == nil {
+			chainConfig.ValidateHTLCBlock = params.TestnetChainConfig.ValidateHTLCBlock
+		}
+		if chainConfig.HeaderHashWithoutTimeBlock == nil {
+			chainConfig.HeaderHashWithoutTimeBlock = params.TestnetChainConfig.HeaderHashWithoutTimeBlock
+		}
+		if chainConfig.ConstantinopleBlock == nil {
+			chainConfig.ConstantinopleBlock = params.TestnetChainConfig.ConstantinopleBlock
+		}
+		if chainConfig.PetersburgBlock == nil {
+			chainConfig.PetersburgBlock = params.TestnetChainConfig.PetersburgBlock
+		}
+		if chainConfig.IstanbulBlock == nil {
+			chainConfig.IstanbulBlock = params.TestnetChainConfig.IstanbulBlock
+		}
+		if chainConfig.MuirGlacierBlock == nil {
+			chainConfig.MuirGlacierBlock = params.TestnetChainConfig.MuirGlacierBlock
+		}
+		if chainConfig.BerlinBlock == nil {
+			chainConfig.BerlinBlock = params.TestnetChainConfig.BerlinBlock
+		}
+		if chainConfig.LondonBlock == nil {
+			chainConfig.LondonBlock = params.TestnetChainConfig.LondonBlock
+		}
+		if chainConfig.MarkProposedInEpochMainBlock == nil {
+			chainConfig.MarkProposedInEpochMainBlock = params.TestnetChainConfig.MarkProposedInEpochMainBlock
+		}
+		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
+			chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
+		}
+	}
 }
 
 func makeExtraData(extra []byte) []byte {
@@ -387,7 +425,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.ApiBackend, false),
+			Service:   filters.NewPublicFilterAPI(s.ApiBackend, false, 5*time.Minute),
 			Public:    true,
 		}, {
 			Namespace: "admin",
@@ -553,7 +591,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	go s.loopForMiningEvent()
 
 	// Start the Data Reduction
-	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0"{
+	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0" {
 		go s.StartScanAndPrune(0)
 	}
 

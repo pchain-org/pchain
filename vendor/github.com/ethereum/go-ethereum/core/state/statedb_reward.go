@@ -350,3 +350,26 @@ func (self *StateDB) commitChildChainRewardPerBlock() {
 	self.setError(self.trie.TryUpdate(childChainRewardPerBlockKey, data))
 }
 
+
+// ----- Mark if one address proposed in one specific epoch
+func (self *StateDB)MarkProposedInEpoch(address common.Address, epoch, height uint64) error {
+
+	return rawdb.MarkProposedInEpoch(self.EthDatabase(), address, epoch, height)
+}
+
+func (self *StateDB) CheckProposedInEpoch(address common.Address, epoch uint64) (uint64, bool) {
+
+	return rawdb.CheckProposedInEpoch(self.EthDatabase(), address, epoch)
+}
+
+func (self *StateDB) ClearProposedInEpoch(address common.Address, epoch uint64) error {
+	return rawdb.ClearProposedInEpoch(self.EthDatabase(), address, epoch)
+}
+
+func (self *StateDB) MarkProposalStartInEpoch(epoch uint64) error {
+	return rawdb.MarkProposalStartInEpoch(self.EthDatabase(), epoch)
+}
+
+func (self *StateDB) GetProposalStartInEpoch() (uint64, error) {
+	return rawdb.GetProposalStartInEpoch(self.EthDatabase())
+}

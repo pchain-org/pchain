@@ -297,7 +297,7 @@ func (c *ChainIndexer) updateLoop() {
 				c.lock.Unlock()
 				newHead, err := c.processSection(section, oldHead)
 				if err != nil {
-					c.log.Warn("Section processing failed, if it is using snaphot db, this could be ignored", "warning", err)
+					c.log.Warn("Section processing failed; it is normal after done snapshot", "error", err)
 				}
 				c.lock.Lock()
 
