@@ -2192,7 +2192,7 @@ func (cs *ConsensusState) saveBlockToMainChain(block *ethTypes.Block, version in
 		}
 
 	} else {
-		proofData, err := newChildChainProofDataV1(block)
+		proofData, err := NewChildChainProofDataV1(block)
 		if err != nil {
 			cs.logger.Error("saveDataToMainChain: failed to create proof data", "block", block, "err", err)
 			return
@@ -2376,7 +2376,7 @@ func newTX3ProofData(block *ethTypes.Block) (*ethTypes.TX3ProofData, error) {
 	return ret, nil
 }
 
-func newChildChainProofDataV1(block *ethTypes.Block) (*ethTypes.ChildChainProofDataV1, error) {
+func NewChildChainProofDataV1(block *ethTypes.Block) (*ethTypes.ChildChainProofDataV1, error) {
 
 	ret := &ethTypes.ChildChainProofDataV1{
 		Header: block.Header(),

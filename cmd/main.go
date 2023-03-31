@@ -87,6 +87,8 @@ func main() {
 
 		//walletCommand,
 		accountCommand,
+
+		sendBlockToMainChainCommand,
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 
@@ -252,6 +254,9 @@ func newCliApp(version, usage string) *cli.App {
 			RpcLaddrFlag,
 			AddrFlag,
 		*/
+
+		SendDataDirFlag,
+		MainChainUrlFlag,
 	}
 	app.Flags = append(app.Flags, DebugFlags...)
 

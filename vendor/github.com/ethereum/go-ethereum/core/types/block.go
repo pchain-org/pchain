@@ -85,7 +85,7 @@ type Header struct {
 	Nonce       BlockNonce     `json:"nonce"`
 
 	// For Child Chain only
-	MainChainNumber *big.Int `json:"mainNumber"      gencodec:"required"`
+	MainChainNumber *big.Int `json:"mainchainNumber"      gencodec:"required"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas"   rlp:"optional"`
