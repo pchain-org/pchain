@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 	pabi "github.com/pchain/abi"
 	"github.com/pchain/chain"
 	tmdcrypto "github.com/tendermint/go-crypto"
@@ -22,7 +21,6 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -30,8 +28,8 @@ var (
 	blockFileName         = "block.json"
 	privValidatorFileName = "priv_validator.json"
 
-	SendDataDirFlag = utils.DirectoryFlag{
-		Name: "senddatadir",
+	ToolkitDirFlag = utils.DirectoryFlag{
+		Name: "toolkitdir",
 		Usage: "directory for one block.json and one priv_validator.json. \n" +
 			"block.json file should contains only one block's json data, \n" +
 			"priv_validator.json file should contain only one priv_validator's json data, " +
@@ -46,12 +44,12 @@ var (
 	}
 
 	sendBlockToMainChainCommand = cli.Command{
-		Name:     "sendBlockToMainChain",
+		Name:     "sendblocktomainchain",
 		Usage:    "send block to main chain",
-		Category: "TOOL COMMANDS",
+		Category: "TOOLkIT COMMANDS",
 		Action:   utils.MigrateFlags(sendBlockToMainChain),
 		Flags: []cli.Flag{
-			SendDataDirFlag,
+			ToolkitDirFlag,
 			MainChainUrlFlag,
 		},
 		Description: `
@@ -64,34 +62,34 @@ chain.`,
 
 func sendBlockToMainChain(ctx *cli.Context) error {
 
-	sendDataDir := ctx.GlobalString(SendDataDirFlag.Name)
+	toolkitDir := ctx.GlobalString(ToolkitDirFlag.Name)
 	mainChainUrl := ctx.GlobalString(MainChainUrlFlag.Name)
 
-	block := loadBlock(sendDataDir + string(os.PathSeparator) + blockFileName)
-	prvValidator := csTypes.LoadPrivValidator(sendDataDir + string(os.PathSeparator) + privValidatorFileName)
+	block := loadBlock(toolkitDir + string(os.PathSeparator) + blockFileName)
+	prvValidator := csTypes.LoadPrivValidator(toolkitDir + string(os.PathSeparator) + privValidatorFileName)
 
 	proofData, err := consensus.NewChildChainProofDataV1(block)
 	if err != nil {
-		Exit(fmt.Sprintf("sendBlockToMainChain: failed to create proof data, block: %v, err: %v\n", block, err))
+		Exit(fmt.Errorf("sendBlockToMainChain: failed to create proof data, block: %v, err: %v\n", block, err))
 	}
 
 	pdBytes, err := rlp.EncodeToBytes(proofData)
 	if err != nil {
-		Exit(fmt.Sprintf("saveDataToMainChain: failed to encode proof data, proof data: %v, err: %v\n", proofData, err))
+		Exit(fmt.Errorf("saveDataToMainChain: failed to encode proof data, proof data: %v, err: %v\n", proofData, err))
 	}
 	fmt.Printf("saveDataToMainChain proof data length: %d\n", len(pdBytes))
 
 	// We use BLS Consensus PrivateKey to sign the digest data
 	prv, err := crypto.ToECDSA(prvValidator.PrivKey.(tmdcrypto.BLSPrivKey).Bytes())
 	if err != nil {
-		Exit(fmt.Sprintf("saveDataToMainChain: failed to get PrivateKey, err: %v\n", err))
+		Exit(fmt.Errorf("saveDataToMainChain: failed to get PrivateKey, err: %v\n", err))
 	}
 
 	hash, err := sendDataToMainChain(mainChainUrl, pdBytes, prv, chain.MainChain)
 	if err != nil {
-		Exit(fmt.Sprintf("saveDataToMainChain(rpc) failed, err:%v\n", err))
+		Exit(fmt.Errorf("saveDataToMainChain(rpc) failed, err:%v\n", err))
 	} else {
-		Exit(fmt.Sprintf("saveDataToMainChain(rpc) success, hash:%v\n", hash))
+		Exit(fmt.Errorf("saveDataToMainChain(rpc) success, hash:%v\n", hash))
 	}
 
 	//we wait for 15 seconds, if not write to main chain, just return
@@ -117,150 +115,33 @@ func loadBlock(filePath string) *types.Block {
 
 	blockJSONBytes, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		Exit(err.Error())
+		Exit(err)
 	}
 
-	blockDoc, err := BlockDocFromJSON(blockJSONBytes)
+	consoleBlock, err := consoleBlockFromJSON(blockJSONBytes)
 	if err != nil {
-		Exit(fmt.Sprintf("Error reading Block from %v: %v\n", filePath, err))
+		Exit(fmt.Errorf("Error reading Block from %v: %v\n", filePath, err))
 	}
 
-	block := blockDocToBlock(blockDoc)
+	block := consoleBlockToBlock(consoleBlock)
 	if block == nil {
-		Exit(fmt.Sprintf("Error reading block from %v: %v\n", filePath, err))
+		Exit(fmt.Errorf("Error reading block from %v: %v\n", filePath, err))
 	}
 
 	return block
 }
 
-func BlockDocFromJSON(jsonBlob []byte) (*BlockDoc, error) {
+func consoleBlockFromJSON(jsonBlob []byte) (*ConsoleBlock, error) {
 
-	blockDoc := &BlockDoc{}
-	if err := json.Unmarshal(jsonBlob, &blockDoc); err != nil {
+	consoleBlock := &ConsoleBlock{}
+	if err := json.Unmarshal(jsonBlob, &consoleBlock); err != nil {
 		return nil, err
 	}
 
-	return blockDoc, nil
+	return consoleBlock, nil
 }
 
-type TransactionDoc struct {
-	TransactionIndex uint64          `json:"transactionIndex"`
-	Nonce            uint64          `json:"nonce"`
-	GasPrice         *big.Int        `json:"gasPrice"`
-	Gas              uint64          `json:"gas"`
-	To               *common.Address `json:"to"`
-	Value            *big.Int        `json:"value"`
-	Data             []byte          `json:"input"`
-	V                *big.Int        `json:"v"`
-	R                *big.Int        `json:"r"`
-	S                *big.Int        `json:"s"`
-}
-
-func (td *TransactionDoc) UnmarshalJSON(input []byte) error {
-	type hexTransactionDoc struct {
-		TransactionIndex uint64          `json:"transactionIndex"`
-		Nonce            uint64          `json:"nonce"`
-		GasPrice         *big.Int        `json:"gasPrice"`
-		Gas              *big.Int        `json:"gas"`
-		To               *common.Address `json:"to"`
-		Value            *big.Int        `json:"value"`
-		Data             string          `json:"input"`
-		V                string          `json:"v"` //hexutil.Big
-		R                string          `json:"r"` //hexutil.Big
-		S                string          `json:"s"` //hexutil.Big
-	}
-
-	var dec hexTransactionDoc
-	if err := json.Unmarshal(input, &dec); err != nil {
-		return err
-	}
-
-	td.TransactionIndex = dec.TransactionIndex
-	td.Nonce = dec.Nonce
-	td.GasPrice = dec.GasPrice
-	td.Gas = dec.Gas.Uint64()
-	td.To = dec.To
-	td.Value = dec.Value
-	td.Data = common.FromHex(dec.Data)
-	td.V, _ = hexStringToBig(dec.V, 16)
-	td.R, _ = hexStringToBig(dec.R, 16)
-	td.S, _ = hexStringToBig(dec.S, 16)
-
-	return nil
-}
-
-func hexStringToBig(str string, base int) (*big.Int, bool) {
-	if strings.HasPrefix(str, "0x") {
-		str = str[2:]
-	}
-	return new(big.Int).SetString(str, base)
-}
-
-type BlockDoc struct {
-	ParentHash  common.Hash      `json:"parentHash"       gencodec:"required"`
-	UncleHash   common.Hash      `json:"sha3Uncles"       gencodec:"required"`
-	Coinbase    common.Address   `json:"miner"            gencodec:"required"`
-	Root        common.Hash      `json:"stateRoot"        gencodec:"required"`
-	TxHash      common.Hash      `json:"transactionsRoot" gencodec:"required"`
-	ReceiptHash common.Hash      `json:"receiptsRoot"     gencodec:"required"`
-	Bloom       string           `json:"logsBloom"        gencodec:"required"`
-	Difficulty  *big.Int         `json:"difficulty"       gencodec:"required"`
-	Number      *big.Int         `json:"number"           gencodec:"required"`
-	GasLimit    uint64           `json:"gasLimit"         gencodec:"required"`
-	GasUsed     uint64           `json:"gasUsed"          gencodec:"required"`
-	Time        *big.Int         `json:"timestamp"        gencodec:"required"`
-	Extra       string           `json:"extraData"        gencodec:"required"`
-	MixDigest   common.Hash      `json:"mixHash"`
-	Nonce       types.BlockNonce `json:"nonce"`
-
-	// For Child Chain only
-	MainChainNumber *big.Int `json:"mainchainNumber"      gencodec:"required"`
-
-	Transactions []TransactionDoc `json:"transactions"`
-}
-
-func blockDocToBlock(blockDoc *BlockDoc) *types.Block {
-
-	//fill headers
-	header := &types.Header{}
-	header.ParentHash = blockDoc.ParentHash
-	header.UncleHash = blockDoc.UncleHash
-	header.Coinbase = blockDoc.Coinbase
-	header.Root = blockDoc.Root
-	header.TxHash = blockDoc.TxHash
-	header.ReceiptHash = blockDoc.ReceiptHash
-	header.Bloom = types.BytesToBloom(common.FromHex(blockDoc.Bloom))
-	header.Difficulty = blockDoc.Difficulty
-	header.Number = blockDoc.Number
-	header.GasLimit = blockDoc.GasLimit
-	header.GasUsed = blockDoc.GasUsed
-	header.Time = blockDoc.Time
-	header.Extra = common.FromHex(blockDoc.Extra)
-	header.MixDigest = blockDoc.MixDigest
-	header.Nonce = blockDoc.Nonce
-	header.MainChainNumber = blockDoc.MainChainNumber
-
-	//fill txs
-	txs := make([]*types.Transaction, len(blockDoc.Transactions))
-	for _, txDoc := range blockDoc.Transactions {
-		tx := &types.LegacyTx{
-			Nonce:    txDoc.Nonce,
-			To:       txDoc.To,
-			Value:    txDoc.Value,
-			Gas:      txDoc.Gas,
-			GasPrice: txDoc.GasPrice,
-			Data:     txDoc.Data,
-			V:        txDoc.V,
-			R:        txDoc.R,
-			S:        txDoc.S,
-		}
-		txs[txDoc.TransactionIndex] = types.NewTx(tx)
-	}
-
-	return types.NewBlock(header, txs, nil, nil, new(trie.Trie))
-}
-
-func Exit(err string) {
+func Exit(err error) {
 	fmt.Println(err)
 	os.Exit(1)
 }

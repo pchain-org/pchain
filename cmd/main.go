@@ -89,6 +89,7 @@ func main() {
 		accountCommand,
 
 		sendBlockToMainChainCommand,
+		getBlockWithTxsCommand,
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 
@@ -255,8 +256,10 @@ func newCliApp(version, usage string) *cli.App {
 			AddrFlag,
 		*/
 
-		SendDataDirFlag,
+		ToolkitDirFlag,
 		MainChainUrlFlag,
+		ChainUrlFlag,
+		BlockNumberFlag,
 	}
 	app.Flags = append(app.Flags, DebugFlags...)
 
