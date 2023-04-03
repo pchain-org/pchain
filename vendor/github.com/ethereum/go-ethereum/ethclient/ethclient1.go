@@ -3,6 +3,7 @@ package ethclient
 import (
 	"context"
 	//"crypto/ecdsa"
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -216,6 +217,26 @@ func BroadcastDataToMainChain(chainUrl string, chainId string, data []byte) erro
 	})
 
 	return err
+}
+
+func WrpGetBlock(chainUrl string, number *big.Int) (json.RawMessage, error) {
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	client, err := Dial(chainUrl)
+	if err != nil {
+		log.Errorf("WrpTransactionByHash, dial err: %v", err)
+		return nil, err
+	}
+
+	var raw json.RawMessage
+	err = client.c.CallContext(ctx, &raw, "eth_getBlockByNumber", hexutil.EncodeBig(number), true)
+	if err != nil {
+		return nil, err
+	} else if len(raw) == 0 {
+		return nil, errors.New("nil message")
+	}
+	
+	Close(client)
+	return raw, nil
 }
 
 //attemps: this parameter means the total amount of operations
