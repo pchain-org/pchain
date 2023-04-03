@@ -141,3 +141,17 @@ For a full guide on how to set up and become a validator node on the Pchain Netw
 ### How To Delegate Your Stake
 
 To learn how to delegate your PI to validators to receive rewards, read [How To Delegate or Stake](https://pliangroup.gitbook.io/plian/using-the-blockchain/delegating-or-staking)
+
+### How To use toolkit With This Branch
+
+**Tool1. sendBlockToMainChain**  which is to send child chain's block to mainchain to refresh tx3/epoch, the command format is 
+```
+./pchain sendBlockToMainChain --senddatadir send_data_dir --mainchainurl mainchainurl
+```
+
+there should be one block.json and one priv_validator.json in send_data_dir, and examples can be found in ./senddatadir directory. block.json contains the block to send; and priv_validator.json could be any valid address, which is no need to be on-duty validator.
+
+For example, to snapshot the main chain 
+```
+./pchain sendBlockToMainChain --senddatadir /home/stevenlv/code/toolkit/.pchain --mainchainurl http://127.0.0.1:6969/pchain
+```
