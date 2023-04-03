@@ -78,6 +78,9 @@ var (
 	//must be less than MainnetMuirGlacierBlock, MainnetBerlinBlock and MainnetLondonBlock if they are enabled
 	EIP155PatchStartBlock = big.NewInt(41168974)
 	EIP155PatchEndBlock   = big.NewInt(41168974)
+
+	MainnetMarkProposedInEpochMainBlock = big.NewInt(44916230)
+	TestnetMarkProposedInEpochMainBlock = big.NewInt(40)
 	
 	MainnetChild0AutoRewardBlock = big.NewInt(17560) //block number in chain "child_0" for mainnet, to patch reward scheme
 	TestnetChild0AutoRewardBlock = big.NewInt(1000000000) //block number in chain "child_0" for testnet, to patch reward scheme
@@ -123,6 +126,7 @@ var (
 		ChildSd2mcWhenEpochEndsBlock: MainnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock:            MainnetValidateHTLCBlock,
 		HeaderHashWithoutTimeBlock:   MainnetHeaderHashWithoutTimeBlock,
+		MarkProposedInEpochMainBlock: MainnetMarkProposedInEpochMainBlock,
 		Child0AutoRewardBlock:        MainnetChild0AutoRewardBlock,
 
 		Tendermint: &TendermintConfig{
@@ -158,6 +162,7 @@ var (
 		ChildSd2mcWhenEpochEndsBlock: TestnetSd2mcWhenEpochEndsBlock,
 		ValidateHTLCBlock:            TestnetValidateHTLCBlock,
 		HeaderHashWithoutTimeBlock:   TestnetHeaderHashWithoutTimeBlock,
+		MarkProposedInEpochMainBlock: TestnetMarkProposedInEpochMainBlock,
 		Child0AutoRewardBlock:        TestnetChild0AutoRewardBlock,
 
 		Tendermint: &TendermintConfig{

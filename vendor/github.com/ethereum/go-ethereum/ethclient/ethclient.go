@@ -103,6 +103,7 @@ func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Bl
 }
 
 type rpcBlock struct {
+	TotalDifficulty *hexutil.Big  `json:"totalDifficulty"`
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
 	UncleHashes  []common.Hash    `json:"uncles"`

@@ -34,6 +34,12 @@ func NewCLevelDB(name string, dir string) (*CLevelDB, error) {
 	opts.SetCreateIfMissing(true)
 	db, err := levigo.Open(dbPath, opts)
 	if err != nil {
+		err = levigo.RepairDatabase(dbPath, nil)
+		if err == nil {
+			db, err = levigo.Open(dbPath, opts)
+		}
+	}
+	if err != nil {
 		return nil, err
 	}
 	ro := levigo.NewReadOptions()
