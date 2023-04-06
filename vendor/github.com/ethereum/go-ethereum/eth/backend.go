@@ -270,6 +270,9 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if chainConfig.MarkProposedInEpochMainBlock == nil {
 			chainConfig.MarkProposedInEpochMainBlock = params.MainnetChainConfig.MarkProposedInEpochMainBlock
 		}
+		if chainConfig.EnhenceExtraBlock == nil {
+			chainConfig.EnhenceExtraBlock = params.MainnetChainConfig.EnhenceExtraBlock
+		}
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
 		}
@@ -319,6 +322,9 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		}
 		if chainConfig.MarkProposedInEpochMainBlock == nil {
 			chainConfig.MarkProposedInEpochMainBlock = params.TestnetChainConfig.MarkProposedInEpochMainBlock
+		}
+		if chainConfig.EnhenceExtraBlock == nil {
+			chainConfig.EnhenceExtraBlock = params.TestnetChainConfig.EnhenceExtraBlock
 		}
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract

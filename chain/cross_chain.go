@@ -353,6 +353,12 @@ func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
 		return fmt.Errorf("invalid child chain id: %s", chainId)
 	}
 
+	isEnhanceExtra := params.IsEnhanceExtra(cch.GetMainChainId(), header.MainChainNumber)
+	if !tdmExtra.IsConsistWithBlockHash(isEnhanceExtra, header.Hash()) {
+		return fmt.Errorf("proofdata extra hash(%x) is bound with the block hash (%x) which validators voted",
+			tdmExtra.SeenCommit.BlockID.Hash, header.Hash())
+	}
+
 	if header.Nonce != (types.TendermintEmptyNonce) && !bytes.Equal(header.Nonce[:], types.TendermintNonce) {
 		return errors.New("invalid nonce")
 	}
@@ -480,6 +486,12 @@ func (cch *CrossChainHelper) ValidateTX3ProofData(proofData *types.TX3ProofData)
 	chainId := tdmExtra.ChainID
 	if chainId == "" || chainId == MainChain || chainId == TestnetChain {
 		return fmt.Errorf("invalid child chain id: %s", chainId)
+	}
+
+	isEnhanceExtra := params.IsEnhanceExtra(cch.GetMainChainId(), header.MainChainNumber)
+	if !tdmExtra.IsConsistWithBlockHash(isEnhanceExtra, header.Hash()) {
+		return fmt.Errorf("proofdata extra hash(%x) is bound with the block hash (%x) which validators voted",
+			tdmExtra.SeenCommit.BlockID.Hash, header.Hash())
 	}
 
 	if header.Nonce != (types.TendermintEmptyNonce) && !bytes.Equal(header.Nonce[:], types.TendermintNonce) {
@@ -638,6 +650,12 @@ func (cch *CrossChainHelper) VerifyChildChainProofDataV1(proofData *types.ChildC
 		return fmt.Errorf("invalid child chain id: %s", chainId)
 	}
 
+	isEnhanceExtra := params.IsEnhanceExtra(cch.GetMainChainId(), header.MainChainNumber)
+	if !tdmExtra.IsConsistWithBlockHash(isEnhanceExtra, header.Hash()) {
+		return fmt.Errorf("proofdata extra hash(%x) is bound with the block hash (%x) which validators voted",
+			tdmExtra.SeenCommit.BlockID.Hash, header.Hash())
+	}
+
 	if header.Nonce != (types.TendermintEmptyNonce) && !bytes.Equal(header.Nonce[:], types.TendermintNonce) {
 		return errors.New("invalid nonce")
 	}
@@ -687,11 +705,8 @@ func (cch *CrossChainHelper) VerifyChildChainProofDataV1(proofData *types.ChildC
 
 			valSet = ep.Validators
 
-			fmt.Println("ep>>>>>>>>>>>>>>>>>>>>", ep.String(), ep.Validators.String())
-			fmt.Println("tdmextra>>>>>>>>>>>>>>>>>>", tdmExtra.String())
-
-			//log.Debugf("ep>>>>>>>>>>>>>>>>>>>> Ep: %v, Validators: %v", ep.String(), ep.Validators.String())
-			//log.Debugf("tdmextra>>>>>>>>>>>>>>>>>> tdmExtra: %v", tdmExtra.String())
+			log.Debugf("ep>>>>>>>>>>>>>>>>>>>> Ep: %v, Validators: %v", ep.String(), ep.Validators.String())
+			log.Debugf("tdmextra>>>>>>>>>>>>>>>>>> tdmExtra: %v", tdmExtra.String())
 		} else {
 			_, tdmGenesis := core.LoadChainGenesis(cch.chainInfoDB, chainId)
 			if tdmGenesis == nil {

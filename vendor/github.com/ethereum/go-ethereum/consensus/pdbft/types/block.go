@@ -10,7 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	pabi "github.com/pchain/abi"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-merkle"
@@ -36,7 +38,8 @@ type TdmBlock struct {
 }
 
 func MakeBlock(height uint64, chainID string, commit *Commit,
-	block *types.Block, valHash []byte, epochNumber uint64, epochBytes []byte, tx3ProofData []*types.TX3ProofData, partSize int) (*TdmBlock, *PartSet) {
+	block *types.Block, valHash []byte, epochNumber uint64, epochBytes []byte, tx3ProofData []*types.TX3ProofData,
+	isEnhenceExtra, isSd2mcV1 bool, partSize int) (*TdmBlock, *PartSet) {
 
 	TdmExtra := &TendermintExtra{
 		ChainID:        chainID,
@@ -53,7 +56,50 @@ func MakeBlock(height uint64, chainID string, commit *Commit,
 		TdmExtra:     TdmExtra,
 		TX3ProofData: tx3ProofData,
 	}
+
+	if isEnhenceExtra {
+		tdmBlock.RefreshNeedToSave(isSd2mcV1)
+	}
+
 	return tdmBlock, tdmBlock.MakePartSet(partSize)
+}
+
+func (b *TdmBlock) RefreshNeedToSave(isSd2mcV1 bool) {
+	if !params.IsMainChain(b.TdmExtra.ChainID) {
+		// check epoch
+		if len(b.TdmExtra.EpochBytes) > 0 {
+			b.TdmExtra.NeedToSave = true
+		}
+
+		// check special cross-chain tx
+		if b.HasTx3() {
+			if !isSd2mcV1 {
+				b.TdmExtra.NeedToBroadcast = true
+			} else {
+				b.TdmExtra.NeedToSave = true
+			}
+		}
+	}
+}
+
+func (b *TdmBlock) HasTx3() bool {
+
+	block := b.Block
+	txs := block.Transactions()
+	for _, tx := range txs {
+		if pabi.IsPChainContractAddr(tx.To()) {
+			data := tx.Data()
+			function, err := pabi.FunctionTypeFromId(data[:4])
+			if err != nil {
+				continue
+			}
+
+			if function == pabi.WithdrawFromChildChain {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Basic validation that doesn't involve state data.
@@ -90,13 +136,13 @@ func (b *TdmBlock) FillSeenCommitHash() {
 
 // Computes and returns the block hash.
 // If the block is incomplete, block hash is nil for safety.
-func (b *TdmBlock) Hash() []byte {
+func (b *TdmBlock) Hash(isEnhanceExtra func(block *types.Block) bool) []byte {
 	// fmt.Println(">>", b.Data)
 	if b == nil || b.TdmExtra.SeenCommit == nil {
 		return nil
 	}
 	b.FillSeenCommitHash()
-	return b.TdmExtra.Hash()
+	return b.TdmExtra.Hash(isEnhanceExtra(b.Block), b.Block.Hash())
 }
 
 func (b *TdmBlock) MakePartSet(partSize int) *PartSet {
@@ -165,14 +211,14 @@ func (b *TdmBlock) FromBytes(reader io.Reader) (*TdmBlock, error) {
 // Convenience.
 // A nil block never hashes to anything.
 // Nothing hashes to a nil hash.
-func (b *TdmBlock) HashesTo(hash []byte) bool {
+func (b *TdmBlock) HashesTo(isEnhanceExtra func(block *types.Block) bool, hash []byte) bool {
 	if len(hash) == 0 {
 		return false
 	}
 	if b == nil {
 		return false
 	}
-	return bytes.Equal(b.Hash(), hash)
+	return bytes.Equal(b.Hash(isEnhanceExtra), hash)
 }
 
 func (b *TdmBlock) String() string {
@@ -188,18 +234,18 @@ func (b *TdmBlock) StringIndented(indent string) string {
 %s  %v
 %s  %v
 %s  %v
-%s}#%X`,
+%s}`,
 		indent, b.Block.String(),
 		indent, b.TdmExtra,
 		indent, b.TdmExtra.SeenCommit.StringIndented(indent+"  "),
-		indent, b.Hash())
+		indent, b.TdmExtra.SeenCommit.BlockID.Hash)
 }
 
 func (b *TdmBlock) StringShort() string {
 	if b == nil {
 		return "nil-Block"
 	} else {
-		return fmt.Sprintf("Block#%X", b.Hash())
+		return fmt.Sprintf("Block#%X", b.TdmExtra.SeenCommit.BlockID.Hash)
 	}
 }
 
