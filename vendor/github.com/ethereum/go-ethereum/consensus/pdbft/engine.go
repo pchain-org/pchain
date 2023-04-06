@@ -3,6 +3,7 @@ package pdbft
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -191,8 +192,15 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	}
 
 	// Ensure that the extra data format is satisfied
-	if _, err := tdmTypes.ExtractTendermintExtra(header); err != nil {
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
+	if err != nil {
 		return errInvalidExtraDataFormat
+	}
+	
+	isEnhanceExtra := params.IsEnhanceExtra(sb.core.cch.GetMainChainId(), header.MainChainNumber)
+	if !tdmExtra.IsConsistWithBlockHash(isEnhanceExtra, header.Hash()) {
+		return fmt.Errorf("proofdata extra hash(%x) is bound with the block hash (%x) which validators voted", 
+			tdmExtra.SeenCommit.BlockID.Hash, header.Hash())
 	}
 
 	// Ensure that the coinbase is valid

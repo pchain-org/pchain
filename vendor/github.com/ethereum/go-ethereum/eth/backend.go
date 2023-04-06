@@ -270,6 +270,9 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if chainConfig.MarkProposedInEpochMainBlock == nil {
 			chainConfig.MarkProposedInEpochMainBlock = params.MainnetChainConfig.MarkProposedInEpochMainBlock
 		}
+		if chainConfig.EnhenceExtraBlock == nil {
+			chainConfig.EnhenceExtraBlock = params.MainnetChainConfig.EnhenceExtraBlock
+		}
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
 		}
@@ -323,6 +326,9 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if chainConfig.MarkProposedInEpochMainBlock == nil {
 			chainConfig.MarkProposedInEpochMainBlock = params.TestnetChainConfig.MarkProposedInEpochMainBlock
 		}
+		if chainConfig.EnhenceExtraBlock == nil {
+			chainConfig.EnhenceExtraBlock = params.TestnetChainConfig.EnhenceExtraBlock
+		}
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == params.CHILD0PCHAINID {
 			chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
 		}
@@ -331,42 +337,46 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		}
 	}
 
-	if params.LocalChainTest && !params.IsMainChain(chainId) {
-		if chainConfig.OutOfStorageBlock == nil {
-			chainConfig.OutOfStorageBlock = big.NewInt(0)
-		}
-		if chainConfig.ExtractRewardMainBlock == nil {
-			chainConfig.ExtractRewardMainBlock = big.NewInt(0)
-		}
-		if chainConfig.ExtractRewardPatchMainBlock == nil {
-			chainConfig.ExtractRewardPatchMainBlock = big.NewInt(0)
-		}
-		if chainConfig.Sd2mcV1Block == nil {
-			chainConfig.Sd2mcV1Block = big.NewInt(0)
-		}
-		if chainConfig.ChildSd2mcWhenEpochEndsBlock == nil {
-			chainConfig.ChildSd2mcWhenEpochEndsBlock = big.NewInt(0)
-		}
-		if chainConfig.ValidateHTLCBlock == nil {
-			chainConfig.ValidateHTLCBlock = big.NewInt(0)
-		}
-		if chainConfig.HeaderHashWithoutTimeBlock == nil {
-			chainConfig.HeaderHashWithoutTimeBlock = big.NewInt(0)
-		}
-		if chainConfig.ConstantinopleBlock == nil {
-			chainConfig.ConstantinopleBlock = big.NewInt(0)
-		}
-		if chainConfig.PetersburgBlock == nil {
-			chainConfig.PetersburgBlock = big.NewInt(0)
-		}
-		if chainConfig.IstanbulBlock == nil {
-			chainConfig.IstanbulBlock = big.NewInt(0)
-		}
-		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == params.CHILD0PCHAINID {
-			chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
-		}
-		if (chainConfig.Child0AutoRewardBlock == nil) && chainId == params.CHILD0PCHAINID {
-			chainConfig.Child0AutoRewardBlock = big.NewInt(0)
+	if params.LocalChainTest {
+		if !params.IsMainChain(chainId) {
+			if chainConfig.OutOfStorageBlock == nil {
+				chainConfig.OutOfStorageBlock = big.NewInt(0)
+			}
+			if chainConfig.ExtractRewardMainBlock == nil {
+				chainConfig.ExtractRewardMainBlock = big.NewInt(0)
+			}
+			if chainConfig.ExtractRewardPatchMainBlock == nil {
+				chainConfig.ExtractRewardPatchMainBlock = big.NewInt(0)
+			}
+			if chainConfig.Sd2mcV1Block == nil {
+				chainConfig.Sd2mcV1Block = big.NewInt(0)
+			}
+			if chainConfig.ChildSd2mcWhenEpochEndsBlock == nil {
+				chainConfig.ChildSd2mcWhenEpochEndsBlock = big.NewInt(0)
+			}
+			if chainConfig.ValidateHTLCBlock == nil {
+				chainConfig.ValidateHTLCBlock = big.NewInt(0)
+			}
+			if chainConfig.HeaderHashWithoutTimeBlock == nil {
+				chainConfig.HeaderHashWithoutTimeBlock = big.NewInt(0)
+			}
+			if chainConfig.ConstantinopleBlock == nil {
+				chainConfig.ConstantinopleBlock = big.NewInt(0)
+			}
+			if chainConfig.PetersburgBlock == nil {
+				chainConfig.PetersburgBlock = big.NewInt(0)
+			}
+			if chainConfig.IstanbulBlock == nil {
+				chainConfig.IstanbulBlock = big.NewInt(0)
+			}
+			if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == params.CHILD0PCHAINID {
+				chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
+			}
+			if (chainConfig.Child0AutoRewardBlock == nil) && chainId == params.CHILD0PCHAINID {
+				chainConfig.Child0AutoRewardBlock = big.NewInt(0)
+			}
+		} else {
+			*chainConfig = *params.MainnetChainConfig
 		}
 	}
 }

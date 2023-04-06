@@ -1015,14 +1015,14 @@ func (cs *ConsensusState) enterPropose(height uint64, round int) {
 		}
 	}()
 
-	if !cs.chainConfig.IsSd2mcV1(cs.getMainBlock()) {
+	lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
+	if !cs.IsSd2mcV1(cs.IsEnhanceExtra, lastBlock) {
 		// Save block to main chain (this happens only on validator node).
 		// Note!!! This will BLOCK the WHOLE consensus stack since it blocks receiveRoutine.
 		// TODO: what if there're more than one round for a height? 'saveBlockToMainChain' would be called more than once
 		if cs.state.TdmExtra.NeedToSave && !params.IsMainChain(cs.state.TdmExtra.ChainID) {
 			if cs.privValidator != nil && cs.IsProposer() {
 				cs.logger.Infof("enterPropose: saveBlockToMainChain height: %v", cs.state.TdmExtra.Height)
-				lastBlock := cs.GetChainReader().GetBlockByNumber(cs.state.TdmExtra.Height)
 				cs.saveBlockToMainChain(lastBlock, 0)
 				cs.state.TdmExtra.NeedToSave = false
 			}
@@ -1084,7 +1084,7 @@ func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
 
 	// Make proposal
 	polRound, polBlockID := cs.VoteSignAggr.POLInfo()
-	cs.logger.Debugf("proposal hash: %X", block.Hash())
+	cs.logger.Debugf("proposal hash: %X", block.Hash(cs.IsEnhanceExtra))
 	if NodeID == "" {
 		panic("Node id is nil")
 	}
@@ -1093,7 +1093,7 @@ func (cs *ConsensusState) defaultDecideProposal(height uint64, round int) {
 	// fmt.Println("defaultDecideProposal: cs nodeInfo %#v\n", cs.nodeInfo)
 	cs.logger.Debugf("defaultDecideProposal: Proposer (peer key %s)", proposerPeerKey)
 
-	proposal := types.NewProposal(height, round, block.Hash(), blockParts.Header(), polRound, polBlockID, proposerPeerKey)
+	proposal := types.NewProposal(height, round, block.Hash(cs.IsEnhanceExtra), blockParts.Header(), polRound, polBlockID, proposerPeerKey)
 	err := cs.privValidator.SignProposal(cs.state.TdmExtra.ChainID, proposal)
 	if err == nil {
 
@@ -1172,15 +1172,18 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 		//This block could be used for later round
 		//cs.blockFromMiner = nil
 
+		isEnhanceExtra := cs.IsEnhanceExtra(ethBlock)
+		isSd2mcV1 := cs.IsSd2mcV1(cs.IsEnhanceExtra, ethBlock)
 		var tx3ProofData []*ethTypes.TX3ProofData = nil
-		if !cs.chainConfig.IsSd2mcV1(cs.getMainBlock()) {
+		if !isSd2mcV1 {
 			// retrieve TX3ProofData for TX4
 			tx3ProofData = cs.GetTX3ProofDataForTx4(ethBlock)
 		}
 
 		return types.MakeBlock(cs.Height, cs.state.TdmExtra.ChainID, commit, ethBlock,
-			val.Hash(), cs.Epoch.Number, epochBytes,
-			tx3ProofData, 65536)
+				val.Hash(), cs.Epoch.Number, epochBytes, tx3ProofData,
+				isEnhanceExtra, isSd2mcV1, 65536)
+		
 	} else {
 		cs.logger.Warn("block from miner should not be nil, let's start another round")
 		return nil, nil
@@ -1222,7 +1225,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	// If a block is locked, prevote that.
 	if cs.LockedBlock != nil {
 		cs.logger.Info("enterPrevote: Block was locked")
-		cs.signAddVote(types.VoteTypePrevote, cs.LockedBlock.Hash(), cs.LockedBlockParts.Header())
+		cs.signAddVote(types.VoteTypePrevote, cs.LockedBlock.Hash(cs.IsEnhanceExtra), cs.LockedBlockParts.Header())
 		return
 	}
 
@@ -1242,7 +1245,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 		return
 	}
 
-	if !cs.chainConfig.IsSd2mcV1(cs.getMainBlock()) {
+	if !cs.IsSd2mcV1(cs.IsEnhanceExtra, cs.ProposalBlock.Block) {
 		// Validate TX4
 		err = cs.ValidateTX4(cs.ProposalBlock)
 		if err != nil {
@@ -1292,7 +1295,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 			selfEpochBytes := cs.blockFromMiner.Header().Extra
 			proposedEpochBytes := cs.ProposalBlock.TdmExtra.EpochBytes
 			if bytes.Equal(selfEpochBytes, proposedEpochBytes) {
-				cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header())
+				cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash(cs.IsEnhanceExtra), cs.ProposalBlockParts.Header())
 				return
 			}
 		}
@@ -1304,7 +1307,7 @@ func (cs *ConsensusState) defaultDoPrevote(height uint64, round int) {
 	// Prevote cs.ProposalBlock
 	// NOTE: the proposal signature is validated when it is received,
 	// and the proposal block parts are validated as they are received (against the merkle hash in the proposal)
-	cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash(), cs.ProposalBlockParts.Header())
+	cs.signAddVote(types.VoteTypePrevote, cs.ProposalBlock.Hash(cs.IsEnhanceExtra), cs.ProposalBlockParts.Header())
 	return
 }
 
@@ -1387,7 +1390,7 @@ func (cs *ConsensusState) enterPrecommit(height uint64, round int) {
 	}
 
 	// If we're already locked on that block, precommit it, and update the LockedRound
-	if cs.LockedBlock.HashesTo(blockID.Hash) {
+	if cs.LockedBlock.HashesTo(cs.IsEnhanceExtra, blockID.Hash) {
 		cs.logger.Info("enterPrecommit: +2/3 prevoted locked block. Relocking")
 		cs.LockedRound = round
 		types.FireEventRelock(cs.evsw, cs.RoundStateEvent())
@@ -1395,11 +1398,11 @@ func (cs *ConsensusState) enterPrecommit(height uint64, round int) {
 		return
 	}
 
-	cs.logger.Debugf("cs proposal hash:%+v", cs.ProposalBlock.Hash())
+	cs.logger.Debugf("cs proposal hash:%+v", cs.ProposalBlock.Hash(cs.IsEnhanceExtra))
 	cs.logger.Debugf("block id:%+v", blockID.Hash)
 
 	// If +2/3 prevoted for proposal block, stage and precommit it
-	if cs.ProposalBlock.HashesTo(blockID.Hash) {
+	if cs.ProposalBlock.HashesTo(cs.IsEnhanceExtra, blockID.Hash) {
 		cs.logger.Info("enterPrecommit: +2/3 prevoted proposal block. Locking", "hash", blockID.Hash)
 		// Validate the block.
 		if err := cs.ProposalBlock.ValidateBasic(cs.state.TdmExtra); err != nil {
@@ -1482,13 +1485,13 @@ func (cs *ConsensusState) enterCommit(height uint64, commitRound int) {
 	// The Locked* fields no longer matter.
 	// Move them over to ProposalBlock if they match the commit hash,
 	// otherwise they'll be cleared in updateToState.
-	if cs.LockedBlock.HashesTo(blockID.Hash) {
+	if cs.LockedBlock.HashesTo(cs.IsEnhanceExtra, blockID.Hash) {
 		cs.ProposalBlock = cs.LockedBlock
 		cs.ProposalBlockParts = cs.LockedBlockParts
 	}
 
 	// If we don't have the block being committed, set up to get it.
-	if !cs.ProposalBlock.HashesTo(blockID.Hash) {
+	if !cs.ProposalBlock.HashesTo(cs.IsEnhanceExtra, blockID.Hash) {
 		if !cs.ProposalBlockParts.HasHeader(blockID.PartsHeader) {
 			// We're getting the wrong block.
 			// Set up ProposalBlockParts and keep waiting.
@@ -1514,10 +1517,10 @@ func (cs *ConsensusState) tryFinalizeCommit(height uint64) {
 		cs.logger.Warn("Attempt to finalize failed. There was no +2/3 majority, or +2/3 was for <nil>.", "height", height)
 		return
 	}
-	if !cs.ProposalBlock.HashesTo(blockID.Hash) {
+	if !cs.ProposalBlock.HashesTo(cs.IsEnhanceExtra, blockID.Hash) {
 		// TODO: this happens every time if we're not a validator (ugly logs)
 		// TODO: ^^ wait, why does it matter that we're a validator?
-		cs.logger.Warn("Attempt to finalize failed. We don't have the commit block.", "height", height, "proposal-block", cs.ProposalBlock.Hash(), "commit-block", blockID.Hash)
+		cs.logger.Warn("Attempt to finalize failed. We don't have the commit block.", "height", height, "proposal-block", cs.ProposalBlock.Hash(cs.IsEnhanceExtra), "commit-block", blockID.Hash)
 		return
 	}
 	//	go
@@ -1542,7 +1545,7 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 	if !blockParts.HasHeader(blockID.PartsHeader) {
 		PanicSanity(Fmt("Expected ProposalBlockParts header to be commit header"))
 	}
-	if !block.HashesTo(blockID.Hash) {
+	if !block.HashesTo(cs.IsEnhanceExtra, blockID.Hash) {
 		PanicSanity(Fmt("Cannot finalizeCommit, ProposalBlock does not hash to commit hash"))
 	}
 	if err := block.ValidateBasic(cs.state.TdmExtra); err != nil {
@@ -1559,28 +1562,10 @@ func (cs *ConsensusState) finalizeCommit(height uint64) {
 
 		block.TdmExtra.SeenCommit = seenCommit
 		block.TdmExtra.SeenCommitHash = seenCommit.Hash()
-		
-		extraHash := block.TdmExtra.Hash()
-		fmt.Printf("%x" , extraHash)
 
-		// update 'NeedToSave' field here
-		if !params.IsMainChain(block.TdmExtra.ChainID) {
-			// check epoch
-			if len(block.TdmExtra.EpochBytes) > 0 {
-				block.TdmExtra.NeedToSave = true
-				cs.logger.Infof("NeedToSave set to true due to epoch. Chain: %s, Height: %v", block.TdmExtra.ChainID, block.TdmExtra.Height)
-			}
-
-			// check special cross-chain tx
-			if cs.HasTx3(block.Block) {
-				if !cs.chainConfig.IsSd2mcV1(cs.getMainBlock()) {
-					block.TdmExtra.NeedToBroadcast = true
-				} else {
-					block.TdmExtra.NeedToSave = true
-				}
-				cs.logger.Infof("NeedToBroadcast/NeedToSave %v/%v set to true due to tx. Chain: %s, Height: %v",
-					block.TdmExtra.NeedToBroadcast, block.TdmExtra.NeedToSave, block.TdmExtra.ChainID, block.TdmExtra.Height)
-			}
+		if !cs.IsEnhanceExtra(block.Block) {
+			// update 'NeedToSave' field here
+			block.RefreshNeedToSave(cs.IsSd2mcV1(cs.IsEnhanceExtra, block.Block))
 		}
 
 		// Fire event for new block.
@@ -1684,8 +1669,7 @@ func (cs *ConsensusState) addProposalBlockPart(height uint64, round int, part *t
 	}
 	if added && cs.ProposalBlockParts.IsComplete() {
 		// Added and completed!
-		tdmBlock := &types.TdmBlock{}
-		cs.ProposalBlock, err = tdmBlock.FromBytes(cs.ProposalBlockParts.GetReader())
+		cs.ProposalBlock, err = new(types.TdmBlock).FromBytes(cs.ProposalBlockParts.GetReader())
 
 		cs.logger.Info("Received complete proposal block", "block", cs.ProposalBlock.String(), "err", err)
 
@@ -1751,7 +1735,7 @@ func (cs *ConsensusState) setMaj23SignAggr(signAggr *types.SignAggr) (error, boo
 
 		if (cs.LockedBlock != nil) && (cs.LockedRound < signAggr.Round) {
 			blockID := cs.PrevoteMaj23SignAggr.Maj23
-			if !cs.LockedBlock.HashesTo(blockID.Hash) {
+			if !cs.LockedBlock.HashesTo(cs.IsEnhanceExtra, blockID.Hash) {
 				cs.logger.Info("Unlocking because of POL.", "lockedRound", cs.LockedRound, "POLRound", signAggr.Round)
 				cs.LockedRound = -1
 				cs.LockedBlock = nil
@@ -2084,6 +2068,14 @@ func CompareHRS(h1 uint64, r1 int, s1 RoundStepType, h2 uint64, r2 int, s2 Round
 	return 1
 }
 
+func (cs *ConsensusState) IsSd2mcV1(isEnhanceExtra func(block *ethTypes.Block) bool, block *ethTypes.Block) bool {
+	if !isEnhanceExtra(block) {
+		return cs.chainConfig.IsSd2mcV1(cs.getMainBlock())
+	} else {
+		return cs.chainConfig.IsSd2mcV1(block.MainchainNumber())
+	}
+}
+
 func (cs *ConsensusState) getMainBlock() *big.Int {
 	chainReader := cs.backend.ChainReader()
 	chainConfig := chainReader.Config()
@@ -2096,23 +2088,16 @@ func (cs *ConsensusState) getMainBlock() *big.Int {
 	return mainBlock
 }
 
-func (cs *ConsensusState) HasTx3(block *ethTypes.Block) bool {
+func (cs *ConsensusState) IsEnhanceExtra(block *ethTypes.Block) bool {
+	return cs.chainConfig.IsEnhanceExtra(cs.getMainBlockFromBlock(block))
+}
 
-	txs := block.Transactions()
-	for _, tx := range txs {
-		if pabi.IsPChainContractAddr(tx.To()) {
-			data := tx.Data()
-			function, err := pabi.FunctionTypeFromId(data[:4])
-			if err != nil {
-				continue
-			}
-
-			if function == pabi.WithdrawFromChildChain {
-				return true
-			}
-		}
+func (cs *ConsensusState) getMainBlockFromBlock(block *ethTypes.Block) *big.Int {
+	mainBlock := block.Number()
+	if !cs.chainConfig.IsMainChain() { //if not main chain, LSRR would be be enabled one block later
+		mainBlock = block.MainchainNumber()
 	}
-	return false
+	return mainBlock
 }
 
 func (cs *ConsensusState) GetTX3ProofDataForTx4(block *ethTypes.Block) []*ethTypes.TX3ProofData {
