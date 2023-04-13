@@ -287,9 +287,18 @@ func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*
 }
 
 func toBlockNumArg(number *big.Int) string {
-	if number == nil {
+	if number == nil || number.Int64() == int64(rpc.LatestBlockNumber) {
 		return "latest"
 	}
+
+	if number.Int64() == int64(rpc.EarliestBlockNumber) {
+		return "earliest"
+	}
+
+	if number.Int64() == int64(rpc.PendingBlockNumber) {
+		return "pending"
+	}
+
 	return hexutil.EncodeBig(number)
 }
 
