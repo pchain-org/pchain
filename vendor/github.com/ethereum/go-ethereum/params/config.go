@@ -89,12 +89,6 @@ var (
 	TestnetChild0AutoRewardBlock = big.NewInt(1000000000) //block number in chain "child_0" for testnet, to patch reward scheme
 )
 
-const (
-	MAINNETPCHAINID	= "pchain"
-	TESTNETPCHAINID	= "testnet"
-	CHILD0PCHAINID	= "child_0"
-)
-
 var (
 	//be careful, setting this variable to 'true' will make the client run as a private chain, which is not consist with the mainnet pchain of plian.org
 	//only for test in local host(s)
@@ -104,7 +98,7 @@ var (
 var (
 	// MainnetChainConfig is the chain parameters to run a node on the main network.
 	MainnetChainConfig = &ChainConfig{
-		PChainId:                     MAINNETPCHAINID,
+		PChainId:                     "pchain",
 		ChainId:                      big.NewInt(1),
 		HomesteadBlock:               big.NewInt(0),
 		DAOForkBlock:                 nil,
@@ -141,7 +135,7 @@ var (
 
 	// TestnetChainConfig contains the chain parameters to run a node on the test network.
 	TestnetChainConfig = &ChainConfig{
-		PChainId:                     TESTNETPCHAINID,
+		PChainId:                     "testnet",
 		ChainId:                      big.NewInt(2),
 		HomesteadBlock:               big.NewInt(0),
 		DAOForkBlock:                 nil,
@@ -521,7 +515,7 @@ func (c *ChainConfig) IsOutOfStorage(blockNumber, mainBlockNumber *big.Int) bool
 
 	log.Debugf("IsOutOfStorage, c.PChainId, c.OutOfStorageBlock, blockNumber, mainBlockNumber is %v, %v, %v, %v",
 		c.PChainId, c.OutOfStorageBlock, blockNumber, mainBlockNumber)
-	if c.PChainId == CHILD0PCHAINID || c.IsMainChain() {
+	if c.PChainId == "child_0" || c.IsMainChain() {
 		return isForked(c.OutOfStorageBlock, blockNumber)
 	} else {
 		return isForked(c.OutOfStorageBlock, mainBlockNumber)
@@ -560,7 +554,7 @@ func (c *ChainConfig) IsSelfRetrieveRewardPatch(blockNumber, mainBlockNumber *bi
 
 //Note: after this patch forks, autoreward will not enable until new epoch estimation
 func (c *ChainConfig) IsChild0AutoReward(blockNumber *big.Int) bool {
-	return c.PChainId == CHILD0PCHAINID && isForked(c.Child0AutoRewardBlock, blockNumber)
+	return c.PChainId == "child_0" && isForked(c.Child0AutoRewardBlock, blockNumber)
 }
 
 func IsSd2mc(mainChainId string, mainBlockNumber *big.Int) bool {

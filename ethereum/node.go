@@ -12,7 +12,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-var clientIdentifier = params.MAINNETPCHAINID // Client identifier to advertise over the network
+var clientIdentifier = "pchain" // Client identifier to advertise over the network
 
 // MakeSystemNode sets up a local node and configures the services to launch
 func MakeSystemNode(chainId, version string, ctx *cli.Context, cch core.CrossChainHelper) *node.Node {

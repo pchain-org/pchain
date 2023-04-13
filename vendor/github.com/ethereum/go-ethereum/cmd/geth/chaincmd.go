@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -338,7 +337,7 @@ func importPreimages(ctx *cli.Context) error {
 
 	chainName := ctx.Args().Get(1)
 	if chainName == "" {
-		chainName = params.MAINNETPCHAINID
+		chainName = "pchain"
 	}
 
 	stack, cfg := makeConfigNode(ctx, chainName)
@@ -363,7 +362,7 @@ func exportPreimages(ctx *cli.Context) error {
 
 	chainName := ctx.Args().Get(1)
 	if chainName == "" {
-		chainName = params.MAINNETPCHAINID
+		chainName = "pchain"
 	}
 
 	stack, cfg := makeConfigNode(ctx, chainName)
@@ -419,7 +418,7 @@ func countBlockState(ctx *cli.Context) error {
 
 	chainName := ctx.Args().Get(1)
 	if chainName == "" {
-		chainName = params.MAINNETPCHAINID
+		chainName = "pchain"
 	}
 
 	stack, cfg := makeConfigNode(ctx, chainName)

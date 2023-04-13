@@ -225,7 +225,7 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 
 	if !isTestnet {
 		if chainConfig.OutOfStorageBlock == nil {
-			if chainId == params.CHILD0PCHAINID {
+			if chainId == "child_0" {
 				chainConfig.OutOfStorageBlock = params.MainnetChainConfig.Child0OutOfStorageBlock
 			} else {
 				chainConfig.OutOfStorageBlock = params.MainnetChainConfig.OutOfStorageBlock
@@ -276,12 +276,12 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
 		}
-		if (chainConfig.Child0AutoRewardBlock == nil) && chainId == params.CHILD0PCHAINID {
+		if (chainConfig.Child0AutoRewardBlock == nil) && chainId == "child_0" {
 			chainConfig.Child0AutoRewardBlock = params.MainnetChainConfig.Child0AutoRewardBlock
 		}
 	} else {
 		if chainConfig.OutOfStorageBlock == nil {
-			if chainId == params.CHILD0PCHAINID {
+			if chainId == "child_0" {
 				chainConfig.OutOfStorageBlock = params.TestnetChainConfig.Child0OutOfStorageBlock
 			} else {
 				chainConfig.OutOfStorageBlock = params.TestnetChainConfig.OutOfStorageBlock
@@ -329,10 +329,10 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if chainConfig.EnhenceExtraBlock == nil {
 			chainConfig.EnhenceExtraBlock = params.TestnetChainConfig.EnhenceExtraBlock
 		}
-		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == params.CHILD0PCHAINID {
+		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
 		}
-		if (chainConfig.Child0AutoRewardBlock == nil) && chainId == params.CHILD0PCHAINID {
+		if (chainConfig.Child0AutoRewardBlock == nil) && chainId == "child_0" {
 			chainConfig.Child0AutoRewardBlock = params.TestnetChainConfig.Child0AutoRewardBlock
 		}
 	}
@@ -369,10 +369,10 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 			if chainConfig.IstanbulBlock == nil {
 				chainConfig.IstanbulBlock = big.NewInt(0)
 			}
-			if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == params.CHILD0PCHAINID {
+			if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 				chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
 			}
-			if (chainConfig.Child0AutoRewardBlock == nil) && chainId == params.CHILD0PCHAINID {
+			if (chainConfig.Child0AutoRewardBlock == nil) && chainId == "child_0" {
 				chainConfig.Child0AutoRewardBlock = big.NewInt(0)
 			}
 		} else {
@@ -646,7 +646,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	go s.loopForMiningEvent()
 
 	// Start the Data Reduction
-	if s.config.PruneStateData && s.chainConfig.PChainId == params.CHILD0PCHAINID{
+	if s.config.PruneStateData && s.chainConfig.PChainId == "child_0" {
 		go s.StartScanAndPrune(0)
 	}
 

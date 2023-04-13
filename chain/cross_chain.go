@@ -385,7 +385,7 @@ func (cch *CrossChainHelper) VerifyChildChainProofData(bs []byte) error {
 	}
 
 	// Bypass the validator check for official child chain 0
-	if chainId != params.CHILD0PCHAINID {
+	if chainId != "child_0" {
 		ci := core.GetChainInfo(cch.chainInfoDB, chainId)
 		if ci == nil {
 			return fmt.Errorf("chain info %s not found", chainId)
@@ -679,7 +679,7 @@ func (cch *CrossChainHelper) VerifyChildChainProofDataV1(proofData *types.ChildC
 
 	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), header.MainChainNumber)
 	// Bypass the validator check for official child chain 0
-	if chainId != params.CHILD0PCHAINID || isSd2mc {
+	if chainId != "child_0" || isSd2mc {
 
 		getValidatorsFromChainInfo := false
 		if tdmExtra.EpochBytes != nil && len(tdmExtra.EpochBytes) != 0 {

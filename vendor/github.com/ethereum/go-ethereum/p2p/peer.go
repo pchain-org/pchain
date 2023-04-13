@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -523,10 +522,9 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 func (p *Peer) startChildChainProtocol(proto *protoRW) {
 	p.wg.Add(1)
 
-	protoName := params.MAINNETPCHAINID
 	proto.closed = p.closed
-	proto.wstart = p.running[protoName].wstart
-	proto.werr = p.running[protoName].werr
+	proto.wstart = p.running["pchain"].wstart
+	proto.werr = p.running["pchain"].werr
 
 	var rw MsgReadWriter = proto
 	if p.events != nil {

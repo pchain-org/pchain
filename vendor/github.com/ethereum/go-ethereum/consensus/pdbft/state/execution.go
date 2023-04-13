@@ -139,7 +139,7 @@ func autoStartMining(bc *core.BlockChain, block *ethTypes.Block) {
 
 func child0PatchAutoReward(bc *core.BlockChain, block *ethTypes.Block) {
 	config := bc.Config()
-	if config.PChainId == params.CHILD0PCHAINID && block.Number().Cmp(config.Child0AutoRewardBlock) == 0 {
+	if config.PChainId == "child_0" && block.Number().Cmp(config.Child0AutoRewardBlock) == 0 {
 		isMainChain := params.IsMainChain(bc.GetCrossChainHelper().GetMainChainId())
 		ep := bc.Engine().(consensus.Tendermint).GetEpoch()
 		ep.Child0PatchAutoReward(isMainChain)

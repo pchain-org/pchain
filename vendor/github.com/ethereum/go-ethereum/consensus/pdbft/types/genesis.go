@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/params"
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-crypto"
 )
@@ -76,7 +75,7 @@ func GenesisDocFromJSON(jsonBlob []byte) (genDoc *GenesisDoc, err error) {
 }
 
 var MainnetGenesisJSON string = `{
-	"chain_id": "` + params.MAINNETPCHAINID + `",
+	"chain_id": "pchain",
 	"consensus": "pos",
 	"genesis_time": "2019-03-29T14:06:08.9945519+08:00",
 	"reward_scheme": {
@@ -635,7 +634,7 @@ var MainnetGenesisJSON string = `{
 }`
 
 var TestnetGenesisJSON string = `{
-  "chain_id": "` + params.TESTNETPCHAINID + `",
+  "chain_id": "testnet",
   "consensus": "pos",
   "genesis_time": "2019-04-03T03:06:53.671117545Z",
   "reward_scheme": {

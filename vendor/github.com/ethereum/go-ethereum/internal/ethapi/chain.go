@@ -93,7 +93,7 @@ func (s *PublicChainAPI) DepositInMainChain(ctx context.Context, from common.Add
 	}
 
 	if params.IsMainChain(chainId) {
-		return common.Hash{}, errors.New("chainId should not be " + params.MAINNETPCHAINID + " or " + params.TESTNETPCHAINID)
+		return common.Hash{}, errors.New("chainId should not be " + params.MainnetChainConfig.PChainId + " or " + params.TestnetChainConfig.PChainId)
 	}
 
 	input, err := pabi.ChainABI.Pack(pabi.DepositInMainChain.String(), chainId)
@@ -1014,7 +1014,7 @@ func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 //check if it matches 'child_0 auto reward'
 func isChild0AutoReward(chainInfo *core.ChainInfo, cch core.CrossChainHelper) bool {
 
-	if chainInfo.ChainId != params.CHILD0PCHAINID {
+	if chainInfo.ChainId != "child_0" {
 		return false
 	}
 
