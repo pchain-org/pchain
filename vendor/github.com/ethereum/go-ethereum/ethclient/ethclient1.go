@@ -50,7 +50,7 @@ func WrpNonceAt(chainUrl string, account common.Address, blockNumber *big.Int) (
 	}
 
 	// nonce, fetch the nonce first, if we get nonce too low error, we will manually add the value until the error gone
-	nonce, err := client.NonceAt(ctx, account, nil)
+	nonce, err := client.NonceAt(ctx, account, blockNumber)
 	if err != nil {
 		Close(client)
 		log.Errorf("WrpNonceAt, err: %v", err)
@@ -91,7 +91,7 @@ func WrpSendTransaction(chainUrl string, tx *types.Transaction) error {
 	err = client.SendTransaction(ctx, tx)
 	if err != nil {
 		Close(client)
-		log.Errorf("WrpSendTransaction, err: %v", err)
+		//log.Errorf("WrpSendTransaction, err: %v", err)
 		return err
 	}
 
@@ -130,7 +130,7 @@ func WrpTransactionByHash(chainUrl string, hash common.Hash) (tx *types.Transact
 	tx, isPending, err = client.TransactionByHash(ctx, hash)
 	if err != nil {
 		Close(client)
-		log.Errorf("WrpTransactionByHash, err: %v", err)
+		//log.Errorf("WrpTransactionByHash, err: %v", err)
 		return nil, false, err
 	}
 
