@@ -55,6 +55,7 @@ Send tx3/tx4 in bunch to perform stress test.`,
 const privFilePrefix = "UTC--"
 const password = "pchain"
 const maxHandleTimes = 5
+const waitDuration = time.Second * 300
 
 var withdrawAmount = big.NewInt(int64(100))
 
@@ -129,7 +130,7 @@ func massWithdraw(ctx *cli.Context) error {
 
 	<-stop
 
-	printStatic()
+	printStatistic()
 
 	return nil
 }
@@ -148,8 +149,8 @@ func initEnv(ctx *cli.Context) {
 		Exit(fmt.Errorf("countPerSec should be in [1, 1000]"))
 	}
 
-	if totalTime < 0 || totalTime > 10 {
-		Exit(fmt.Errorf("countPerSec should be in [1, 10]"))
+	if totalTime < 0 || totalTime > 100 {
+		Exit(fmt.Errorf("countPerSec should be in [1, 100]"))
 	}
 
 	err := error(nil)
@@ -369,7 +370,7 @@ func sendOneTx3(nonceCache *uint64) (common.Hash, error) {
 func checkTx3() error {
 
 	receiveTime := time.Now()
-	for !time.Now().After(receiveTime.Add(time.Second * 300)) {
+	for !time.Now().After(receiveTime.Add(waitDuration)) {
 		hash := common.Hash{}
 		if sendTx3done {
 			hash = tx3CheckHHS.getHashToHandle()
@@ -413,7 +414,7 @@ func sendTx4() error {
 
 	receiveTime := time.Now()
 	nonceCache := uint64(0)
-	for !time.Now().After(receiveTime.Add(time.Second * 300)) {
+	for !time.Now().After(receiveTime.Add(waitDuration)) {
 		tx3hash := common.Hash{}
 		if checkTx3done {
 			tx3hash = tx4SendHHS.getHashToHandle()
@@ -521,7 +522,7 @@ func sendOneTx4(tx3hash common.Hash, nonceCache *uint64) (common.Hash, error) {
 func checkTx4() error {
 
 	receiveTime := time.Now()
-	for !time.Now().After(receiveTime.Add(time.Second * 300)) {
+	for !time.Now().After(receiveTime.Add(waitDuration)) {
 		hash := common.Hash{}
 		if sendTx4done {
 			hash = tx4CheckHHS.getHashToHandle()
@@ -551,7 +552,7 @@ func checkTx4() error {
 	return nil
 }
 
-func printStatic() {
+func printStatistic() {
 	fmt.Printf("\n\n\n\n\n\n"+
 		"this statistic of mass tx3/tx4 test\n"+
 		"startTime: %v\n"+
