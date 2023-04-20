@@ -150,6 +150,7 @@ func (sb *backend) Stop() error {
 
 func (sb *backend) Close() error {
 	sb.core.epochDB.Close()
+	sb.core.sendDataDb.Close()
 	return nil
 }
 
@@ -518,7 +519,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 // seal place on top.
 func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (interface{}, error) {
 
-	sb.logger.Info("/e")
+	sb.logger.Debug("enter backend.Seal()")
 
 	// update the block header timestamp and signature and propose the block to core engine
 	header := block.Header()
@@ -548,7 +549,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 	defer clear()
 
 	// post block into Istanbul engine
-	sb.logger.Infof("Tendermint (backend) Seal, before fire event with block height: %d", block.NumberU64())
+	sb.logger.Debugf("Tendermint (backend) Seal, before fire event with block height: %d", block.NumberU64())
 	go tdmTypes.FireEventRequest(sb.core.EventSwitch(), tdmTypes.EventDataRequest{Proposal: block})
 	//go sb.EventMux().Post(tdmTypes.RequestEvent{
 	//	Proposal: block,
