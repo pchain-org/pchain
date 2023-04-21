@@ -81,6 +81,9 @@ var (
 
 	MainnetMarkProposedInEpochMainBlock = big.NewInt(44916230)
 	TestnetMarkProposedInEpochMainBlock = big.NewInt(40)
+
+	MainnetEnhenceExtraBlock *big.Int = nil //big.NewInt(100000000000)
+	TestnetEnhenceExtraBlock *big.Int = nil //big.NewInt(100000000000)
 )
 
 var (
@@ -112,6 +115,7 @@ var (
 		ValidateHTLCBlock:            MainnetValidateHTLCBlock,
 		HeaderHashWithoutTimeBlock:   MainnetHeaderHashWithoutTimeBlock,
 		MarkProposedInEpochMainBlock: MainnetMarkProposedInEpochMainBlock,
+		EnhenceExtraBlock:            MainnetEnhenceExtraBlock,
 
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
@@ -147,6 +151,7 @@ var (
 		ValidateHTLCBlock:            TestnetValidateHTLCBlock,
 		HeaderHashWithoutTimeBlock:   TestnetHeaderHashWithoutTimeBlock,
 		MarkProposedInEpochMainBlock: TestnetMarkProposedInEpochMainBlock,
+		EnhenceExtraBlock:            TestnetEnhenceExtraBlock,
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
@@ -200,16 +205,16 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, new(EthashConfig), nil, nil, nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, nil, new(EthashConfig), nil, nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
+	AllCliqueProtocolChanges = &ChainConfig{"", big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, nil, new(EthashConfig), &CliqueConfig{Period: 0, Epoch: 30000}, nil, nil, nil}
 
-	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, new(EthashConfig), nil, nil, nil, nil}
+	TestChainConfig = &ChainConfig{"", big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), common.Address{}, nil, nil, nil, nil, common.Address{}, nil, nil, nil, nil, nil, nil, new(EthashConfig), nil, nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -309,6 +314,7 @@ type ChainConfig struct {
 	ValidateHTLCBlock            *big.Int       `json:"validateHTLCBlock,omitempty"`
 	HeaderHashWithoutTimeBlock   *big.Int       `json:"headerHashWithoutTimeBlock,omitempty"`
 	MarkProposedInEpochMainBlock *big.Int       `json:"markProposedInEpochMainBlock,omitempty"`
+	EnhenceExtraBlock            *big.Int       `json:"enhenceExtraBlock,omitempty"`
 
 	// Various consensus engines
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
@@ -551,6 +557,19 @@ func (c *ChainConfig) IsHeaderHashWithoutTimeBlock(mainBlockNumber *big.Int) boo
 
 func (c *ChainConfig) IsMarkProposedInEpoch(mainBlockNumber *big.Int) bool {
 	return isForked(c.MarkProposedInEpochMainBlock, mainBlockNumber)
+}
+
+func (c *ChainConfig) IsEnhanceExtra(mainBlockNumber *big.Int) bool {
+	return isForked(c.EnhenceExtraBlock, mainBlockNumber)
+}
+
+func IsEnhanceExtra(mainChainId string, mainBlockNumber *big.Int) bool {
+	if mainChainId == MainnetChainConfig.PChainId {
+		return isForked(MainnetEnhenceExtraBlock, mainBlockNumber)
+	} else if mainChainId == TestnetChainConfig.PChainId {
+		return isForked(TestnetEnhenceExtraBlock, mainBlockNumber)
+	}
+	return false
 }
 
 // Check whether is on main chain or not

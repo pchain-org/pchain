@@ -275,7 +275,7 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 	if _, err := os.Stat(genFile); os.IsNotExist(err) {
 
 		var rewardScheme types.RewardSchemeDoc
-		if chainId == MainChain || chainId == TestnetChain {
+		if params.IsMainChain(chainId) {
 			posReward, _ := new(big.Int).SetString(POSReward, 10)
 			LockReward, _ := new(big.Int).SetString(LockReward, 10)
 			totalReward := new(big.Int).Sub(posReward, LockReward)
@@ -295,7 +295,7 @@ func createGenesisDoc(config cfg.Config, chainId string, coreGenesis *core.Genes
 		}
 
 		var rewardPerBlock *big.Int
-		if chainId == MainChain || chainId == TestnetChain {
+		if params.IsMainChain(chainId) {
 			rewardPerBlock = big.NewInt(1219698431069958847)
 		} else {
 			rewardPerBlock = big.NewInt(0)

@@ -3,6 +3,7 @@ package pdbft
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
@@ -148,6 +150,7 @@ func (sb *backend) Stop() error {
 
 func (sb *backend) Close() error {
 	sb.core.epochDB.Close()
+	sb.core.sendDataDb.Close()
 	return nil
 }
 
@@ -190,8 +193,15 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	}
 
 	// Ensure that the extra data format is satisfied
-	if _, err := tdmTypes.ExtractTendermintExtra(header); err != nil {
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
+	if err != nil {
 		return errInvalidExtraDataFormat
+	}
+	
+	isEnhanceExtra := params.IsEnhanceExtra(sb.core.cch.GetMainChainId(), header.MainChainNumber)
+	if !tdmExtra.IsConsistWithBlockHash(isEnhanceExtra, header.Hash()) {
+		return fmt.Errorf("proofdata extra hash(%x) is bound with the block hash (%x) which validators voted", 
+			tdmExtra.SeenCommit.BlockID.Hash, header.Hash())
 	}
 
 	// Ensure that the coinbase is valid
@@ -509,7 +519,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 // seal place on top.
 func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (interface{}, error) {
 
-	sb.logger.Info("/e")
+	sb.logger.Debug("enter backend.Seal()")
 
 	// update the block header timestamp and signature and propose the block to core engine
 	header := block.Header()
@@ -539,7 +549,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 	defer clear()
 
 	// post block into Istanbul engine
-	sb.logger.Infof("Tendermint (backend) Seal, before fire event with block height: %d", block.NumberU64())
+	sb.logger.Debugf("Tendermint (backend) Seal, before fire event with block height: %d", block.NumberU64())
 	go tdmTypes.FireEventRequest(sb.core.EventSwitch(), tdmTypes.EventDataRequest{Proposal: block})
 	//go sb.EventMux().Post(tdmTypes.RequestEvent{
 	//	Proposal: block,

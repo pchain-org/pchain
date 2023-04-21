@@ -21,7 +21,7 @@ func MakeSystemNode(chainId, version string, ctx *cli.Context, cch core.CrossCha
 	//utils.RegisterEthService(stack, &cfg.Eth)
 	registerEthService(stack, &cfg.Eth, ctx, cch)
 
-	if (params.IsMainChain(chainId)) && ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
+	if params.IsMainChain(chainId) && ctx.GlobalBool(utils.DashboardEnabledFlag.Name) {
 		// Only Main Chain can start the dashboard, the dashboard is still not complete
 		utils.RegisterDashboardService(stack, &cfg.Dashboard, "" /*gitCommit*/)
 	}

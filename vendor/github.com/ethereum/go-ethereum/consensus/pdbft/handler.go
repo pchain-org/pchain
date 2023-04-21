@@ -67,7 +67,7 @@ func (sb *backend) SetBroadcaster(broadcaster consensus.Broadcaster) {
 
 func (sb *backend) GetBroadcaster() consensus.Broadcaster {
 
-	sb.logger.Infof("Tendermint (backend) GetBroadcaster: %p", sb.broadcaster)
+	sb.logger.Debugf("Tendermint (backend) GetBroadcaster: %p", sb.broadcaster)
 	return sb.broadcaster
 }
 
