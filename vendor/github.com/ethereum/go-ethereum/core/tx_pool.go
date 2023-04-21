@@ -50,7 +50,7 @@ const (
 	// non-trivial consequences: larger transactions are significantly harder and
 	// more expensive to propagate; larger transactions also take more resources
 	// to validate whether they fit into the pool or not.
-	txMaxSize = 4 * txSlotSize // 128KB
+	TxMaxSize = 4 * txSlotSize // 128KB
 )
 
 var (
@@ -578,7 +578,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return ErrTxTypeNotSupported
 	}
 	// Heuristic limit, reject transactions over 32KB to prevent DOS attacks
-	if tx.Size() > txMaxSize {
+	if tx.Size() > TxMaxSize {
 		return ErrOversizedData
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
@@ -653,7 +653,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			return ErrNotAllowedInChildChain
 		}
 
-		log.Infof("validateTx Chain Function %v", function.String())
+		log.Debugf("validateTx Chain Function %v", function.String())
 		if validateCb := GetValidateCb(function); validateCb != nil {
 			if function.IsCrossChainType() {
 				if fn, ok := validateCb.(CrossChainValidateCb); ok {

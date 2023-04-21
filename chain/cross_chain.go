@@ -677,7 +677,7 @@ func (cch *CrossChainHelper) VerifyChildChainProofDataV1(proofData *types.ChildC
 		return fmt.Errorf("chain info %s not found", chainId)
 	}
 
-	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), cch.GetHeightFromMainChain())
+	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), header.MainChainNumber)
 	// Bypass the validator check for official child chain 0
 	if chainId != "child_0" || isSd2mc {
 

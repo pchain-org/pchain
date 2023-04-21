@@ -5,6 +5,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	cmn "github.com/tendermint/go-common"
@@ -12,6 +14,7 @@ import (
 	dbm "github.com/tendermint/go-db"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -22,6 +25,7 @@ type Node struct {
 	privValidator *types.PrivValidator // local node's validator key
 
 	epochDB dbm.DB
+	sendDataDb ethdb.Database
 
 	// services
 	evsw types.EventSwitch // pub/sub for services
@@ -45,6 +49,12 @@ func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.Ch
 	epochDB := dbm.NewDB("epoch", "leveldb", config.GetString("db_dir"))
 	ep := epoch.InitEpoch(epochDB, genDoc, backend.logger)
 
+	sendDataDb, err := rawdb.NewLevelDBDatabase(filepath.Join(config.GetString("db_dir"), "senddata"), 512, 1024, "pdbft/db/senddata/")
+	if err != nil {
+		backend.logger.Critf("could not open database: %v", err)
+	}
+	sendData := consensus.NewSendData(sendDataDb)
+
 	// We should start mine if we are in the ValidatorSet
 	if privValidator != nil && ep.Validators.HasAddress(privValidator.Address[:]) {
 		backend.shouldStart = true
@@ -53,10 +63,7 @@ func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.Ch
 	}
 
 	// Make ConsensusReactor
-	consensusState := consensus.NewConsensusState(backend, config, chainConfig, cch, ep)
-	if privValidator != nil {
-		consensusState.SetPrivValidator(privValidator)
-	}
+	consensusState := consensus.NewConsensusState(backend, config, chainConfig, cch, privValidator, ep, sendData)
 	consensusReactor := consensus.NewConsensusReactor(consensusState /*, fastSync*/)
 
 	// Add Reactor to P2P Switch
@@ -72,6 +79,7 @@ func NewNodeNotStart(backend *backend, config cfg.Config, chainConfig *params.Ch
 		privValidator: privValidator,
 
 		epochDB: epochDB,
+		sendDataDb: sendDataDb,
 
 		evsw: eventSwitch,
 

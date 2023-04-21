@@ -120,7 +120,7 @@ func (t *timeoutTicker) timeoutRoutine() {
 				return
 			}
 
-			t.logger.Infof("Received tick. old_ti: %v, new_ti: %v", ti, newti)
+			t.logger.Debugf("Received tick. old_ti: %v, new_ti: %v", ti, newti)
 
 			// ignore tickers for old height/round/step
 			/*
@@ -143,7 +143,7 @@ func (t *timeoutTicker) timeoutRoutine() {
 			// NOTE time.Timer allows duration to be non-positive
 			ti = newti
 			t.timer.Reset(ti.Duration)
-			t.logger.Infof("Scheduled timeout. dur: %v, height: %v, round: %v, step: %v", ti.Duration, ti.Height, ti.Round, ti.Step)
+			t.logger.Debugf("Scheduled timeout. dur: %v, height: %v, round: %v, step: %v", ti.Duration, ti.Height, ti.Round, ti.Step)
 		case <-t.timer.C:
 
 			if !t.IsRunning() {
@@ -151,7 +151,7 @@ func (t *timeoutTicker) timeoutRoutine() {
 				return
 			}
 
-			t.logger.Infof("Timed out. dur: %v, height: %v, round: %v, step: %v", ti.Duration, ti.Height, ti.Round, ti.Step)
+			t.logger.Debugf("Timed out. dur: %v, height: %v, round: %v, step: %v", ti.Duration, ti.Height, ti.Round, ti.Step)
 			// go routine here gaurantees timeoutRoutine doesn't block.
 			// Determinism comes from playback in the receiveRoutine.
 			// We can eliminate it by merging the timeoutRoutine into receiveRoutine
