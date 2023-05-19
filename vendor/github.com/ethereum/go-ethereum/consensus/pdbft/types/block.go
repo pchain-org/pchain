@@ -94,7 +94,8 @@ func (b *TdmBlock) HasTx3() bool {
 				continue
 			}
 
-			if function == pabi.WithdrawFromChildChain {
+			if function == pabi.WithdrawFromChildChain ||
+				function == pabi.CrossChainTransferExec {
 				return true
 			}
 		}

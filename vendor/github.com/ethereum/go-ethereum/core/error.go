@@ -135,4 +135,7 @@ var (
 	
 	// ErrSenderNoEOA is returned if the sender of a transaction is a contract.
 	ErrSenderNoEOA = errors.New("sender not an eoa")
+
+	// ErrInvalidTx4 is returned if the tx4 has been checked during execution
+	ErrTryCCTTxExec = errors.New("failed try run CCTTxExec")
 )

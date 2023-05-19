@@ -550,7 +550,7 @@ func NewChildChainProofData(block *Block) (*ChildChainProofData, error) {
 	return ret, nil
 }
 
-// ChildChainProofData represents epoch from child chain to the main chain.
+// ChildChainProofDataV1 represents epoch from child chain to the main chain.
 type ChildChainProofDataV1 struct {
 	Header *Header
 
@@ -574,4 +574,32 @@ func DecodeChildChainProofDataV1(bs []byte) (*ChildChainProofDataV1, error) {
 		return nil, err
 	}
 	return proofData, nil
+}
+
+var CCTSuspendBlocks = uint64(20)
+var CCTBatchBlocks   = uint64(5)
+const (
+	CCTFAILED = iota
+	CCTSUCCEEDED
+	CCTFROMSUCCEEDED
+	CCTUNHANDLED
+)
+
+//CCTTx record tx of cross chain in mainChain
+type CCTTxStatus struct {
+	MainBlockNumber     *big.Int
+	TxHash              common.Hash
+	Owner               common.Address
+	FromChainId         string
+	ToChainId           string
+	Amount              *big.Int
+	Status              uint64
+	ToChainOperated     bool
+}
+
+//CCTTx record execution status of cross chain tx for fromChain/toChain
+type CCTTxExecStatus struct {
+	CCTTxStatus
+	BlockNumber     *big.Int
+	LocalStatus     uint64
 }
