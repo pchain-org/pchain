@@ -69,12 +69,54 @@ func (sc *ConsensusState) saveBlockToMainChain(blockNumber uint64, version int) 
 	return sc.sendData.addOrUpdateDataItem(item)
 }
 
+
+func (sc *ConsensusState) CurrentCCTBlock() *big.Int {
+	return sc.sendData.CurrentCCTBlock()
+}
+
+func (sc *ConsensusState) WriteCurrentCCTBlock(blockNumber *big.Int) {
+	sc.sendData.WriteCurrentCCTBlock(blockNumber)
+}
+
+func (sc *ConsensusState) GetLatestCCTExecStatus(hash common.Hash) *ethTypes.CCTTxExecStatus {
+	return sc.sendData.GetLatestCCTExecStatus(hash)
+}
+
+func (sc *ConsensusState) GetCCTExecStatusByHash(hash common.Hash) []*ethTypes.CCTTxExecStatus {
+	return sc.sendData.GetCCTExecStatusByHash(hash)
+}
+
+func (sc *ConsensusState) WriteCCTExecStatus(receipt *ethTypes.CCTTxExecStatus) {
+	sc.sendData.WriteCCTExecStatus(receipt)
+}
+
+func (sc *ConsensusState) DeleteCCTExecStatus(hash common.Hash) {
+	sc.sendData.DeleteCCTExecStatus(hash)
+}
+
+func (sc *ConsensusState) SignTx(tx *ethTypes.Transaction) (*ethTypes.Transaction, error) {
+	//initialize sendTxVars
+	prv, err := crypto.ToECDSA(sc.privValidator.(*types.PrivValidator).PrivKey.(tmdcrypto.BLSPrivKey).Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	digest := crypto.Keccak256([]byte(sc.chainConfig.PChainId))
+	signer := ethTypes.LatestSignerForChainID(new(big.Int).SetBytes(digest[:]))
+
+	return ethTypes.SignTx(tx, signer, prv)
+}
+
 var (
 	indexKeyFmt     = "Data-%x" //%x is blockNumber
 	indexKeyPrefix  = []byte("Data-")
 	indexValue      = []byte("~o~") //position occupation
 	contentKeyFmt   = "Content-%x"  //%x is the number of which block to send
 	contentKeyPrefix = []byte("Content-")
+
+	cctBlockKey     = []byte("CCTBlock-")
+
+	receiptKeyFmt      = "CCTReceipt-%x"
 
 	ExceedTxCount   = errors.New("exceed the tx count")
 )
@@ -99,12 +141,16 @@ type SDItem struct{
 	Tx3Count        uint64 //equcal zero means no tx3
 	SentTimes       int
 	Hash            common.Hash //if sd2mc tx has sent, here is the hash
+
 }
 
 type SendData struct {
 	DB              ethdb.Database
-	items           map[string]*SDItem //string should be "blockNumber" or "blockNumber+tx3BeginIndex+tx3EndIndex"
 	dbMtx           sync.Mutex
+
+	items           map[string]*SDItem //string should be "blockNumber" or "blockNumber+tx3BeginIndex+tx3EndIndex"
+
+	cctBlock        *big.Int
 
 	runMtx			sync.Mutex
 
@@ -326,7 +372,7 @@ func (sd *SendData) checkOneItem(picked *SDItem, inDetail bool) {
 		apiBridge := sd.CCH().GetApiBridgeFromMainChain()
 		isPending, err := apiBridge.GetTransactionByHash(ctx, hash)
 		if err != nil {
-			sd.Logger().Error("checkOneBlock: tx %x not found in main chain, send again", hash)
+			sd.Logger().Error("checkOneBlock: tx %x not found in main chain, send again", "hash", hash)
 			picked.Hash = common.Hash{}
 			sd.addOrUpdateDataItem(picked)
 		} else {
@@ -640,6 +686,97 @@ func (sd *SendData) SendDataToMainChain(data []byte, nonce *uint64) (common.Hash
 }
 
 
+func (sd *SendData) CurrentCCTBlock() *big.Int {
+	if sd.cctBlock != nil {
+		return new(big.Int).Set(sd.cctBlock)
+	}
+
+	sd.dbMtx.Lock()
+	defer sd.dbMtx.Unlock()
+
+	bnBytes, err := sd.DB.Get(cctBlockKey)
+	if err != nil {
+		return nil
+	}
+
+	return new(big.Int).SetBytes(bnBytes)
+}
+
+func (sd *SendData) WriteCurrentCCTBlock(blockNumber *big.Int) {
+	if sd.cctBlock == nil || blockNumber.Cmp(sd.cctBlock) > 0 {
+		sd.cctBlock = blockNumber
+
+		sd.dbMtx.Lock()
+		defer sd.dbMtx.Unlock()
+
+		sd.DB.Put(cctBlockKey, sd.cctBlock.Bytes())
+	}
+}
+
+func calReceiptKey(hash common.Hash) []byte {
+	return []byte(fmt.Sprintf(receiptKeyFmt, hash))
+}
+
+func (sd *SendData) GetLatestCCTExecStatus(hash common.Hash) *ethTypes.CCTTxExecStatus {
+	cctESs := sd.GetCCTExecStatusByHash(hash)
+	if len(cctESs) == 0 {
+		return nil
+	} else {
+		cctES := cctESs[0]
+		for _, cts := range cctESs {
+			if cts.MainBlockNumber.Cmp(cts.MainBlockNumber) > 0 {
+				cctES = cts
+			}
+		}
+		return cctES
+	}
+}
+
+func (sd *SendData) GetCCTExecStatusByHash(hash common.Hash) []*ethTypes.CCTTxExecStatus {
+
+	sd.dbMtx.Lock()
+	defer sd.dbMtx.Unlock()
+
+	cctESBytes, err := sd.DB.Get(calReceiptKey(hash))
+	if err != nil {
+		return nil
+	}
+
+	cctESs := make([]*ethTypes.CCTTxExecStatus, 0)
+	err = rlp.DecodeBytes(cctESBytes, &cctESs)
+	if err != nil {
+		return nil
+	}
+
+	return cctESs
+}
+
+func (sd *SendData) WriteCCTExecStatus(cctES *ethTypes.CCTTxExecStatus) {
+	if cctES != nil {
+
+		receipts := sd.GetCCTExecStatusByHash(cctES.TxHash)
+		receipts = append(receipts, cctES)
+
+		receiptByptes, err := rlp.EncodeToBytes(receipts)
+		if err != nil {
+			return
+		}
+
+		sd.dbMtx.Lock()
+		defer sd.dbMtx.Unlock()
+
+		sd.DB.Put(calReceiptKey(cctES.TxHash), receiptByptes)
+	}
+}
+
+func (sd *SendData) DeleteCCTExecStatus(hash common.Hash) {
+
+	sd.dbMtx.Lock()
+	defer sd.dbMtx.Unlock()
+
+	sd.DB.Delete(calReceiptKey(hash))
+}
+
 func newTX3ProofData(block *ethTypes.Block) (*ethTypes.TX3ProofData, error) {
 	ret := &ethTypes.TX3ProofData{
 		Header: block.Header(),
@@ -715,7 +852,8 @@ func NewChildChainProofDataV1(block *ethTypes.Block, tx3BeginIndex, tx3Count uin
 				continue
 			}
 
-			if function == pabi.WithdrawFromChildChain {
+			if function == pabi.WithdrawFromChildChain ||
+				function == pabi.CrossChainTransferExec {
 				kvSet := ethTypes.MakeBSKeyValueSet()
 				keybuf.Reset()
 				rlp.Encode(keybuf, uint(i))

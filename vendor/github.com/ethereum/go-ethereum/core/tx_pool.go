@@ -658,7 +658,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			if function.IsCrossChainType() {
 				if fn, ok := validateCb.(CrossChainValidateCb); ok {
 					pool.cch.GetMutex().Lock()
-					err := fn(tx, pool.currentState, pool.cch)
+					err := fn(tx, pool.currentState, pool.chain.(*BlockChain), pool.cch)
 					pool.cch.GetMutex().Unlock()
 					if err != nil {
 						return err

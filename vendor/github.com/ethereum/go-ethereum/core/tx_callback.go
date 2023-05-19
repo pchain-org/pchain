@@ -22,6 +22,16 @@ type TX3LocalCache interface {
 
 	GetTX3ProofData(chainId string, txHash common.Hash) *types.TX3ProofData
 	GetAllTX3ProofData() []*types.TX3ProofData
+	
+	UpdateCCTTxStatus(cts *types.CCTTxStatus, curMainBlockNumber *big.Int, chainId string, localStatus uint64, state *state.StateDB) (*types.CCTTxStatus, error)
+	FinalizeCCTTxStatus(blockNumber *big.Int) ([]*types.CCTTxStatus, error)
+	WriteCCTTxStatus(cts *types.CCTTxStatus) error
+	GetCCTTxStatusByBlockNumber(mainBlockNumber *big.Int) ([]*types.CCTTxStatus, error)
+	GetCCTTxStatusByChainId(mainBlockNumber *big.Int, chainId string) ([]*types.CCTTxStatus, error)
+	GetCCTTxStatusByHash(mainBlockNumber *big.Int, hash common.Hash) (*types.CCTTxStatus, error)
+	GetLatestCCTTxStatusByHash(hash common.Hash) (*types.CCTTxStatus, error)
+	HasCCTTxStatus(blockNumber *big.Int, hash common.Hash, fromChainId, toChainId string, amount *big.Int, status uint64) bool
+	DeleteCCTxStatus(cctData *types.CCTTxStatus)
 }
 
 type CrossChainHelper interface {
@@ -61,12 +71,12 @@ type CrossChainHelper interface {
 }
 
 // CrossChain Callback
-type CrossChainValidateCb = func(tx *types.Transaction, state *state.StateDB, cch CrossChainHelper) error
-type CrossChainApplyCb = func(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch CrossChainHelper, mining bool) error
+type CrossChainValidateCb = func(tx *types.Transaction, state *state.StateDB, bc *BlockChain, cch CrossChainHelper) error
+type CrossChainApplyCb = func(tx *types.Transaction, state *state.StateDB, bc *BlockChain, header *types.Header, ops *types.PendingOps, cch CrossChainHelper, mining bool) error
 
 // Non-CrossChain Callback
 type NonCrossChainValidateCb = func(tx *types.Transaction, state *state.StateDB, bc *BlockChain) error
-type NonCrossChainApplyCb = func(tx *types.Transaction, state *state.StateDB, bc *BlockChain, ops *types.PendingOps) error
+type NonCrossChainApplyCb = func(tx *types.Transaction, state *state.StateDB, bc *BlockChain, header *types.Header, ops *types.PendingOps) error
 
 type EtdInsertBlockCb func(bc *BlockChain, block *types.Block)
 

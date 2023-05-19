@@ -797,13 +797,49 @@ func (cch *CrossChainHelper) SaveChildChainProofDataToMainChainV1(proofData *typ
 	if len(proofData.TxIndexs) != 0 {
 
 		log.Infof("SaveChildChainProofDataToMainChainV1 - Save Tx3, count is %v", len(proofData.TxIndexs))
-		tx3ProofData := &types.TX3ProofData{
-			Header:   proofData.Header,
-			TxIndexs: proofData.TxIndexs,
-			TxProofs: proofData.TxProofs,
+
+		Tx3Indexs := make([]uint, 0)
+		Tx3Proofs := make([]*types.BSKeyValueSet, 0)
+		for i, txIndex := range proofData.TxIndexs {
+
+			keybuf := new(bytes.Buffer)
+			rlp.Encode(keybuf, txIndex)
+			val, _, err := trie.VerifyProof(header.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
+			if err != nil {
+				return err
+			}
+
+			var tx types.Transaction
+			err = rlp.DecodeBytes(val, &tx)
+			if err != nil {
+				return err
+			}
+
+			if pabi.IsPChainContractAddr(tx.To()) {
+				data := tx.Data()
+				function, err := pabi.FunctionTypeFromId(data[:4])
+				if err != nil {
+					return err
+				}
+
+				if function == pabi.WithdrawFromChildChain {
+					Tx3Indexs = append(Tx3Indexs, txIndex)
+					Tx3Proofs = append(Tx3Proofs, proofData.TxProofs[i])
+				} else if function == pabi.CrossChainTransferExec {
+					//do nothing
+				}
+			}
 		}
-		if err := cch.WriteTX3ProofData(tx3ProofData); err != nil {
-			log.Error("TX3ProofDataMsg write error", "error", err)
+
+		if len(Tx3Indexs) != 0 {
+			tx3ProofData := &types.TX3ProofData{
+				Header:   proofData.Header,
+				TxIndexs: Tx3Indexs,
+				TxProofs: Tx3Proofs,
+			}
+			if err := cch.WriteTX3ProofData(tx3ProofData); err != nil {
+				log.Error("TX3ProofDataMsg write error", "error", err)
+			}
 		}
 	}
 
@@ -910,6 +946,129 @@ func (cch *CrossChainHelper) GetTX3ProofData(chainId string, txHash common.Hash)
 
 func (cch *CrossChainHelper) GetAllTX3ProofData() []*types.TX3ProofData {
 	return rawdb.GetAllTX3ProofData(cch.localTX3CacheDB)
+}
+
+func (cch *CrossChainHelper) UpdateCCTTxStatus(cts *types.CCTTxStatus, curMainBlockNumber *big.Int, chainId string,
+	localStatus uint64, state *state.StateDB) (*types.CCTTxStatus, error) {
+
+	if cts.Status == types.CCTFAILED || (cts.Status == types.CCTSUCCEEDED && cts.ToChainOperated) {
+		return nil, nil
+	}
+
+	handled := false
+	succeeded := false
+	if cts.Status == types.CCTUNHANDLED {
+		if chainId == cts.FromChainId {
+			if localStatus == types.ReceiptStatusSuccessful {
+				cts.Status = types.CCTFROMSUCCEEDED
+				handled = true
+			} else if localStatus == types.ReceiptStatusFailed {
+				cts.Status = types.CCTFAILED
+				handled = true
+			}
+		}
+	} else if cts.Status == types.CCTFROMSUCCEEDED {
+		if chainId == cts.ToChainId {
+			if localStatus == types.ReceiptStatusSuccessful {
+				cts.Status = types.CCTSUCCEEDED
+				handled = true
+				succeeded = true
+			} else if localStatus == types.ReceiptStatusFailed {
+				cts.Status = types.CCTFAILED
+				handled = true
+			}
+		}
+	} else if cts.Status == types.CCTSUCCEEDED {
+		if chainId == cts.ToChainId {
+			if localStatus == types.ReceiptStatusSuccessful {
+				cts.ToChainOperated = true
+				handled = true
+			}
+		}
+	}
+
+	if !handled {
+		return nil, errors.New("state transfer error")
+	}
+
+	if succeeded {
+		if cts.FromChainId != cch.GetMainChainId() {
+			chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), cts.FromChainId)
+			if chainInfo != nil {
+				state.SubChainBalance(chainInfo.Owner, cts.Amount)
+			}
+		}
+
+		if cts.ToChainId != cch.GetMainChainId() {
+			chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), cts.ToChainId)
+			if chainInfo != nil {
+				state.AddChainBalance(chainInfo.Owner, cts.Amount)
+			}
+		}
+	}
+
+	cts.MainBlockNumber = curMainBlockNumber
+	return cts, nil
+}
+
+func (cch *CrossChainHelper) FinalizeCCTTxStatus(mainBlockNumber *big.Int) ([]*types.CCTTxStatus, error) {
+
+	blockNumber := new(big.Int).Sub(mainBlockNumber, new(big.Int).SetUint64(types.CCTSuspendBlocks))
+	if blockNumber.Sign() < 0 {
+		return nil, errors.New("no need finalize")
+	}
+
+	ctss, err := cch.GetCCTTxStatusByBlockNumber(blockNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	retCTSS := make([]*types.CCTTxStatus, 0)
+	for _, cts := range ctss {
+
+		latestCTS, err := cch.GetLatestCCTTxStatusByHash(cts.TxHash)
+		//check if there is newer status
+		if err == nil && latestCTS != nil && latestCTS.MainBlockNumber.Cmp(cts.MainBlockNumber) > 0 {
+			continue
+		}
+
+		if cts.Status != types.CCTFAILED && cts.Status != types.CCTSUCCEEDED {
+			cts.MainBlockNumber = blockNumber
+			cts.Status = types.CCTFAILED
+			retCTSS = append(retCTSS, cts)
+		}
+	}
+
+	return retCTSS, nil
+}
+
+func (cch *CrossChainHelper) WriteCCTTxStatus(cctData *types.CCTTxStatus) error {
+	return rawdb.WriteCCTTxStatus(cch.localTX3CacheDB, cctData)
+}
+
+func (cch *CrossChainHelper) GetCCTTxStatusByBlockNumber(mainBlockNumber *big.Int) ([]*types.CCTTxStatus, error) {
+	return rawdb.GetCCTTxStatusByBlockNumber(cch.localTX3CacheDB, mainBlockNumber)
+}
+
+func (cch *CrossChainHelper) GetCCTTxStatusByChainId(mainBlockNumber *big.Int, chainId string) ([]*types.CCTTxStatus, error) {
+	return rawdb.GetCCTTxStatusByChainId(cch.localTX3CacheDB, mainBlockNumber, chainId)
+}
+
+func (cch *CrossChainHelper) GetCCTTxStatusByHash(mainBlockNumber *big.Int, hash common.Hash) (*types.CCTTxStatus, error) {
+	return rawdb.GetCCTTxStatusByHash(cch.localTX3CacheDB, mainBlockNumber, hash)
+}
+
+func (cch *CrossChainHelper) GetLatestCCTTxStatusByHash(hash common.Hash) (*types.CCTTxStatus, error) {
+	return rawdb.GetLatestCCTTxStatusByHash(cch.localTX3CacheDB, hash)
+}
+
+func (cch *CrossChainHelper) HasCCTTxStatus(blockNumber *big.Int, hash common.Hash,
+	fromChainId, toChainId string, amount *big.Int, status uint64) bool {
+	return rawdb.HasCCTTxStatus(cch.localTX3CacheDB, blockNumber, hash, fromChainId, toChainId, amount, status)
+}
+
+func (cch *CrossChainHelper) DeleteCCTxStatus(cctData *types.CCTTxStatus) {
+	rawdb.DeleteCCTxStatus(cch.localTX3CacheDB, cctData)
 }
 
 // TX3LocalCache end

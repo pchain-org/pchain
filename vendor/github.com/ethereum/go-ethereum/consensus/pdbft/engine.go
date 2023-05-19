@@ -463,7 +463,7 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 //
 // Note, the block header and state database might be updated to reflect any
 // consensus rules that happen at finalization (e.g. block rewards).
-func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
+func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, 
 	totalGasFee *big.Int, uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
 
 	sb.logger.Debugf("Tendermint (backend) Finalize, receipts are: %v", receipts)
@@ -492,6 +492,19 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	markProposedInEpoch := sb.chainConfig.IsMarkProposedInEpoch(header.MainChainNumber)
 	// Calculate the rewards
 	sb.accumulateRewards(state, header, epoch, totalGasFee, selfRetrieveReward, markProposedInEpoch)
+
+	if params.IsMainChain(sb.chainConfig.PChainId) {
+		ctss, err := sb.core.cch.FinalizeCCTTxStatus(header.Number)
+		if err == nil {
+			for _, cts := range ctss {
+				if ok := ops.Append(&types.SaveCCTTxStatusOp{
+					CCTTxStatus: *cts,
+				}); !ok {
+					sb.logger.Error("pending SaveCCTTxStatusOp error in backend.Finalize()")
+				}
+			}
+		}
+	}
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
@@ -685,12 +698,44 @@ func (sb *backend) SetEpoch(ep *epoch.Epoch) {
 	sb.core.consensusState.Epoch = ep
 }
 
+func (sb *backend) ConsensusPrivateValidator() *tdmTypes.PrivValidator {
+	return sb.core.consensusState.GetPrivValidator().(*tdmTypes.PrivValidator)
+} 
+
 // Return the private validator address of consensus
 func (sb *backend) PrivateValidator() common.Address {
 	if sb.core.privValidator != nil {
 		return sb.core.privValidator.Address
 	}
 	return common.Address{}
+}
+
+func (sb *backend) CurrentCCTBlock() *big.Int {
+	return sb.core.consensusState.CurrentCCTBlock()
+}
+
+func (sb *backend) WriteCurrentCCTBlock(blockNumber *big.Int) {
+	sb.core.consensusState.WriteCurrentCCTBlock(blockNumber)
+}
+
+func (sb *backend) GetLatestCCTExecStatus(hash common.Hash) *types.CCTTxExecStatus {
+	return sb.core.consensusState.GetLatestCCTExecStatus(hash)
+}
+
+func (sb *backend) GetCCTExecStatusByHash(hash common.Hash) []*types.CCTTxExecStatus {
+	return sb.core.consensusState.GetCCTExecStatusByHash(hash)
+}
+
+func (sb *backend) WriteCCTExecStatus(receipt *types.CCTTxExecStatus) {
+	sb.core.consensusState.WriteCCTExecStatus(receipt)
+}
+
+func (sb *backend) DeleteCCTExecStatus(hash common.Hash) {
+	sb.core.consensusState.DeleteCCTExecStatus(hash)
+}
+
+func (sb *backend) SignTx(tx *types.Transaction) (*types.Transaction, error) {
+	return sb.core.consensusState.SignTx(tx)
 }
 
 // update timestamp and signature of the block based on its number of transactions

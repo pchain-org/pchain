@@ -2,9 +2,11 @@ package rawdb
 
 import (
 	"bytes"
+	"math/big"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/ethereum/go-ethereum/rlp"
 	pabi "github.com/pchain/abi"
 )
@@ -13,6 +15,8 @@ var (
 	tx3Prefix       = []byte("t") // tx3Prefix + chainId + txHash -> tx3
 	tx3LookupPrefix = []byte("k") // tx3LookupPrefix + chainId + txHash -> tx3 lookup metadata
 	Tx3ProofPrefix  = []byte("p") // tx3ProofPrefix + chainId + height -> proof data
+	ctsPrefix       = []byte("c") // ctsPrefix + height + txHash-> CCTTxStatusData
+	ctsHashPrefix   = []byte("h") // ctsHashPrefix + txHash-> height
 )
 
 // TX3LookupEntry is a positional metadata to help looking up the tx3 proof content given only its chainId and hash.
@@ -201,6 +205,166 @@ func DeleteTX3(db ethdb.Database, chainId string, txHash common.Hash) {
 		bs, _ := rlp.EncodeToBytes(proofData)
 		db.Put(key3, bs)
 	}
+}
+
+func cctTxFullKey(blockNumber *big.Int, txHash common.Hash) []byte {
+	return append(ctsPrefix, append(blockNumber.Bytes(), txHash.Bytes()...)...)
+}
+
+func cctTxSearchKey(blockNumber *big.Int) []byte {
+	return append(ctsPrefix, blockNumber.Bytes()...)
+}
+
+func cctHashKey(hash common.Hash) []byte {
+	return append(ctsHashPrefix, hash.Bytes()...)
+}
+
+func WriteCCTTxStatus(db ethdb.Database, cts *types.CCTTxStatus) error {
+
+	ctsBytes, err := rlp.EncodeToBytes(cts)
+	if err != nil {
+		return err
+	}
+
+	err = db.Put(cctTxFullKey(cts.MainBlockNumber, cts.TxHash), ctsBytes)
+	if err != nil {
+		return err
+	}
+
+	blocksBytes, err := db.Get(cctHashKey(cts.TxHash))
+	if err != nil && err != leveldb.ErrNotFound{
+		return err
+	}
+
+	blocks := make([]*big.Int, 0)
+	if blocksBytes != nil {
+		err = rlp.DecodeBytes(blocksBytes, &blocks)
+		if err != nil {
+			return err
+		}
+
+		for _, blockNumber := range blocks {
+			if blockNumber.Cmp(cts.MainBlockNumber) == 0 {
+				return nil
+			}
+		}
+	}
+	blocks = append(blocks, cts.MainBlockNumber)
+	blocksBytes, err = rlp.EncodeToBytes(blocks)
+	if err != nil {
+		return err
+	}
+
+	return db.Put(cctHashKey(cts.TxHash), blocksBytes)
+}
+
+func GetCCTTxStatusByBlockNumber(db ethdb.Database, mainBlockNumber *big.Int) ([]*types.CCTTxStatus, error) {
+
+	result := make([]*types.CCTTxStatus, 0)
+
+	iter := db.NewIteratorWithPrefix(cctTxSearchKey(mainBlockNumber))
+	for iter.Next() {
+
+		cctData := &types.CCTTxStatus{}
+		err := rlp.DecodeBytes(iter.Value(), cctData)
+		if err != nil {
+			continue
+		}
+
+		result = append(result, cctData)
+	}
+
+	return result, nil
+}
+
+func GetCCTTxStatusByChainId(db ethdb.Database, mainBlockNumber *big.Int, chainId string) ([]*types.CCTTxStatus, error) {
+	
+	result := make([]*types.CCTTxStatus, 0)
+
+	iter := db.NewIteratorWithPrefix(cctTxSearchKey(mainBlockNumber))
+	for iter.Next() {
+
+		cctData := &types.CCTTxStatus{}
+		err := rlp.DecodeBytes(iter.Value(), cctData)
+		if err != nil {
+			continue
+		}
+
+		if cctData.FromChainId == chainId || cctData.ToChainId == chainId {
+			result = append(result, cctData)
+		}
+	}
+
+	return result, nil
+}
+
+func GetCCTTxStatusByHash(db ethdb.Database, mainBlockNumber *big.Int, hash common.Hash) (*types.CCTTxStatus, error) {
+
+	ctsBytes, err := db.Get(cctTxFullKey(mainBlockNumber, hash))
+	if err != nil {
+		return nil, err
+	}
+
+	cts := &types.CCTTxStatus{}
+	err = rlp.DecodeBytes(ctsBytes, cts)
+	if err != nil {
+		return nil, err
+	}
+
+	return cts, nil
+}
+
+func GetLatestCCTTxStatusByHash(db ethdb.Database, hash common.Hash) (*types.CCTTxStatus, error) {
+	blocksBytes, err := db.Get(cctHashKey(hash))
+	if err != nil {
+		return nil, err
+	}
+
+	latestBlock := (*big.Int)(nil)
+	if blocksBytes != nil {
+		blocks := make([]*big.Int, 0)
+		err = rlp.DecodeBytes(blocksBytes, &blocks)
+		if err != nil {
+			return nil, err
+		}
+		
+		for _, blockNumber := range blocks {
+			if latestBlock == nil || blockNumber.Cmp(latestBlock) > 0 {
+				latestBlock = blockNumber
+			}			
+		}
+	}
+	
+	if latestBlock != nil {
+		return GetCCTTxStatusByHash(db, latestBlock, hash)
+	} else {
+		return nil, nil
+	}
+}
+
+func HasCCTTxStatus(db ethdb.Database, blockNumber *big.Int, hash common.Hash,
+							fromChainId, toChainId string, amount *big.Int, status uint64) bool {
+	
+	iter := db.NewIteratorWithPrefix(cctTxSearchKey(blockNumber))
+	for iter.Next() {
+
+		cctData := &types.CCTTxStatus{}
+		err := rlp.DecodeBytes(iter.Value(), cctData)
+		if err != nil {
+			continue
+		}
+
+		if cctData.TxHash == hash && cctData.FromChainId == fromChainId && cctData.ToChainId == toChainId &&
+			cctData.Amount == amount && cctData.Status == status {
+			return true
+		}
+	}
+
+	return false
+}
+
+func DeleteCCTxStatus(db ethdb.Database, cts *types.CCTTxStatus) {
+	db.Delete(cctTxFullKey(cts.MainBlockNumber, cts.TxHash))
 }
 
 func decodeTx(txBytes []byte) (*types.Transaction, error) {
