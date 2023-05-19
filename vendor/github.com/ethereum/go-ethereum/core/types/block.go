@@ -575,3 +575,21 @@ func DecodeChildChainProofDataV1(bs []byte) (*ChildChainProofDataV1, error) {
 	}
 	return proofData, nil
 }
+const (
+	CCTFAILED = iota
+	CCTSUCCEEDED
+	CCTFROMSUCCEEDED
+	CCTUNHANDLED
+)
+
+//CCTTx record tx of cross chain in mainChain
+type CCTTxStatus struct {
+	MainBlockNumber     *big.Int
+	TxHash              common.Hash
+	Owner               common.Address
+	FromChainId         string
+	ToChainId           string
+	Amount              *big.Int
+	Status              uint64
+	ToChainOperated     bool
+}

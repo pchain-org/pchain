@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -44,20 +45,15 @@ var (
 			"to which epoch the block belongs.\n",
 	}
 
-	MainChainUrlFlag = cli.StringFlag{
-		Name:  "mainchainurl",
-		Usage: "main chain's url to which send the block, default value is http://localhost:6969/pchain\n",
-		Value: "http://localhost:6969/pchain",
-	}
-
 	sendBlockToMainChainCommand = cli.Command{
 		Name:     "sendblocktomainchain",
 		Usage:    "send block to main chain",
 		Category: "TOOLkIT COMMANDS",
 		Action:   utils.MigrateFlags(sendBlockToMainChain),
 		Flags: []cli.Flag{
+			utils.RPCListenAddrFlag,
+			utils.RPCPortFlag,
 			ToolkitDirFlag,
-			MainChainUrlFlag,
 		},
 		Description: `
 When tx3 or Epoch information are not send to main chain in time, main chain
@@ -92,7 +88,8 @@ func sendBlockToMainChain(ctx *cli.Context) error {
 		Exit(fmt.Errorf("saveDataToMainChain: failed to get PrivateKey, err: %v\n", err))
 	}
 
-	sendTxVars.mainChainUrl = ctx.GlobalString(MainChainUrlFlag.Name)
+	localRpcPrefix := calLocalRpcPrefix(ctx)
+	sendTxVars.mainChainUrl = localRpcPrefix + params.MainnetChainConfig.PChainId
 	sendTxVars.prv = prv
 	sendTxVars.account = crypto.PubkeyToAddress(sendTxVars.prv.PublicKey)
 	digest := crypto.Keccak256([]byte(chain.MainChain))
@@ -365,6 +362,12 @@ func sendDataToMainChain(data []byte, nonce *uint64) (common.Hash, error) {
 	}
 
 	return hash, err
+}
+
+func calLocalRpcPrefix(ctx *cli.Context) string {
+	localRpcPrefix := "http://" + ctx.GlobalString(utils.RPCListenAddrFlag.Name) + ":"
+	localRpcPrefix += fmt.Sprintf("%v", ctx.GlobalInt(utils.RPCPortFlag.Name)) + "/"
+	return localRpcPrefix
 }
 
 //attemps: this parameter means the total amount of operations

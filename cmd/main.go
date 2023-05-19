@@ -91,6 +91,7 @@ func main() {
 		sendBlockToMainChainCommand,
 		getBlockWithTxsCommand,
 		massWithdrawCommand,
+		crossChainTransferCommand,
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 
@@ -258,11 +259,14 @@ func newCliApp(version, usage string) *cli.App {
 		*/
 
 		ToolkitDirFlag,
-		MainChainUrlFlag,
-		ChainUrlFlag,
+		ChainIdFlag,
 		BlockNumberFlag,
 		CountPerSecFlag,
 		TotalTimeFlag,
+		FromChainIdFlag,
+		ToChainIdFlag,
+		ToFlag,
+		AmountFlag,
 	}
 	app.Flags = append(app.Flags, DebugFlags...)
 

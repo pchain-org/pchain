@@ -138,7 +138,46 @@ func WrpTransactionByHash(chainUrl string, hash common.Hash) (tx *types.Transact
 	return tx, isPending, nil
 }
 
+func WrpGetLatestCCTStatusByHash(chainUrl string, hash common.Hash) (*types.CCTTxStatus, error) {
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	client, err := Dial(chainUrl)
+	if err != nil {
+		log.Errorf("WrpGetLatestCCTStatusByHash, dial err: %v", err)
+		return nil, err
+	}
 
+	var cts *types.CCTTxStatus
+	err = client.c.CallContext(ctx, &cts, "eth_getLatestCCTStatusByHash", hash)
+	if err != nil {
+		Close(client)
+		log.Errorf("WrpGetLatestCCTStatusByHash, err: %v", err)
+		return nil, err
+	}
+
+	Close(client)
+	return cts, err
+}
+
+
+func WrpGetBalance(chainUrl string, addr common.Address, blockNumber *big.Int) (*big.Int, error) {
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	client, err := Dial(chainUrl)
+	if err != nil {
+		log.Errorf("WrpGetBalance, dial err: %v", err)
+		return nil, err
+	}
+
+	var balance hexutil.Big
+	err = client.c.CallContext(ctx, &balance, "eth_getBalance", addr, toBlockNumArg(blockNumber))
+	if err != nil {
+		Close(client)
+		log.Errorf("WrpGetBalance, err: %v", err)
+		return nil, err
+	}
+
+	Close(client)
+	return (*big.Int)(&balance), err
+}
 
 // SendDataToMainChain send epoch data to main chain through eth_sendRawTransaction
 // deprecated

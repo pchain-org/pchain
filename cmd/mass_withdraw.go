@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	pabi "github.com/pchain/abi"
 	"gopkg.in/urfave/cli.v1"
@@ -41,8 +42,9 @@ var (
 		Action:   utils.MigrateFlags(massWithdraw),
 		Flags: []cli.Flag{
 			ToolkitDirFlag,
-			MainChainUrlFlag,
-			ChainUrlFlag,
+			utils.RPCListenAddrFlag,
+			utils.RPCPortFlag,
+			ChainIdFlag,
 			CountPerSecFlag,
 			TotalTimeFlag,
 		},
@@ -60,7 +62,7 @@ const waitDuration = time.Second * 300
 var withdrawAmount = big.NewInt(int64(100))
 
 //variables
-var (
+var massiveWithdrawVars struct {
 	//enviorment variables
 	toolkitDir      string
 	mainChainUrl    string
@@ -70,17 +72,16 @@ var (
 	privkeyFileName string
 	keyStore        *keystore.KeyStore
 	account         accounts.Account
-	countPerSec     = 10
-	totalTime       = 10
+	countPerSec     int
+	totalTime       int
 
 	//state control variables
-	sendTx3done  = false
-	checkTx3done = false
-	sendTx4done  = false
-	checkTx4done = false
-	stop         = make(chan struct{}) // Channel wait to stop
-
-)
+	sendTx3done  bool          //false
+	checkTx3done bool          //false
+	sendTx4done  bool          //false
+	checkTx4done bool          //false
+	stop         chan struct{} //make(chan struct {}) // Channel wait to stop
+}
 
 type StatisticHolder struct {
 	startTime       time.Time
@@ -128,7 +129,7 @@ func massWithdraw(ctx *cli.Context) error {
 	go sendTx4()
 	go checkTx4()
 
-	<-stop
+	<-massiveWithdrawVars.stop
 
 	printStatistic()
 
@@ -137,43 +138,55 @@ func massWithdraw(ctx *cli.Context) error {
 
 func initEnv(ctx *cli.Context) {
 
-	toolkitDir = ctx.GlobalString(ToolkitDirFlag.Name)
-	mainChainUrl = ctx.GlobalString(MainChainUrlFlag.Name)
-	mainChainId = mainChainUrl[strings.LastIndex(mainChainUrl, "/")+1:]
-	childChainUrl = ctx.GlobalString(ChainUrlFlag.Name)
-	childChainId = childChainUrl[strings.LastIndex(childChainUrl, "/")+1:]
-	countPerSec = ctx.GlobalInt(CountPerSecFlag.Name)
-	totalTime = ctx.GlobalInt(TotalTimeFlag.Name)
+	massiveWithdrawVars.countPerSec = 10
+	massiveWithdrawVars.totalTime = 10
 
-	if countPerSec < 0 || countPerSec > 1000 {
+	//state control variables
+	massiveWithdrawVars.sendTx3done = false
+	massiveWithdrawVars.checkTx3done = false
+	massiveWithdrawVars.sendTx4done = false
+	massiveWithdrawVars.checkTx4done = false
+	massiveWithdrawVars.stop = make(chan struct{})
+
+	massiveWithdrawVars.toolkitDir = ctx.GlobalString(ToolkitDirFlag.Name)
+
+	localRpcPrefix := calLocalRpcPrefix(ctx)
+	massiveWithdrawVars.mainChainId = params.MainnetChainConfig.PChainId
+	massiveWithdrawVars.mainChainUrl = localRpcPrefix + massiveWithdrawVars.mainChainId
+	massiveWithdrawVars.childChainId = ctx.GlobalString(ChainIdFlag.Name)
+	massiveWithdrawVars.childChainUrl = localRpcPrefix + massiveWithdrawVars.childChainId
+	massiveWithdrawVars.countPerSec = ctx.GlobalInt(CountPerSecFlag.Name)
+	massiveWithdrawVars.totalTime = ctx.GlobalInt(TotalTimeFlag.Name)
+
+	if massiveWithdrawVars.countPerSec < 0 || massiveWithdrawVars.countPerSec > 1000 {
 		Exit(fmt.Errorf("countPerSec should be in [1, 1000]"))
 	}
 
-	if totalTime < 0 || totalTime > 100 {
+	if massiveWithdrawVars.totalTime < 0 || massiveWithdrawVars.totalTime > 100 {
 		Exit(fmt.Errorf("countPerSec should be in [1, 100]"))
 	}
 
 	err := error(nil)
-	files, err := ioutil.ReadDir(toolkitDir)
+	files, err := ioutil.ReadDir(massiveWithdrawVars.toolkitDir)
 	if err != nil {
 		Exit(err)
 	}
 	for _, file := range files {
 		if !file.IsDir() && strings.HasPrefix(file.Name(), privFilePrefix) {
-			privkeyFileName = toolkitDir + string(os.PathSeparator) + file.Name()
+			massiveWithdrawVars.privkeyFileName = massiveWithdrawVars.toolkitDir + string(os.PathSeparator) + file.Name()
 		}
 	}
-	if privkeyFileName == "" {
-		Exit(fmt.Errorf("there is no private key file under %s", toolkitDir))
+	if massiveWithdrawVars.privkeyFileName == "" {
+		Exit(fmt.Errorf("there is no private key file under %s", massiveWithdrawVars.toolkitDir))
 	}
-	keyStore = keystore.NewKeyStore(toolkitDir, keystore.StandardScryptN, keystore.StandardScryptP)
-	keyJSON, err := ioutil.ReadFile(privkeyFileName)
+	massiveWithdrawVars.keyStore = keystore.NewKeyStore(massiveWithdrawVars.toolkitDir, keystore.StandardScryptN, keystore.StandardScryptP)
+	keyJSON, err := ioutil.ReadFile(massiveWithdrawVars.privkeyFileName)
 	if err != nil {
 		Exit(err)
 	}
 	privKey, err := keystore.DecryptKey(keyJSON, password)
-	account = accounts.Account{Address: privKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: privkeyFileName}}
-	err = keyStore.Unlock(account, password)
+	massiveWithdrawVars.account = accounts.Account{Address: privKey.Address, URL: accounts.URL{Scheme: keystore.KeyStoreScheme, Path: massiveWithdrawVars.privkeyFileName}}
+	err = massiveWithdrawVars.keyStore.Unlock(massiveWithdrawVars.account, password)
 	if err != nil {
 		Exit(err)
 	}
@@ -272,11 +285,11 @@ func sendTx3() error {
 
 	nonceCache := uint64(0)
 	//within total time
-	for !time.Now().After(startTime.Add(time.Second * time.Duration(totalTime))) {
+	for !time.Now().After(startTime.Add(time.Second * time.Duration(massiveWithdrawVars.totalTime))) {
 		fmt.Printf("send tx3 in one second, start at: %v\n", time.Now())
 		//within one second
 		for !time.Now().After(lastSecond.Add(time.Second * 1)) {
-			if lastCount < countPerSec {
+			if lastCount < massiveWithdrawVars.countPerSec {
 				hash, err := sendOneTx3(&nonceCache)
 				if err == nil {
 					tx3CheckHHS.addOrUpdate(hash, false)
@@ -302,10 +315,10 @@ func sendTx3() error {
 		lastCount = 0
 	}
 
-	statisticHolder.tx3PredictCount = countPerSec * totalTime
+	statisticHolder.tx3PredictCount = massiveWithdrawVars.countPerSec * massiveWithdrawVars.totalTime
 	statisticHolder.tx3ActualCount = totalCount
 
-	sendTx3done = true
+	massiveWithdrawVars.sendTx3done = true
 	//tx3CheckHHS.addOrUpdate(common.HexToHash("56fcd79581628cdb65eb2f489cd6fdbfa3605d8582eded5ae5cf44405f8b157e"), false)
 
 	return nil
@@ -313,21 +326,21 @@ func sendTx3() error {
 
 func sendOneTx3(nonceCache *uint64) (common.Hash, error) {
 
-	bs, err := pabi.ChainABI.Pack(pabi.WithdrawFromChildChain.String(), childChainId)
+	bs, err := pabi.ChainABI.Pack(pabi.WithdrawFromChildChain.String(), massiveWithdrawVars.childChainId)
 	if err != nil {
 		log.Errorf("sendOneTx3, pack err: %v", err)
 		return common.Hash{}, err
 	}
 
 	// tx signer for the main chain
-	digest := crypto.Keccak256([]byte(childChainId))
+	digest := crypto.Keccak256([]byte(massiveWithdrawVars.childChainId))
 	chainId := new(big.Int).SetBytes(digest[:])
 
 	// gasLimit
 	defaultGas := pabi.WithdrawFromChildChain.RequiredGas()
 
 	// gasPrice
-	gasPrice, err := ethclient.WrpSuggestGasPrice(childChainUrl)
+	gasPrice, err := ethclient.WrpSuggestGasPrice(massiveWithdrawVars.childChainUrl)
 	if err != nil {
 		log.Errorf("sendOneTx3, WrpSuggestGasPrice err: %v", err)
 		return common.Hash{}, err
@@ -336,7 +349,7 @@ func sendOneTx3(nonceCache *uint64) (common.Hash, error) {
 	nonce := *nonceCache
 	if nonce == 0 {
 		// nonce, fetch the nonce first, if we get nonce too low error, we will manually add the value until the error gone
-		nonce, err = ethclient.WrpNonceAt(childChainUrl, account.Address, big.NewInt(int64(rpc.PendingBlockNumber)))
+		nonce, err = ethclient.WrpNonceAt(massiveWithdrawVars.childChainUrl, massiveWithdrawVars.account.Address, big.NewInt(int64(rpc.PendingBlockNumber)))
 		if err != nil {
 			log.Errorf("sendOneTx3, WrpNonceAt err: %v", err)
 			return common.Hash{}, err
@@ -348,14 +361,14 @@ func sendOneTx3(nonceCache *uint64) (common.Hash, error) {
 	tx := types.NewTransaction(nonce, pabi.ChainContractMagicAddr, withdrawAmount, defaultGas, gasPrice, bs)
 
 	// sign the tx
-	signedTx, err := keyStore.SignTx(account, tx, chainId)
+	signedTx, err := massiveWithdrawVars.keyStore.SignTx(massiveWithdrawVars.account, tx, chainId)
 	if err != nil {
 		log.Errorf("sendOneTx3, SignTx err: %v", err)
 		return common.Hash{}, err
 	}
 
 	// eth_sendRawTransaction
-	err = ethclient.WrpSendTransaction(childChainUrl, signedTx)
+	err = ethclient.WrpSendTransaction(massiveWithdrawVars.childChainUrl, signedTx)
 	if err != nil {
 		log.Errorf("sendOneTx3, WrpSendTransaction err: %v", err)
 		return common.Hash{}, err
@@ -372,10 +385,10 @@ func checkTx3() error {
 	receiveTime := time.Now()
 	for !time.Now().After(receiveTime.Add(waitDuration)) {
 		hash := common.Hash{}
-		if sendTx3done {
+		if massiveWithdrawVars.sendTx3done {
 			hash = tx3CheckHHS.getHashToHandle()
 			if common.EmptyHash(hash) {
-				checkTx3done = true
+				massiveWithdrawVars.checkTx3done = true
 				return nil
 			}
 		} else {
@@ -383,7 +396,7 @@ func checkTx3() error {
 		}
 
 		if !common.EmptyHash(hash) {
-			err := checkOneTx(hash, childChainUrl)
+			err := checkOneTx(hash, massiveWithdrawVars.childChainUrl)
 			if err == nil {
 				tx3CheckHHS.addOrUpdate(hash, true)
 				tx4SendHHS.addOrUpdate(hash, false)
@@ -395,7 +408,7 @@ func checkTx3() error {
 		}
 	}
 
-	checkTx3done = true
+	massiveWithdrawVars.checkTx3done = true
 	return nil
 }
 
@@ -416,10 +429,10 @@ func sendTx4() error {
 	nonceCache := uint64(0)
 	for !time.Now().After(receiveTime.Add(waitDuration)) {
 		tx3hash := common.Hash{}
-		if checkTx3done {
+		if massiveWithdrawVars.checkTx3done {
 			tx3hash = tx4SendHHS.getHashToHandle()
 			if common.EmptyHash(tx3hash) {
-				sendTx4done = true
+				massiveWithdrawVars.sendTx4done = true
 				return nil
 			}
 		} else {
@@ -439,7 +452,7 @@ func sendTx4() error {
 		}
 	}
 
-	sendTx4done = true
+	massiveWithdrawVars.sendTx4done = true
 	//tx4CheckHHS.addOrUpdate(common.HexToHash("0xc2ee2b0ffb2fc8a937d3c7f81e96395399ddfc0a3ad74f2802734523f1739af1"), false)
 
 	return nil
@@ -447,14 +460,14 @@ func sendTx4() error {
 
 func sendOneTx4(tx3hash common.Hash, nonceCache *uint64) (common.Hash, error) {
 
-	bs, err := pabi.ChainABI.Pack(pabi.WithdrawFromMainChain.String(), childChainId, withdrawAmount, tx3hash)
+	bs, err := pabi.ChainABI.Pack(pabi.WithdrawFromMainChain.String(), massiveWithdrawVars.childChainId, withdrawAmount, tx3hash)
 	if err != nil {
 		log.Errorf("sendOneTx4, pack err: %v", err)
 		return common.Hash{}, err
 	}
 
 	// tx signer for the main chain
-	digest := crypto.Keccak256([]byte(mainChainId))
+	digest := crypto.Keccak256([]byte(massiveWithdrawVars.mainChainId))
 	chainId := new(big.Int).SetBytes(digest[:])
 
 	// gasLimit
@@ -463,7 +476,7 @@ func sendOneTx4(tx3hash common.Hash, nonceCache *uint64) (common.Hash, error) {
 	nonce := *nonceCache
 	// nonce, fetch the nonce first, if we get nonce too low error, we will manually add the value until the error gone
 	if nonce == 0 {
-		nonce, err = ethclient.WrpNonceAt(mainChainUrl, account.Address, big.NewInt(int64(rpc.PendingBlockNumber)))
+		nonce, err = ethclient.WrpNonceAt(massiveWithdrawVars.mainChainUrl, massiveWithdrawVars.account.Address, big.NewInt(int64(rpc.PendingBlockNumber)))
 		if err != nil {
 			log.Errorf("sendOneTx4, WrpNonceAt err: %v", err)
 			return common.Hash{}, err
@@ -476,7 +489,7 @@ func sendOneTx4(tx3hash common.Hash, nonceCache *uint64) (common.Hash, error) {
 	i := int64(0)
 	for ; i < 5; i++ {
 		if i == 0 { // gasPrice
-			gasPrice, err = ethclient.WrpSuggestGasPrice(mainChainUrl)
+			gasPrice, err = ethclient.WrpSuggestGasPrice(massiveWithdrawVars.mainChainUrl)
 			if err != nil {
 				log.Errorf("sendOneTx4, WrpSuggestGasPrice err: %v", err)
 				return common.Hash{}, err
@@ -489,14 +502,14 @@ func sendOneTx4(tx3hash common.Hash, nonceCache *uint64) (common.Hash, error) {
 		tx := types.NewTransaction(nonce, pabi.ChainContractMagicAddr, withdrawAmount, defaultGas, gasPrice, bs)
 
 		// sign the tx
-		signedTx, err = keyStore.SignTx(account, tx, chainId)
+		signedTx, err = massiveWithdrawVars.keyStore.SignTx(massiveWithdrawVars.account, tx, chainId)
 		if err != nil {
 			log.Errorf("sendOneTx4, SignTx err: %v", err)
 			return common.Hash{}, err
 		}
 
 		// eth_sendRawTransaction
-		err = ethclient.WrpSendTransaction(mainChainUrl, signedTx)
+		err = ethclient.WrpSendTransaction(massiveWithdrawVars.mainChainUrl, signedTx)
 		if err != nil {
 			if err.Error() == core.ErrReplaceUnderpriced.Error() {
 				continue
@@ -524,18 +537,18 @@ func checkTx4() error {
 	receiveTime := time.Now()
 	for !time.Now().After(receiveTime.Add(waitDuration)) {
 		hash := common.Hash{}
-		if sendTx4done {
+		if massiveWithdrawVars.sendTx4done {
 			hash = tx4CheckHHS.getHashToHandle()
 			if common.EmptyHash(hash) {
 				statisticHolder.endTime = time.Now()
-				close(stop)
+				close(massiveWithdrawVars.stop)
 				return nil
 			}
 		} else {
 			hash = tx4CheckHHS.getHashToHandle()
 		}
 		if !common.EmptyHash(hash) {
-			err := checkOneTx(hash, mainChainUrl)
+			err := checkOneTx(hash, massiveWithdrawVars.mainChainUrl)
 			if err == nil {
 				tx4CheckHHS.addOrUpdate(hash, true)
 				statisticHolder.tx4CheckedCount++
@@ -547,7 +560,7 @@ func checkTx4() error {
 	}
 
 	statisticHolder.endTime = time.Now()
-	close(stop)
+	close(massiveWithdrawVars.stop)
 
 	return nil
 }

@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	ChainUrlFlag = cli.StringFlag{
-		Name:  "chainurl",
+	ChainIdFlag = cli.StringFlag{
+		Name:  "chainid",
 		Usage: "chain's url to get block and its transactions\n",
 	}
 
@@ -32,7 +32,9 @@ var (
 		Action:   utils.MigrateFlags(getBlockWithTxs),
 		Flags: []cli.Flag{
 			ToolkitDirFlag,
-			ChainUrlFlag,
+			utils.RPCListenAddrFlag,
+			utils.RPCPortFlag,
+			ChainIdFlag,
 			BlockNumberFlag,
 		},
 		Description: `
@@ -50,10 +52,12 @@ func getBlockWithTxs(ctx *cli.Context) error {
 		toolkitDir = "."
 	}
 
-	if !ctx.IsSet(ChainUrlFlag.Name) {
-		Exit(fmt.Errorf("--chainurl needed"))
+	if !ctx.IsSet(ChainIdFlag.Name) {
+		Exit(fmt.Errorf("--chainId needed"))
 	}
-	chainUrl := ctx.GlobalString(ChainUrlFlag.Name)
+	chainId := ctx.GlobalString(ChainIdFlag.Name)
+	localRpcPrefix := calLocalRpcPrefix(ctx)
+	chainUrl := localRpcPrefix + chainId
 
 	if !ctx.IsSet(BlockNumberFlag.Name) {
 		Exit(fmt.Errorf("--blocknumber needed"))
