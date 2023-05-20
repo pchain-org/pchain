@@ -144,38 +144,50 @@ To learn how to delegate your PI to validators to receive rewards, read [How To 
 
 ### How To use toolkit With This Branch
 
-**Tool1. sendblocktomainchain**  which is to send child chain's block to mainchain to refresh tx3/epoch, the command format is 
+**Tool1. sendblocktomainchain**  which is to send child chain's block to mainchain(default url is http://localhost:6969/pchain) to refresh tx3/epoch, the command format is 
 ```
-./pchain sendblocktomainchain --toolkitdir toolkit_dir --mainchainurl mainchain_url
+./pchain sendblocktomainchain --toolkitdir toolkit_dir
 ```
 
 there should be one block.json and one priv_validator.json under toolkit_dir, and examples can be found under ./toolkitdir directory. block.json contains the block to send; and priv_validator.json could be any valid address, which is no need to be on-duty validator.
 
 For example, to send block to the main chain 
 ```
-./pchain sendblocktomainchain --toolkitdir /home/user/toolkit/.pchain --mainchainurl http://127.0.0.1:6969/pchain
+./pchain sendblocktomainchain --toolkitdir /home/user/toolkit/.pchain
 ```
 
 **Tool2. getblockwithtxs**  which is to get one chain's block to local, the command format is 
 ```
-./pchain getblockwithtxs --chainurl chain_url --blocknumber block_number --toolkitdir toolkit_dir 
+./pchain getblockwithtxs --chainid chain_id --blocknumber block_number --toolkitdir toolkit_dir 
 ```
 
-if there is block with block_number on chain_url, one block_`block_number`.json file would be generated under toolkit_dir, which contains the json-format content of the block with its all transactions.
+if there is block with block_number on chain_id(the url will be http://localhost:6969/chain_id), one block_`block_number`.json file would be generated under toolkit_dir, which contains the json-format content of the block with its all transactions.
 
 For example, to get block 13215 from child_0 
 ```
-./pchain getblockwithtxs --chainurl http://127.0.0.1:6969/child_0 --blocknumber 13215 --toolkitdir /home/user/toolkit/.pchain
+./pchain getblockwithtxs --chainid child_0 --blocknumber 13215 --toolkitdir /home/user/toolkit/.pchain
 ```
 
 **Tool3. masswithdraw**  which is to send tx3(tx4 will be sent automatically for tx3) in batch to perform stress test, and this tool should run on local chain or test chain. the command format is 
 ```
-./pchain masswithdraw --mainchainurl mainchain_url --chainurl chain_url --toolkitdir toolkit_dir --countpersec tx3number_per_second --totaltime total_seconds
+./pchain masswithdraw --chainid chain_Id --toolkitdir toolkit_dir --countpersec tx3number_per_second --totaltime total_seconds
 ```
 
-there should be one UTC-xxx-address.json under toolkit_dir, and its example can be found under ./toolkitdir directory. this private key file contain one account who should have enough token(PI)  on chainurl for withdrawal.
+with this command, the default mainchain url is http://localhost:6969/pchain, and the child chain is http://localhost:6969/chain_Id, there should be one UTC-xxx-address.json under toolkit_dir, and its example can be found under ./toolkitdir directory. this private key file contain one account who should have enough token(PI)  on chainurl for withdrawal.
 
 For example, to send 10 tx3 to child_0 per-second, and last 5 seconds 
 ```
-./pchain masswithdraw --mainchainurl http://127.0.0.1:6969/pchain --chainurl http://127.0.0.1:6969/child_0 --toolkitdir /home/user/toolkit/.pchain --countpersec 10 --totaltime 5
+./pchain masswithdraw --chainid child_0 --toolkitdir /home/user/toolkit/.pchain --countpersec 10 --totaltime 5
+```
+
+**Tool4. crosschaintransfer**  which is to send cross chain transfer transaction. the command format is 
+```
+./pchain crosschaintransfer --fromchain fromchain_id --tochain tochain_id --amount amount --toolkitdir toolkit_dir
+```
+
+with this command, the fromchain's url is http://localhost:6969/fromchain_id, and the tochain's url is http://localhost:6969/tochain_Id, there should be one UTC-xxx-address.json under toolkit_dir, and its example can be found under ./toolkitdir directory. this private key file contain one account who should have enough token(PI)  on fromchain_id for cross chain transfer.
+
+For example, to send 1000 wei from pchain to child_0
+```
+./pchain crosschaintransfer --fromchain pchain --tochain child_0 --amount 1000 --toolkitdir /home/user/toolkit/.pchain
 ```
