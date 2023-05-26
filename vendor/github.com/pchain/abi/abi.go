@@ -208,11 +208,11 @@ type CrossChainTransferRequestArgs struct {
 
 type CrossChainTransferExecArgs struct {
 	MainBlockNumber *big.Int
+	TxHash      common.Hash
 	Owner       common.Address
 	FromChainId string
 	ToChainId   string
 	Amount      *big.Int
-	TxHash      common.Hash
 	Status      uint64
 	LocalStatus uint64
 }
@@ -379,6 +379,14 @@ const jsonChainABI = `
 				"type": "uint256"
 			},
 			{
+				"name": "txHash",
+				"type": "bytes32"
+			},
+			{
+				"name": "owner",
+				"type": "address"
+			},
+			{
 				"name": "fromChainId",
 				"type": "string"
 			},
@@ -392,11 +400,11 @@ const jsonChainABI = `
 			},
 			{
 				"name": "status",
-				"type": "uint256"
+				"type": "uint64"
 			},
 			{
 				"name": "localStatus",
-				"type": "uint256"
+				"type": "uint64"
 			}
 		]
 	},

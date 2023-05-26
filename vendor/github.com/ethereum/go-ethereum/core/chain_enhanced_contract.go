@@ -15,6 +15,7 @@ type chainEnhPrecompileInputPacket struct {
 	bc *BlockChain
 	statedb *state.StateDB
 	ops *types.PendingOps
+	header *types.Header
 	cch CrossChainHelper
 	mining bool
 }
@@ -47,6 +48,7 @@ func (*chainEnhPrecompile) Run(input interface{}) ([]byte, error) {
 	bc := inputPacket.bc
 	statedb := inputPacket.statedb
 	ops := inputPacket.ops
+	header := inputPacket.header
 	cch := inputPacket.cch
 	mining := inputPacket.mining
 
@@ -60,7 +62,7 @@ func (*chainEnhPrecompile) Run(input interface{}) ([]byte, error) {
 		if function.IsCrossChainType() {
 			if fn, ok := applyCb.(CrossChainApplyCb); ok {
 				cch.GetMutex().Lock()
-				err := fn(tx, statedb, ops, cch, mining)
+				err := fn(tx, statedb, bc, header, ops, cch, mining)
 				cch.GetMutex().Unlock()
 
 				if err != nil {
@@ -71,7 +73,7 @@ func (*chainEnhPrecompile) Run(input interface{}) ([]byte, error) {
 			}
 		} else {
 			if fn, ok := applyCb.(NonCrossChainApplyCb); ok {
-				if err := fn(tx, statedb, bc, ops); err != nil {
+				if err := fn(tx, statedb, bc, header, ops); err != nil {
 					return nil, err
 				}
 			} else {

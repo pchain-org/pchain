@@ -69,12 +69,54 @@ func (sc *ConsensusState) saveBlockToMainChain(blockNumber uint64, version int) 
 	return sc.sendData.addOrUpdateDataItem(item)
 }
 
+
+func (sc *ConsensusState) CurrentCCTBlock() *big.Int {
+	return sc.sendData.CurrentCCTBlock()
+}
+
+func (sc *ConsensusState) WriteCurrentCCTBlock(blockNumber *big.Int) {
+	sc.sendData.WriteCurrentCCTBlock(blockNumber)
+}
+
+func (sc *ConsensusState) GetLatestCCTExecStatus(hash common.Hash) *ethTypes.CCTTxExecStatus {
+	return sc.sendData.GetLatestCCTExecStatus(hash)
+}
+
+func (sc *ConsensusState) GetCCTExecStatusByHash(hash common.Hash) []*ethTypes.CCTTxExecStatus {
+	return sc.sendData.GetCCTExecStatusByHash(hash)
+}
+
+func (sc *ConsensusState) WriteCCTExecStatus(receipt *ethTypes.CCTTxExecStatus) {
+	sc.sendData.WriteCCTExecStatus(receipt)
+}
+
+func (sc *ConsensusState) DeleteCCTExecStatus(hash common.Hash) {
+	sc.sendData.DeleteCCTExecStatus(hash)
+}
+
+func (sc *ConsensusState) SignTx(tx *ethTypes.Transaction) (*ethTypes.Transaction, error) {
+	//initialize sendTxVars
+	prv, err := crypto.ToECDSA(sc.privValidator.(*types.PrivValidator).PrivKey.(tmdcrypto.BLSPrivKey).Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	digest := crypto.Keccak256([]byte(sc.chainConfig.PChainId))
+	signer := ethTypes.LatestSignerForChainID(new(big.Int).SetBytes(digest[:]))
+
+	return ethTypes.SignTx(tx, signer, prv)
+}
+
 var (
 	indexKeyFmt     = "Data-%x" //%x is blockNumber
 	indexKeyPrefix  = []byte("Data-")
 	indexValue      = []byte("~o~") //position occupation
 	contentKeyFmt   = "Content-%x"  //%x is the number of which block to send
 	contentKeyPrefix = []byte("Content-")
+
+	cctBlockKey     = []byte("CCTBlock-")
+
+	receiptKeyFmt      = "CCTReceipt-%x"
 
 	ExceedTxCount   = errors.New("exceed the tx count")
 )
@@ -84,27 +126,31 @@ type SDItem struct{
 
 	//only parent item would be stored in db
 	isParent        bool
-	//for parent, key is block number string, for child, key is tx3beginindex
+	//for parent, key is block number string, for child, key is TxBeginindex
 	children        map[string]*SDItem
 	parent          *SDItem
 	proofDataBytes  []byte
-	tx3Hashes       []common.Hash
+	txHashes        []common.Hash
 
 	BlockNumber     uint64
 	EpochNumber     int //less than zero means no epoch information
-	//when the count of tx3es is too many, split them into different sd2vc txes
-	//for example there is 230 tx3es, send them with different 3 sd2vc txes which may contains tx3
-	//like (Tx3BeginIndex, Tx3Count) = (0, 100), (100, 100), (200, 30]
-	Tx3BeginIndex   uint64
-	Tx3Count        uint64 //equcal zero means no tx3
+	//when the count of txs is too many, split them into different sd2vc txs
+	//for example there is 230 txes, send them with different 3 sd2vc txes which may contains tx
+	//like (TxBeginIndex, TxCount) = (0, 100), (100, 100), (200, 30]
+	TxBeginIndex    uint64
+	TxCount         uint64 //equcal zero means no tx
 	SentTimes       int
 	Hash            common.Hash //if sd2mc tx has sent, here is the hash
+
 }
 
 type SendData struct {
 	DB              ethdb.Database
-	items           map[string]*SDItem //string should be "blockNumber" or "blockNumber+tx3BeginIndex+tx3EndIndex"
 	dbMtx           sync.Mutex
+
+	items           map[string]*SDItem //string should be "blockNumber" or "blockNumber+txBeginIndex+txCount"
+
+	cctBlock        *big.Int
 
 	runMtx			sync.Mutex
 
@@ -181,14 +227,14 @@ func (sd *SendData) addOrUpdateDataItem(item *SDItem) error {
 		if parentItem.children == nil {
 			parentItem.children = make(map[string]*SDItem)
 		}
-		parentItem.children[calcMapKey(item.Tx3BeginIndex)] = item
+		parentItem.children[calcMapKey(item.TxBeginIndex)] = item
 	}
 
 	return nil
 }
 
 //only parent item needs db operation
-func (sd *SendData) deleteDataItem (isParent bool, blockNumber, tx3BeginIndex uint64) error {
+func (sd *SendData) deleteDataItem (isParent bool, blockNumber, beginIndex uint64) error {
 
 	sd.dbMtx.Lock()
 	defer sd.dbMtx.Unlock()
@@ -196,7 +242,7 @@ func (sd *SendData) deleteDataItem (isParent bool, blockNumber, tx3BeginIndex ui
 	sdItem := sd.items[calcMapKey(blockNumber)]
 	deleteParent := isParent
 	if !deleteParent {
-		delete(sdItem.children, calcMapKey(tx3BeginIndex))
+		delete(sdItem.children, calcMapKey(beginIndex))
 		if len(sdItem.children) == 0 {
 			deleteParent = true
 		}
@@ -326,7 +372,7 @@ func (sd *SendData) checkOneItem(picked *SDItem, inDetail bool) {
 		apiBridge := sd.CCH().GetApiBridgeFromMainChain()
 		isPending, err := apiBridge.GetTransactionByHash(ctx, hash)
 		if err != nil {
-			sd.Logger().Error("checkOneBlock: tx %x not found in main chain, send again", hash)
+			sd.Logger().Error("checkOneBlock: tx not found in main chain, send again", "hash", hash)
 			picked.Hash = common.Hash{}
 			sd.addOrUpdateDataItem(picked)
 		} else {
@@ -339,11 +385,11 @@ func (sd *SendData) checkOneItem(picked *SDItem, inDetail bool) {
 					if picked.EpochNumber >= 0 {
 						sd.checkEpochInMainChain(block)
 					}
-					if picked.Tx3Count > 0 {
-						sd.checkTx3InMainChain(block)
+					if picked.TxCount > 0 {
+						sd.checkTxInMainChain(block)
 					}
 				}
-				sd.deleteDataItem(picked.isParent, picked.BlockNumber, picked.Tx3BeginIndex)
+				sd.deleteDataItem(picked.isParent, picked.BlockNumber, picked.TxBeginIndex)
 			}
 		}
 	}
@@ -354,8 +400,8 @@ func (sd *SendData) checkEpochInMainChain(block *ethTypes.Block) error {
 	return nil
 }
 
-func (sd *SendData) checkTx3InMainChain(block *ethTypes.Block) error {
-	sd.Logger().Infof("CheckTx3InMainChain: block %v tx3 was stored in main chain", block.NumberU64())
+func (sd *SendData) checkTxInMainChain(block *ethTypes.Block) error {
+	sd.Logger().Infof("checkTxInMainChain: block %v tx was stored in main chain", block.NumberU64())
 	return nil
 }
 
@@ -392,7 +438,7 @@ func (sd *SendData) pickOneForSend() *SDItem {
 
 	if picked != nil {
 		sd.Logger().Infof("pickOneForSend: block (%d-%d-%d) is picked to send to main chain",
-			picked.BlockNumber, picked.Tx3BeginIndex, picked.Tx3Count)
+			picked.BlockNumber, picked.TxBeginIndex, picked.TxCount)
 	} else {
 		sd.Logger().Debug("pickOneForSend: no block is picked to send")
 	}
@@ -403,8 +449,9 @@ func (sd *SendData) pickOneForSend() *SDItem {
 type MPDRet struct {
 	proofDataBytes []byte
 	epochNumber    int
-	tx3Count       uint64
-	tx3Hashes      []common.Hash
+	txHashes       []common.Hash
+	txCount        uint64
+	iterCount      uint64
 	ended          bool
 	err            error
 }
@@ -414,7 +461,7 @@ func (sd *SendData) sendOneItem(picked *SDItem, version int) error {
 	defer sd.runMtx.Unlock()
 
 	proofDataBytes := picked.proofDataBytes
-	tx3BeginIndex := uint64(0)
+	beginIndex := uint64(0)
 
 	if len(proofDataBytes) == 0 {
 		block := sd.ChainReader().GetBlockByNumber(picked.BlockNumber)
@@ -422,10 +469,15 @@ func (sd *SendData) sendOneItem(picked *SDItem, version int) error {
 		ended := false
 		isParent := true
 		for !ended {
-			ret := sd.MakeProofData(block, tx3BeginIndex, version)
+			ret := sd.MakeProofData(block, beginIndex, version)
 			if ret.err != nil {
-				return ret.err
+				if ret.err == ExceedTxCount {
+					break
+				} else {
+					return ret.err
+				}
 			}
+
 			if !ret.ended && isParent {
 				isParent = false
 			}
@@ -434,23 +486,23 @@ func (sd *SendData) sendOneItem(picked *SDItem, version int) error {
 					isParent: isParent,
 					BlockNumber: picked.BlockNumber,
 					EpochNumber: ret.epochNumber,
-					tx3Hashes: ret.tx3Hashes,
-					Tx3BeginIndex: tx3BeginIndex,
-					Tx3Count: ret.tx3Count,
+					txHashes: ret.txHashes,
+					TxBeginIndex: beginIndex,
+					TxCount: ret.txCount,
 					proofDataBytes: ret.proofDataBytes,
 				}
 				sd.addOrUpdateDataItem(item)
 			}
 
-			tx3BeginIndex += ret.tx3Count
+			beginIndex += ret.iterCount
 			ended = ret.ended
 		}
 
+		picked = sd.items[calcMapKey(picked.BlockNumber)]
 		if len(picked.children) != 0 {
 			picked = sd.items[calcMapKey(picked.BlockNumber)].children[calcMapKey(uint64(0))]
-		} else { // picked's pointer has been replaced after above addOrUpdateDataItem()
-			picked = sd.items[calcMapKey(picked.BlockNumber)]
 		}
+
 		proofDataBytes = picked.proofDataBytes
 	}
 
@@ -459,11 +511,11 @@ func (sd *SendData) sendOneItem(picked *SDItem, version int) error {
 		picked.SentTimes++
 		picked.Hash = hash
 		sd.addOrUpdateDataItem(picked)
-		if picked.Tx3Count > 0 {
+		if picked.TxCount > 0 {
 			sd.Logger().Infof("sendDataToMainChain with (%v-%v-%v), first hashe is:",
-				picked.BlockNumber, picked.Tx3BeginIndex, picked.Tx3Count)
-			sd.Logger().Infof("%x ", picked.tx3Hashes[0])
-			//for _,hash := range picked.tx3Hashes {
+				picked.BlockNumber, picked.TxBeginIndex, picked.TxCount)
+			sd.Logger().Infof("%x ", picked.txHashes[0])
+			//for _,hash := range picked.txHashes {
 			//	sd.Logger().Infof("%x ", hash)
 			//}
 		}
@@ -476,7 +528,7 @@ func (sd *SendData) sendOneItem(picked *SDItem, version int) error {
 	return err
 }
 
-func (sd *SendData) MakeProofData(block *ethTypes.Block, tx3BeginIndex uint64, version int) (mpdRet *MPDRet) {
+func (sd *SendData) MakeProofData(block *ethTypes.Block, beginIndex uint64, version int) (mpdRet *MPDRet) {
 
 	mpdRet = &MPDRet{ended:true}
 
@@ -515,17 +567,16 @@ func (sd *SendData) MakeProofData(block *ethTypes.Block, tx3BeginIndex uint64, v
 	} else {
 
 		mpdRet.ended = false
-
-		lastTx3Count := uint64(0)
-		lastTx3Hashes := make([]common.Hash,0)
+		lastTxHashes := make([]common.Hash,0)
+		lastTxCount := uint64(0)
+		lastIterCount := uint64(0)
 		lastProofDataBytes := []byte{}
-		ended := false
 		step := uint64(10)
-		tx3Count := step
+		count := step
 		for ;; {
-			proofData, tx3Hashes, err := NewChildChainProofDataV1(block, tx3BeginIndex, tx3Count)
+			proofData, hashes, iCount, err := NewChildChainProofDataV1(block, beginIndex, count)
 			if err == ExceedTxCount {
-				mpdRet.ended = true
+				mpdRet.err = err
 				return
 			} else if err != nil {
 				mpdRet.err = err
@@ -544,26 +595,25 @@ func (sd *SendData) MakeProofData(block *ethTypes.Block, tx3BeginIndex uint64, v
 			}
 
 			lastProofDataBytes = proofDataBytes
-			lastTx3Hashes = tx3Hashes
-			lastTx3Count = uint64(len(tx3Hashes))
-			if lastTx3Count < tx3Count {
-				ended = true
+			lastTxHashes = hashes
+			lastTxCount = uint64(len(proofData.TxProofs))
+			lastIterCount = iCount
+
+			if iCount < count {
+				mpdRet.ended = true
 				break
 			}
 
-			tx3Count += step //try to contain 10 more tx3
+			count += step //try to contain 10 more tx
 		}
 
 		mpdRet.proofDataBytes = lastProofDataBytes
-		mpdRet.tx3Hashes = lastTx3Hashes
-		mpdRet.tx3Count = lastTx3Count
-
-		if ended {
-			mpdRet.ended = true
-		}
+		mpdRet.txHashes = lastTxHashes
+		mpdRet.txCount = lastTxCount
+		mpdRet.iterCount = lastIterCount
 	}
-	sd.Logger().Infof("MakeProofData proof data length: %d， tx3BeginIndex is %v, tx3Count is %v",
-						len(proofDataBytes), tx3BeginIndex, mpdRet.tx3Count)
+	sd.Logger().Infof("MakeProofData proof data length: %d， beginIndex is %v, iterCount is %v, txCount is %v",
+						len(proofDataBytes), beginIndex, mpdRet.iterCount, mpdRet.txCount)
 
 	return
 }
@@ -640,6 +690,97 @@ func (sd *SendData) SendDataToMainChain(data []byte, nonce *uint64) (common.Hash
 }
 
 
+func (sd *SendData) CurrentCCTBlock() *big.Int {
+	if sd.cctBlock != nil {
+		return new(big.Int).Set(sd.cctBlock)
+	}
+
+	sd.dbMtx.Lock()
+	defer sd.dbMtx.Unlock()
+
+	bnBytes, err := sd.DB.Get(cctBlockKey)
+	if err != nil {
+		return nil
+	}
+
+	return new(big.Int).SetBytes(bnBytes)
+}
+
+func (sd *SendData) WriteCurrentCCTBlock(blockNumber *big.Int) {
+	if sd.cctBlock == nil || blockNumber.Cmp(sd.cctBlock) > 0 {
+		sd.cctBlock = blockNumber
+
+		sd.dbMtx.Lock()
+		defer sd.dbMtx.Unlock()
+
+		sd.DB.Put(cctBlockKey, sd.cctBlock.Bytes())
+	}
+}
+
+func calReceiptKey(hash common.Hash) []byte {
+	return []byte(fmt.Sprintf(receiptKeyFmt, hash))
+}
+
+func (sd *SendData) GetLatestCCTExecStatus(hash common.Hash) *ethTypes.CCTTxExecStatus {
+	cctESs := sd.GetCCTExecStatusByHash(hash)
+	if len(cctESs) == 0 {
+		return nil
+	} else {
+		cctES := cctESs[0]
+		for _, cts := range cctESs {
+			if cts.MainBlockNumber.Cmp(cts.MainBlockNumber) > 0 {
+				cctES = cts
+			}
+		}
+		return cctES
+	}
+}
+
+func (sd *SendData) GetCCTExecStatusByHash(hash common.Hash) []*ethTypes.CCTTxExecStatus {
+
+	sd.dbMtx.Lock()
+	defer sd.dbMtx.Unlock()
+
+	cctESBytes, err := sd.DB.Get(calReceiptKey(hash))
+	if err != nil {
+		return nil
+	}
+
+	cctESs := make([]*ethTypes.CCTTxExecStatus, 0)
+	err = rlp.DecodeBytes(cctESBytes, &cctESs)
+	if err != nil {
+		return nil
+	}
+
+	return cctESs
+}
+
+func (sd *SendData) WriteCCTExecStatus(cctES *ethTypes.CCTTxExecStatus) {
+	if cctES != nil {
+
+		receipts := sd.GetCCTExecStatusByHash(cctES.TxHash)
+		receipts = append(receipts, cctES)
+
+		receiptByptes, err := rlp.EncodeToBytes(receipts)
+		if err != nil {
+			return
+		}
+
+		sd.dbMtx.Lock()
+		defer sd.dbMtx.Unlock()
+
+		sd.DB.Put(calReceiptKey(cctES.TxHash), receiptByptes)
+	}
+}
+
+func (sd *SendData) DeleteCCTExecStatus(hash common.Hash) {
+
+	sd.dbMtx.Lock()
+	defer sd.dbMtx.Unlock()
+
+	sd.DB.Delete(calReceiptKey(hash))
+}
+
 func newTX3ProofData(block *ethTypes.Block) (*ethTypes.TX3ProofData, error) {
 	ret := &ethTypes.TX3ProofData{
 		Header: block.Header(),
@@ -680,11 +821,11 @@ func newTX3ProofData(block *ethTypes.Block) (*ethTypes.TX3ProofData, error) {
 	return ret, nil
 }
 
-func NewChildChainProofDataV1(block *ethTypes.Block, tx3BeginIndex, tx3Count uint64) (*ethTypes.ChildChainProofDataV1, []common.Hash, error) {
+func NewChildChainProofDataV1(block *ethTypes.Block, beginIndex, count uint64) (*ethTypes.ChildChainProofDataV1, []common.Hash, uint64, error) {
 
 	txs := block.Transactions()
-	if tx3BeginIndex > uint64(len(txs)) {
-		return nil, nil, ExceedTxCount
+	if beginIndex > uint64(len(txs)) {
+		return nil, nil, 0, ExceedTxCount
 	}
 
 	// build the Trie (see derive_sha.go)
@@ -700,13 +841,17 @@ func NewChildChainProofDataV1(block *ethTypes.Block, tx3BeginIndex, tx3Count uin
 		Header: block.Header(),
 	}
 
-	tx3hashes := make([]common.Hash, 0)
-	// do the Merkle Proof for the specific tx
-	for i, tx := range txs {
+	txHashes := make([]common.Hash, 0)
 
-		if uint64(len(tx3hashes)) >= tx3Count {
+	// do the Merkle Proof for the specific tx
+	slicedTxs := txs[beginIndex:]
+	iCount := uint64(0)
+	for i, tx := range slicedTxs {
+
+		if uint64(i) >= count {
 			break
 		}
+		iCount ++
 
 		if pabi.IsPChainContractAddr(tx.To()) {
 			data := tx.Data()
@@ -715,23 +860,23 @@ func NewChildChainProofDataV1(block *ethTypes.Block, tx3BeginIndex, tx3Count uin
 				continue
 			}
 
-			if function == pabi.WithdrawFromChildChain {
+			if function == pabi.WithdrawFromChildChain ||
+				function == pabi.CrossChainTransferExec {
 				kvSet := ethTypes.MakeBSKeyValueSet()
 				keybuf.Reset()
-				rlp.Encode(keybuf, uint(i))
+				realIndex := uint(i) + uint(beginIndex)
+				rlp.Encode(keybuf, realIndex)
 				if err := trie.Prove(keybuf.Bytes(), 0, kvSet); err != nil {
-					return nil, nil, err
+					return nil, nil, iCount, err
 				}
 
-				if uint64(i) >= tx3BeginIndex {
-					proofData.TxIndexs = append(proofData.TxIndexs, uint(i))
-					proofData.TxProofs = append(proofData.TxProofs, kvSet)
+				proofData.TxIndexs = append(proofData.TxIndexs, realIndex)
+				proofData.TxProofs = append(proofData.TxProofs, kvSet)
 
-					tx3hashes = append(tx3hashes, tx.Hash())
-				}
+				txHashes = append(txHashes, tx.Hash())
 			}
 		}
 	}
 
-	return proofData, tx3hashes, nil
+	return proofData, txHashes, iCount, nil
 }

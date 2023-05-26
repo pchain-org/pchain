@@ -57,7 +57,7 @@ Send tx3/tx4 in bunch to perform stress test.`,
 const privFilePrefix = "UTC--"
 const password = "pchain"
 const maxHandleTimes = 5
-const waitDuration = time.Second * 300
+const waitDuration = time.Second * 120
 
 var withdrawAmount = big.NewInt(int64(100))
 
@@ -262,6 +262,16 @@ func (ha *HandleHashSet) getHashToHandle() common.Hash {
 
 	ha.needHandle = needHandle
 	return firstFoundHash
+}
+
+func (ha *HandleHashSet) printUnhandedHashes(count int) {
+	i := 0
+	for hash, handled := range ha.hashHandledMap {
+		if !handled && i < count {
+			fmt.Printf("unhanded Hash: %x\n", hash)
+			i++
+		}
+	}
 }
 
 func newHandleHashSet() *HandleHashSet {
@@ -567,7 +577,7 @@ func checkTx4() error {
 
 func printStatistic() {
 	fmt.Printf("\n\n\n\n\n\n"+
-		"this statistic of mass tx3/tx4 test\n"+
+		"this statistic of massive tx3/tx4 test\n"+
 		"startTime: %v\n"+
 		"endTime:%v\n"+
 		"total running time:%v\n"+

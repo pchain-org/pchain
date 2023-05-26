@@ -56,9 +56,9 @@ var (
 			ToolkitDirFlag,
 		},
 		Description: `
-When tx3 or Epoch information are not send to main chain in time, main chain
+When tx or Epoch information are not send to main chain in time, main chain
 may deny processing of withdraw from child chain.
-this command is to help send the block which holds the tx3es or epoch to main
+this command is to help send the block which holds the txs or epoch to main
 chain.`,
 	}
 )
@@ -148,29 +148,30 @@ func Exit(err error) {
 type MPDRet struct {
 	proofDataBytes []byte
 	epochNumber    int
-	tx3Count       uint64
-	tx3Hashes      []common.Hash
+	txHashes       []common.Hash
+	txCount        uint64
+	iterCount      uint64
 	ended          bool
 	err            error
 }
 
 func sendOneBlock(block *types.Block, version int) error {
 
-	tx3BeginIndex := uint64(0)
+	txBeginIndex := uint64(0)
 	ended := false
 	for !ended {
-		ret := makeProofData(block, tx3BeginIndex, version)
+		ret := makeProofData(block, txBeginIndex, version)
 		if ret.err != nil {
 			return ret.err
 		}
 
 		if len(ret.proofDataBytes) != 0 {
 
-			if ret.tx3Count > 0 {
-				fmt.Printf("send data to main chain with (blocknumber-tx3BeginIndex-tx3Count): (%v-%v-%v)\n",
-					block.NumberU64(), tx3BeginIndex, ret.tx3Count)
-				//fmt.Printf("%x \n", ret.tx3Hashes[0])
-				//for _,hash := range picked.tx3Hashes {
+			if ret.txCount > 0 {
+				fmt.Printf("send data to main chain with (blocknumber-txBeginIndex-txCount): (%v-%v-%v)\n",
+					block.NumberU64(), txBeginIndex, ret.txCount)
+				//fmt.Printf("%x \n", ret.txHashes[0])
+				//for _,hash := range picked.txHashes {
 				//	sd.Logger().Infof("%x \n", hash)
 				//}
 			}
@@ -201,13 +202,13 @@ func sendOneBlock(block *types.Block, version int) error {
 			}
 		}
 
-		tx3BeginIndex += ret.tx3Count
+		txBeginIndex += ret.iterCount
 		ended = ret.ended
 	}
 	return nil
 }
 
-func makeProofData(block *types.Block, tx3BeginIndex uint64, version int) (mpdRet *MPDRet) {
+func makeProofData(block *types.Block, beginIndex uint64, version int) (mpdRet *MPDRet) {
 
 	mpdRet = &MPDRet{ended: true}
 
@@ -246,17 +247,16 @@ func makeProofData(block *types.Block, tx3BeginIndex uint64, version int) (mpdRe
 	} else {
 
 		mpdRet.ended = false
-
-		lastTx3Count := uint64(0)
-		lastTx3Hashes := make([]common.Hash, 0)
+		lastTxHashes := make([]common.Hash, 0)
+		lastTxCount := uint64(0)
+		lastIterCount := uint64(0)
 		lastProofDataBytes := []byte{}
-		ended := false
 		step := uint64(10)
-		tx3Count := step
+		count := step
 		for {
-			proofData, tx3Hashes, err := consensus.NewChildChainProofDataV1(block, tx3BeginIndex, tx3Count)
+			proofData, hashes, iCount, err := consensus.NewChildChainProofDataV1(block, beginIndex, count)
 			if err == ExceedTxCount {
-				mpdRet.ended = true
+				mpdRet.err = err
 				return
 			} else if err != nil {
 				mpdRet.err = err
@@ -275,26 +275,25 @@ func makeProofData(block *types.Block, tx3BeginIndex uint64, version int) (mpdRe
 			}
 
 			lastProofDataBytes = proofDataBytes
-			lastTx3Hashes = tx3Hashes
-			lastTx3Count = uint64(len(tx3Hashes))
-			if lastTx3Count < tx3Count {
-				ended = true
+			lastTxHashes = hashes
+			lastTxCount = uint64(len(proofData.TxProofs))
+			lastIterCount = iCount
+
+			if iCount < count {
+				mpdRet.ended = true
 				break
 			}
 
-			tx3Count += step //try to contain 10 more tx3
+			count += step //try to contain 10 more tx
 		}
 
 		mpdRet.proofDataBytes = lastProofDataBytes
-		mpdRet.tx3Hashes = lastTx3Hashes
-		mpdRet.tx3Count = lastTx3Count
-
-		if ended {
-			mpdRet.ended = true
-		}
+		mpdRet.txHashes = lastTxHashes
+		mpdRet.txCount = lastTxCount
+		mpdRet.iterCount = lastIterCount
 	}
-	log.Debugf("MakeProofData proof data length: %d， tx3BeginIndex is %v, tx3Count is %v",
-		len(proofDataBytes), tx3BeginIndex, mpdRet.tx3Count)
+	log.Debugf("MakeProofData proof data length: %d， beginIndex is %v, txCount is %v",
+		len(proofDataBytes), beginIndex, mpdRet.txCount)
 
 	return
 }
