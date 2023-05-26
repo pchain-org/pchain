@@ -72,7 +72,7 @@ func (b *TdmBlock) RefreshNeedToSave(isSd2mcV1 bool) {
 		}
 
 		// check special cross-chain tx
-		if b.HasTx3() {
+		if b.HasTxToReport() {
 			if !isSd2mcV1 {
 				b.TdmExtra.NeedToBroadcast = true
 			} else {
@@ -82,7 +82,7 @@ func (b *TdmBlock) RefreshNeedToSave(isSd2mcV1 bool) {
 	}
 }
 
-func (b *TdmBlock) HasTx3() bool {
+func (b *TdmBlock) HasTxToReport() bool {
 
 	block := b.Block
 	txs := block.Transactions()

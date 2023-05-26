@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	//ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/tendermint/go-merkle"
 	"math/big"
 	"sort"
@@ -132,7 +133,24 @@ func (valSet *ValidatorSet) HasAddress(address []byte) bool {
 	}
 	return false
 }
-
+/*
+// HasPubkeyAddress returns true if address given is in the validator set, false -
+// otherwise.
+func (valSet *ValidatorSet) HasPubkeyAddress(address common.Address) bool {
+	
+	for i := 0; i < len(valSet.Validators); i++ {
+		ecdsaPub, err := ethCrypto.UnmarshalPubkey(valSet.Validators[i].PubKey.Bytes())
+		if err != nil {
+			continue
+		}
+		addr := ethCrypto.PubkeyToAddress(*ecdsaPub)
+		if addr == address {
+			return true
+		}
+	}
+	return false
+}
+*/
 func (valSet *ValidatorSet) GetByAddress(address []byte) (index int, val *Validator) {
 
 	idx := -1

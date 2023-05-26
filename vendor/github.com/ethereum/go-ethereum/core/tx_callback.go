@@ -23,13 +23,14 @@ type TX3LocalCache interface {
 	GetTX3ProofData(chainId string, txHash common.Hash) *types.TX3ProofData
 	GetAllTX3ProofData() []*types.TX3ProofData
 	
-	UpdateCCTTxStatus(cts *types.CCTTxStatus, curMainBlockNumber *big.Int, chainId string, localStatus uint64, state *state.StateDB) (*types.CCTTxStatus, error)
+	UpdateCCTTxStatus(latestCts, handledCts  *types.CCTTxStatus, curMainBlockNumber *big.Int, chainId string, localStatus uint64, state *state.StateDB) (*types.CCTTxStatus, error)
 	FinalizeCCTTxStatus(blockNumber *big.Int) ([]*types.CCTTxStatus, error)
 	WriteCCTTxStatus(cts *types.CCTTxStatus) error
 	GetCCTTxStatusByBlockNumber(mainBlockNumber *big.Int) ([]*types.CCTTxStatus, error)
 	GetCCTTxStatusByChainId(mainBlockNumber *big.Int, chainId string) ([]*types.CCTTxStatus, error)
 	GetCCTTxStatusByHash(mainBlockNumber *big.Int, hash common.Hash) (*types.CCTTxStatus, error)
 	GetLatestCCTTxStatusByHash(hash common.Hash) (*types.CCTTxStatus, error)
+	GetAllCCTTxStatusByHash(hash common.Hash) ([]*types.CCTTxStatus, error)
 	HasCCTTxStatus(blockNumber *big.Int, hash common.Hash, fromChainId, toChainId string, amount *big.Int, status uint64) bool
 	DeleteCCTxStatus(cctData *types.CCTTxStatus)
 }

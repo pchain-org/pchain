@@ -38,10 +38,6 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 	case *types.SaveCCTTxStatusOp:
 		return cch.WriteCCTTxStatus(&op.CCTTxStatus)
 	case *types.SaveCCTTxExecStatusOp:
-		cctBlock := bc.engine.(consensus.Tendermint).CurrentCCTBlock()
-		if op.MainBlockNumber.Cmp(cctBlock) > 0 {
-			bc.engine.(consensus.Tendermint).WriteCurrentCCTBlock(op.MainBlockNumber)
-		}
 		bc.engine.(consensus.Tendermint).WriteCCTExecStatus(&op.CCTTxExecStatus)
 		return nil
 	case *types.SaveDataToMainChainOp:

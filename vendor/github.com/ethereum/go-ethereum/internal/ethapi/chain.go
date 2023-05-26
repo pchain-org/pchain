@@ -793,8 +793,26 @@ func cctr_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, _ := types.Sender(signer, tx)
 
+	startCTS := types.CCTTxStatus {
+		MainBlockNumber: header.Number/*header.MainChainNumber*/,
+		TxHash:          tx.Hash(),
+		Owner:           from,
+		FromChainId:     args.FromChainId,
+		ToChainId:       args.ToChainId,
+		Amount:          args.Amount,
+		Status:          types.CCTUNHANDLED,
+	}
+
 	hasErr := false
 	if args.FromChainId == bc.Config().PChainId && bc.Config().IsMainChain() { //transfer from mainchain to other chain
+
+		cctESOp := types.SaveCCTTxExecStatusOp {
+			CCTTxExecStatus: types.CCTTxExecStatus{
+				CCTTxStatus: startCTS,
+				BlockNumber: header.Number,
+				LocalStatus: types.ReceiptStatusSuccessful,
+			},
+		}
 
 		if state.GetBalance(from).Cmp(args.Amount) < 0 {
 			hasErr = true
@@ -803,7 +821,7 @@ func cctr_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 		}
 
 		if !hasErr {
-			op := types.SaveCCTTxStatusOp{
+			ctsOp := types.SaveCCTTxStatusOp{
 				types.CCTTxStatus {
 					MainBlockNumber: header.Number/*header.MainChainNumber*/,
 					TxHash:          tx.Hash(),
@@ -815,24 +833,16 @@ func cctr_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 				},
 			}
 
-			if ok := ops.Append(&op); !ok {
-				return fmt.Errorf("pending ops conflict: %v", op)
+			if ok := ops.Append(&cctESOp); !ok {
+				return fmt.Errorf("pending ops conflict: %v", cctESOp)
 			}
 
-			op1 := types.SaveCCTTxExecStatusOp {
-				CCTTxExecStatus: types.CCTTxExecStatus{
-					CCTTxStatus: op.CCTTxStatus,
-					BlockNumber: header.Number,
-					LocalStatus: types.ReceiptStatusSuccessful,
-				},
-			}
-
-			if ok := ops.Append(&op1); !ok {
-				return fmt.Errorf("pending ops conflict: %v", op1)
+			if ok := ops.Append(&ctsOp); !ok {
+				return fmt.Errorf("pending ops conflict: %v", ctsOp)
 			}
 		} else {
 
-			op := types.SaveCCTTxStatusOp{
+			ctsOp := types.SaveCCTTxStatusOp{
 				types.CCTTxStatus {
 					MainBlockNumber: header.Number/*header.MainChainNumber*/,
 					TxHash:          tx.Hash(),
@@ -844,22 +854,19 @@ func cctr_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 				},
 			}
 
-			if ok := ops.Append(&op); !ok {
-				return fmt.Errorf("pending ops conflict: %v", op)
+			cctESOp.LocalStatus = types.ReceiptStatusFailed
+			if ok := ops.Append(&cctESOp); !ok {
+				return fmt.Errorf("pending ops conflict: %v", cctESOp)
+			}
+
+			if ok := ops.Append(&ctsOp); !ok {
+				return fmt.Errorf("pending ops conflict: %v", ctsOp)
 			}
 		}
 	} else {
 
 		op := types.SaveCCTTxStatusOp{
-			types.CCTTxStatus {
-				MainBlockNumber: header.Number/*header.MainChainNumber*/,
-				TxHash:          tx.Hash(),
-				Owner:           from,
-				FromChainId:     args.FromChainId,
-				ToChainId:       args.ToChainId,
-				Amount:          args.Amount,
-				Status:          types.CCTUNHANDLED,
-			},
+			CCTTxStatus: startCTS,
 		}
 
 		if ok := ops.Append(&op); !ok {
@@ -896,24 +903,29 @@ func ccte_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 	}
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
-	from, err := types.Sender(signer, tx)
+	_, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
 	}
-
+/*
 	epoch := bc.Engine().(consensus.Tendermint).GetEpoch()
-	if !epoch.Validators.HasAddress(from.Bytes()) {
+	if !epoch.Validators.HasPubkeyAddress(from) {
 		return core.ErrInvalidSender
 	}
-
+*/
 	return nil
 }
 
 func ccte_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
+	err := ccte_ValidateCb(tx, state, bc, cch)
+	if err != nil {
+		return err
+	}
+
 	var args pabi.CrossChainTransferExecArgs
 	data := tx.Data()
-	err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferExec.String(), data[4:])
+	err = pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferExec.String(), data[4:])
 	if err != nil {
 		return err
 	}
@@ -927,19 +939,6 @@ func ccte_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 	handled := false
 	cctES := bc.Engine().(consensus.Tendermint).GetLatestCCTExecStatus(args.TxHash)
 	if cctES == nil {
-		cctES = &types.CCTTxExecStatus{
-			CCTTxStatus: types.CCTTxStatus{
-				MainBlockNumber: args.MainBlockNumber,
-				TxHash:          args.TxHash,
-				Owner:           args.Owner,
-				FromChainId:     args.FromChainId,
-				ToChainId:       args.ToChainId,
-				Amount:          args.Amount,
-				Status:          args.Status,
-			},
-			BlockNumber:         header.Number,
-			LocalStatus:         args.LocalStatus,
-		}
 		if transOut {
 			if args.Status == types.CCTUNHANDLED {
 				if state.GetBalance(args.Owner).Cmp(args.Amount) < 0 {
@@ -974,37 +973,46 @@ func ccte_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 	}
 
 	if hasErr {
-		signer := types.LatestSignerForChainID(tx.ChainId())
-		from, err := types.Sender(signer, tx)
-		if err != nil {
-			return core.ErrInvalidSender
-		}
-
-		sentByMyself := false
-		cssPriv := bc.Engine().(consensus.Tendermint).ConsensusPrivateValidator()
-		if cssPriv.Address == from {
-			sentByMyself = true
-		}
-
-		//if it is proposer's CCTExecTx pre-run, or it reproduces proposer's pre-run failed in other validator's tx-run
-		if sentByMyself || args.Status == types.ReceiptStatusFailed {
+		//reproduces proposer's pre-run failure in other validator's tx-run
+		if args.Status == types.ReceiptStatusFailed {
 			err = core.ErrTryCCTTxExec
-		} else if args.Status != types.ReceiptStatusFailed {
+		} else {
 			return fmt.Errorf("state transmisstion error")
 		}
 	}
 
-	localStatus := types.ReceiptStatusFailed
-	if handled && !hasErr {
-		localStatus = types.ReceiptStatusSuccessful
+	localStatus := types.ReceiptStatusSuccessful
+	if hasErr {
+		localStatus = types.ReceiptStatusFailed
+	}
+
+
+	op := types.SaveCCTTxExecStatusOp {
+		CCTTxExecStatus: types.CCTTxExecStatus{
+			CCTTxStatus: types.CCTTxStatus{
+				MainBlockNumber:    args.MainBlockNumber,
+				TxHash:             args.TxHash,
+				Owner:              args.Owner,
+				FromChainId:        args.FromChainId,
+				ToChainId:          args.ToChainId,
+				Amount:             args.Amount,
+				Status:             args.Status,
+			},
+			BlockNumber: header.Number,
+			LocalStatus: localStatus,
+		},
+	}
+
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
 	}
 
 	if bc.Config().IsMainChain() {
-		cts, err := cch.GetLatestCCTTxStatusByHash(cctES.TxHash)
+		cts, err := cch.GetLatestCCTTxStatusByHash(args.TxHash)
 		if err != nil {
 			return err
 		}
-		newCTS, err := cch.UpdateCCTTxStatus(cts, header.Number/*header.MainChainNumber*/, cch.GetMainChainId(), cctES.LocalStatus, state)
+		newCTS, err := cch.UpdateCCTTxStatus(cts, &op.CCTTxExecStatus.CCTTxStatus, header.Number/*header.MainChainNumber*/, cch.GetMainChainId(), localStatus, state)
 		if err != nil {
 			return err
 		}
@@ -1015,27 +1023,7 @@ func ccte_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 			return fmt.Errorf("pending ops conflict: %v", op)
 		}
 	}
-	
-	op := types.SaveCCTTxExecStatusOp {
-		CCTTxExecStatus: types.CCTTxExecStatus{
-			CCTTxStatus: types.CCTTxStatus{
-				MainBlockNumber:    cctES.MainBlockNumber,
-				TxHash:             cctES.TxHash,
-				Owner:              cctES.Owner,
-				FromChainId:        cctES.FromChainId,
-				ToChainId:          cctES.ToChainId,
-				Amount:             cctES.Amount,
-				Status:             cctES.Status,
-			},
-			BlockNumber: header.Number,
-			LocalStatus: localStatus,
-		},
-	}
 
-	if ok := ops.Append(&op); !ok {
-		return fmt.Errorf("pending ops conflict: %v", op)
-	}
-	
 	return err
 }
 
@@ -1132,7 +1120,18 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCh
 					if err != nil {
 						return nil
 					}
-					newCTS, err := cch.UpdateCCTTxStatus(cts, header.Number/*header.MainChainNumber*/, chainId, args.LocalStatus, state)
+
+					handledCts := &types.CCTTxStatus{
+						MainBlockNumber:    args.MainBlockNumber,
+						TxHash:             args.TxHash,
+						Owner:              args.Owner,
+						FromChainId:        args.FromChainId,
+						ToChainId:          args.ToChainId,
+						Amount:             args.Amount,
+						Status:             args.Status,
+						LastOperationDone:  false,
+					}
+					newCTS, err := cch.UpdateCCTTxStatus(cts, handledCts, header.Number/*header.MainChainNumber*/, chainId, args.LocalStatus, state)
 					if newCTS != nil && err == nil {
 						op := types.SaveCCTTxStatusOp{
 							CCTTxStatus: *newCTS,

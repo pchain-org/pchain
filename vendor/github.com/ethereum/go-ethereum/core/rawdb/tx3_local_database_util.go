@@ -342,6 +342,39 @@ func GetLatestCCTTxStatusByHash(db ethdb.Database, hash common.Hash) (*types.CCT
 	}
 }
 
+
+func GetAllCCTTxStatusByHash(db ethdb.Database, hash common.Hash) ([]*types.CCTTxStatus, error) {
+	blocksBytes, err := db.Get(cctHashKey(hash))
+	if err != nil {
+		return nil, err
+	}
+
+	ret := make([]*types.CCTTxStatus, 0)
+
+	if blocksBytes != nil {
+		blocks := make([]*big.Int, 0)
+		err = rlp.DecodeBytes(blocksBytes, &blocks)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, blockNumber := range blocks {
+			if blockNumber != nil {
+				cts, err := GetCCTTxStatusByHash(db, blockNumber, hash)
+				if err != nil {
+					return nil, err
+				}
+				if cts != nil {
+					ret = append(ret, cts)
+				}
+			}
+		}
+	}
+
+	return ret, nil
+}
+
+
 func HasCCTTxStatus(db ethdb.Database, blockNumber *big.Int, hash common.Hash,
 							fromChainId, toChainId string, amount *big.Int, status uint64) bool {
 	
@@ -355,7 +388,7 @@ func HasCCTTxStatus(db ethdb.Database, blockNumber *big.Int, hash common.Hash,
 		}
 
 		if cctData.TxHash == hash && cctData.FromChainId == fromChainId && cctData.ToChainId == toChainId &&
-			cctData.Amount == amount && cctData.Status == status {
+			cctData.Amount.Cmp(amount) == 0 && cctData.Status == status {
 			return true
 		}
 	}
