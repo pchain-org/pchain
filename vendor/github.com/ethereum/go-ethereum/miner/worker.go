@@ -403,6 +403,13 @@ func (self *worker) resultLoop() {
 				continue
 			}
 
+			// execute the pending ops.
+			for _, op := range ops.Ops() {
+				if err := core.ApplyOp(op, self.chain, self.cch); err != nil {
+					log.Error("Failed executing", "op", op, "err", err)
+				}
+			}
+
 			self.chain.MuLock()
 
 			stat, err := self.chain.WriteBlockWithState(block, receipts, state)
@@ -410,12 +417,6 @@ func (self *worker) resultLoop() {
 				self.logger.Error("Failed writing block to chain", "err", err)
 				self.chain.MuUnLock()
 				continue
-			}
-			// execute the pending ops.
-			for _, op := range ops.Ops() {
-				if err := core.ApplyOp(op, self.chain, self.cch); err != nil {
-					log.Error("Failed executing", "op", op, "err", err)
-				}
 			}
 			// check if canon block and write transactions
 			if stat == core.CanonStatTy {
@@ -799,14 +800,14 @@ func (w *worker) needHandle(chainId string, cts *types.CCTTxStatus, latestCCTES 
 	if chainId == cts.FromChainId {
 		if cts.Status == types.CCTUNHANDLED && latestCCTES == nil {
 			return true //need handle
-		} else if cts.Status== types.CCTFAILED &&
+		} else if cts.Status== types.CCTFAILED && !cts.LastOperationDone &&
 			latestCCTES != nil && latestCCTES.Status == types.CCTUNHANDLED && latestCCTES.LocalStatus == types.ReceiptStatusSuccessful {
 			return true //need revert
 		}
 	} else if chainId == cts.ToChainId {
 		if cts.Status == types.CCTFROMSUCCEEDED && latestCCTES == nil {
 			return true //need send succeed signal
-		} else if cts.Status == types.CCTSUCCEEDED && !cts.ToChainOperated &&
+		} else if cts.Status == types.CCTSUCCEEDED && !cts.LastOperationDone &&
 			latestCCTES != nil && latestCCTES.Status == types.CCTFROMSUCCEEDED && latestCCTES.LocalStatus == types.ReceiptStatusSuccessful {
 			return true //need do real transfer
 		}
@@ -878,9 +879,12 @@ func (w *worker) commitCCTExecTransactionEx(tx *types.Transaction, coinbase comm
 		w.current.txs = append(w.current.txs, newTx)
 		w.current.receipts = append(w.current.receipts, receipt)
 		
+	} else if err != nil {
+		return nil, err
 	} else {
 		w.current.txs = append(w.current.txs, tx)
 		w.current.receipts = append(w.current.receipts, receipt)
+
 	}
 	
 	return receipt.Logs, nil

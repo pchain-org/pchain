@@ -948,40 +948,47 @@ func (cch *CrossChainHelper) GetAllTX3ProofData() []*types.TX3ProofData {
 	return rawdb.GetAllTX3ProofData(cch.localTX3CacheDB)
 }
 
-func (cch *CrossChainHelper) UpdateCCTTxStatus(cts *types.CCTTxStatus, curMainBlockNumber *big.Int, chainId string,
+func (cch *CrossChainHelper) UpdateCCTTxStatus(latestCts, handledCts *types.CCTTxStatus, curMainBlockNumber *big.Int, chainId string,
 	localStatus uint64, state *state.StateDB) (*types.CCTTxStatus, error) {
 
-	if cts.Status == types.CCTFAILED || (cts.Status == types.CCTSUCCEEDED && cts.ToChainOperated) {
-		return nil, nil
+	if (latestCts.Status == types.CCTFAILED || latestCts.Status == types.CCTSUCCEEDED) && latestCts.LastOperationDone {
+		return nil, errors.New("status repeat, should not happen")
 	}
 
 	handled := false
-	succeeded := false
-	if cts.Status == types.CCTUNHANDLED {
-		if chainId == cts.FromChainId {
+	cctLastSuccessful := false
+	if latestCts.Status == types.CCTUNHANDLED {
+		if chainId == latestCts.FromChainId && handledCts.Status == types.CCTUNHANDLED {
 			if localStatus == types.ReceiptStatusSuccessful {
-				cts.Status = types.CCTFROMSUCCEEDED
+				latestCts.Status = types.CCTFROMSUCCEEDED
 				handled = true
 			} else if localStatus == types.ReceiptStatusFailed {
-				cts.Status = types.CCTFAILED
+				latestCts.Status = types.CCTFAILED
 				handled = true
 			}
 		}
-	} else if cts.Status == types.CCTFROMSUCCEEDED {
-		if chainId == cts.ToChainId {
+	} else if latestCts.Status == types.CCTFROMSUCCEEDED {
+		if chainId == latestCts.ToChainId && handledCts.Status == types.CCTFROMSUCCEEDED {
 			if localStatus == types.ReceiptStatusSuccessful {
-				cts.Status = types.CCTSUCCEEDED
+				latestCts.Status = types.CCTSUCCEEDED
 				handled = true
-				succeeded = true
 			} else if localStatus == types.ReceiptStatusFailed {
-				cts.Status = types.CCTFAILED
+				latestCts.Status = types.CCTFAILED
 				handled = true
 			}
 		}
-	} else if cts.Status == types.CCTSUCCEEDED {
-		if chainId == cts.ToChainId {
+	} else if latestCts.Status == types.CCTFAILED {
+		if chainId == latestCts.FromChainId && handledCts.Status == types.CCTFAILED {
 			if localStatus == types.ReceiptStatusSuccessful {
-				cts.ToChainOperated = true
+				latestCts.LastOperationDone = true //done revert
+				handled = true
+			}
+		}
+	} else if latestCts.Status == types.CCTSUCCEEDED {
+		if chainId == latestCts.ToChainId && handledCts.Status == types.CCTSUCCEEDED {
+			if localStatus == types.ReceiptStatusSuccessful {
+				latestCts.LastOperationDone = true //done real transfer
+				cctLastSuccessful = true
 				handled = true
 			}
 		}
@@ -991,24 +998,24 @@ func (cch *CrossChainHelper) UpdateCCTTxStatus(cts *types.CCTTxStatus, curMainBl
 		return nil, errors.New("state transfer error")
 	}
 
-	if succeeded {
-		if cts.FromChainId != cch.GetMainChainId() {
-			chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), cts.FromChainId)
+	if cctLastSuccessful {
+		if latestCts.FromChainId != cch.GetMainChainId() {
+			chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), latestCts.FromChainId)
 			if chainInfo != nil {
-				state.SubChainBalance(chainInfo.Owner, cts.Amount)
+				state.SubChainBalance(chainInfo.Owner, latestCts.Amount)
 			}
 		}
 
-		if cts.ToChainId != cch.GetMainChainId() {
-			chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), cts.ToChainId)
+		if latestCts.ToChainId != cch.GetMainChainId() {
+			chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), latestCts.ToChainId)
 			if chainInfo != nil {
-				state.AddChainBalance(chainInfo.Owner, cts.Amount)
+				state.AddChainBalance(chainInfo.Owner, latestCts.Amount)
 			}
 		}
 	}
 
-	cts.MainBlockNumber = curMainBlockNumber
-	return cts, nil
+	latestCts.MainBlockNumber = curMainBlockNumber
+	return latestCts, nil
 }
 
 func (cch *CrossChainHelper) FinalizeCCTTxStatus(mainBlockNumber *big.Int) ([]*types.CCTTxStatus, error) {
@@ -1033,7 +1040,7 @@ func (cch *CrossChainHelper) FinalizeCCTTxStatus(mainBlockNumber *big.Int) ([]*t
 		}
 
 		if cts.Status != types.CCTFAILED && cts.Status != types.CCTSUCCEEDED {
-			cts.MainBlockNumber = blockNumber
+			cts.MainBlockNumber = mainBlockNumber
 			cts.Status = types.CCTFAILED
 			retCTSS = append(retCTSS, cts)
 		}
@@ -1060,6 +1067,10 @@ func (cch *CrossChainHelper) GetCCTTxStatusByHash(mainBlockNumber *big.Int, hash
 
 func (cch *CrossChainHelper) GetLatestCCTTxStatusByHash(hash common.Hash) (*types.CCTTxStatus, error) {
 	return rawdb.GetLatestCCTTxStatusByHash(cch.localTX3CacheDB, hash)
+}
+
+func (cch *CrossChainHelper) GetAllCCTTxStatusByHash(hash common.Hash) ([]*types.CCTTxStatus, error) {
+	return rawdb.GetAllCCTTxStatusByHash(cch.localTX3CacheDB, hash)
 }
 
 func (cch *CrossChainHelper) HasCCTTxStatus(blockNumber *big.Int, hash common.Hash,

@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -1454,10 +1455,24 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	return fields, nil
 }
 
-// GetTransactionByHash returns the transaction for the given hash
 func (s *PublicTransactionPoolAPI) GetLatestCCTStatusByHash(ctx context.Context, hash common.Hash) (*types.CCTTxStatus, error) {
-
 	return s.b.GetCrossChainHelper().GetLatestCCTTxStatusByHash(hash)
+}
+
+func (s *PublicTransactionPoolAPI) GetAllCCTStatusByHash(ctx context.Context, hash common.Hash) ([]*types.CCTTxStatus, error) {
+	return s.b.GetCrossChainHelper().GetAllCCTTxStatusByHash(hash)
+}
+
+func (s *PublicTransactionPoolAPI) GetCCTTxStatusByBlockNumber(ctx context.Context, mainBlockNumber rpc.BlockNumber) ([]*types.CCTTxStatus, error) {
+	return s.b.GetCrossChainHelper().GetCCTTxStatusByBlockNumber(new(big.Int).SetUint64(uint64(mainBlockNumber)))
+}
+
+func (s *PublicTransactionPoolAPI) GetCCTTxStatusByChainId(ctx context.Context, mainBlockNumber rpc.BlockNumber, chainId string) ([]*types.CCTTxStatus, error) {
+	return s.b.GetCrossChainHelper().GetCCTTxStatusByChainId(new(big.Int).SetUint64(uint64(mainBlockNumber)), chainId)
+}
+
+func (s *PublicTransactionPoolAPI) GetAllCCTExeStatusByHash(ctx context.Context, hash common.Hash) ([]*types.CCTTxExecStatus, error) {
+	return s.b.Engine().(consensus.Tendermint).GetCCTExecStatusByHash(hash), nil
 }
 
 // sign is a helper function that signs a transaction with the private key of the given address.

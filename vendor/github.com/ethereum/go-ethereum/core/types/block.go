@@ -594,7 +594,9 @@ type CCTTxStatus struct {
 	ToChainId           string
 	Amount              *big.Int
 	Status              uint64
-	ToChainOperated     bool
+	//if Status is CCTSUCCEEDED, to-account will add balance, or it is CCTFAILED, from-account need refund balance
+	//after this operation done, LastOperationDone will be set to true
+	LastOperationDone   bool
 }
 
 //CCTTx record execution status of cross chain tx for fromChain/toChain

@@ -47,10 +47,10 @@ var (
 	TestnetExtractRewardMainBlock = big.NewInt(40)
 
 	//use SaveData2MainBlock v1; which reports epoch/tx3 to main block
-	MainnetSd2mcV1MainBlock = big.NewInt(11824000)
+	MainnetSd2mcV1MainBlock = big.NewInt(60000)
 	TestnetSd2mcV1MainBlock = big.NewInt(40)
 
-	MainnetSd2mcWhenEpochEndsBlock = big.NewInt(14486667)
+	MainnetSd2mcWhenEpochEndsBlock = big.NewInt(40000)
 	TestnetSd2mcWhenEpochEndsBlock = big.NewInt(40)
 
 	MainnetValidateHTLCBlock = big.NewInt(16000000)
