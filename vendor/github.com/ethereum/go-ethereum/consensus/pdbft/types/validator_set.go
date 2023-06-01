@@ -133,24 +133,25 @@ func (valSet *ValidatorSet) HasAddress(address []byte) bool {
 	}
 	return false
 }
-/*
+
 // HasPubkeyAddress returns true if address given is in the validator set, false -
 // otherwise.
-func (valSet *ValidatorSet) HasPubkeyAddress(address common.Address) bool {
+func (valSet *ValidatorSet) VerifyConsensusAddressSignature(addr common.Address, addrSig []byte) bool {
+
+	sig, err := crypto.SignatureFromBytes(addrSig)
+	if err != nil {
+		return false
+	}
 	
 	for i := 0; i < len(valSet.Validators); i++ {
-		ecdsaPub, err := ethCrypto.UnmarshalPubkey(valSet.Validators[i].PubKey.Bytes())
-		if err != nil {
-			continue
-		}
-		addr := ethCrypto.PubkeyToAddress(*ecdsaPub)
-		if addr == address {
+		pubKey := valSet.Validators[i].PubKey
+		if pubKey.VerifyBytes(addr.Bytes(), sig) {
 			return true
 		}
 	}
 	return false
 }
-*/
+
 func (valSet *ValidatorSet) GetByAddress(address []byte) (index int, val *Validator) {
 
 	idx := -1

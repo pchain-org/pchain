@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -24,7 +26,7 @@ import (
 	pabi "github.com/pchain/abi"
 	. "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
-	tmdcrypto "github.com/tendermint/go-crypto"
+	tmdCrypto "github.com/tendermint/go-crypto"
 )
 
 const ROUND_NOT_PROPOSED int = 0
@@ -282,7 +284,7 @@ func (ti *timeoutInfo) String() string {
 
 type PrivValidator interface {
 	GetAddress() []byte
-	GetPubKey() tmdcrypto.PubKey
+	GetPubKey() tmdCrypto.PubKey
 	SignVote(chainID string, vote *types.Vote) error
 	SignProposal(chainID string, proposal *types.Proposal) error
 }
@@ -293,6 +295,11 @@ type ConsensusState struct {
 
 	chainConfig   *params.ChainConfig
 	privValidator PrivValidator // for signing votes
+	ecdsaPrv      *ecdsa.PrivateKey
+	cssAddress    common.Address
+	cssAddrSig    []byte
+	signer        ethTypes.Signer
+
 	cch           core.CrossChainHelper
 
 	mtx sync.Mutex
@@ -331,12 +338,11 @@ type ConsensusState struct {
 }
 
 func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.ChainConfig,
-	cch core.CrossChainHelper, privValidator PrivValidator, epoch *ep.Epoch, sendData *SendData) *ConsensusState {
+	cch core.CrossChainHelper, privValidator *types.PrivValidator, epoch *ep.Epoch, sendData *SendData) *ConsensusState {
 
 	cs := &ConsensusState{
 		chainConfig:   chainConfig,
 		cch:           cch,
-		privValidator: privValidator,
 		timeoutTicker: NewTimeoutTicker(backend.GetLogger()),
 		timeoutParams: InitTimeoutParamsFromConfig(config),
 		//done:             make(chan struct{}),
@@ -346,6 +352,8 @@ func NewConsensusState(backend Backend, config cfg.Config, chainConfig *params.C
 		sendData:       sendData,
 		logger:         backend.GetLogger(),
 	}
+	//do some initialization
+	cs.SetPrivValidator(privValidator)
 
 	sendData.CS = cs
 
@@ -392,10 +400,27 @@ func (cs *ConsensusState) getRoundState() *RoundState {
 }
 
 // Sets our private validator account for signing votes.
-func (cs *ConsensusState) SetPrivValidator(priv PrivValidator) {
+func (cs *ConsensusState) SetPrivValidator(priv *types.PrivValidator) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
+
+	if priv == nil {
+		return
+	}
+
 	cs.privValidator = priv
+	blsPriv := cs.privValidator.(*types.PrivValidator).PrivKey.(tmdCrypto.BLSPrivKey)
+	ecdsaPrv, err := crypto.ToECDSA(blsPriv.Bytes())
+	if err != nil {
+		return
+	}
+	
+	cs.ecdsaPrv = ecdsaPrv
+	cs.cssAddress = crypto.PubkeyToAddress(ecdsaPrv.PublicKey)
+	cs.cssAddrSig = blsPriv.Sign(cs.cssAddress.Bytes()).Bytes()
+	
+	digest := crypto.Keccak256([]byte(cs.chainConfig.PChainId))
+	cs.signer = ethTypes.LatestSignerForChainID(new(big.Int).SetBytes(digest[:]))
 }
 
 // Sets our private validator account for signing votes.
@@ -2014,7 +2039,7 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 	cs.logger.Debugf("vote len is: %v", len(votes))
 	numValidators := cs.Validators.Size()
 	signBitArray := NewBitArray((uint64)(numValidators))
-	var sigs []*tmdcrypto.Signature
+	var sigs []*tmdCrypto.Signature
 	var ss []byte
 
 	for _, vote := range votes {
@@ -2028,7 +2053,7 @@ func (cs *ConsensusState) sendMaj23SignAggr(voteType byte) {
 
 	// step 1: build BLS signature aggregation based on signatures in votes
 	// bitarray, signAggr := BuildSignAggr(votes)
-	signature := tmdcrypto.BLSSignatureAggregate(sigs)
+	signature := tmdCrypto.BLSSignatureAggregate(sigs)
 	if signature == nil {
 		cs.logger.Error("Can not aggregate signature")
 		return

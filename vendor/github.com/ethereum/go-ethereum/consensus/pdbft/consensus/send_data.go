@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	pabi "github.com/pchain/abi"
-	tmdcrypto "github.com/tendermint/go-crypto"
+	tmdCrypto "github.com/tendermint/go-crypto"
 	"github.com/tendermint/go-wire"
 
 	"bytes"
@@ -93,18 +93,17 @@ func (sc *ConsensusState) WriteCCTExecStatus(receipt *ethTypes.CCTTxExecStatus) 
 func (sc *ConsensusState) DeleteCCTExecStatus(hash common.Hash) {
 	sc.sendData.DeleteCCTExecStatus(hash)
 }
+func (sc *ConsensusState) ConsensusAddressSignature() (common.Address, []byte) {
+	return sc.cssAddress, sc.cssAddrSig
+}
 
 func (sc *ConsensusState) SignTx(tx *ethTypes.Transaction) (*ethTypes.Transaction, error) {
-	//initialize sendTxVars
-	prv, err := crypto.ToECDSA(sc.privValidator.(*types.PrivValidator).PrivKey.(tmdcrypto.BLSPrivKey).Bytes())
-	if err != nil {
-		return nil, err
+
+	if sc.signer != nil {
+		return ethTypes.SignTx(tx, sc.signer, sc.ecdsaPrv)
+	} else {
+		return nil, errors.New("no private key")	
 	}
-
-	digest := crypto.Keccak256([]byte(sc.chainConfig.PChainId))
-	signer := ethTypes.LatestSignerForChainID(new(big.Int).SetBytes(digest[:]))
-
-	return ethTypes.SignTx(tx, signer, prv)
 }
 
 var (
@@ -269,7 +268,7 @@ func (sd *SendData) deleteDataItem (isParent bool, blockNumber, beginIndex uint6
 func (sd *SendData) initialize() error {
 
 	//initialize sendTxVars
-	prv, err := crypto.ToECDSA(sd.PrivValidator().PrivKey.(tmdcrypto.BLSPrivKey).Bytes())
+	prv, err := crypto.ToECDSA(sd.PrivValidator().PrivKey.(tmdCrypto.BLSPrivKey).Bytes())
 	if err != nil {
 		sd.Logger().Error("initialize: failed to get PrivateKey", "err", err)
 		return err
@@ -620,7 +619,11 @@ func (sd *SendData) MakeProofData(block *ethTypes.Block, beginIndex uint64, vers
 
 func (sd *SendData) estimateTxOverSize(input []byte) bool {
 
-	tx := ethTypes.NewTransaction(uint64(0), pabi.ChainContractMagicAddr, nil, 0, common.Big256, input)
+	data, err := pabi.ChainABI.Pack(pabi.SaveDataToMainChain.String(), input)
+	if err != nil {
+		return false
+	}
+	tx := ethTypes.NewTransaction(uint64(0), pabi.ChainContractMagicAddr, nil, 0, common.Big256, data)
 
 	signedTx, _ := ethTypes.SignTx(tx, sendTxVars.signer, sendTxVars.prv)
 
@@ -861,6 +864,7 @@ func NewChildChainProofDataV1(block *ethTypes.Block, beginIndex, count uint64) (
 			}
 
 			if function == pabi.WithdrawFromChildChain ||
+				function == pabi.CrossChainTransferRequest ||
 				function == pabi.CrossChainTransferExec {
 				kvSet := ethTypes.MakeBSKeyValueSet()
 				keybuf.Reset()

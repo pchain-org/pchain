@@ -698,16 +698,23 @@ func (sb *backend) SetEpoch(ep *epoch.Epoch) {
 	sb.core.consensusState.Epoch = ep
 }
 
-func (sb *backend) ConsensusPrivateValidator() *tdmTypes.PrivValidator {
+func (sb *backend) PrivateValidator() *tdmTypes.PrivValidator {
 	return sb.core.consensusState.GetPrivValidator().(*tdmTypes.PrivValidator)
-} 
+}
 
-// Return the private validator address of consensus
-func (sb *backend) PrivateValidator() common.Address {
+func (sb *backend) TokenAddress() common.Address {
 	if sb.core.privValidator != nil {
 		return sb.core.privValidator.Address
 	}
 	return common.Address{}
+}
+
+func (sb *backend) ConsensusAddressSignature() (common.Address, []byte) {
+	return sb.core.consensusState.ConsensusAddressSignature()
+}
+
+func (sb *backend) SignTx(tx *types.Transaction) (*types.Transaction, error) {
+	return sb.core.consensusState.SignTx(tx)
 }
 
 func (sb *backend) CurrentCCTBlock() *big.Int {
@@ -732,10 +739,6 @@ func (sb *backend) WriteCCTExecStatus(receipt *types.CCTTxExecStatus) {
 
 func (sb *backend) DeleteCCTExecStatus(hash common.Hash) {
 	sb.core.consensusState.DeleteCCTExecStatus(hash)
-}
-
-func (sb *backend) SignTx(tx *types.Transaction) (*types.Transaction, error) {
-	return sb.core.consensusState.SignTx(tx)
 }
 
 // update timestamp and signature of the block based on its number of transactions
@@ -941,7 +944,7 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 
 		//if this chain rewinds or the self-proposed head block is overwritten by external block
 		//it needs clear the mark of self-address
-		selfAddress := sb.PrivateValidator()
+		selfAddress := sb.TokenAddress()
 		if sb.IsStarted() && (selfAddress != common.Address{}) && header.Coinbase != selfAddress {
 			firstProposedBlock, proposed := state.CheckProposedInEpoch(selfAddress, ep.Number)
 			if proposed && height <= firstProposedBlock {

@@ -1,15 +1,15 @@
 package ethapi
 
 import (
-	"context"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
 	ep "github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core"
@@ -18,8 +18,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 	pabi "github.com/pchain/abi"
 	"github.com/tendermint/go-crypto"
 	"math/big"
@@ -762,23 +762,30 @@ func cctr_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 		return fmt.Errorf("chain ids: (%s, %s), equal or not correct", args.FromChainId, args.ToChainId)
 	}
 
+	if args.FromChainId != cch.GetMainChainId() && args.ToChainId != cch.GetMainChainId() {
+		return fmt.Errorf("only accept cross chain transfer between main chain and sub-chain")
+	}
+
+	if args.FromChainId != bc.Config().PChainId {
+		return fmt.Errorf("can only start cross chain transfer from local chain")
+	}
+
+	if state.GetBalance(from).Cmp(args.Amount) < 0 {
+		return fmt.Errorf("%w: address %x", core.ErrInsufficientFundsForTransfer, from)
+	}
+
 	if args.FromChainId != cch.GetMainChainId() {
 		chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.FromChainId)
 		if chainInfo == nil {
-			return fmt.Errorf("chain id: %s not exist", args.FromChainId)
+			return fmt.Errorf("chain id: %s not exist in main chain", args.FromChainId)
 		}
-	} else {
-		if state.GetBalance(from).Cmp(args.Amount) < 0 {
-			return fmt.Errorf("%w: address %v", core.ErrInsufficientFundsForTransfer, from.Hex())
-		}
-	}
-
-	if args.ToChainId != cch.GetMainChainId() {
+	} else if args.ToChainId != cch.GetMainChainId() {
 		chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ToChainId)
 		if chainInfo == nil {
-			return fmt.Errorf("chain id: %s not exist", args.ToChainId)
+			return fmt.Errorf("chain id: %s not exist in main chain", args.ToChainId)
 		}
 	}
+	
 	return nil
 }
 
@@ -794,93 +801,53 @@ func cctr_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 	from, _ := types.Sender(signer, tx)
 
 	startCTS := types.CCTTxStatus {
-		MainBlockNumber: header.Number/*header.MainChainNumber*/,
+		MainBlockNumber: header.MainChainNumber,
 		TxHash:          tx.Hash(),
 		Owner:           from,
 		FromChainId:     args.FromChainId,
 		ToChainId:       args.ToChainId,
 		Amount:          args.Amount,
-		Status:          types.CCTUNHANDLED,
+		Status:          types.CCTRECEIVED,
 	}
 
-	hasErr := false
-	if args.FromChainId == bc.Config().PChainId && bc.Config().IsMainChain() { //transfer from mainchain to other chain
+	if state.GetBalance(from).Cmp(args.Amount) < 0 {
+		return fmt.Errorf("%w: address %x", core.ErrInsufficientFundsForTransfer, from)
+	}
 
-		cctESOp := types.SaveCCTTxExecStatusOp {
-			CCTTxExecStatus: types.CCTTxExecStatus{
-				CCTTxStatus: startCTS,
-				BlockNumber: header.Number,
-				LocalStatus: types.ReceiptStatusSuccessful,
+	state.SubBalance(from, args.Amount)
+
+	cctESOp := types.SaveCCTTxExecStatusOp{
+		CCTTxExecStatus: types.CCTTxExecStatus{
+			CCTTxStatus: startCTS,
+			BlockNumber: header.Number,
+			LocalStatus: types.ReceiptStatusSuccessful,
+		},
+	}
+	if ok := ops.Append(&cctESOp); !ok {
+		return fmt.Errorf("pending ops conflict: %v", cctESOp)
+	}
+
+	if bc.Config().IsMainChain() { //transfer from mainchain to other chain
+
+		ctsOp := types.SaveCCTTxStatusOp{
+			types.CCTTxStatus{
+				MainBlockNumber: header.Number /*header.MainChainNumber*/,
+				TxHash:          tx.Hash(),
+				Owner:           from,
+				FromChainId:     args.FromChainId,
+				ToChainId:       args.ToChainId,
+				Amount:          args.Amount,
+				Status:          types.CCTFROMSUCCEEDED,
 			},
 		}
 
-		if state.GetBalance(from).Cmp(args.Amount) < 0 {
-			hasErr = true
-		} else {
-			state.SubBalance(from, args.Amount)
-		}
-
-		if !hasErr {
-			ctsOp := types.SaveCCTTxStatusOp{
-				types.CCTTxStatus {
-					MainBlockNumber: header.Number/*header.MainChainNumber*/,
-					TxHash:          tx.Hash(),
-					Owner:           from,
-					FromChainId:     args.FromChainId,
-					ToChainId:       args.ToChainId,
-					Amount:          args.Amount,
-					Status:          types.CCTFROMSUCCEEDED,
-				},
-			}
-
-			if ok := ops.Append(&cctESOp); !ok {
-				return fmt.Errorf("pending ops conflict: %v", cctESOp)
-			}
-
-			if ok := ops.Append(&ctsOp); !ok {
-				return fmt.Errorf("pending ops conflict: %v", ctsOp)
-			}
-		} else {
-
-			ctsOp := types.SaveCCTTxStatusOp{
-				types.CCTTxStatus {
-					MainBlockNumber: header.Number/*header.MainChainNumber*/,
-					TxHash:          tx.Hash(),
-					Owner:           from,
-					FromChainId:     args.FromChainId,
-					ToChainId:       args.ToChainId,
-					Amount:          args.Amount,
-					Status:          types.CCTFAILED,
-				},
-			}
-
-			cctESOp.LocalStatus = types.ReceiptStatusFailed
-			if ok := ops.Append(&cctESOp); !ok {
-				return fmt.Errorf("pending ops conflict: %v", cctESOp)
-			}
-
-			if ok := ops.Append(&ctsOp); !ok {
-				return fmt.Errorf("pending ops conflict: %v", ctsOp)
-			}
-		}
-	} else {
-
-		op := types.SaveCCTTxStatusOp{
-			CCTTxStatus: startCTS,
-		}
-
-		if ok := ops.Append(&op); !ok {
-			return fmt.Errorf("pending ops conflict: %v", op)
+		if ok := ops.Append(&ctsOp); !ok {
+			return fmt.Errorf("pending ops conflict: %v", ctsOp)
 		}
 	}
 
-	if hasErr {
-		return core.ErrTryCCTTxExec
-	}
-	
 	return nil
 }
-
 
 func ccte_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, cch core.CrossChainHelper) error {
 
@@ -903,16 +870,16 @@ func ccte_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 	}
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
-	_, err := types.Sender(signer, tx)
+	from, err := types.Sender(signer, tx)
 	if err != nil {
 		return core.ErrInvalidSender
 	}
-/*
+
 	epoch := bc.Engine().(consensus.Tendermint).GetEpoch()
-	if !epoch.Validators.HasPubkeyAddress(from) {
+	if !epoch.Validators.VerifyConsensusAddressSignature(from, args.AddrSig) {
 		return core.ErrInvalidSender
 	}
-*/
+	
 	return nil
 }
 
@@ -940,7 +907,7 @@ func ccte_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 	cctES := bc.Engine().(consensus.Tendermint).GetLatestCCTExecStatus(args.TxHash)
 	if cctES == nil {
 		if transOut {
-			if args.Status == types.CCTUNHANDLED {
+			if args.Status == types.CCTRECEIVED {
 				if state.GetBalance(args.Owner).Cmp(args.Amount) < 0 {
 					hasErr = true
 				} else {
@@ -956,7 +923,7 @@ func ccte_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 		}
 	} else {
 		if transOut {
-			if cctES.Status == types.CCTUNHANDLED && cctES.LocalStatus == types.ReceiptStatusSuccessful && args.Status == types.CCTFAILED {
+			if cctES.Status == types.CCTRECEIVED && cctES.LocalStatus == types.ReceiptStatusSuccessful && args.Status == types.CCTFAILED {
 				state.AddBalance(args.Owner, args.Amount) //do revert
 				handled = true
 			}
@@ -1111,6 +1078,53 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCh
 
 				if function == pabi.WithdrawFromChildChain {
 					//do nothing
+				} else if function == pabi.CrossChainTransferRequest {
+					var args pabi.CrossChainTransferRequestArgs
+					if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferRequest.String(), data[4:]); err != nil {
+						return err
+					}
+
+					signer := types.LatestSignerForChainID(tx.ChainId())
+					from, err := types.Sender(signer, &tx)
+					if err != nil {
+						return core.ErrInvalidSender
+					}
+
+					txHash := tx.Hash()
+					cts, err := cch.GetLatestCCTTxStatusByHash(txHash)
+					if cts != nil {
+						return nil //has been handled
+					}
+
+					cts = &types.CCTTxStatus{
+						MainBlockNumber:    header.Number/*header.MainChainNumber*/,
+						TxHash:             txHash,
+						Owner:              from,
+						FromChainId:        args.FromChainId,
+						ToChainId:          args.ToChainId,
+						Amount:             args.Amount,
+						Status:             types.CCTFROMSUCCEEDED,
+						LastOperationDone:  false,
+					}
+
+					cctESOp := types.SaveCCTTxExecStatusOp{
+						CCTTxExecStatus: types.CCTTxExecStatus{
+							CCTTxStatus: *cts,
+							BlockNumber: header.Number,
+							LocalStatus: types.ReceiptStatusSuccessful,
+						},
+					}
+					if ok := ops.Append(&cctESOp); !ok {
+						return fmt.Errorf("pending ops conflict: %v", cctESOp)
+					}
+
+					cts.Status = types.CCTSUCCEEDED
+					ctsOp := types.SaveCCTTxStatusOp{
+						CCTTxStatus: *cts,
+					}
+					if ok := ops.Append(&ctsOp); !ok {
+						return fmt.Errorf("pending ops conflict: %v", ctsOp)
+					}
 				} else if function == pabi.CrossChainTransferExec {
 					var args pabi.CrossChainTransferExecArgs
 					if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferExec.String(), data[4:]); err != nil {

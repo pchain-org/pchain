@@ -32,13 +32,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	pabi "github.com/pchain/abi"
-	tmdcrypto "github.com/tendermint/go-crypto"
 
 	"gopkg.in/fatih/set.v0"
 )
@@ -305,10 +303,12 @@ func (self *worker) mainLoop() {
 		select {
 		// Handle ChainHeadEvent
 		case ev := <-self.chainHeadCh:
-			if h, ok := self.engine.(consensus.Handler); ok {
-				h.NewChainHead(ev.Block)
+			if self.isRunning() {
+				if h, ok := self.engine.(consensus.Handler); ok {
+					h.NewChainHead(ev.Block)
+				}
+				self.commitNewWork()
 			}
-			self.commitNewWork()
 
 		// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:
@@ -354,7 +354,7 @@ func (self *worker) resultLoop() {
 		case result := <-self.resultCh:
 			atomic.AddInt32(&self.atWork, -1)
 
-			if result == nil {
+			if !self.isRunning() || result == nil {
 				continue
 			}
 
@@ -616,7 +616,9 @@ func (self *worker) commitNewWork() {
 			for i := uint64(0); i < scanBlocks; i++ {
 				cctBlock = cctBlock.Add(cctBlock, common.Big1)
 				cctTxsInOneBlock, _ := self.cch.GetCCTTxStatusByChainId(cctBlock, self.config.PChainId)
-				self.commitCCTExecTransactionsEx(cctTxsInOneBlock, self.coinbase, totalUsedMoney, self.cch)
+				if len(cctTxsInOneBlock) != 0 {
+					self.commitCCTExecTransactionsEx(cctTxsInOneBlock, self.coinbase, totalUsedMoney, self.cch)
+				}
 			}
 		}
 
@@ -783,10 +785,10 @@ func (w *worker) commitTransactionEx(tx *types.Transaction, coinbase common.Addr
 	return receipt.Logs, nil
 }
 
-func (w *worker) NewChildCCTTx(cts *types.CCTTxStatus, nonce uint64) (*types.Transaction, error) {
+func (w *worker) NewChildCCTTx(cts *types.CCTTxStatus, nonce uint64, addrSig []byte) (*types.Transaction, error) {
 
 	input, err := pabi.ChainABI.Pack(pabi.CrossChainTransferExec.String(), cts.MainBlockNumber, cts.TxHash, cts.Owner,
-									cts.FromChainId, cts.ToChainId, cts.Amount, cts.Status, types.ReceiptStatusSuccessful)
+									cts.FromChainId, cts.ToChainId, cts.Amount, cts.Status, types.ReceiptStatusSuccessful, addrSig)
 	if err != nil {
 		return nil, err
 	}
@@ -798,10 +800,10 @@ func (w *worker) NewChildCCTTx(cts *types.CCTTxStatus, nonce uint64) (*types.Tra
 func (w *worker) needHandle(chainId string, cts *types.CCTTxStatus, latestCCTES *types.CCTTxExecStatus) bool {
 
 	if chainId == cts.FromChainId {
-		if cts.Status == types.CCTUNHANDLED && latestCCTES == nil {
+		if cts.Status == types.CCTRECEIVED && latestCCTES == nil {
 			return true //need handle
 		} else if cts.Status== types.CCTFAILED && !cts.LastOperationDone &&
-			latestCCTES != nil && latestCCTES.Status == types.CCTUNHANDLED && latestCCTES.LocalStatus == types.ReceiptStatusSuccessful {
+			latestCCTES != nil && latestCCTES.Status == types.CCTRECEIVED && latestCCTES.LocalStatus == types.ReceiptStatusSuccessful {
 			return true //need revert
 		}
 	} else if chainId == cts.ToChainId {
@@ -821,19 +823,15 @@ func (w *worker) commitCCTExecTransactionsEx(cctTxsInOneBlock []*types.CCTTxStat
 
 	gp := new(core.GasPool).AddGas(w.current.header.GasLimit)
 
-	blsPriv := w.engine.(consensus.Tendermint).ConsensusPrivateValidator().PrivKey.(tmdcrypto.BLSPrivKey)
-	ecdsaPrv, err := crypto.ToECDSA(blsPriv.Bytes())
-	if err != nil {
-		return
-	}
-	from := crypto.PubkeyToAddress(ecdsaPrv.PublicKey)
+	tdmEngine := w.engine.(consensus.Tendermint)
+	addr, addrSig := tdmEngine.ConsensusAddressSignature()
 
 	for _, cts := range cctTxsInOneBlock {
-		latestCCTES := w.engine.(consensus.Tendermint).GetLatestCCTExecStatus(cts.TxHash)
+		latestCCTES := tdmEngine.GetLatestCCTExecStatus(cts.TxHash)
 		if w.needHandle(w.config.PChainId, cts, latestCCTES) {
 
-			nonce := w.current.state.GetNonce(from)
-			tx, err := w.NewChildCCTTx(cts, nonce)
+			nonce := w.current.state.GetNonce(addr)
+			tx, err := w.NewChildCCTTx(cts, nonce, addrSig)
 			if err != nil {
 				w.logger.Trace("called NewChildCCTTx", "error", err)
 				continue

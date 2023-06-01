@@ -957,8 +957,8 @@ func (cch *CrossChainHelper) UpdateCCTTxStatus(latestCts, handledCts *types.CCTT
 
 	handled := false
 	cctLastSuccessful := false
-	if latestCts.Status == types.CCTUNHANDLED {
-		if chainId == latestCts.FromChainId && handledCts.Status == types.CCTUNHANDLED {
+	if latestCts.Status == types.CCTRECEIVED {
+		if chainId == latestCts.FromChainId && handledCts.Status == types.CCTRECEIVED {
 			if localStatus == types.ReceiptStatusSuccessful {
 				latestCts.Status = types.CCTFROMSUCCEEDED
 				handled = true

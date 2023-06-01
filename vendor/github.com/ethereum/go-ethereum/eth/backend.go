@@ -511,7 +511,7 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	if tdm, ok := s.engine.(consensus.Tendermint); ok {
-		eb = tdm.PrivateValidator()
+		eb = tdm.TokenAddress()
 		if eb != (common.Address{}) {
 			return eb, nil
 		} else {
@@ -562,7 +562,7 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 func (s *Ethereum) StartMining(local bool) error {
 	var eb common.Address
 	if tdm, ok := s.engine.(consensus.Tendermint); ok {
-		eb = tdm.PrivateValidator()
+		eb = tdm.TokenAddress()
 		if (eb == common.Address{}) {
 			log.Error("Cannot start mining without private validator")
 			return errors.New("private validator missing")
