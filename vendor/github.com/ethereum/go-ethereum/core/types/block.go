@@ -582,7 +582,7 @@ const (
 	CCTFAILED = iota
 	CCTSUCCEEDED
 	CCTFROMSUCCEEDED
-	CCTUNHANDLED
+	CCTRECEIVED
 )
 
 //CCTTx record tx of cross chain in mainChain

@@ -185,8 +185,10 @@ type Tendermint interface {
 
 	SetEpoch(ep *epoch.Epoch)
 
-	ConsensusPrivateValidator() *tdmTypes.PrivValidator
-	PrivateValidator() common.Address
+	PrivateValidator() *tdmTypes.PrivValidator
+	TokenAddress() common.Address
+	ConsensusAddressSignature() (common.Address, []byte)
+	SignTx(tx *types.Transaction) (*types.Transaction, error)
 
 	CurrentCCTBlock() *big.Int
 	WriteCurrentCCTBlock(blockNumber *big.Int)
@@ -196,7 +198,6 @@ type Tendermint interface {
 	WriteCCTExecStatus(receipt *types.CCTTxExecStatus)
 	DeleteCCTExecStatus(hash common.Hash)
 	
-	SignTx(tx *types.Transaction) (*types.Transaction, error)
 
 	// VerifyHeader checks whether a header conforms to the consensus rules of a given engine.
 	VerifyHeaderBeforeConsensus(chain ChainReader, header *types.Header, seal bool) error

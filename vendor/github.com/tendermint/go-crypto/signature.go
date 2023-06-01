@@ -7,8 +7,8 @@ import (
 	. "github.com/tendermint/go-common"
 	"github.com/tendermint/go-data"
 	"github.com/tendermint/go-wire"
-	"encoding/hex"
-	"encoding/json"
+	//"encoding/hex"
+	//"encoding/json"
 	"bls"
 )
 
@@ -287,7 +287,8 @@ func (sig BLSSignature) getElement() *bls.Signature {
 func (sig BLSSignature) IsZero() bool { return len(sig) == 0 }
 
 func (sig BLSSignature) Bytes() []byte {
-	return sig
+	//return sig
+	return wire.BinaryBytes(struct{ Signature }{sig})
 }
 
 func (sig BLSSignature) String() string { return fmt.Sprintf("/%X.../", Fingerprint(sig)) }
@@ -301,8 +302,9 @@ func (sig BLSSignature) Equals(other Signature) bool {
 }
 
 func (p BLSSignature) MarshalJSON() ([]byte, error) {
-	s := "0x" + hex.EncodeToString(p)
-	return json.Marshal(s)
+	//s := "0x" + hex.EncodeToString(p)
+	//return json.Marshal(s)
+	return data.Encoder.Marshal(p)
 }
 
 func (p *BLSSignature) UnmarshalJSON(enc []byte) error {

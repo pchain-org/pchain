@@ -24,8 +24,8 @@ var (
 	WithdrawFromMainChain        = FunctionType{5, true, true, false}
 	SaveDataToMainChain          = FunctionType{6, true, true, false}
 	SetBlockReward               = FunctionType{7, true, false, true}
-	CrossChainTransferRequest    = FunctionType{8, true, true, false}
-	CrossChainTransferExec       = FunctionType{9, true, false, true}
+	CrossChainTransferRequest    = FunctionType{8, true, true, true}
+	CrossChainTransferExec       = FunctionType{9, true, true, true}
 	// Non-Cross Chain Function
 	VoteNextEpoch                = FunctionType{10, false, true, true}
 	RevealVote                   = FunctionType{11, false, true, true}
@@ -215,6 +215,7 @@ type CrossChainTransferExecArgs struct {
 	Amount      *big.Int
 	Status      uint64
 	LocalStatus uint64
+	AddrSig      []byte
 }
 
 type VoteNextEpochArgs struct {
@@ -405,6 +406,10 @@ const jsonChainABI = `
 			{
 				"name": "localStatus",
 				"type": "uint64"
+			},
+			{
+				"name": "addrSig",
+				"type": "bytes"
 			}
 		]
 	},

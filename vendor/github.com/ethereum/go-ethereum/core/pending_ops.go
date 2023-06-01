@@ -52,7 +52,7 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 		nextEp, err := eng.GetEpoch().EnterNewEpoch(op.NewValidators)
 		if err == nil {
 			// Stop the Engine if we are not in the new validators
-			if !op.NewValidators.HasAddress(eng.PrivateValidator().Bytes()) && eng.IsStarted() {
+			if !op.NewValidators.HasAddress(eng.TokenAddress().Bytes()) && eng.IsStarted() {
 				bc.PostChainEvents([]interface{}{StopMiningEvent{}}, nil)
 			}
 			eng.SetEpoch(nextEp)
