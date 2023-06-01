@@ -95,6 +95,7 @@ func (b *TdmBlock) HasTxToReport() bool {
 			}
 
 			if function == pabi.WithdrawFromChildChain ||
+				function == pabi.CrossChainTransferRequest ||
 				function == pabi.CrossChainTransferExec {
 				return true
 			}

@@ -120,13 +120,15 @@ func crosschainTransfer(ctx *cli.Context) error {
 
 	cctInitEnv(ctx)
 
-	cctSH.fromBlcInMCBefore, cctSH.fromBlcInFCBefore, cctSH.toBlcInTCBefore = getBalance()
+	/*cctSH.fromBlcInMCBefore, */
+	cctSH.fromBlcInFCBefore, cctSH.toBlcInTCBefore = getBalance()
 
 	go sendCCT()
 	go checkCCT()
 	<-cctVars.stop
 
-	cctSH.fromBlcInMCAfter, cctSH.fromBlcInFCAfter, cctSH.toBlcInTCAfter = getBalance()
+	/*cctSH.fromBlcInMCAfter, */
+	cctSH.fromBlcInFCAfter, cctSH.toBlcInTCAfter = getBalance()
 
 	cctPrintStatistic()
 
@@ -196,7 +198,7 @@ func cctInitEnv(ctx *cli.Context) {
 	return
 }
 
-func getBalance() (mainBalance, fromBalance, toBalance *big.Int) {
+func getBalance() ( /*mainBalance, */ fromBalance, toBalance *big.Int) {
 
 	fromBalance, err := ethclient.WrpGetBalance(cctVars.fromChainUrl, cctVars.fromAddr, big.NewInt(int64(rpc.LatestBlockNumber)))
 	if err == nil {
@@ -207,18 +209,18 @@ func getBalance() (mainBalance, fromBalance, toBalance *big.Int) {
 	if err == nil {
 		fmt.Printf("getBalance: address(%x)'s balance is %v in chain %s\n", cctVars.toAddr, toBalance, cctVars.toChainId)
 	}
-
-	if cctVars.fromChainId == cctVars.mainChainId {
-		mainBalance = fromBalance
-	} else if cctVars.toChainId == cctVars.mainChainId {
-		mainBalance = toBalance
-	} else {
-		mainBalance, err = ethclient.WrpGetBalance(cctVars.mainChainUrl, cctVars.fromAddr, big.NewInt(int64(rpc.LatestBlockNumber)))
-		if err == nil {
-			fmt.Printf("getBalance: address(%x)'s balance is %v in chain %s\n", cctVars.fromAddr, mainBalance, cctVars.mainChainId)
+	/*
+		if cctVars.fromChainId == cctVars.mainChainId {
+			mainBalance = fromBalance
+		} else if cctVars.toChainId == cctVars.mainChainId {
+			mainBalance = toBalance
+		} else {
+			mainBalance, err = ethclient.WrpGetBalance(cctVars.mainChainUrl, cctVars.fromAddr, big.NewInt(int64(rpc.LatestBlockNumber)))
+			if err == nil {
+				fmt.Printf("getBalance: address(%x)'s balance is %v in chain %s\n", cctVars.fromAddr, mainBalance, cctVars.mainChainId)
+			}
 		}
-	}
-
+	*/
 	return
 }
 
@@ -282,14 +284,14 @@ func sendOneCCT(nonceCache *uint64) (common.Hash, error) {
 	}
 
 	// tx signer for the main chain
-	digest := crypto.Keccak256([]byte(params.MainnetChainConfig.PChainId))
+	digest := crypto.Keccak256([]byte(cctVars.fromChainId))
 	chainId := new(big.Int).SetBytes(digest[:])
 
 	// gasLimit
 	defaultGas := pabi.CrossChainTransferRequest.RequiredGas()
 
 	// gasPrice
-	gasPrice, err := ethclient.WrpSuggestGasPrice(cctVars.mainChainUrl)
+	gasPrice, err := ethclient.WrpSuggestGasPrice(cctVars.fromChainUrl)
 	if err != nil {
 		log.Errorf("sendOneCCT, WrpSuggestGasPrice err: %v", err)
 		return common.Hash{}, err
@@ -300,7 +302,7 @@ func sendOneCCT(nonceCache *uint64) (common.Hash, error) {
 	nonce := *nonceCache
 	if nonce == 0 {
 		// nonce, fetch the nonce first, if we get nonce too low error, we will manually add the value until the error gone
-		nonce, err = ethclient.WrpNonceAt(cctVars.mainChainUrl, cctVars.fromAddr, big.NewInt(int64(rpc.PendingBlockNumber)))
+		nonce, err = ethclient.WrpNonceAt(cctVars.fromChainUrl, cctVars.fromAddr, big.NewInt(int64(rpc.PendingBlockNumber)))
 		if err != nil {
 			log.Errorf("sendOneCCT, WrpNonceAt err: %v", err)
 			return common.Hash{}, err
@@ -319,7 +321,7 @@ func sendOneCCT(nonceCache *uint64) (common.Hash, error) {
 	}
 
 	// eth_sendRawTransaction
-	err = ethclient.WrpSendTransaction(cctVars.mainChainUrl, signedTx)
+	err = ethclient.WrpSendTransaction(cctVars.fromChainUrl, signedTx)
 	if err != nil {
 		log.Errorf("sendOneCCT, WrpSendTransaction err: %v", err)
 		return common.Hash{}, err
@@ -367,9 +369,9 @@ func checkCCT() error {
 
 func checkOneCCT(hash common.Hash) error {
 
-	_, isPending, err := ethclient.WrpTransactionByHash(cctVars.mainChainUrl, hash)
+	_, isPending, err := ethclient.WrpTransactionByHash(cctVars.fromChainUrl, hash)
 	if !isPending && err == nil {
-		fmt.Printf("checkOneTx: tx %x packaged in block in chain %s\n", hash, cctVars.mainChainUrl)
+		fmt.Printf("checkOneTx: tx %x packaged in block in chain %s\n", hash, cctVars.fromChainUrl)
 	} else {
 		return errors.New("not executed yet")
 	}
@@ -399,22 +401,23 @@ func checkBalance() bool {
 	txConsumedBalance := cctSH.consumedBalance
 	transferAmount := new(big.Int).Mul(sc, new(big.Int).SetInt64(defaultAmount))
 
-	expectedFromBlcInMC := (*big.Int)(nil)
-	expectedFromBlcInFC := new(big.Int).Sub(cctSH.fromBlcInFCBefore, transferAmount)
+	//expectedFromBlcInMC := (*big.Int)(nil)
+	expectedFromBlcInFC := new(big.Int).Sub(cctSH.fromBlcInFCBefore, txConsumedBalance)
+	expectedFromBlcInFC = new(big.Int).Sub(expectedFromBlcInFC, transferAmount)
 	expectedToBlcInTC := new(big.Int).Add(cctSH.toBlcInTCBefore, transferAmount)
-
-	if cctVars.fromChainId == params.MainnetChainConfig.PChainId {
-		expectedFromBlcInFC = new(big.Int).Sub(expectedFromBlcInFC, txConsumedBalance)
-		expectedFromBlcInMC = expectedFromBlcInFC
-	} else if cctVars.toChainId == params.MainnetChainConfig.PChainId {
-		expectedToBlcInTC = new(big.Int).Sub(expectedToBlcInTC, txConsumedBalance)
-		expectedFromBlcInMC = expectedToBlcInTC
-	} else {
-		expectedFromBlcInMC = new(big.Int).Sub(cctSH.fromBlcInMCBefore, txConsumedBalance)
-	}
-
-	if expectedFromBlcInMC.Cmp(cctSH.fromBlcInMCAfter) == 0 &&
-		expectedFromBlcInFC.Cmp(cctSH.fromBlcInFCAfter) == 0 &&
+	/*
+		if cctVars.fromChainId == params.MainnetChainConfig.PChainId {
+			expectedFromBlcInFC = new(big.Int).Sub(expectedFromBlcInFC, txConsumedBalance)
+			expectedFromBlcInMC = expectedFromBlcInFC
+		} else if cctVars.toChainId == params.MainnetChainConfig.PChainId {
+			expectedToBlcInTC = new(big.Int).Sub(expectedToBlcInTC, txConsumedBalance)
+			expectedFromBlcInMC = expectedToBlcInTC
+		} else {
+			expectedFromBlcInMC = new(big.Int).Sub(cctSH.fromBlcInMCBefore, txConsumedBalance)
+		}
+	*/
+	if /*expectedFromBlcInMC.Cmp(cctSH.fromBlcInMCAfter) == 0 &&*/
+	expectedFromBlcInFC.Cmp(cctSH.fromBlcInFCAfter) == 0 &&
 		expectedToBlcInTC.Cmp(cctSH.toBlcInTCAfter) == 0 {
 		return true
 	}

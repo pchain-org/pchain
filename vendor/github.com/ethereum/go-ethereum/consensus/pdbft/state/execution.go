@@ -129,7 +129,7 @@ func autoStartMining(bc *core.BlockChain, block *ethTypes.Block) {
 		}
 		nextEp.Validators = nextValidators
 
-		if nextValidators.HasAddress(eng.PrivateValidator().Bytes()) && !eng.IsStarted() {
+		if nextValidators.HasAddress(eng.TokenAddress().Bytes()) && !eng.IsStarted() {
 			bc.PostChainEvents([]interface{}{core.StartMiningEvent{}}, nil)
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	//ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/tendermint/go-merkle"
 	"math/big"
 	"sort"
@@ -127,6 +128,24 @@ func (valSet *ValidatorSet) HasAddress(address []byte) bool {
 
 	for i := 0; i < len(valSet.Validators); i++ {
 		if bytes.Compare(address, valSet.Validators[i].Address) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// HasPubkeyAddress returns true if address given is in the validator set, false -
+// otherwise.
+func (valSet *ValidatorSet) VerifyConsensusAddressSignature(addr common.Address, addrSig []byte) bool {
+
+	sig, err := crypto.SignatureFromBytes(addrSig)
+	if err != nil {
+		return false
+	}
+	
+	for i := 0; i < len(valSet.Validators); i++ {
+		pubKey := valSet.Validators[i].PubKey
+		if pubKey.VerifyBytes(addr.Bytes(), sig) {
 			return true
 		}
 	}
