@@ -1165,7 +1165,7 @@ func (cs *ConsensusState) createProposalBlock() (*types.TdmBlock, *types.PartSet
 			epochBytes = cs.Epoch.Bytes()
 
 		} else if cs.chainConfig.IsChildSd2mcWhenEpochEndsBlock(cs.getMainBlock()) && cs.Height == cs.Epoch.EndBlock {
-			//At the end block of epoch, save epoch data into block, epcoh data is taken from herder
+			//At the end block of epoch, save epoch data into block, epcoh data is taken from header
 			epochBytes = cs.blockFromMiner.Header().Extra
 
 		} else {

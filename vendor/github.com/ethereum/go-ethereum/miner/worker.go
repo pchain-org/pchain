@@ -301,10 +301,12 @@ func (self *worker) mainLoop() {
 		select {
 		// Handle ChainHeadEvent
 		case ev := <-self.chainHeadCh:
-			if h, ok := self.engine.(consensus.Handler); ok {
-				h.NewChainHead(ev.Block)
+			if self.isRunning() {
+				if h, ok := self.engine.(consensus.Handler); ok {
+					h.NewChainHead(ev.Block)
+				}
+				self.commitNewWork()
 			}
-			self.commitNewWork()
 
 		// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:
@@ -350,7 +352,7 @@ func (self *worker) resultLoop() {
 		case result := <-self.resultCh:
 			atomic.AddInt32(&self.atWork, -1)
 
-			if result == nil {
+			if !self.isRunning() || result == nil {
 				continue
 			}
 
@@ -399,6 +401,13 @@ func (self *worker) resultLoop() {
 				continue
 			}
 
+			// execute the pending ops.
+			for _, op := range ops.Ops() {
+				if err := core.ApplyOp(op, self.chain, self.cch); err != nil {
+					log.Error("Failed executing", "op", op, "err", err)
+				}
+			}
+
 			self.chain.MuLock()
 
 			stat, err := self.chain.WriteBlockWithState(block, receipts, state)
@@ -406,12 +415,6 @@ func (self *worker) resultLoop() {
 				self.logger.Error("Failed writing block to chain", "err", err)
 				self.chain.MuUnLock()
 				continue
-			}
-			// execute the pending ops.
-			for _, op := range ops.Ops() {
-				if err := core.ApplyOp(op, self.chain, self.cch); err != nil {
-					log.Error("Failed executing op", op, "err", err)
-				}
 			}
 			// check if canon block and write transactions
 			if stat == core.CanonStatTy {
