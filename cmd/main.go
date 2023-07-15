@@ -240,7 +240,7 @@ func newCliApp(version, usage string) *cli.App {
 		utils.PerfTestFlag,
 
 		LogDirFlag,
-		ChildChainFlag,
+		utils.ChildChainFlag,
 
 		/*
 			//Tendermint flags

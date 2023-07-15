@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/bridge"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/consensus"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/pchain/chain"
@@ -26,7 +27,7 @@ func pchainCmd(ctx *cli.Context) error {
 	chainMgr := chain.GetCMInstance(ctx)
 
 	// ChildChainFlag flag
-	requestChildChain := strings.Split(ctx.GlobalString(ChildChainFlag.Name), ",")
+	requestChildChain := strings.Split(ctx.GlobalString(utils.ChildChainFlag.Name), ",")
 
 	// Initial P2P Server
 	chainMgr.InitP2P()

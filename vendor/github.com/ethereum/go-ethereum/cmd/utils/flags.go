@@ -192,6 +192,11 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
+	// Child Chain Flag
+	ChildChainFlag = cli.StringFlag{
+		Name:  "childChain",
+		Usage: "Specify one or more child chain should be start. Ex: child-1,child-2",
+	}
 	// Dashboard settings
 	DashboardEnabledFlag = cli.BoolFlag{
 		Name:  metrics.DashboardEnabledFlag,
