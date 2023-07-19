@@ -752,7 +752,7 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 //
 // If the coinbase is Candidate, divide the rewards by weight
 func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header, ep *epoch.Epoch,
-	totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch bool) {
+					totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
 	config := sb.chainConfig
