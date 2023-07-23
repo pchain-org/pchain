@@ -380,7 +380,6 @@ func NewChildChainConfig(childChainID string) *ChainConfig {
 		ByzantiumBlock:      big.NewInt(0), //let's start from block 0
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
