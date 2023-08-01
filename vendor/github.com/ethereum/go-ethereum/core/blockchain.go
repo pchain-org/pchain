@@ -208,6 +208,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	return bc, nil
 }
 
+// GetVMConfig returns the block chain VM config.
+func (bc *BlockChain) GetVMConfig() *vm.Config {
+	return &bc.vmConfig
+}
+
 func (bc *BlockChain) getProcInterrupt() bool {
 	return atomic.LoadInt32(&bc.procInterrupt) == 1
 }
@@ -215,6 +220,7 @@ func (bc *BlockChain) getProcInterrupt() bool {
 // loadLastState loads the last known chain state from the database. This method
 // assumes that the chain manager mutex is held.
 func (bc *BlockChain) loadLastState() error {
+
 	// Restore the last known head block
 	head := rawdb.ReadHeadBlockHash(bc.db)
 	if head == (common.Hash{}) {
@@ -222,6 +228,8 @@ func (bc *BlockChain) loadLastState() error {
 		bc.logger.Warn("Empty database, resetting chain")
 		return bc.Reset()
 	}
+
+
 	// Make sure the entire head block is available
 	currentBlock := bc.GetBlockByHash(head)
 	if currentBlock == nil {
@@ -581,7 +589,7 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 	if block == nil {
 		return false
 	}
-	return bc.HasState(block.Root())
+	return bc.HasState(block.Root()) && bc.HasState(bc.GetRoot1ByHash(hash))
 }
 
 // GetBlock retrieves a block from the database by hash and number,
@@ -628,7 +636,7 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if number == nil {
 		return nil
 	}
-	receipts := rawdb.ReadReceipts(bc.db, hash, *number)
+	receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
 	if receipts == nil {
 		return nil
 	}
@@ -811,7 +819,7 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 
 // SetReceiptsData computes all the non-consensus fields of the receipts
 func SetReceiptsData(config *params.ChainConfig, block *types.Block, receipts types.Receipts) error {
-	signer := types.MakeSigner(config, block.Number())
+	signer := types.MakeSignerWithMainBlock(config, block.Header().MainChainNumber)
 
 	transactions, logIndex := block.Transactions(), uint(0)
 	if len(transactions) != len(receipts) {
@@ -1261,7 +1269,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	}
 
 	// No validation errors for the first block (or chain prefix skipped)
-	for ; block != nil && err == nil; block, err = it.next() {
+	for ; block != nil && (err == nil || err == ErrKnownBlock); block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 			bc.logger.Debug("Premature abort during blocks processing")
@@ -1301,16 +1309,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		}
 		proctime := time.Since(start)
 
-		// Write the block to the chain and get the status.
-		status, err := bc.writeBlockWithState(block, receipts, statedb)
-		if err != nil {
-			return it.index, events, coalescedLogs, err
-		}
 		// execute the pending ops.
 		for _, op := range ops.Ops() {
 			if err := ApplyOp(op, bc, bc.cch); err != nil {
 				bc.logger.Error("Failed executing op", op, "err", err)
 			}
+		}
+
+		// Write the block to the chain and get the status.
+		status, err := bc.writeBlockWithState(block, receipts, statedb)
+		if err != nil {
+			return it.index, events, coalescedLogs, err
 		}
 
 		blockInsertTimer.UpdateSince(start)
@@ -1361,6 +1370,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 		events = append(events, ChainHeadEvent{lastCanon})
+	}
+	
+	if err == ErrKnownBlock {
+		err = nil
 	}
 
 	return it.index, events, coalescedLogs, err
@@ -1506,7 +1519,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 				return
 			}
 			// Coalesce logs and set 'Removed'.
-			receipts := rawdb.ReadReceipts(bc.db, hash, *number)
+			receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
 			for _, receipt := range receipts {
 				for _, log := range receipt.Logs {
 					del := *log
@@ -1774,6 +1787,11 @@ func (bc *BlockChain) GetHeaderByHash(hash common.Hash) *types.Header {
 // it if present.
 func (bc *BlockChain) HasHeader(hash common.Hash, number uint64) bool {
 	return bc.hc.HasHeader(hash, number)
+}
+
+// GetCanonicalHash returns the canonical hash for a given block number
+func (bc *BlockChain) GetCanonicalHash(number uint64) common.Hash {
+	return bc.hc.GetCanonicalHash(number)
 }
 
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given

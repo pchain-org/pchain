@@ -6,6 +6,7 @@ import (
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 
 	. "github.com/tendermint/go-common"
@@ -25,7 +26,15 @@ type GoLevelDB struct {
 
 func NewGoLevelDB(name string, dir string) (*GoLevelDB, error) {
 	dbPath := path.Join(dir, name+".db")
-	db, err := leveldb.OpenFile(dbPath, nil)
+	db, err := leveldb.OpenFile(dbPath, &opt.Options{
+		OpenFilesCacheCapacity: 1024,
+		BlockCacheCapacity:     512 / 2 * opt.MiB,
+		WriteBuffer:            512 / 4 * opt.MiB, // Two of these are used internally
+		Filter:                 filter.NewBloomFilter(10),
+	})
+	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
+		db, err = leveldb.RecoverFile(dbPath, nil)
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -95,6 +96,9 @@ type worker struct {
 	engine consensus.Engine
 	eth    Backend
 	chain  *core.BlockChain
+
+	// Feeds
+	pendingLogsFeed event.Feed
 
 	gasFloor uint64
 	gasCeil  uint64
@@ -193,6 +197,7 @@ func (self *worker) pending() (*types.Block, *state.StateDB) {
 			self.current.txs,
 			nil,
 			self.current.receipts,
+			new(trie.Trie),
 		), self.current.state.Copy()
 	}
 	return self.current.Block, self.current.state.Copy()
@@ -208,6 +213,7 @@ func (self *worker) pendingBlock() *types.Block {
 			self.current.txs,
 			nil,
 			self.current.receipts,
+			new(trie.Trie),
 		)
 	}
 	return self.current.Block
@@ -295,10 +301,12 @@ func (self *worker) mainLoop() {
 		select {
 		// Handle ChainHeadEvent
 		case ev := <-self.chainHeadCh:
-			if h, ok := self.engine.(consensus.Handler); ok {
-				h.NewChainHead(ev.Block)
+			if self.isRunning() {
+				if h, ok := self.engine.(consensus.Handler); ok {
+					h.NewChainHead(ev.Block)
+				}
+				self.commitNewWork()
 			}
-			self.commitNewWork()
 
 		// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:
@@ -313,7 +321,7 @@ func (self *worker) mainLoop() {
 				self.currentMu.Lock()
 				acc, _ := types.Sender(self.current.signer, ev.Tx)
 				txs := map[common.Address]types.Transactions{acc: {ev.Tx}}
-				txset := types.NewTransactionsByPriceAndNonce(self.current.signer, txs)
+				txset := types.NewTransactionsByPriceAndNonce(self.current.signer, txs, self.current.header.BaseFee)
 
 				self.commitTransactionsEx(txset, self.coinbase, big.NewInt(0), self.cch)
 				self.currentMu.Unlock()
@@ -344,7 +352,7 @@ func (self *worker) resultLoop() {
 		case result := <-self.resultCh:
 			atomic.AddInt32(&self.atWork, -1)
 
-			if result == nil {
+			if !self.isRunning() || result == nil {
 				continue
 			}
 
@@ -393,6 +401,13 @@ func (self *worker) resultLoop() {
 				continue
 			}
 
+			// execute the pending ops.
+			for _, op := range ops.Ops() {
+				if err := core.ApplyOp(op, self.chain, self.cch); err != nil {
+					log.Error("Failed executing", "op", op, "err", err)
+				}
+			}
+
 			self.chain.MuLock()
 
 			stat, err := self.chain.WriteBlockWithState(block, receipts, state)
@@ -400,12 +415,6 @@ func (self *worker) resultLoop() {
 				self.logger.Error("Failed writing block to chain", "err", err)
 				self.chain.MuUnLock()
 				continue
-			}
-			// execute the pending ops.
-			for _, op := range ops.Ops() {
-				if err := core.ApplyOp(op, self.chain, self.cch); err != nil {
-					log.Error("Failed executing op", op, "err", err)
-				}
 			}
 			// check if canon block and write transactions
 			if stat == core.CanonStatTy {
@@ -459,7 +468,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		return err
 	}
 	work := &Work{
-		signer:    types.NewEIP155Signer(self.config.ChainId),
+		signer:    types.MakeSignerWithMainBlock(self.config, header.MainChainNumber),
 		state:     state,
 		ancestors: set.New(),
 		family:    set.New(),
@@ -517,6 +526,14 @@ func (self *worker) commitNewWork() {
 		Extra:      self.extra,
 		Time:       big.NewInt(tstamp),
 	}
+	// Set baseFee and GasLimit if we are on an EIP-1559 chain
+	if self.config.IsLondon(header.Number) {
+		header.BaseFee = misc.CalcBaseFee(self.config, parent.Header())
+		if !self.config.IsLondon(parent.Number()) {
+			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
+			header.GasLimit = core.CalcGasLimit(parent, parentGasLimit, self.gasCeil)
+		}
+	}
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if self.isRunning() {
 		if self.coinbase == (common.Address{}) {
@@ -562,7 +579,7 @@ func (self *worker) commitNewWork() {
 	}
 
 	totalUsedMoney := big.NewInt(0)
-	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending)
+	txs := types.NewTransactionsByPriceAndNonce(self.current.signer, pending, header.BaseFee)
 	//work.commitTransactions(self.mux, txs, self.chain, self.coinbase)
 	rmTxs := self.commitTransactionsEx(txs, self.coinbase, totalUsedMoney, self.cch)
 
@@ -653,7 +670,7 @@ func (w *worker) commitTransactionsEx(txs *types.TransactionsByPriceAndNonce, co
 		}
 
 		// Start executing the transaction
-		w.current.state.Prepare(tx.Hash(), common.Hash{}, w.current.tcount)
+		w.current.state.Prepare(tx.Hash(), w.current.tcount)
 
 		logs, err := w.commitTransactionEx(tx, coinbase, gp, totalUsedMoney, cch)
 		switch err {
@@ -717,7 +734,7 @@ func (w *worker) commitTransactionEx(tx *types.Transaction, coinbase common.Addr
 	snap := w.current.state.Snapshot()
 	snap1 := w.current.state.GetState1DB().Snapshot()
 
-	receipt, _, err := core.ApplyTransactionEx(w.config, w.chain, nil, gp, w.current.state, w.current.ops, w.current.header, tx, &w.current.header.GasUsed, totalUsedMoney, vm.Config{}, cch, true)
+	receipt, err := core.ApplyTransaction(w.config, w.chain, nil, gp, w.current.state, w.current.ops, w.current.header, tx, &w.current.header.GasUsed, totalUsedMoney, vm.Config{}, cch, true)
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
 		w.current.state.GetState1DB().RevertToSnapshot(snap1)

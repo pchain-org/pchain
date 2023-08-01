@@ -14,9 +14,10 @@ func needPatch(chainId string, blockNumber uint64) bool {
 	return chainId == "child_0" && (blockNumber == 26536499 || blockNumber == 26536500)
 }
 
-func accumulateRewardsPatch(config *params.ChainConfig, state *state.StateDB, ep *epoch.Epoch, totalGasFee *big.Int) *big.Int {
+func (sb *backend) accumulateRewardsPatch(state *state.StateDB, ep *epoch.Epoch, totalGasFee *big.Int) *big.Int {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
+	config := sb.chainConfig
 	if config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId {
 		// Main Chain
 
@@ -60,7 +61,7 @@ func accumulateRewardsPatch(config *params.ChainConfig, state *state.StateDB, ep
 // The total reward consists of the static block reward of Owner setup and total tx gas fee.
 //
 // If the coinbase is Candidate, divide the rewards by weight
-func accumulateRewardsPatch1(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch,
+func (sb *backend) accumulateRewardsPatch1(state *state.StateDB, header *types.Header, ep *epoch.Epoch,
 	coinbase common.Address, coinbaseReward, totalGasFee *big.Int, selfRetrieveReward bool) {
 
 	// Coinbase Reward   = Self Reward + Delegate Reward (if Deposit Proxied Balance > 0)
@@ -94,6 +95,7 @@ func accumulateRewardsPatch1(config *params.ChainConfig, state *state.StateDB, h
 		}
 	}
 
+	config := sb.chainConfig
 	outsideReward := config.IsOutOfStorage(header.Number, header.MainChainNumber)
 
 	// Move the self reward to Reward Trie
@@ -143,7 +145,7 @@ func accumulateRewardsPatch1(config *params.ChainConfig, state *state.StateDB, h
 // The total reward consists of the static block reward of Owner setup and total tx gas fee.
 //
 // If the coinbase is Candidate, divide the rewards by weight
-func accumulateRewardsPatch2(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch,
+func (sb *backend) accumulateRewardsPatch2(state *state.StateDB, header *types.Header, ep *epoch.Epoch,
 	coinbase common.Address, coinbaseReward, totalGasFee *big.Int, selfRetrieveReward bool) {
 
 	// Coinbase Reward   = Self Reward + Delegate Reward (if Deposit Proxied Balance > 0)
@@ -178,6 +180,7 @@ func accumulateRewardsPatch2(config *params.ChainConfig, state *state.StateDB, h
 	}
 
 	// Move the self reward to Reward Trie
+	config := sb.chainConfig
 	outsideReward := config.IsOutOfStorage(header.Number, header.MainChainNumber)
 
 	height := header.Number.Uint64()

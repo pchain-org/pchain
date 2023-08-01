@@ -14,7 +14,8 @@ func (self *state1Object) GetEpochRewardBalance(key uint64) *big.Int {
 func (self *state1Object) SetEpochRewardBalance(key uint64, rewardAmount *big.Int) {
 
 	if rewardAmount.Sign() < 0 {
-		log.Infof("!!!amount is negative in SetEpochRewardBalance(), not support yet")
+		log.Infof("!!!amount is negative in SetEpochRewardBalance(), make it 0 by force, addr is %x", self.address)
+		rewardAmount = big.NewInt(0)
 	}
 
 	epochReward := self.EpochReward()

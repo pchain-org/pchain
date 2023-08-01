@@ -138,8 +138,8 @@ func makeBlock(chain *core.BlockChain, engine *backend, parent *types.Block) *ty
 func makeBlockWithoutSeal(chain *core.BlockChain, engine *backend, parent *types.Block) *types.Block {
 	header := makeHeader(parent, engine.config)
 	engine.Prepare(chain, header)
-	state, _ := chain.StateAt(parent.Root())
-	block, _ := engine.Finalize(chain, header, state, nil, nil, nil, nil)
+	state, _ := chain.StateAtHeader(parent.Header())
+	block, _ := engine.Finalize(chain, header, state, nil, nil, nil, nil, nil)
 	return block
 }
 

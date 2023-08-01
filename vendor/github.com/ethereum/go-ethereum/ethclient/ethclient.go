@@ -57,6 +57,22 @@ func Close(client *Client) {
 	}
 }
 
+// CreateAccessList tries to create an access list for a specific transaction based on the
+// current pending state of the blockchain.
+func (ec *Client) CreateAccessList(ctx context.Context, msg ethereum.CallMsg) (*types.AccessList, uint64, string, error) {
+	type accessListResult struct {
+		Accesslist *types.AccessList `json:"accessList"`
+		Error      string            `json:"error,omitempty"`
+		GasUsed    hexutil.Uint64    `json:"gasUsed"`
+	}
+	var result accessListResult
+	if err := ec.c.CallContext(ctx, &result, "eth_createAccessList", toCallArg(msg)); err != nil {
+		return nil, 0, "", err
+	}
+	return result.Accesslist, uint64(result.GasUsed), result.Error, nil
+}
+
+
 // Blockchain Access
 
 // ChainId retrieves the current chain ID for transaction replay protection.
@@ -87,6 +103,7 @@ func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Bl
 }
 
 type rpcBlock struct {
+	TotalDifficulty *hexutil.Big  `json:"totalDifficulty"`
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
 	UncleHashes  []common.Hash    `json:"uncles"`
@@ -270,9 +287,18 @@ func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*
 }
 
 func toBlockNumArg(number *big.Int) string {
-	if number == nil {
+	if number == nil || number.Int64() == int64(rpc.LatestBlockNumber) {
 		return "latest"
 	}
+
+	if number.Int64() == int64(rpc.EarliestBlockNumber) {
+		return "earliest"
+	}
+
+	if number.Int64() == int64(rpc.PendingBlockNumber) {
+		return "pending"
+	}
+
 	return hexutil.EncodeBig(number)
 }
 

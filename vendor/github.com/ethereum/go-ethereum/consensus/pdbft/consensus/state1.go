@@ -27,9 +27,7 @@ func (cs *ConsensusState) StartNewHeight() {
 	defer cs.mtx.Unlock()
 
 	//reload the block
-	cr := cs.backend.ChainReader()
-	curEthBlock := cr.CurrentBlock()
-	curHeight := curEthBlock.NumberU64()
+	curHeight := cs.backend.ChainReader().CurrentBlock().NumberU64()
 	cs.logger.Infof("StartNewHeight. current block height is %v", curHeight)
 
 	state := cs.InitState(cs.Epoch)
@@ -59,7 +57,7 @@ func (cs *ConsensusState) InitState(epoch *ep.Epoch) *sm.State {
 		state.Epoch = epoch
 		cs.ReconstructLastCommit(state)
 
-		cs.logger.Infof("InitStateAndEpoch. state extra: %#v, epoch validators: %v", state.TdmExtra, epoch.Validators)
+		cs.logger.Debugf("InitStateAndEpoch. state extra: %#v, epoch validators: %v", state.TdmExtra, epoch.Validators)
 	}
 
 	return state
@@ -87,6 +85,8 @@ func (cs *ConsensusState) Initialize() {
 	cs.PrecommitMaj23SignAggr = nil
 	cs.CommitRound = -1
 	cs.state = nil
+
+	cs.externalCommitted = make(map[uint64]bool)
 }
 
 // Updates ConsensusState and increments height to match thatRewardScheme of state.
@@ -108,13 +108,9 @@ func (cs *ConsensusState) UpdateToState(state *sm.State) {
 	// RoundState fields
 	cs.updateRoundStep(0, RoundStepNewHeight)
 	//cs.StartTime = cs.timeoutParams.Commit(cs.CommitTime)
-	if state.TdmExtra.ChainID == params.MainnetChainConfig.PChainId ||
-		state.TdmExtra.ChainID == params.TestnetChainConfig.PChainId {
-
+	if params.IsMainChain(state.TdmExtra.ChainID) {
 		cs.StartTime = cs.timeoutParams.Commit(time.Now())
-
 	} else {
-
 		if cs.CommitTime.IsZero() {
 			cs.StartTime = cs.timeoutParams.Commit(time.Now())
 		} else {

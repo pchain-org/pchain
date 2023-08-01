@@ -1,7 +1,9 @@
 package types
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/tendermint/go-merkle"
 	"github.com/tendermint/go-wire"
@@ -66,11 +68,11 @@ func (te *TendermintExtra) Copy() *TendermintExtra {
 }
 
 // NOTE: hash is nil if required fields are missing.
-func (te *TendermintExtra) Hash() []byte {
+func (te *TendermintExtra) Hash(withBlockHash bool, hash common.Hash) []byte {
 	if len(te.ValidatorsHash) == 0 {
 		return nil
 	}
-	return merkle.SimpleHashFromMap(map[string]interface{}{
+	hashObj := map[string]interface{}{
 		"ChainID":         te.ChainID,
 		"Height":          te.Height,
 		"Time":            te.Time,
@@ -79,7 +81,27 @@ func (te *TendermintExtra) Hash() []byte {
 		"EpochNumber":     te.EpochNumber,
 		"Validators":      te.ValidatorsHash,
 		"EpochBytes":      te.EpochBytes,
-	})
+	}
+
+	if withBlockHash {
+		hashObj["BlockHash"] = hash
+	}
+
+	return merkle.SimpleHashFromMap(hashObj)
+}
+
+func (te *TendermintExtra) IsConsistWithBlockHash(isEnhanceExtra bool, blockHash common.Hash) bool {
+	if te == nil {
+		return false
+	}
+	tdmExtra := *te
+	if !isEnhanceExtra {
+		tdmExtra.NeedToSave = false
+		tdmExtra.NeedToBroadcast = false
+	}
+	extraHash := tdmExtra.Hash(isEnhanceExtra, blockHash)
+	blockIdHash := te.SeenCommit.BlockID.Hash
+	return bytes.Equal(extraHash, blockIdHash)
 }
 
 // ExtractTendermintExtra extracts all values of the TendermintExtra from the header. It returns an

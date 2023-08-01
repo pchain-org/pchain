@@ -8,6 +8,7 @@ import (
 	eth "github.com/ethereum/go-ethereum/node"
 	"github.com/pchain/ethereum"
 	"github.com/pchain/version"
+	cmn "github.com/tendermint/go-common"
 	cfg "github.com/tendermint/go-config"
 	"gopkg.in/urfave/cli.v1"
 	"path/filepath"
@@ -43,13 +44,11 @@ func LoadChildChain(ctx *cli.Context, chainId string) *Chain {
 
 	log.Infof("now load child: %s", chainId)
 
-	//chainDir := ChainDir(ctx, chainId)
-	//empty, err := cmn.IsDirEmpty(chainDir)
-	//log.Infof("chainDir is : %s, empty is %v", chainDir, empty)
-	//if empty || err != nil {
-	//	log.Errorf("directory %s not exist or with error %v", chainDir, err)
-	//	return nil
-	//}
+	if !ChainDirExist(ctx, chainId) {
+		log.Errorf("chain directory for %s does not exist", chainId)
+		return nil
+	}
+
 	chain := &Chain{Id: chainId}
 	config := GetTendermintConfig(chainId, ctx)
 	chain.Config = config
@@ -114,4 +113,35 @@ func CreateChildChain(ctx *cli.Context, chainId string, validator tdmTypes.PrivV
 	init_tdm_files(config, chainId, config.GetString("eth_genesis_file"), validators)
 
 	return nil
+}
+
+func CreateChildChainForSynch(ctx *cli.Context, chainId string, validators []tdmTypes.GenesisValidator) error {
+
+	// Get Tendermint config base on chain id
+	config := GetTendermintConfig(chainId, ctx)
+
+	// Init the Ethereum Genesis
+	err := initEthGenesisFromExistValidator(chainId, config, validators)
+	if err != nil {
+		return err
+	}
+
+	// Init the Ethereum Blockchain
+	init_eth_blockchain(chainId, config.GetString("eth_genesis_file"), ctx)
+
+	// Init the Tendermint Genesis
+	init_tdm_files(config, chainId, config.GetString("eth_genesis_file"), validators)
+
+	return nil
+}
+
+func ChainDirExist(ctx *cli.Context, chainId string) bool {
+
+	rootDir := ctx.GlobalString(utils.DataDirFlag.Name)
+	chainDir := filepath.Join(rootDir, chainId)
+	empty, err := cmn.IsDirEmpty(chainDir)
+	if empty || err != nil {
+		return false
+	}
+	return true
 }

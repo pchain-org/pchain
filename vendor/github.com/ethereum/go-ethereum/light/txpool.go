@@ -68,6 +68,8 @@ type TxPool struct {
 	clearIdx     uint64                               // earliest block nr that can contain mined tx info
 
 	homestead bool
+	istanbul  bool
+	eip2718  bool // Fork indicator whether we are in the eip2718 stage.
 }
 
 // TxRelayBackend provides an interface to the mechanism that forwards transacions
@@ -89,7 +91,7 @@ type TxRelayBackend interface {
 func NewTxPool(config *params.ChainConfig, chain *LightChain, relay TxRelayBackend) *TxPool {
 	pool := &TxPool{
 		config:      config,
-		signer:      types.NewEIP155Signer(config.ChainId),
+		signer:      types.LatestSigner(config),
 		nonce:       make(map[common.Address]uint64),
 		pending:     make(map[common.Hash]*types.Transaction),
 		mined:       make(map[common.Hash][]*types.Transaction),
@@ -309,8 +311,10 @@ func (pool *TxPool) setNewHead(head *types.Header) {
 	txc, _ := pool.reorgOnNewHead(ctx, head)
 	m, r := txc.getLists()
 	pool.relay.NewHead(pool.head, m, r)
-	pool.homestead = pool.config.IsHomestead(head.Number)
-	pool.signer = types.MakeSigner(pool.config, head.Number)
+	mainchainNumber := head.MainChainNumber
+	pool.homestead = pool.config.IsHomestead(mainchainNumber)
+	pool.homestead = pool.config.IsIstanbul(mainchainNumber)
+	pool.eip2718 = pool.config.IsBerlin(mainchainNumber)
 }
 
 // Stop stops the light transaction pool
@@ -378,7 +382,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 	}
 
 	// Should supply enough intrinsic gas
-	gas, err := core.IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
+	gas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, pool.homestead, pool.istanbul)
 	if err != nil {
 		return err
 	}

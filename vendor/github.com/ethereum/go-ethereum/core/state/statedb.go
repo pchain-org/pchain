@@ -71,6 +71,13 @@ type StateDB struct {
 	childChainRewardPerBlock      *big.Int
 	childChainRewardPerBlockDirty bool
 
+	//rewardOutsideSet map[common.Address]Reward //cache rewards of candidate&delegators for recording in diskdb
+	//extractRewardSet map[common.Address]uint64 //cache rewards of different epochs when delegator does extract
+
+	//if there is rollback, the rewards stored in diskdb for 'out-of-storage' feature should not be added again
+	//remember the last block consistent with out-of-storage recording
+	//oosLastBlock  *big.Int
+
 	// DB error.
 	// State objects are used by the consensus core and VM which are
 	// unable to deal with database-level errors. Any error that occurs
@@ -81,12 +88,15 @@ type StateDB struct {
 	// The refund counter, also used by state transitioning.
 	refund uint64
 
-	thash, bhash common.Hash
-	txIndex      int
+	thash   common.Hash
+	txIndex int
 	logs         map[common.Hash][]*types.Log
 	logSize      uint
 
 	preimages map[common.Hash][]byte
+
+	// Per-transaction access list
+	accessList *accessList
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -101,7 +111,7 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &StateDB{
 		db:                            db,
 		trie:                          tr,
@@ -113,8 +123,12 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		rewardSetDirty:                false,
 		childChainRewardPerBlock:      nil,
 		childChainRewardPerBlockDirty: false,
+		//rewardOutsideSet:              make(map[common.Address]Reward),
+		//extractRewardSet:              make(map[common.Address]uint64),
+		//oosLastBlock:                  nil,
 		logs:                          make(map[common.Hash][]*types.Log),
 		preimages:                     make(map[common.Hash][]byte),
+		accessList:          			newAccessList(),
 	}, nil
 }
 
@@ -136,8 +150,12 @@ func NewFromRoots(root, root1 common.Hash, db Database) (*StateDB, error) {
 		rewardSetDirty:                false,
 		childChainRewardPerBlock:      nil,
 		childChainRewardPerBlockDirty: false,
+		//rewardOutsideSet:              make(map[common.Address]Reward),
+		//extractRewardSet:              make(map[common.Address]uint64),
+		//oosLastBlock:                  nil,
 		logs:                          make(map[common.Hash][]*types.Log),
 		preimages:                     make(map[common.Hash][]byte),
+		accessList:          			newAccessList(),
 	}
 
 	state1, err1 := NewState1DB(root1, state)
@@ -175,8 +193,10 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.delegateRefundSet = make(DelegateRefundSet)
 	self.rewardSet = make(RewardSet)
 	self.childChainRewardPerBlock = nil
+	//self.rewardOutsideSet = make(map[common.Address]Reward)
+	//self.extractRewardSet = make(map[common.Address]uint64)
+	//self.oosLastBlock     = nil
 	self.thash = common.Hash{}
-	self.bhash = common.Hash{}
 	self.txIndex = 0
 	self.logs = make(map[common.Hash][]*types.Log)
 	self.logSize = 0
@@ -189,15 +209,18 @@ func (self *StateDB) AddLog(log *types.Log) {
 	self.journal = append(self.journal, addLogChange{txhash: self.thash})
 
 	log.TxHash = self.thash
-	log.BlockHash = self.bhash
 	log.TxIndex = uint(self.txIndex)
 	log.Index = self.logSize
 	self.logs[self.thash] = append(self.logs[self.thash], log)
 	self.logSize++
 }
 
-func (self *StateDB) GetLogs(hash common.Hash) []*types.Log {
-	return self.logs[hash]
+func (self *StateDB) GetLogs(hash common.Hash, blockHash common.Hash) []*types.Log {
+	logs := self.logs[hash]
+	for _, l := range logs {
+		l.BlockHash = blockHash
+	}
+	return logs
 }
 
 func (self *StateDB) Logs() []*types.Log {
@@ -260,6 +283,15 @@ func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 	return common.Big0
 }
 
+// Retrieve the ward balance from the given address or 0 if object not found
+func (self *StateDB) GetRewardBalance(addr common.Address) *big.Int {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.RewardBalance()
+	}
+	return common.Big0
+}
+
 func (self *StateDB) GetNonce(addr common.Address) uint64 {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
@@ -272,11 +304,6 @@ func (self *StateDB) GetNonce(addr common.Address) uint64 {
 // TxIndex returns the current transaction index set by Prepare.
 func (self *StateDB) TxIndex() int {
 	return self.txIndex
-}
-
-// BlockHash returns the current block hash set by Prepare.
-func (self *StateDB) BlockHash() common.Hash {
-	return self.bhash
 }
 
 func (self *StateDB) GetCode(addr common.Address) []byte {
@@ -434,6 +461,16 @@ func (self *StateDB) SetState(addr common.Address, key common.Hash, value common
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetState(self.db, key, value)
+	}
+}
+
+
+// SetStorage replaces the entire storage for the specified account with given
+// storage. This function should only be used for debugging.
+func (self *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash) {
+	stateObject := self.GetOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetStorage(storage)
 	}
 }
 
@@ -662,6 +699,8 @@ func (self *StateDB) Copy() *StateDB {
 		rewardSet:                     make(RewardSet, len(self.rewardSet)),
 		rewardSetDirty:                self.rewardSetDirty,
 		childChainRewardPerBlockDirty: self.childChainRewardPerBlockDirty,
+		//rewardOutsideSet:              make(map[common.Address]Reward, len(self.rewardOutsideSet)),
+		//extractRewardSet:              make(map[common.Address]uint64, len(self.extractRewardSet)),
 		refund:                        self.refund,
 		logs:                          make(map[common.Hash][]*types.Log, len(self.logs)),
 		logSize:                       self.logSize,
@@ -681,6 +720,17 @@ func (self *StateDB) Copy() *StateDB {
 	if self.childChainRewardPerBlock != nil {
 		state.childChainRewardPerBlock = new(big.Int).Set(self.childChainRewardPerBlock)
 	}
+	/*
+	for addr := range self.rewardOutsideSet {
+		state.rewardOutsideSet[addr] = self.rewardOutsideSet[addr].Copy()
+	}
+	for addr := range self.extractRewardSet {
+		state.extractRewardSet[addr] = self.extractRewardSet[addr]
+	}
+	if self.oosLastBlock != nil {
+		state.oosLastBlock = new(big.Int).Set(self.oosLastBlock)
+	}
+	*/
 	for hash, logs := range self.logs {
 		state.logs[hash] = make([]*types.Log, len(logs))
 		copy(state.logs[hash], logs)
@@ -688,6 +738,12 @@ func (self *StateDB) Copy() *StateDB {
 	for hash, preimage := range self.preimages {
 		state.preimages[hash] = preimage
 	}
+	// Do we need to copy the access list? In practice: No. At the start of a
+	// transaction, the access list is empty. In practice, we only ever copy state
+	// _between_ transactions/blocks, never in the middle of a transaction.
+	// However, it doesn't cost us much to copy an empty list, so we do it anyway
+	// to not blow up if we ever decide copy it in the middle of a transaction
+	state.accessList = self.accessList.Copy()
 	return state
 }
 
@@ -771,12 +827,12 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 	return s.trie.Hash()
 }
 
-// Prepare sets the current transaction hash and index and block hash which is
+// Prepare sets the current transaction hash and index which are
 // used when the EVM emits new state logs.
-func (self *StateDB) Prepare(thash, bhash common.Hash, ti int) {
-	self.thash = thash
-	self.bhash = bhash
-	self.txIndex = ti
+func (s *StateDB) Prepare(thash common.Hash, ti int) {
+	s.thash = thash
+	s.txIndex = ti
+	s.accessList = newAccessList()
 }
 
 // DeleteSuicides flags the suicided objects for deletion so that it
@@ -900,4 +956,65 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 
 func (s *StateDB) GetState1DB() *State1DB {
 	return s.state1DB
+}
+
+// PrepareAccessList handles the preparatory steps for executing a state transition with
+// regards to both EIP-2929 and EIP-2930:
+//
+// - Add sender to access list (2929)
+// - Add destination to access list (2929)
+// - Add precompiles to access list (2929)
+// - Add the contents of the optional tx access list (2930)
+//
+// This method should only be called if Berlin/2929+2930 is applicable at the current number.
+func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+	s.AddAddressToAccessList(sender)
+	if dst != nil {
+		s.AddAddressToAccessList(*dst)
+		// If it's a create-tx, the destination will be added inside evm.create
+	}
+	for _, addr := range precompiles {
+		s.AddAddressToAccessList(addr)
+	}
+	for _, el := range list {
+		s.AddAddressToAccessList(el.Address)
+		for _, key := range el.StorageKeys {
+			s.AddSlotToAccessList(el.Address, key)
+		}
+	}
+}
+
+// AddAddressToAccessList adds the given address to the access list
+func (s *StateDB) AddAddressToAccessList(addr common.Address) {
+	if s.accessList.AddAddress(addr) {
+		s.journal = append(s.journal, accessListAddAccountChange{&addr})
+	}
+}
+
+// AddSlotToAccessList adds the given (address, slot)-tuple to the access list
+func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
+	addrMod, slotMod := s.accessList.AddSlot(addr, slot)
+	if addrMod {
+		// In practice, this should not happen, since there is no way to enter the
+		// scope of 'address' without having the 'address' become already added
+		// to the access list (via call-variant, create, etc).
+		// Better safe than sorry, though
+		s.journal = append(s.journal, accessListAddAccountChange{&addr})
+	}
+	if slotMod {
+		s.journal = append(s.journal, accessListAddSlotChange{
+			address: &addr,
+			slot:    &slot,
+		})
+	}
+}
+
+// AddressInAccessList returns true if the given address is in the access list.
+func (s *StateDB) AddressInAccessList(addr common.Address) bool {
+	return s.accessList.ContainsAddress(addr)
+}
+
+// SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
+func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
+	return s.accessList.Contains(addr, slot)
 }

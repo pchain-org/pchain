@@ -431,3 +431,8 @@ func (t *Trie) hashRoot(db *Database, onleaf LeafCallback) (node, node, error) {
 	defer returnHasherToPool(h)
 	return h.hash(t.root, db, true)
 }
+
+// Reset drops the referenced root node and cleans all internal state.
+func (t *Trie) Reset() {
+	t.root = nil
+}

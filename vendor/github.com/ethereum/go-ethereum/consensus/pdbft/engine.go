@@ -3,6 +3,10 @@ package pdbft
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"math/big"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
@@ -11,10 +15,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/hashicorp/golang-lru"
+	"github.com/ethereum/go-ethereum/trie"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/tendermint/go-wire"
-	"math/big"
-	"time"
 )
 
 const (
@@ -147,6 +150,7 @@ func (sb *backend) Stop() error {
 
 func (sb *backend) Close() error {
 	sb.core.epochDB.Close()
+	sb.core.sendDataDb.Close()
 	return nil
 }
 
@@ -189,8 +193,15 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	}
 
 	// Ensure that the extra data format is satisfied
-	if _, err := tdmTypes.ExtractTendermintExtra(header); err != nil {
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
+	if err != nil {
 		return errInvalidExtraDataFormat
+	}
+	
+	isEnhanceExtra := params.IsEnhanceExtra(sb.core.cch.GetMainChainId(), header.MainChainNumber)
+	if !tdmExtra.IsConsistWithBlockHash(isEnhanceExtra, header.Hash()) {
+		return fmt.Errorf("proofdata extra hash(%x) is bound with the block hash (%x) which validators voted", 
+			tdmExtra.SeenCommit.BlockID.Hash, header.Hash())
 	}
 
 	// Ensure that the coinbase is valid
@@ -438,12 +449,29 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	//}
 
 	// Add Main Chain Height if running on Child Chain
-	if sb.chainConfig.PChainId != params.MainnetChainConfig.PChainId && sb.chainConfig.PChainId != params.TestnetChainConfig.PChainId {
+	if !sb.chainConfig.IsMainChain() {
 		header.MainChainNumber = sb.core.cch.GetHeightFromMainChain()
+	} else {
+		header.MainChainNumber = header.Number
 	}
 
 	return nil
 }
+
+//var watchAddr = common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c")
+//var watchAddr = common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c")
+//var watchAddr = common.HexToAddress("0x82bc1c28bef8f31e8d61a1706dcab8d36e6f5e58")
+//var watchAddr = common.HexToAddress("0xceb2694a1ddb8daf849825d74c4954dcd0ad6489")
+//var watchAddr = common.HexToAddress("0xd5e6619291b2384b5b7da595a9bd78ec7ea30785")
+//var watchAddr = common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5")
+//var watchAddr = common.HexToAddress("0xeaeb9794265a4b38ddfcf69ede2f65d15fe99902")
+//var watchAddr = common.HexToAddress("0x9a4eb75fc8db5680497ac33fd689b536334292b0")
+//var watchAddr = common.HexToAddress("0xae6bde77bc386d2cb6492f824ded9147d0926512")
+//var watchAddr = common.HexToAddress("0xef470c3a63343585651808b8187bba0e277bc3c8")
+//var watchAddr = common.HexToAddress("0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa")
+var watchAddr = common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc")
+
+
 
 // Finalize runs any post-transaction state modifications (e.g. block rewards)
 // and assembles the final block.
@@ -456,7 +484,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	sb.logger.Debugf("Tendermint (backend) Finalize, receipts are: %v", receipts)
 
 	// Check if any Child Chain need to be launch and Update their account balance accordingly
-	if sb.chainConfig.PChainId == params.MainnetChainConfig.PChainId || sb.chainConfig.PChainId == params.TestnetChainConfig.PChainId {
+	if sb.chainConfig.IsMainChain() {
 		// Check the Child Chain Start
 		readyId, updateBytes, removedId := sb.core.cch.ReadyForLaunchChildChain(header.Number, state)
 		if len(readyId) > 0 || updateBytes != nil || len(removedId) > 0 {
@@ -471,52 +499,72 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		}
 	}
 
+	chainId := sb.chainConfig.PChainId
+	watchBalance := state.GetBalance(watchAddr)
+	watchRewardBalance := state.GetRewardBalance(watchAddr)
+	sb.logger.Infof("in height %v, watchAddr(%x) balance is %v, rewardBalance is %v",
+		header.Number.Uint64(), watchAddr, watchBalance, watchRewardBalance)
+
 	curBlockNumber := header.Number.Uint64()
 	epoch := sb.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
 
 	selfRetrieveReward := consensus.IsSelfRetrieveReward(sb.GetEpoch(), chain, header)
 
-
+	markProposedInEpoch := sb.chainConfig.IsMarkProposedInEpoch(header.MainChainNumber)
 	// Calculate the rewards
 	hn := header.Number.Uint64()
 	patch := needPatch(sb.chainConfig.PChainId, hn)
 	if !patch {
-		accumulateRewards(sb.chainConfig, state, header, epoch, totalGasFee, selfRetrieveReward)
+		sb.accumulateRewards(state, header, epoch, totalGasFee, selfRetrieveReward, markProposedInEpoch)
 	} else {
-		coinbaseReward := accumulateRewardsPatch(sb.chainConfig, state, epoch, totalGasFee)
-		accumulateRewardsPatch1(sb.chainConfig, state, header, epoch, header.Coinbase, coinbaseReward, totalGasFee, selfRetrieveReward)
+		coinbaseReward := sb.accumulateRewardsPatch(state, epoch, totalGasFee)
+		sb.accumulateRewardsPatch1(state, header, epoch, header.Coinbase, coinbaseReward, totalGasFee, selfRetrieveReward)
 
 		patchCoinbase := common.HexToAddress("0xd6fb7034433e11663500038c124d7c3abdd9d63c") //old coinbase for 26536499 and 26536500 in "child_0"
-		accumulateRewardsPatch2(sb.chainConfig, state, header, epoch, patchCoinbase, coinbaseReward, totalGasFee, selfRetrieveReward)
+		sb.accumulateRewardsPatch2(state, header, epoch, patchCoinbase, coinbaseReward, totalGasFee, selfRetrieveReward)
 	}
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
 										sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
-										selfRetrieveReward); ok {
+										selfRetrieveReward, markProposedInEpoch); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
 		})
-		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber){
-			epochInfo:=epoch.GetNextEpoch();
-			if epochInfo !=nil {
+		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber) {
+			epochInfo := epoch.GetNextEpoch()
+			if epochInfo != nil {
 				header.Extra = epochInfo.Bytes()
 			}
 		}
-
 	}
+
+	if chainId == "child_0" {
+		curBalance := state.GetBalance(watchAddr)
+		curRewardBalance := state.GetRewardBalance(watchAddr)
+
+		bncDiff := new(big.Int).Sub(curBalance, watchBalance)
+		rwdBncDiff := new(big.Int).Sub(curRewardBalance, watchRewardBalance)
+
+		if bncDiff.Sign() != 0 || rwdBncDiff.Sign() != 0 {
+			sb.logger.Infof("in height %v, watchAddr(%x) balance add %v to %v, rewardBalance added %v to %v",
+				header.Number.Uint64(), watchAddr, bncDiff, curBalance, rwdBncDiff, curRewardBalance)
+		}
+	}
+
+
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	header.UncleHash = types.TendermintNilUncleHash
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, nil, receipts), nil
+	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
 }
 
 // Seal generates a new block for the given input block with the local miner's
 // seal place on top.
 func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (interface{}, error) {
 
-	sb.logger.Info("/e")
+	sb.logger.Debug("enter backend.Seal()")
 
 	// update the block header timestamp and signature and propose the block to core engine
 	header := block.Header()
@@ -546,7 +594,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 	defer clear()
 
 	// post block into Istanbul engine
-	sb.logger.Infof("Tendermint (backend) Seal, before fire event with block height: %d", block.NumberU64())
+	sb.logger.Debugf("Tendermint (backend) Seal, before fire event with block height: %d", block.NumberU64())
 	go tdmTypes.FireEventRequest(sb.core.EventSwitch(), tdmTypes.EventDataRequest{Proposal: block})
 	//go sb.EventMux().Post(tdmTypes.RequestEvent{
 	//	Proposal: block,
@@ -571,7 +619,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 
 		case iresult, ok := <-sb.vcommitCh:
 
-			if ok {
+			if ok && iresult != nil {
 				sb.logger.Debugf("Tendermint (backend) Seal, v got result with block.Hash: %x, result.Hash: %x", block.Hash(), iresult.Block.Hash())
 				if block.Hash() != iresult.Block.Hash() {
 					return iresult, nil
@@ -601,6 +649,14 @@ func (sb *backend) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 
 // Commit implements istanbul.Backend.Commit
 func (sb *backend) Commit(proposal *tdmTypes.TdmBlock, seals [][]byte, isProposer func() bool) error {
+
+	//block imported outside, abort
+	if proposal == nil {
+		sb.logger.Infof("(sb *backend) Commit() receive nil block, abort\n")
+		sb.vcommitCh <- nil
+		return nil
+	}
+
 	// Check if the proposal is a valid block
 	block := proposal.Block
 
@@ -718,7 +774,7 @@ func prepareExtra(header *types.Header, vals []common.Address) ([]byte, error) {
 func writeSeal(h *types.Header, seal []byte) error {
 
 	//logger.Info("Tendermint (backend) writeSeal, add logic here")
-	if h.Extra==nil{
+	if h.Extra == nil {
 		payload := types.MagicExtra
 		h.Extra = payload
 	}
@@ -740,11 +796,12 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 // The total reward consists of the static block reward of Owner setup and total tx gas fee.
 //
 // If the coinbase is Candidate, divide the rewards by weight
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, ep *epoch.Epoch,
-						totalGasFee *big.Int, selfRetrieveReward bool) {
+func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header, ep *epoch.Epoch,
+					totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
-	if config.PChainId == params.MainnetChainConfig.PChainId || config.PChainId == params.TestnetChainConfig.PChainId {
+	config := sb.chainConfig
+	if sb.chainConfig.IsMainChain() {
 		// Main Chain
 
 		// Coinbase Reward   = 80% of Total Reward
@@ -847,6 +904,27 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 				state.SubRewardBalanceByEpochNumber(header.Coinbase, ep.Number, diff)
 			}
 		}
+	}
+
+	if markProposedInEpoch {
+
+		_, err := state.GetProposalStartInEpoch()
+		if err != nil {
+			state.MarkProposalStartInEpoch(ep.Number)
+		}
+
+		//if this chain rewinds or the self-proposed head block is overwritten by external block
+		//it needs clear the mark of self-address
+		selfAddress := sb.PrivateValidator()
+		if sb.IsStarted() && (selfAddress != common.Address{}) && header.Coinbase != selfAddress {
+			firstProposedBlock, proposed := state.CheckProposedInEpoch(selfAddress, ep.Number)
+			if proposed && height <= firstProposedBlock {
+				state.ClearProposedInEpoch(selfAddress, ep.Number)
+				sb.logger.Infof("the address %x encouters the rewind or block overwritten, clear its proposal record", selfAddress)
+			}
+		}
+
+		state.MarkProposedInEpoch(header.Coinbase, ep.Number, height)
 	}
 }
 

@@ -192,6 +192,11 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
+	// Child Chain Flag
+	ChildChainFlag = cli.StringFlag{
+		Name:  "childChain",
+		Usage: "Specify one or more child chain should be start. Ex: child-1,child-2",
+	}
 	// Dashboard settings
 	DashboardEnabledFlag = cli.BoolFlag{
 		Name:  metrics.DashboardEnabledFlag,
@@ -399,6 +404,11 @@ var (
 		Name:  "rpccorsdomain",
 		Usage: "Comma separated list of domains from which to accept cross origin requests (browser enforced)",
 		Value: "",
+	}
+	RPCGlobalGasCapFlag = cli.Uint64Flag{
+		Name:  "rpc.gascap",
+		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)",
+		Value: eth.DefaultConfig.RPCGasCap,
 	}
 	RPCVirtualHostsFlag = cli.StringFlag{
 		Name:  "rpcvhosts",
@@ -1145,7 +1155,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		// TODO(fjl): force-enable this in --dev mode
 		cfg.EnablePreimageRecording = ctx.GlobalBool(VMEnableDebugFlag.Name)
 	}
-
+	if ctx.GlobalIsSet(RPCGlobalGasCapFlag.Name) {
+		cfg.RPCGasCap = ctx.GlobalUint64(RPCGlobalGasCapFlag.Name)
+	}
+	if cfg.RPCGasCap != 0 {
+		log.Info("Set global gas cap", "cap", cfg.RPCGasCap)
+	} else {
+		log.Info("Global gas cap disabled")
+	}
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.GlobalBool(TestnetFlag.Name):
