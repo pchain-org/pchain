@@ -356,9 +356,6 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 		height := curBlockHeight + 1
 
 		log.Infof("extrRwd_ApplyCb, (chainId, height, from) is (%v, %v, %x\n", chainId, height, from)
-		if chainId == "child_0" && height == 43635343 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
-			fmt.Printf("debug here")
-		}
 
 		if patchNoRun(chainId, height, from) {
 			return nil
@@ -651,64 +648,86 @@ func patchStep1(chainId string, blockNumber uint64, from common.Address, current
 	}
 
 	if chainId == "child_0" {
-		
-		if blockNumber == 33389535 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
-			rewardDiff := new(big.Int).SetUint64(121128901091097)
-			rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
-		}
-		if blockNumber == 35182438 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
-			rewardDiff := new(big.Int).SetUint64(121128901091097)
-			rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
-		}
-		if blockNumber == 36492381 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
-			rewardDiff := new(big.Int).SetUint64(121128901091097)
-			rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
-		}
-		if blockNumber == 38070487 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
-			rewardDiff := new(big.Int).SetUint64(121128901091097)
-			rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
-		}
-		if blockNumber == 41975759 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
-			rewardDiff := new(big.Int).SetUint64(121128901091097)
-			rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
-			rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
-		}
-		if blockNumber == 45115772 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
-			rewardDiff := new(big.Int).SetUint64(121128901091097)
-			rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
-		}
-		if blockNumber == 49769059 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
-			rewardDiff := new(big.Int).SetUint64(121128901091097)
-			rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
-			rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
+
+		//for 0x852d12801e5fb640a84421c37eafae87ba86c76c
+		{
+			if blockNumber == 33389535 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
+				rewardDiff := new(big.Int).SetUint64(121128901091097)
+				rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
+			}
+			if blockNumber == 35182438 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
+				rewardDiff := new(big.Int).SetUint64(121128901091097)
+				rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
+			}
+			if blockNumber == 36492381 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
+				rewardDiff := new(big.Int).SetUint64(121128901091097)
+				rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
+			}
+			if blockNumber == 38070487 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
+				rewardDiff := new(big.Int).SetUint64(121128901091097)
+				rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
+			}
+			if blockNumber == 41975759 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
+				rewardDiff := new(big.Int).SetUint64(121128901091097)
+				rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
+				rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
+			}
+			if blockNumber == 45115772 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
+				rewardDiff := new(big.Int).SetUint64(121128901091097)
+				rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
+			}
+			if blockNumber == 49769059 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
+				rewardDiff := new(big.Int).SetUint64(121128901091097)
+				rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
+				rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
+			}
+			if blockNumber == 55788578 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
+				rewardDiff := new(big.Int).SetUint64(121128901091097)
+				rewards[28] = new(big.Int).Add(rewards[28], rewardDiff)
+				rewards[29] = new(big.Int).Add(rewards[29], rewardDiff)
+
+				rewardDiff = new(big.Int).SetUint64(121128901091097 + 11) //last epoch, has some extra pi
+				rewards[30] = new(big.Int).Add(rewards[30], rewardDiff)
+			}
 		}
 
+		//for 0xbecabc3fed76ca7a551d4c372c20318b7457878c
+		{
+			if blockNumber == 33611723 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
+				rewardDiff := new(big.Int).SetUint64(1041442624722396)
+				rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
+			}
+			if blockNumber == 37967696 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
+				rewardDiff := new(big.Int).SetUint64(1041442624722396)
+				rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
+				rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
+			}
+			if blockNumber == 40807203 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
+				rewardDiff := new(big.Int).SetUint64(1041442624722396)
+				rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
+				rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
+			}
+			if blockNumber == 42394831 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
+				rewardDiff := new(big.Int).SetUint64(1041442624722396)
+				rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
+			}
+			if blockNumber == 45190833 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
+				rewardDiff := new(big.Int).SetUint64(1041442624722396)
+				rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
+			}
+			if blockNumber == 47305502 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
+				rewardDiff := new(big.Int).SetUint64(1041442624722396)
+				rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
+			}
+			if blockNumber == 61201149 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
+				rewardDiff := new(big.Int).SetUint64(1041442624722396)
+				rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
+				rewards[28] = new(big.Int).Add(rewards[28], rewardDiff)
+				rewards[29] = new(big.Int).Add(rewards[29], rewardDiff)
 
-		if blockNumber == 33611723 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
-			rewardDiff := new(big.Int).SetUint64(1041442624722396)
-			rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
-		}
-		if blockNumber == 37967696 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
-			rewardDiff := new(big.Int).SetUint64(1041442624722396)
-			rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
-			rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
-		}
-		if blockNumber == 40807203 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
-			rewardDiff := new(big.Int).SetUint64(1041442624722396)
-			rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
-			rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
-		}
-		if blockNumber == 42394831 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
-			rewardDiff := new(big.Int).SetUint64(1041442624722396)
-			rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
-		}
-		if blockNumber == 45190833 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
-			rewardDiff := new(big.Int).SetUint64(1041442624722396)
-			rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
-		}
-		if blockNumber == 47305502 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
-			rewardDiff := new(big.Int).SetUint64(1041442624722396)
-			rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
+				rewardDiff = new(big.Int).SetUint64(1041442624722396 + 8) //last epoch, has some extra pi
+				rewards[30] = new(big.Int).Add(rewards[30], rewardDiff)
+			}
 		}
 
 
@@ -762,46 +781,68 @@ func patchStep1(chainId string, blockNumber uint64, from common.Address, current
 			rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
 		}
 
-		
-		if blockNumber == 34517913 && from == common.HexToAddress("0xd5e6619291b2384b5b7da595a9bd78ec7ea30785") {
-			rewardDiff := new(big.Int).SetUint64(6320382574071211)
-			rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
-			rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
+		//for "0xd5e6619291b2384b5b7da595a9bd78ec7ea30785"
+		{
+			if blockNumber == 34517913 && from == common.HexToAddress("0xd5e6619291b2384b5b7da595a9bd78ec7ea30785") {
+				rewardDiff := new(big.Int).SetUint64(6320382574071211)
+				rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
+				rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
+			}
+			if blockNumber == 38183507 && from == common.HexToAddress("0xd5e6619291b2384b5b7da595a9bd78ec7ea30785") {
+				rewardDiff := new(big.Int).SetUint64(6320382574071211)
+				rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
+				rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
+			}
+			if blockNumber == 42712099 && from == common.HexToAddress("0xd5e6619291b2384b5b7da595a9bd78ec7ea30785") {
+				rewardDiff := new(big.Int).SetUint64(6320382574071211)
+				rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
+				rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
+			}
+			if blockNumber == 55923898 && from == common.HexToAddress("0xd5e6619291b2384b5b7da595a9bd78ec7ea30785") {
+				rewardDiff := new(big.Int).SetUint64(6320382574071211)
+				rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
+				rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
+				rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
+				rewards[28] = new(big.Int).Add(rewards[28], rewardDiff)
+				rewards[29] = new(big.Int).Add(rewards[29], rewardDiff)
+
+				rewardDiff = new(big.Int).SetUint64(6320382574071211 + 3) //last epoch, has some extra pi
+				rewards[30] = new(big.Int).Add(rewards[30], rewardDiff)
+			}
 		}
-		if blockNumber == 38183507 && from == common.HexToAddress("0xd5e6619291b2384b5b7da595a9bd78ec7ea30785") {
-			rewardDiff := new(big.Int).SetUint64(6320382574071211)
-			rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
-			rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
-		}
-		if blockNumber == 42712099 && from == common.HexToAddress("0xd5e6619291b2384b5b7da595a9bd78ec7ea30785") {
-			rewardDiff := new(big.Int).SetUint64(6320382574071211)
-			rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
-			rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
-		}
-		
-		
-		if blockNumber == 36553835 && from == common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5") {
-			rewardDiff := new(big.Int).SetUint64(734409970398072)
-			rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
-			rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
-			rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
-		}
-		if blockNumber == 38000080 && from == common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5") {
-			rewardDiff := new(big.Int).SetUint64(734409970398072)
-			rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
-		}
-		if blockNumber == 40241404 && from == common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5") {
-			rewardDiff := new(big.Int).SetUint64(734409970398072)
-			rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
-		}
-		if blockNumber == 41960852 && from == common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5") {
-			rewardDiff := new(big.Int).SetUint64(734409970398072)
-			rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
-		}
-		if blockNumber == 48221867 && from == common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5") {
-			rewardDiff := new(big.Int).SetUint64(734409970398072)
-			rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
-			rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
+
+		//for 0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5
+		{
+			if blockNumber == 36553835 && from == common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5") {
+				rewardDiff := new(big.Int).SetUint64(734409970398072)
+				rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
+				rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
+				rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
+			}
+			if blockNumber == 38000080 && from == common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5") {
+				rewardDiff := new(big.Int).SetUint64(734409970398072)
+				rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
+			}
+			if blockNumber == 40241404 && from == common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5") {
+				rewardDiff := new(big.Int).SetUint64(734409970398072)
+				rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
+			}
+			if blockNumber == 41960852 && from == common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5") {
+				rewardDiff := new(big.Int).SetUint64(734409970398072)
+				rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
+			}
+			if blockNumber == 48221867 && from == common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5") {
+				rewardDiff := new(big.Int).SetUint64(734409970398072)
+				rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
+				rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
+			}
+			if blockNumber == 57941470 && from == common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5") {
+				rewardDiff := new(big.Int).SetUint64(734409970398072)
+				rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
+				rewards[28] = new(big.Int).Add(rewards[28], rewardDiff)
+				rewards[29] = new(big.Int).Add(rewards[29], rewardDiff)
+				rewards[30] = new(big.Int).Add(rewards[30], rewardDiff) //last epoch, has some extra pi :-)
+			}
 		}
 
 		
@@ -828,19 +869,34 @@ func patchStep1(chainId string, blockNumber uint64, from common.Address, current
 		}
 
 
-		if blockNumber == 36816616 && from == common.HexToAddress("0x9a4eb75fc8db5680497ac33fd689b536334292b0") {
-			rewardDiff := new(big.Int).SetUint64(812400409732380)
-			rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
-			rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
-			rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
-		}
-		if blockNumber == 38430645 && from == common.HexToAddress("0x9a4eb75fc8db5680497ac33fd689b536334292b0") {
-			rewardDiff := new(big.Int).SetUint64(812400409732380)
-			rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
-		}
-		if blockNumber == 41639657 && from == common.HexToAddress("0x9a4eb75fc8db5680497ac33fd689b536334292b0") {
-			rewardDiff := new(big.Int).SetUint64(812400409732380)
-			rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
+		//for 0x9a4eb75fc8db5680497ac33fd689b536334292b0
+		{
+			if blockNumber == 36816616 && from == common.HexToAddress("0x9a4eb75fc8db5680497ac33fd689b536334292b0") {
+				rewardDiff := new(big.Int).SetUint64(812400409732380)
+				rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
+				rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
+				rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
+			}
+			if blockNumber == 38430645 && from == common.HexToAddress("0x9a4eb75fc8db5680497ac33fd689b536334292b0") {
+				rewardDiff := new(big.Int).SetUint64(812400409732380)
+				rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
+			}
+			if blockNumber == 41639657 && from == common.HexToAddress("0x9a4eb75fc8db5680497ac33fd689b536334292b0") {
+				rewardDiff := new(big.Int).SetUint64(812400409732380)
+				rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
+			}
+			if blockNumber == 56951656 && from == common.HexToAddress("0x9a4eb75fc8db5680497ac33fd689b536334292b0") {
+				rewardDiff := new(big.Int).SetUint64(812400409732380)
+				rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
+				rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
+				rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
+				rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
+				rewards[28] = new(big.Int).Add(rewards[28], rewardDiff)
+				rewards[29] = new(big.Int).Add(rewards[29], rewardDiff)
+
+				rewardDiff = new(big.Int).SetUint64(812400409732380 + 6) //last epoch, has some extra pi
+				rewards[30] = new(big.Int).Add(rewards[30], rewardDiff)
+			}
 		}
 
 		
@@ -863,70 +919,112 @@ func patchStep1(chainId string, blockNumber uint64, from common.Address, current
 			rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
 		}
 
-		
-		if blockNumber == 37682064 && from == common.HexToAddress("0xef470c3a63343585651808b8187bba0e277bc3c8") {
-			rewardDiff := new(big.Int).SetUint64(10268741179017)
-			rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
-			rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
-			rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
-		}
-		if blockNumber == 49512860 && from == common.HexToAddress("0xef470c3a63343585651808b8187bba0e277bc3c8") {
-			rewardDiff := new(big.Int).SetUint64(10268741179017)
-			rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
-			rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
-			rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
-			rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
-			rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
-			rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
-		}
-		if blockNumber == 52081898 && from == common.HexToAddress("0xef470c3a63343585651808b8187bba0e277bc3c8") {
-			rewardDiff := new(big.Int).SetUint64(10268741179017)
-			rewards[28] = new(big.Int).Add(rewards[28], rewardDiff)
-		}
-
-
-		if blockNumber == 39602464 && from == common.HexToAddress("0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa") {
-			rewardDiff := new(big.Int).SetUint64(1676043787709040)
-			rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
-			rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
-			rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
-			rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
-			rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
-		}
-		if blockNumber == 42479918 && from == common.HexToAddress("0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa") {
-			rewardDiff := new(big.Int).SetUint64(1676043787709040)
-			rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
-		}
-		if blockNumber == 44774842 && from == common.HexToAddress("0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa") {
-			rewardDiff := new(big.Int).SetUint64(1676043787709040)
-			rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
+		//for 0xef470c3a63343585651808b8187bba0e277bc3c8
+		{
+			if blockNumber == 37682064 && from == common.HexToAddress("0xef470c3a63343585651808b8187bba0e277bc3c8") {
+				rewardDiff := new(big.Int).SetUint64(10268741179017)
+				rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
+				rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
+				rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
+			}
+			if blockNumber == 49512860 && from == common.HexToAddress("0xef470c3a63343585651808b8187bba0e277bc3c8") {
+				rewardDiff := new(big.Int).SetUint64(10268741179017)
+				rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
+				rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
+				rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
+				rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
+				rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
+				rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
+			}
+			if blockNumber == 52081898 && from == common.HexToAddress("0xef470c3a63343585651808b8187bba0e277bc3c8") {
+				rewardDiff := new(big.Int).SetUint64(10268741179017)
+				rewards[28] = new(big.Int).Add(rewards[28], rewardDiff)
+			}
+			if blockNumber == 56449325 && from == common.HexToAddress("0xef470c3a63343585651808b8187bba0e277bc3c8") {
+				rewardDiff := new(big.Int).SetUint64(10268741179017)
+				rewards[29] = new(big.Int).Add(rewards[29], rewardDiff)
+				rewardDiff = new(big.Int).SetUint64(10268741179017 + 3) //last epoch, has some extra pi
+				rewards[30] = new(big.Int).Add(rewards[30], rewardDiff)
+			}
 		}
 
+		//for 0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa
+		{
+			if blockNumber == 39602464 && from == common.HexToAddress("0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa") {
+				rewardDiff := new(big.Int).SetUint64(1676043787709040)
+				rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
+				rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
+				rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
+				rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
+				rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
+			}
+			if blockNumber == 42479918 && from == common.HexToAddress("0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa") {
+				rewardDiff := new(big.Int).SetUint64(1676043787709040)
+				rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
+			}
+			if blockNumber == 44774842 && from == common.HexToAddress("0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa") {
+				rewardDiff := new(big.Int).SetUint64(1676043787709040)
+				rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
+			}
+			if blockNumber == 61731113 && from == common.HexToAddress("0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa") {
+				rewardDiff := new(big.Int).SetUint64(1676043787709040)
+				rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
+				rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
+				rewards[28] = new(big.Int).Add(rewards[28], rewardDiff)
+				rewards[29] = new(big.Int).Add(rewards[29], rewardDiff)
 
-		if blockNumber == 43635343 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
-			rewardDiff := new(big.Int).SetUint64(40072897040696)
-			rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
-			rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
-			rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
-			rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
-			rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
-			rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
+				rewardDiff = new(big.Int).SetUint64(1676043787709040 + 9) //last epoch, has some extra pi
+				rewards[30] = new(big.Int).Add(rewards[30], rewardDiff)
+			}
 		}
-		if blockNumber == 44574635 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
-			rewardDiff := new(big.Int).SetUint64(40072897040696)
-			rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
+
+		//for 0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc
+		{
+			if blockNumber == 43635343 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
+				rewardDiff := new(big.Int).SetUint64(40072897040696)
+				rewards[19] = new(big.Int).Add(rewards[19], rewardDiff)
+				rewards[20] = new(big.Int).Add(rewards[20], rewardDiff)
+				rewards[21] = new(big.Int).Add(rewards[21], rewardDiff)
+				rewards[22] = new(big.Int).Add(rewards[22], rewardDiff)
+				rewards[23] = new(big.Int).Add(rewards[23], rewardDiff)
+				rewards[24] = new(big.Int).Add(rewards[24], rewardDiff)
+			}
+			if blockNumber == 44574635 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
+				rewardDiff := new(big.Int).SetUint64(40072897040696)
+				rewards[25] = new(big.Int).Add(rewards[25], rewardDiff)
+			}
+			if blockNumber == 47946932 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
+				rewardDiff := new(big.Int).SetUint64(40072897040696)
+				rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
+			}
+			if blockNumber == 49779509 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
+				rewardDiff := new(big.Int).SetUint64(40072897040696)
+				rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
+			}
+			if blockNumber == 51389901 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
+				rewardDiff := new(big.Int).SetUint64(40072897040696)
+				rewards[28] = new(big.Int).Add(rewards[28], rewardDiff)
+			}
+			if blockNumber == 56944193 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
+				rewardDiff := new(big.Int).SetUint64(40072897040696)
+				rewards[29] = new(big.Int).Add(rewards[29], rewardDiff)
+
+				rewardDiff = new(big.Int).SetUint64(40072897040696 + 4) //last epoch, has some extra pi
+				rewards[30] = new(big.Int).Add(rewards[30], rewardDiff)
+			}
 		}
-		if blockNumber == 47946932 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
-			rewardDiff := new(big.Int).SetUint64(40072897040696)
-			rewards[26] = new(big.Int).Add(rewards[26], rewardDiff)
-		}
-		if blockNumber == 49779509 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
-			rewardDiff := new(big.Int).SetUint64(40072897040696)
-			rewards[27] = new(big.Int).Add(rewards[27], rewardDiff)
-		}
-		if blockNumber == 51389901 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
-			rewardDiff := new(big.Int).SetUint64(40072897040696)
-			rewards[28] = new(big.Int).Add(rewards[28], rewardDiff)
+
+		//for 0x723c1b86c78a04c4f125df4573acb0625bfc69a5
+		{
+			if blockNumber == 80530396 && from == common.HexToAddress("0x723c1b86c78a04c4f125df4573acb0625bfc69a5") {
+				rewardDiff := new(big.Int).SetUint64(5564573679550924)
+				for en := uint64(19); en < 30; en++ {
+					rewards[en] = new(big.Int).Add(rewards[en], rewardDiff)
+				}
+
+				rewardDiff = new(big.Int).SetUint64(5564573679550924 + 1)
+				rewards[30] = new(big.Int).Add(rewards[30], rewardDiff)
+			}
 		}
 	}
 

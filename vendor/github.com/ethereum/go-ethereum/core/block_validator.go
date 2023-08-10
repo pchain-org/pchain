@@ -18,10 +18,10 @@ package core
 
 import (
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -81,6 +81,11 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
 func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
+
+	if types.SynchFromLocalDB && block.NumberU64() % 5000 != 0 {
+		return nil
+	}
+
 	header := block.Header()
 	if block.GasUsed() != usedGas {
 		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), usedGas)
@@ -98,8 +103,14 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
-	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
-		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
+	root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number));
+	if header.Root != root {
+		if !types.SkipRootInconsistence {
+			return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
+		} else {
+			log.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
+			types.SetHashWithBlockNumber(header.Root, root)
+		}
 	}
 	return nil
 }

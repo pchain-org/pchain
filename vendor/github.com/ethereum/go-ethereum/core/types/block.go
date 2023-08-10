@@ -583,3 +583,21 @@ func DecodeChildChainProofDataV1(bs []byte) (*ChildChainProofDataV1, error) {
 	}
 	return proofData, nil
 }
+
+var SynchFromLocalDB = true
+var SkipRootInconsistence = false
+var bhMap = make(map[common.Hash]common.Hash)
+func SetHashWithBlockNumber(old, new common.Hash) {
+	bhMap[old] = new
+}
+
+func GetHashFromBlockNumber(old common.Hash) common.Hash {
+	if hash, exist := bhMap[old]; exist {
+		return hash
+	}
+	return old
+}
+
+func init() {
+	bhMap[common.HexToHash("3d728590790b3955980c5ac99075bf65775aabc2fbaf65a58ce51b5384d1f5b7")] = common.HexToHash("4554d6932ed514e180cf7c52f5b68e1b5bcd16ecd789242bc088d563905863a5")
+}

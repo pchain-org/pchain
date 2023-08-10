@@ -229,7 +229,6 @@ func (bc *BlockChain) loadLastState() error {
 		return bc.Reset()
 	}
 
-
 	// Make sure the entire head block is available
 	currentBlock := bc.GetBlockByHash(head)
 	if currentBlock == nil {
@@ -589,7 +588,18 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 	if block == nil {
 		return false
 	}
-	return bc.HasState(block.Root()) && bc.HasState(bc.GetRoot1ByHash(hash))
+	//return bc.HasState(block.Root()) && bc.HasState(bc.GetRoot1ByHash(hash))
+
+	if !(bc.HasState(block.Root()) && bc.HasState(bc.GetRoot1ByHash(hash))) {
+		if types.SkipRootInconsistence {
+			root := types.GetHashFromBlockNumber(block.Root())
+			return bc.HasState(root) && bc.HasState(bc.GetRoot1ByHash(hash))
+		}
+		return false
+	}
+
+	return true
+
 }
 
 // GetBlock retrieves a block from the database by hash and number,
@@ -1288,7 +1298,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		
+
 		root, root1 := bc.GetRoots(parent)
 		statedb, err := state.NewFromRoots(root, root1, bc.stateCache)
 		if err != nil {

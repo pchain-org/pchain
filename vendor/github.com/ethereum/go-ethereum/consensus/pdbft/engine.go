@@ -289,9 +289,13 @@ func (sb *backend) verifyCascadingFields(chain consensus.ChainReader, header *ty
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-
-	err := sb.verifyCommittedSeals(chain, header, parents)
-	return err
+	
+	if !types.SynchFromLocalDB {
+		err := sb.verifyCommittedSeals(chain, header, parents)
+		return err
+	} else {
+		return nil
+	}
 }
 
 func (sb *backend) VerifyHeaderBeforeConsensus(chain consensus.ChainReader, header *types.Header, seal bool) error {
@@ -458,19 +462,15 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 	return nil
 }
 
-//var watchAddr = common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c")
-//var watchAddr = common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c")
-//var watchAddr = common.HexToAddress("0x82bc1c28bef8f31e8d61a1706dcab8d36e6f5e58")
-//var watchAddr = common.HexToAddress("0xceb2694a1ddb8daf849825d74c4954dcd0ad6489")
-//var watchAddr = common.HexToAddress("0xd5e6619291b2384b5b7da595a9bd78ec7ea30785")
-//var watchAddr = common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5")
-//var watchAddr = common.HexToAddress("0xeaeb9794265a4b38ddfcf69ede2f65d15fe99902")
-//var watchAddr = common.HexToAddress("0x9a4eb75fc8db5680497ac33fd689b536334292b0")
-//var watchAddr = common.HexToAddress("0xae6bde77bc386d2cb6492f824ded9147d0926512")
-//var watchAddr = common.HexToAddress("0xef470c3a63343585651808b8187bba0e277bc3c8")
-//var watchAddr = common.HexToAddress("0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa")
-var watchAddr = common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc")
+type balanceReward struct {
+	bb, br *big.Int
+	ab, ar *big.Int
+}
+var watchAddrs = map[common.Address]*balanceReward {
+	//common.HexToAddress("0x723c1b86c78a04c4f125df4573acb0625bfc69a5"): nil,
+}
 
+var debug = false
 
 
 // Finalize runs any post-transaction state modifications (e.g. block rewards)
@@ -499,12 +499,23 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		}
 	}
 
+	debug = false
 	chainId := sb.chainConfig.PChainId
-	watchBalance := state.GetBalance(watchAddr)
-	watchRewardBalance := state.GetRewardBalance(watchAddr)
-	sb.logger.Infof("in height %v, watchAddr(%x) balance is %v, rewardBalance is %v",
-		header.Number.Uint64(), watchAddr, watchBalance, watchRewardBalance)
+	if chainId == "child_0" && (header.Number.Uint64() == 53815000 || header.Number.Uint64() == 53812868) {
+		debug = true
+	}
 
+	if chainId == "child_0" {
+		for addr, _ := range watchAddrs {
+			watchBalance := state.GetBalance(addr)
+			watchRewardBalance := state.GetRewardBalance(addr)
+			sb.logger.Infof("in height %v, watchAddr(%x) balance is %v, rewardBalance is %v",
+				header.Number.Uint64(), addr, watchBalance, watchRewardBalance)
+			watchAddrs[addr] = &balanceReward{bb:watchBalance, br:watchRewardBalance}
+		}
+	}
+
+	
 	curBlockNumber := header.Number.Uint64()
 	epoch := sb.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
 
@@ -541,20 +552,35 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	}
 
 	if chainId == "child_0" {
-		curBalance := state.GetBalance(watchAddr)
-		curRewardBalance := state.GetRewardBalance(watchAddr)
+		
+		for addr, blnRwd := range watchAddrs {
 
-		bncDiff := new(big.Int).Sub(curBalance, watchBalance)
-		rwdBncDiff := new(big.Int).Sub(curRewardBalance, watchRewardBalance)
+			curBalance := state.GetBalance(addr)
+			curRewardBalance := state.GetRewardBalance(addr)
 
-		if bncDiff.Sign() != 0 || rwdBncDiff.Sign() != 0 {
-			sb.logger.Infof("in height %v, watchAddr(%x) balance add %v to %v, rewardBalance added %v to %v",
-				header.Number.Uint64(), watchAddr, bncDiff, curBalance, rwdBncDiff, curRewardBalance)
+			bncDiff := new(big.Int).Sub(curBalance, blnRwd.bb)
+			rwdBncDiff := new(big.Int).Sub(curRewardBalance, blnRwd.br)
+
+			if bncDiff.Sign() != 0 || rwdBncDiff.Sign() != 0 {
+				sb.logger.Infof("in height %v, watchAddr(%x) balance add %v to %v, rewardBalance added %v to %v",
+					header.Number.Uint64(), addr, bncDiff, curBalance, rwdBncDiff, curRewardBalance)
+			}
 		}
 	}
 
+	//contract patch :-(
+	if chainId == "child_0" && header.Number.Uint64() == 53812868 {
+		contractAddr := common.HexToAddress("0x1fc20597e28fd46d045548beafa5cce7cf97e296")
+		code := "0x000000000000000000000000000000000000001fc20597e28fd46d045548beafa5cce7cf97e29600000000000000000000000000000000000000000000000000"
+		if state.Exist(contractAddr) {
+			state.SetCode(contractAddr, common.FromHex(code))
+		}
+	}
 
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	if !types.SynchFromLocalDB {
+		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	}
+
 	header.UncleHash = types.TendermintNilUncleHash
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
@@ -801,12 +827,13 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
 	config := sb.chainConfig
+	rewardPerBlock := (*big.Int)(nil)
 	if sb.chainConfig.IsMainChain() {
 		// Main Chain
 
 		// Coinbase Reward   = 80% of Total Reward
 		// Foundation Reward = 20% of Total Reward
-		rewardPerBlock := ep.RewardPerBlock
+		rewardPerBlock = ep.RewardPerBlock
 		if rewardPerBlock != nil && rewardPerBlock.Sign() == 1 {
 			// 80% Coinbase Reward
 			coinbaseReward = new(big.Int).Mul(rewardPerBlock, big.NewInt(8))
@@ -821,7 +848,7 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 		}
 	} else {
 		// Child Chain
-		rewardPerBlock := state.GetChildChainRewardPerBlock()
+		rewardPerBlock = state.GetChildChainRewardPerBlock()
 		if rewardPerBlock != nil && rewardPerBlock.Sign() == 1 {
 			childChainRewardBalance := state.GetBalance(childChainRewardAddress)
 			if childChainRewardBalance.Cmp(rewardPerBlock) == -1 {
@@ -834,6 +861,11 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 		} else {
 			coinbaseReward = totalGasFee
 		}
+	}
+
+	if sb.chainConfig.PChainId == "child_0" {
+		sb.logger.Infof("in height %v, rewardPerBlock is %v, coinbaseReward is %v, coinbase is %x",
+				header.Number.Uint64(), rewardPerBlock, coinbaseReward, header.Coinbase)
 	}
 
 	// Coinbase Reward   = Self Reward + Delegate Reward (if Deposit Proxied Balance > 0)

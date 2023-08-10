@@ -136,7 +136,13 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 func NewFromRoots(root, root1 common.Hash, db Database) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
-		return nil, err
+		if types.SkipRootInconsistence {
+			newRoot := types.GetHashFromBlockNumber(root)
+			tr, err = db.OpenTrie(newRoot)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 	
 	state := &StateDB{

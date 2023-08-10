@@ -415,7 +415,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	statedb, err := pool.chain.StateAtHeader(newHead)
 	if err != nil {
 		log.Error("Failed to reset txpool state", "err", err)
-		return
+		return	
 	}
 	pool.currentState = statedb
 	pool.pendingState = state.ManageState(statedb)
