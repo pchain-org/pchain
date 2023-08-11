@@ -183,12 +183,12 @@ func cctInitEnv(ctx *cli.Context) {
 	cctVars.countPerSec = ctx.GlobalInt(CountPerSecFlag.Name)
 	cctVars.totalTime = ctx.GlobalInt(TotalTimeFlag.Name)
 
-	if cctVars.countPerSec < 0 || cctVars.countPerSec > 1000 {
-		Exit(fmt.Errorf("countPerSec should be in [1, 1000]"))
+	if cctVars.countPerSec <= 0 || cctVars.countPerSec > 1000 {
+		Exit(fmt.Errorf("--countpersec should be in [1, 1000]"))
 	}
 
-	if cctVars.totalTime < 0 || cctVars.totalTime > 100 {
-		Exit(fmt.Errorf("countPerSec should be in [1, 100]"))
+	if cctVars.totalTime <= 0 || cctVars.totalTime > 100 {
+		Exit(fmt.Errorf("--totaltime should be in [1, 100]"))
 	}
 
 	cctVars.stop = make(chan struct{})

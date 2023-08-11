@@ -158,12 +158,12 @@ func initEnv(ctx *cli.Context) {
 	massiveWithdrawVars.countPerSec = ctx.GlobalInt(CountPerSecFlag.Name)
 	massiveWithdrawVars.totalTime = ctx.GlobalInt(TotalTimeFlag.Name)
 
-	if massiveWithdrawVars.countPerSec < 0 || massiveWithdrawVars.countPerSec > 1000 {
-		Exit(fmt.Errorf("countPerSec should be in [1, 1000]"))
+	if massiveWithdrawVars.countPerSec <= 0 || massiveWithdrawVars.countPerSec > 1000 {
+		Exit(fmt.Errorf("--countpersec should be in [1, 1000]"))
 	}
 
-	if massiveWithdrawVars.totalTime < 0 || massiveWithdrawVars.totalTime > 100 {
-		Exit(fmt.Errorf("countPerSec should be in [1, 100]"))
+	if massiveWithdrawVars.totalTime <= 0 || massiveWithdrawVars.totalTime > 100 {
+		Exit(fmt.Errorf("--totaltime should be in [1, 100]"))
 	}
 
 	err := error(nil)
