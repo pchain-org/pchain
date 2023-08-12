@@ -290,8 +290,14 @@ func (sb *backend) verifyCascadingFields(chain consensus.ChainReader, header *ty
 		return consensus.ErrUnknownAncestor
 	}
 
-	err := sb.verifyCommittedSeals(chain, header, parents)
-	return err
+	if !common.RoughCheckSync {
+		err := sb.verifyCommittedSeals(chain, header, parents)
+		return err
+	} else {
+		return nil
+	}
+
+	return nil
 }
 
 func (sb *backend) VerifyHeaderBeforeConsensus(chain consensus.ChainReader, header *types.Header, seal bool) error {
@@ -484,14 +490,44 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		}
 	}
 
+	chainId := sb.chainConfig.PChainId
+	if chainId == "child_0" {
+		for addr := range common.LogAddrs {
+			common.LogAddrs[addr] = &common.BalanceReward{
+				BeforeBalance: state.GetBalance(addr),
+				BeforeReward:  state.GetRewardBalance(addr),
+			}
+		}
+	}
+
 	curBlockNumber := header.Number.Uint64()
 	epoch := sb.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
 
 	selfRetrieveReward := consensus.IsSelfRetrieveReward(sb.GetEpoch(), chain, header)
 
 	markProposedInEpoch := sb.chainConfig.IsMarkProposedInEpoch(header.MainChainNumber)
+	outsideReward := sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber)
+
+	rollbackCatchup := false
+	if outsideReward {
+		lastBlock, err := state.ReadOOSLastBlock()
+		if err == nil && header.Number.Cmp(lastBlock) <= 0 {
+			rollbackCatchup = true
+		}
+	}
+
 	// Calculate the rewards
-	sb.accumulateRewards(state, header, epoch, totalGasFee, selfRetrieveReward, markProposedInEpoch)
+	hn := header.Number.Uint64()
+	patch := needPatch(sb.chainConfig.PChainId, hn)
+	if !patch {
+		sb.accumulateRewards(state, header, epoch, totalGasFee, selfRetrieveReward, markProposedInEpoch, outsideReward, rollbackCatchup)
+	} else {
+		coinbaseReward := sb.accumulateRewardsPatch(state, epoch, totalGasFee)
+		sb.accumulateRewardsPatch1(state, header, epoch, header.Coinbase, coinbaseReward, totalGasFee, selfRetrieveReward, outsideReward, rollbackCatchup)
+
+		patchCoinbase := common.HexToAddress("0xd6fb7034433e11663500038c124d7c3abdd9d63c") //old coinbase for 26536499 and 26536500 in "child_0"
+		sb.accumulateRewardsPatch2(state, header, epoch, patchCoinbase, coinbaseReward, totalGasFee, selfRetrieveReward, outsideReward, rollbackCatchup)
+	}
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
@@ -509,7 +545,35 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		}
 	}
 
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	if chainId == "child_0" {
+
+		for addr, blnRwd := range common.LogAddrs{
+
+			curBalance := state.GetBalance(addr)
+			curRewardBalance := state.GetRewardBalance(addr)
+
+			bncDiff := new(big.Int).Sub(curBalance, blnRwd.BeforeBalance)
+			rwdBncDiff := new(big.Int).Sub(curRewardBalance, blnRwd.BeforeReward)
+
+			if bncDiff.Sign() != 0 || rwdBncDiff.Sign() != 0 {
+				sb.logger.Infof("in height %v, logAddr(%x) balance add %v to %v, rewardBalance added %v to %v",
+					header.Number.Uint64(), addr, bncDiff, curBalance, rwdBncDiff, curRewardBalance)
+			}
+		}
+	}
+	
+	//contract patch :-(
+	if chainId == "child_0" && header.Number.Uint64() == 53812868 {
+		contractAddr := common.HexToAddress("0x1fc20597e28fd46d045548beafa5cce7cf97e296")
+		code := "0x000000000000000000000000000000000000001fc20597e28fd46d045548beafa5cce7cf97e29600000000000000000000000000000000000000000000000000"
+		if state.Exist(contractAddr) {
+			state.SetCode(contractAddr, common.FromHex(code))
+		}
+	}
+
+	if !common.RoughCheckSync {
+		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	}
 	header.UncleHash = types.TendermintNilUncleHash
 	// Assemble and return the final block for sealing
 	return types.NewBlock(header, txs, nil, receipts, new(trie.Trie)), nil
@@ -752,10 +816,9 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 //
 // If the coinbase is Candidate, divide the rewards by weight
 func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header, ep *epoch.Epoch,
-					totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch bool) {
+					totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch, outsideReward, rollbackCatchup bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
-	config := sb.chainConfig
 	if sb.chainConfig.IsMainChain() {
 		// Main Chain
 
@@ -821,21 +884,11 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 			delegateReward.Sub(delegateReward, commissionReward)
 		}
 	}
-
-	outsideReward := config.IsOutOfStorage(header.Number, header.MainChainNumber)
-
-	rollbackCatchup := false
-	if outsideReward {
-		lastBlock, err := state.ReadOOSLastBlock()
-		if err == nil && header.Number.Cmp(lastBlock) <= 0 {
-			rollbackCatchup = true
-		}
-	}
-
+	
 	height := header.Number.Uint64()
 
 	// Move the self reward to Reward Trie
-	divideRewardByEpoch(state, header.Coinbase, ep.Number, height, selfReward, outsideReward, selfRetrieveReward, rollbackCatchup)
+	sb.divideRewardByEpoch(state, header.Coinbase, ep.Number, height, selfReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 
 	// Calculate the Delegate Reward
 	if delegateReward != nil && delegateReward.Sign() > 0 {
@@ -845,7 +898,7 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 			if depositProxiedBalance.Sign() == 1 {
 				// deposit * delegateReward / total deposit
 				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
-				divideRewardByEpoch(state, key, ep.Number, height, individualReward, outsideReward, selfRetrieveReward, rollbackCatchup)
+				sb.divideRewardByEpoch(state, key, ep.Number, height, individualReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 				totalIndividualReward.Add(totalIndividualReward, individualReward)
 			}
 			return true
@@ -901,7 +954,7 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 	}
 }
 
-func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64, height uint64,
+func (sb *backend) divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber uint64, height uint64,
 	reward *big.Int, outsideReward, selfRetrieveReward, rollbackCatchup bool) {
 	epochReward := new(big.Int).Quo(reward, big.NewInt(12))
 	lastEpochReward := new(big.Int).Set(reward)
@@ -931,5 +984,10 @@ func divideRewardByEpoch(state *state.StateDB, addr common.Address, epochNumber 
 	}
 	if !selfRetrieveReward {
 		state.MarkAddressReward(addr)
+	}
+	
+	if common.NeedLogReward(sb.chainConfig.PChainId, addr) {
+		sb.logger.Infof("in height %v, addr(%x), epoch[%v-%v]'s reward is %v, epoch[%v]'s reward is %v",
+			height, addr, epochNumber, epochNumber+10, epochReward, epochNumber+11, lastEpochReward)
 	}
 }

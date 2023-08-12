@@ -147,7 +147,7 @@ func (self *StateDB) GetOutsideRewardBalanceByEpochNumberFromDB(addr common.Addr
 	return rb
 }
 
-func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+func (self *StateDB) AddOutsideRewardBalanceByEpochNumberBase(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
 	currentRewardBalance := self.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height)
 	newReward := new(big.Int).Add(currentRewardBalance, amount)
 	if rs, exist := self.rewardOutsideSet[addr]; exist {
@@ -156,11 +156,14 @@ func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, e
 		epochReward := Reward{epochNo: newReward}
 		self.rewardOutsideSet[addr] = epochReward
 	}
+}
 
+func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+	self.AddOutsideRewardBalanceByEpochNumberBase(addr, epochNo, height, amount)
 	self.AddRewardBalance(addr, amount)
 }
 
-func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+func (self *StateDB) SubOutsideRewardBalanceByEpochNumberBase(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
 	currentRewardBalance := self.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height)
 	newReward := new(big.Int).Sub(currentRewardBalance, amount)
 	if rs, exist := self.rewardOutsideSet[addr]; exist {
@@ -169,10 +172,12 @@ func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, e
 		epochReward := Reward{epochNo: newReward}
 		self.rewardOutsideSet[addr] = epochReward
 	}
-
-	self.SubRewardBalance(addr, amount)
 }
 
+func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+	self.SubOutsideRewardBalanceByEpochNumberBase(addr, epochNo, height, amount)
+	self.SubRewardBalance(addr, amount)
+}
 
 //func (self *StateDB) GetEpochReward(address common.Address, epoch uint64) *big.Int {
 //	return self.db.TrieDB().GetEpochReward(address, epoch)

@@ -59,12 +59,34 @@ func GetCMInstance(ctx *cli.Context) *ChainManager {
 	return chainMgr
 }
 
+func NewCMInstance(ctx *cli.Context) *ChainManager {
+
+	chainMgr = &ChainManager{ctx: ctx}
+	chainMgr.stop = make(chan struct{})
+	chainMgr.childChains = make(map[string]*Chain)
+	chainMgr.childQuits = make(map[string]<-chan struct{})
+	chainMgr.cch = &CrossChainHelper{}
+
+	return chainMgr
+}
+
 func (cm *ChainManager) GetNodeID() string {
 	return cm.server.Server().NodeInfo().ID
 }
 
 func (cm *ChainManager) InitP2P() {
 	cm.server = p2p.NewP2PServer(cm.ctx)
+}
+
+func (cm *ChainManager) GetMainChain() *Chain {
+	return cm.mainChain
+}
+
+func (cm *ChainManager) GetChildChain(chainId string) *Chain {
+	if chain, exist := cm.childChains[chainId]; exist {
+		return chain
+	}
+	return nil
 }
 
 func (cm *ChainManager) LoadMainChain(ctx *cli.Context) error {
@@ -297,7 +319,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	validator := false
 
 	var ethereum *eth.Ethereum
-	cm.mainChain.EthNode.Service(&ethereum)
+	cm.mainChain.EthNode.ServiceNoRunning(&ethereum)
 
 	var localEtherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
@@ -458,7 +480,7 @@ func (cm *ChainManager) LoadChildChainFromDB(ctx *cli.Context, chainId string) *
 	validator := false
 
 	var ethereum *eth.Ethereum
-	cm.mainChain.EthNode.Service(&ethereum)
+	cm.mainChain.EthNode.ServiceNoRunning(&ethereum)
 
 	var localEtherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
@@ -487,12 +509,22 @@ func (cm *ChainManager) LoadChildChainFromDB(ctx *cli.Context, chainId string) *
 	// Write down the genesis into chain info db when exit the routine
 	defer writeGenesisIntoChainInfoDB(cm.cch.chainInfoDB, chainId, validators)
 
-	requestChildChain := strings.Split(cm.ctx.GlobalString(utils.ChildChainFlag.Name), ",")
 	synchronize := false
+	requestChildChain := strings.Split(cm.ctx.GlobalString(utils.ChildChainFlag.Name), ",")
 	for _, requestChildId := range requestChildChain {
 		if requestChildId == chainId {
 			synchronize = true
 			break
+		}
+	}
+
+	if !synchronize {
+		requestChildChain = strings.Split(cm.ctx.GlobalString(utils.ChainIdFlag.Name), ",")
+		for _, requestChildId := range requestChildChain {
+			if requestChildId == chainId {
+				synchronize = true
+				break
+			}
 		}
 	}
 
@@ -549,7 +581,7 @@ func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainIn
 
 func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool {
 	var ethereum *eth.Ethereum
-	cm.mainChain.EthNode.Service(&ethereum)
+	cm.mainChain.EthNode.ServiceNoRunning(&ethereum)
 
 	var localEtherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
@@ -603,7 +635,7 @@ func (cm *ChainManager) getNodeValidator(ethNode *node.Node) (common.Address, bo
 
 	log.Debug("getNodeValidator")
 	var ethereum *eth.Ethereum
-	ethNode.Service(&ethereum)
+	ethNode.ServiceNoRunning(&ethereum)
 
 	var etherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {

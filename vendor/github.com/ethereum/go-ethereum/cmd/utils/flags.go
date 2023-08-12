@@ -580,6 +580,16 @@ var (
 		Name:  "perftest",
 		Usage: "Whether doing performance test, will remove some limitations and cause system more frigile",
 	}
+
+	RoughCheckSyncFlag = cli.BoolFlag{
+		Name:  "roughCheckSync",
+		Usage: "Fast blockchain syncing",
+	}
+	
+	ChainIdFlag = cli.StringFlag{
+		Name:  "chainId",
+		Usage: "which chain to synchronize and import to local\n",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating

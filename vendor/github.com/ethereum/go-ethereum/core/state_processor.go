@@ -60,7 +60,7 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // Process returns the receipts and logs accumulated during the process and
 // returns the amount of gas that was used in the process. If any of the
 // transactions failed to execute due to insufficient gas it will return an error.
-func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, *types.PendingOps, error) {
+func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (*types.Block, types.Receipts, []*types.Log, uint64, *types.PendingOps, error) {
 	var (
 		receipts types.Receipts
 		usedGas  = new(uint64)
@@ -81,7 +81,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	for i, tx := range block.Transactions() {
 		msg, err := tx.AsMessage(types.MakeSignerWithMainBlock(p.config, header.MainChainNumber), header.BaseFee)
 		if err != nil {
-			return nil, nil, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+			return nil, nil, nil, 0, nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.Prepare(tx.Hash(), i)
 		//receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, header, tx, usedGas, vmenv)
@@ -89,18 +89,18 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			tx, usedGas, totalUsedMoney, cfg, p.cch, false, vmenv)
 		log.Debugf("(p *StateProcessor) Process()，after ApplyTransactionEx, receipt is %v\n", receipt)
 		if err != nil {
-			return nil, nil, 0, nil, err
+			return nil, nil, nil, 0, nil, err
 		}
 		receipts = append(receipts, receipt)
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	_, err := p.engine.Finalize(p.bc, header, statedb, block.Transactions(), totalUsedMoney, block.Uncles(), receipts, ops)
+	newBlock, err := p.engine.Finalize(p.bc, header, statedb, block.Transactions(), totalUsedMoney, block.Uncles(), receipts, ops)
 	if err != nil {
-		return nil, nil, 0, nil, err
+		return nil, nil, nil, 0, nil, err
 	}
 
-	return receipts, allLogs, *usedGas, ops, nil
+	return newBlock, receipts, allLogs, *usedGas, ops, nil
 }
 
 

@@ -573,7 +573,14 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 	if block == nil {
 		return false
 	}
-	return bc.HasState(block.Root())
+	if !bc.HasState(block.Root()) {
+		if common.SkipRootInconsistence {
+			root := common.GetHashFromBlockNumber(block.Root())
+			return bc.HasState(root)
+		}
+		return false
+	}
+	return true
 }
 
 // GetBlock retrieves a block from the database by hash and number,
@@ -685,14 +692,14 @@ func (bc *BlockChain) ValidateBlock(block *types.Block) (*state.StateDB, types.R
 	}
 
 	// Process block using the parent state as reference point.
-	receipts, _, usedGas, ops, err := bc.processor.Process(block, state, bc.vmConfig)
+	newBlock, receipts, _, usedGas, ops, err := bc.processor.Process(block, state, bc.vmConfig)
 	if err != nil {
 		log.Debugf("ValidateBlock-Process return with error: %v", err)
 		return nil, nil, nil, err
 	}
 
 	// Validate the state using the default validator
-	err = bc.Validator().ValidateState(block, state, receipts, usedGas)
+	err = bc.Validator().ValidateState(block, state, receipts, usedGas, newBlock)
 	if err != nil {
 		log.Debugf("ValidateBlock-ValidateState return with error: %v", err)
 		return nil, nil, nil, err
@@ -995,10 +1002,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		outsideReward := state.GetOutsideReward()
 		for addr, reward := range outsideReward {
 			for epoch, rewardAmount := range reward {
-				if rewardAmount.Sign() < 0 && ((bc.chainConfig.PChainId== "pchain" && block.NumberU64() == 13311677) || (bc.chainConfig.PChainId=="child_0" && block.NumberU64()==22094435))  {
+				/*if rewardAmount.Sign() < 0 && ((bc.chainConfig.PChainId== "pchain" && block.NumberU64() == 13311677) || (bc.chainConfig.PChainId=="child_0" && block.NumberU64()==22094435))  {
 					log.Errorf("!!!should dig it, rewardAmount for %x is %v", addr, rewardAmount)
 					rewardAmount = rewardAmount.Abs(rewardAmount)
 				}
+				*/
 				rawdb.WriteReward(bc.db, addr, epoch, block.NumberU64(), rewardAmount)
 			}
 		}
@@ -1301,14 +1309,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			return it.index, events, coalescedLogs, err
 		}
 		// Process block using the parent state as reference point.
-		receipts, logs, usedGas, ops, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		newBlock, receipts, logs, usedGas, ops, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return it.index, events, coalescedLogs, err
 		}
 
 		// Validate the state using the default validator
-		err = bc.Validator().ValidateState(block, statedb, receipts, usedGas)
+		err = bc.Validator().ValidateState(block, statedb, receipts, usedGas, newBlock)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return it.index, events, coalescedLogs, err

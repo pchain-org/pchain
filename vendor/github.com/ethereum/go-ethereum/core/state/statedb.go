@@ -106,7 +106,13 @@ type StateDB struct {
 func New(root common.Hash, db Database) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
-		return nil, err
+		if common.SkipRootInconsistence {
+			newRoot := common.GetHashFromBlockNumber(root)
+			tr, err = db.OpenTrie(newRoot)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &StateDB{
@@ -239,6 +245,15 @@ func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Balance()
+	}
+	return common.Big0
+}
+
+// Retrieve the ward balance from the given address or 0 if object not found
+func (self *StateDB) GetRewardBalance(addr common.Address) *big.Int {
+	stateObject := self.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.RewardBalance()
 	}
 	return common.Big0
 }
@@ -402,6 +417,11 @@ func (self *StateDB) SetNonce(addr common.Address, nonce uint64) {
 }
 
 func (self *StateDB) SetCode(addr common.Address, code []byte) {
+
+	if addr == common.HexToAddress("0x1fc20597e28fd46d045548beafa5cce7cf97e296") {
+		fmt.Printf("debug here")
+	}
+	
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(crypto.Keccak256Hash(code), code)

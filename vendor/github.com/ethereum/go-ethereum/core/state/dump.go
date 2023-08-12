@@ -69,6 +69,17 @@ type Dump struct {
 	RefundAccounts []string               `json:"refund_accounts"`
 }
 
+var watchAddrs = map[common.Address]*big.Int {
+	common.HexToAddress("0000000000000000000000000000000000000004"): nil,
+	common.HexToAddress("0000000000000000000000000000000000000064"): nil,
+	common.HexToAddress("e23dc8c60b6b0811781b93f185e1c8bbbc503ee7"): nil,
+	common.HexToAddress("3f04251dee44077a300aebd45e7ae3a3fb1c08aa"): nil,
+	common.HexToAddress("0c63fba395071e79a11406b54f0f8ed4852eda8a"): nil,
+	common.HexToAddress("9a4eb75fc8db5680497ac33fd689b536334292b0"): nil,
+	common.HexToAddress("28ad808ac87a979611e66019e4d28145724b3510"): nil,
+	common.HexToAddress("1fc20597e28fd46d045548beafa5cce7cf97e296"): nil,
+}
+
 func (self *StateDB) RawDump() Dump {
 	dump := Dump{
 		Root:     fmt.Sprintf("%x", self.trie.Hash()),
@@ -84,6 +95,11 @@ func (self *StateDB) RawDump() Dump {
 			var data Account
 			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 				panic(err)
+			}
+			
+			commonAddr := common.BytesToAddress(addr)
+			if _, exist := watchAddrs[commonAddr]; !exist {
+				continue
 			}
 
 			obj := newObject(nil, common.BytesToAddress(addr), data, nil)
