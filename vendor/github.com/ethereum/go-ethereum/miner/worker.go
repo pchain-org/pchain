@@ -589,7 +589,7 @@ func (self *worker) commitNewWork() {
 	if len(rmTxs) > 0 {
 		self.eth.TxPool().RemoveTxs(rmTxs)
 	}
-	
+
 	//collect cross chain txes and process
 	cctBlock := self.engine.(consensus.Tendermint).CurrentCCTBlock()
 	mainHeight := new(big.Int).Set(header.MainChainNumber)
@@ -606,9 +606,9 @@ func (self *worker) commitNewWork() {
 			self.engine.(consensus.Tendermint).WriteCurrentCCTBlock(cctBlock)
 		}
 
-		scanBlocks := new(big.Int).Sub(mainHeight, cctBlock).Uint64()
-		if scanBlocks > 0 {
-
+		scanStep := new(big.Int).Sub(mainHeight, cctBlock)
+		if scanStep.Sign() > 0 { //skip these blocks if there is no ccttx in them
+			scanBlocks := scanStep.Uint64()
 			if scanBlocks > types.CCTBatchBlocks {
 				scanBlocks = types.CCTBatchBlocks
 			}
@@ -620,10 +620,9 @@ func (self *worker) commitNewWork() {
 					self.commitCCTExecTransactionsEx(cctTxsInOneBlock, self.coinbase, totalUsedMoney, self.cch)
 				}
 			}
-		}
-
-		if scanBlocks > 0 { //skip these blocks if there is no ccttx in them
 			self.engine.(consensus.Tendermint).WriteCurrentCCTBlock(cctBlock)
+		} else if scanStep.Sign() < 0 {
+			self.engine.(consensus.Tendermint).WriteCurrentCCTBlock(mainHeight)
 		}
 	}
 
@@ -788,7 +787,7 @@ func (w *worker) commitTransactionEx(tx *types.Transaction, coinbase common.Addr
 func (w *worker) NewChildCCTTx(cts *types.CCTTxStatus, nonce uint64, addrSig []byte) (*types.Transaction, error) {
 
 	input, err := pabi.ChainABI.Pack(pabi.CrossChainTransferExec.String(), cts.MainBlockNumber, cts.TxHash, cts.Owner,
-									cts.FromChainId, cts.ToChainId, cts.Amount, cts.Status, types.ReceiptStatusSuccessful, addrSig)
+		cts.FromChainId, cts.ToChainId, cts.Amount, cts.Status, types.ReceiptStatusSuccessful, addrSig)
 	if err != nil {
 		return nil, err
 	}
@@ -802,7 +801,7 @@ func (w *worker) needHandle(chainId string, cts *types.CCTTxStatus, latestCCTES 
 	if chainId == cts.FromChainId {
 		if cts.Status == types.CCTRECEIVED && latestCCTES == nil {
 			return true //need handle
-		} else if cts.Status== types.CCTFAILED && !cts.LastOperationDone &&
+		} else if cts.Status == types.CCTFAILED && !cts.LastOperationDone &&
 			latestCCTES != nil && latestCCTES.Status == types.CCTRECEIVED && latestCCTES.LocalStatus == types.ReceiptStatusSuccessful {
 			return true //need revert
 		}
@@ -817,7 +816,6 @@ func (w *worker) needHandle(chainId string, cts *types.CCTTxStatus, latestCCTES 
 
 	return false
 }
-
 
 func (w *worker) commitCCTExecTransactionsEx(cctTxsInOneBlock []*types.CCTTxStatus, coinbase common.Address, totalUsedMoney *big.Int, cch core.CrossChainHelper) {
 
@@ -848,7 +846,7 @@ func (w *worker) commitCCTExecTransactionsEx(cctTxsInOneBlock []*types.CCTTxStat
 			if err != nil {
 				w.logger.Trace("cross chain transfer", "error", err)
 			} else {
-				nonce ++
+				nonce++
 			}
 		}
 	}
@@ -864,19 +862,19 @@ func (w *worker) commitCCTExecTransactionEx(tx *types.Transaction, coinbase comm
 		args := pabi.CrossChainTransferExecArgs{}
 		pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferExec.String(), tx.Data())
 		input, err := pabi.ChainABI.Pack(pabi.CrossChainTransferExec.String(), args.MainBlockNumber, args.TxHash, args.Owner,
-										args.FromChainId, args.ToChainId, args.Amount, args.Status, types.ReceiptStatusFailed)
+			args.FromChainId, args.ToChainId, args.Amount, args.Status, types.ReceiptStatusFailed)
 		if err != nil {
 			return nil, err
 		}
 
 		newTx := types.NewTransaction(tx.Nonce(), pabi.ChainContractMagicAddr, nil, 0, common.Big256, input)
-		newTx,_ =  w.engine.(consensus.Tendermint).SignTx(newTx)
+		newTx, _ = w.engine.(consensus.Tendermint).SignTx(newTx)
 		receipt.TxHash = newTx.Hash()
 		receipt.Status = types.ReceiptStatusFailed //should be this value, just re-assign
 
 		w.current.txs = append(w.current.txs, newTx)
 		w.current.receipts = append(w.current.receipts, receipt)
-		
+
 	} else if err != nil {
 		return nil, err
 	} else {
@@ -884,6 +882,6 @@ func (w *worker) commitCCTExecTransactionEx(tx *types.Transaction, coinbase comm
 		w.current.receipts = append(w.current.receipts, receipt)
 
 	}
-	
+
 	return receipt.Logs, nil
 }
