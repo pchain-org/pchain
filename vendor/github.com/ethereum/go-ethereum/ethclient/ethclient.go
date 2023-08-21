@@ -103,6 +103,7 @@ func (ec *Client) BlockByNumber(ctx context.Context, number *big.Int) (*types.Bl
 }
 
 type rpcBlock struct {
+	TotalDifficulty *hexutil.Big  `json:"totalDifficulty"`
 	Hash         common.Hash      `json:"hash"`
 	Transactions []rpcTransaction `json:"transactions"`
 	UncleHashes  []common.Hash    `json:"uncles"`
@@ -286,9 +287,18 @@ func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*
 }
 
 func toBlockNumArg(number *big.Int) string {
-	if number == nil {
+	if number == nil || number.Int64() == int64(rpc.LatestBlockNumber) {
 		return "latest"
 	}
+
+	if number.Int64() == int64(rpc.EarliestBlockNumber) {
+		return "earliest"
+	}
+
+	if number.Int64() == int64(rpc.PendingBlockNumber) {
+		return "pending"
+	}
+
 	return hexutil.EncodeBig(number)
 }
 

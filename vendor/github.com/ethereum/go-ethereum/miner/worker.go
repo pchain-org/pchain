@@ -36,6 +36,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
+	pabi "github.com/pchain/abi"
+
 	"gopkg.in/fatih/set.v0"
 )
 
@@ -301,10 +303,12 @@ func (self *worker) mainLoop() {
 		select {
 		// Handle ChainHeadEvent
 		case ev := <-self.chainHeadCh:
-			if h, ok := self.engine.(consensus.Handler); ok {
-				h.NewChainHead(ev.Block)
+			if self.isRunning() {
+				if h, ok := self.engine.(consensus.Handler); ok {
+					h.NewChainHead(ev.Block)
+				}
+				self.commitNewWork()
 			}
-			self.commitNewWork()
 
 		// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:
@@ -350,7 +354,7 @@ func (self *worker) resultLoop() {
 		case result := <-self.resultCh:
 			atomic.AddInt32(&self.atWork, -1)
 
-			if result == nil {
+			if !self.isRunning() || result == nil {
 				continue
 			}
 
@@ -399,6 +403,13 @@ func (self *worker) resultLoop() {
 				continue
 			}
 
+			// execute the pending ops.
+			for _, op := range ops.Ops() {
+				if err := core.ApplyOp(op, self.chain, self.cch); err != nil {
+					log.Error("Failed executing", "op", op, "err", err)
+				}
+			}
+
 			self.chain.MuLock()
 
 			stat, err := self.chain.WriteBlockWithState(block, receipts, state)
@@ -406,12 +417,6 @@ func (self *worker) resultLoop() {
 				self.logger.Error("Failed writing block to chain", "err", err)
 				self.chain.MuUnLock()
 				continue
-			}
-			// execute the pending ops.
-			for _, op := range ops.Ops() {
-				if err := core.ApplyOp(op, self.chain, self.cch); err != nil {
-					log.Error("Failed executing op", op, "err", err)
-				}
 			}
 			// check if canon block and write transactions
 			if stat == core.CanonStatTy {
@@ -585,6 +590,42 @@ func (self *worker) commitNewWork() {
 		self.eth.TxPool().RemoveTxs(rmTxs)
 	}
 
+	//collect cross chain txes and process
+	cctBlock := self.engine.(consensus.Tendermint).CurrentCCTBlock()
+	mainHeight := new(big.Int).Set(header.MainChainNumber)
+	if self.config.IsMainChain() {
+		mainHeight = mainHeight.Sub(mainHeight, common.Big1) //can't scan current pending block
+	}
+	if mainHeight != nil {
+
+		if cctBlock == nil { //initialize the cctblocks in db, make it -5 from current height
+			cctBlock = new(big.Int).Sub(mainHeight, big.NewInt(int64(types.CCTBatchBlocks)))
+			if cctBlock.Sign() < 0 {
+				cctBlock = common.Big0
+			}
+			self.engine.(consensus.Tendermint).WriteCurrentCCTBlock(cctBlock)
+		}
+
+		scanStep := new(big.Int).Sub(mainHeight, cctBlock)
+		if scanStep.Sign() > 0 { //skip these blocks if there is no ccttx in them
+			scanBlocks := scanStep.Uint64()
+			if scanBlocks > types.CCTBatchBlocks {
+				scanBlocks = types.CCTBatchBlocks
+			}
+
+			for i := uint64(0); i < scanBlocks; i++ {
+				cctBlock = cctBlock.Add(cctBlock, common.Big1)
+				cctTxsInOneBlock, _ := self.cch.GetCCTTxStatusByChainId(cctBlock, self.config.PChainId)
+				if len(cctTxsInOneBlock) != 0 {
+					self.commitCCTExecTransactionsEx(cctTxsInOneBlock, self.coinbase, totalUsedMoney, self.cch)
+				}
+			}
+			self.engine.(consensus.Tendermint).WriteCurrentCCTBlock(cctBlock)
+		} else if scanStep.Sign() < 0 {
+			self.engine.(consensus.Tendermint).WriteCurrentCCTBlock(mainHeight)
+		}
+	}
+
 	// compute uncles for the new block.
 	var (
 		uncles    []*types.Header
@@ -607,6 +648,7 @@ func (self *worker) commitNewWork() {
 	for _, hash := range badUncles {
 		delete(self.possibleUncles, hash)
 	}
+
 	// Create the new block to seal with the consensus engine
 	if work.Block, err = self.engine.Finalize(self.chain, header, work.state, work.txs, totalUsedMoney, uncles, work.receipts, work.ops); err != nil {
 		self.logger.Error("Failed to finalize block for sealing", "err", err)
@@ -738,6 +780,108 @@ func (w *worker) commitTransactionEx(tx *types.Transaction, coinbase common.Addr
 
 	w.current.txs = append(w.current.txs, tx)
 	w.current.receipts = append(w.current.receipts, receipt)
+
+	return receipt.Logs, nil
+}
+
+func (w *worker) NewChildCCTTx(cts *types.CCTTxStatus, nonce uint64, addrSig []byte) (*types.Transaction, error) {
+
+	input, err := pabi.ChainABI.Pack(pabi.CrossChainTransferExec.String(), cts.MainBlockNumber, cts.TxHash, cts.Owner,
+		cts.FromChainId, cts.ToChainId, cts.Amount, cts.Status, types.ReceiptStatusSuccessful, addrSig)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := types.NewTransaction(nonce, pabi.ChainContractMagicAddr, nil, 0, common.Big256, input)
+	return w.engine.(consensus.Tendermint).SignTx(tx)
+}
+
+func (w *worker) needHandle(chainId string, cts *types.CCTTxStatus, latestCCTES *types.CCTTxExecStatus) bool {
+
+	if chainId == cts.FromChainId {
+		if cts.Status == types.CCTRECEIVED && latestCCTES == nil {
+			return true //need handle
+		} else if cts.Status == types.CCTFAILED && !cts.LastOperationDone &&
+			latestCCTES != nil && latestCCTES.Status == types.CCTRECEIVED && latestCCTES.LocalStatus == types.ReceiptStatusSuccessful {
+			return true //need revert
+		}
+	} else if chainId == cts.ToChainId {
+		if cts.Status == types.CCTFROMSUCCEEDED && latestCCTES == nil {
+			return true //need send succeed signal
+		} else if cts.Status == types.CCTSUCCEEDED && !cts.LastOperationDone &&
+			latestCCTES != nil && latestCCTES.Status == types.CCTFROMSUCCEEDED && latestCCTES.LocalStatus == types.ReceiptStatusSuccessful {
+			return true //need do real transfer
+		}
+	}
+
+	return false
+}
+
+func (w *worker) commitCCTExecTransactionsEx(cctTxsInOneBlock []*types.CCTTxStatus, coinbase common.Address, totalUsedMoney *big.Int, cch core.CrossChainHelper) {
+
+	gp := new(core.GasPool).AddGas(w.current.header.GasLimit)
+
+	tdmEngine := w.engine.(consensus.Tendermint)
+	addr, addrSig := tdmEngine.ConsensusAddressSignature()
+
+	for _, cts := range cctTxsInOneBlock {
+		latestCCTES := tdmEngine.GetLatestCCTExecStatus(cts.TxHash)
+		if w.needHandle(w.config.PChainId, cts, latestCCTES) {
+
+			nonce := w.current.state.GetNonce(addr)
+			tx, err := w.NewChildCCTTx(cts, nonce, addrSig)
+			if err != nil {
+				w.logger.Trace("called NewChildCCTTx", "error", err)
+				continue
+			}
+			if tx.Protected() && !w.config.IsEIP155(w.current.header.Number) {
+				w.logger.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.config.EIP155Block)
+				continue
+			}
+
+			// Start executing the transaction
+			w.current.state.Prepare(tx.Hash(), w.current.tcount)
+
+			_, err = w.commitCCTExecTransactionEx(tx, w.coinbase, gp, totalUsedMoney, w.cch)
+			if err != nil {
+				w.logger.Trace("cross chain transfer", "error", err)
+			} else {
+				nonce++
+			}
+		}
+	}
+}
+
+func (w *worker) commitCCTExecTransactionEx(tx *types.Transaction, coinbase common.Address, gp *core.GasPool, totalUsedMoney *big.Int, cch core.CrossChainHelper) ([]*types.Log, error) {
+	snap := w.current.state.Snapshot()
+
+	receipt, err := core.ApplyTransaction(w.config, w.chain, nil, gp, w.current.state, w.current.ops, w.current.header, tx, &w.current.header.GasUsed, totalUsedMoney, vm.Config{}, cch, true)
+	if err == core.ErrTryCCTTxExec {
+		w.current.state.RevertToSnapshot(snap)
+
+		args := pabi.CrossChainTransferExecArgs{}
+		pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferExec.String(), tx.Data())
+		input, err := pabi.ChainABI.Pack(pabi.CrossChainTransferExec.String(), args.MainBlockNumber, args.TxHash, args.Owner,
+			args.FromChainId, args.ToChainId, args.Amount, args.Status, types.ReceiptStatusFailed)
+		if err != nil {
+			return nil, err
+		}
+
+		newTx := types.NewTransaction(tx.Nonce(), pabi.ChainContractMagicAddr, nil, 0, common.Big256, input)
+		newTx, _ = w.engine.(consensus.Tendermint).SignTx(newTx)
+		receipt.TxHash = newTx.Hash()
+		receipt.Status = types.ReceiptStatusFailed //should be this value, just re-assign
+
+		w.current.txs = append(w.current.txs, newTx)
+		w.current.receipts = append(w.current.receipts, receipt)
+
+	} else if err != nil {
+		return nil, err
+	} else {
+		w.current.txs = append(w.current.txs, tx)
+		w.current.receipts = append(w.current.receipts, receipt)
+
+	}
 
 	return receipt.Logs, nil
 }

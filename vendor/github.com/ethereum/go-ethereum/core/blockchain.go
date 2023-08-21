@@ -1315,16 +1315,17 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		}
 		proctime := time.Since(start)
 
-		// Write the block to the chain and get the status.
-		status, err := bc.writeBlockWithState(block, receipts, statedb)
-		if err != nil {
-			return it.index, events, coalescedLogs, err
-		}
 		// execute the pending ops.
 		for _, op := range ops.Ops() {
 			if err := ApplyOp(op, bc, bc.cch); err != nil {
 				bc.logger.Error("Failed executing op", op, "err", err)
 			}
+		}
+
+		// Write the block to the chain and get the status.
+		status, err := bc.writeBlockWithState(block, receipts, statedb)
+		if err != nil {
+			return it.index, events, coalescedLogs, err
 		}
 
 		blockInsertTimer.UpdateSince(start)

@@ -85,7 +85,7 @@ type Header struct {
 	Nonce       BlockNonce     `json:"nonce"`
 
 	// For Child Chain only
-	MainChainNumber *big.Int `json:"mainNumber"      gencodec:"required"`
+	MainChainNumber *big.Int `json:"mainchainNumber"      gencodec:"required"`
 
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas"   rlp:"optional"`
@@ -365,23 +365,25 @@ func (b *Block) Transaction(hash common.Hash) *Transaction {
 	return nil
 }
 
-func (b *Block) Number() *big.Int     { return new(big.Int).Set(b.header.Number) }
-func (b *Block) GasLimit() uint64     { return b.header.GasLimit }
-func (b *Block) GasUsed() uint64      { return b.header.GasUsed }
-func (b *Block) Difficulty() *big.Int { return new(big.Int).Set(b.header.Difficulty) }
-func (b *Block) Time() uint64         { return b.header.Time.Uint64() }
+func (b *Block) Number() *big.Int           { return new(big.Int).Set(b.header.Number) }
+func (b *Block) MainchainNumber() *big.Int  { return new(big.Int).Set(b.header.MainChainNumber) }
+func (b *Block) GasLimit() uint64           { return b.header.GasLimit }
+func (b *Block) GasUsed() uint64            { return b.header.GasUsed }
+func (b *Block) Difficulty() *big.Int       { return new(big.Int).Set(b.header.Difficulty) }
+func (b *Block) Time() uint64               { return b.header.Time.Uint64() }
 
-func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
-func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
-func (b *Block) Nonce() uint64            { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
-func (b *Block) Bloom() Bloom             { return b.header.Bloom }
-func (b *Block) Coinbase() common.Address { return b.header.Coinbase }
-func (b *Block) Root() common.Hash        { return b.header.Root }
-func (b *Block) ParentHash() common.Hash  { return b.header.ParentHash }
-func (b *Block) TxHash() common.Hash      { return b.header.TxHash }
-func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
-func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
-func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
+func (b *Block) NumberU64() uint64          { return b.header.Number.Uint64() }
+func (b *Block) MainchainNumberU64() uint64 { return b.header.MainChainNumber.Uint64() }
+func (b *Block) MixDigest() common.Hash     { return b.header.MixDigest }
+func (b *Block) Nonce() uint64              { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
+func (b *Block) Bloom() Bloom               { return b.header.Bloom }
+func (b *Block) Coinbase() common.Address   { return b.header.Coinbase }
+func (b *Block) Root() common.Hash          { return b.header.Root }
+func (b *Block) ParentHash() common.Hash    { return b.header.ParentHash }
+func (b *Block) TxHash() common.Hash        { return b.header.TxHash }
+func (b *Block) ReceiptHash() common.Hash   { return b.header.ReceiptHash }
+func (b *Block) UncleHash() common.Hash     { return b.header.UncleHash }
+func (b *Block) Extra() []byte              { return common.CopyBytes(b.header.Extra) }
 
 func (b *Block) BaseFee() *big.Int {
 	if b.header.BaseFee == nil {
@@ -548,7 +550,7 @@ func NewChildChainProofData(block *Block) (*ChildChainProofData, error) {
 	return ret, nil
 }
 
-// ChildChainProofData represents epoch from child chain to the main chain.
+// ChildChainProofDataV1 represents epoch from child chain to the main chain.
 type ChildChainProofDataV1 struct {
 	Header *Header
 
@@ -572,4 +574,34 @@ func DecodeChildChainProofDataV1(bs []byte) (*ChildChainProofDataV1, error) {
 		return nil, err
 	}
 	return proofData, nil
+}
+
+var CCTSuspendBlocks = uint64(20)
+var CCTBatchBlocks   = uint64(5)
+const (
+	CCTFAILED = iota
+	CCTSUCCEEDED
+	CCTFROMSUCCEEDED
+	CCTRECEIVED
+)
+
+//CCTTx record tx of cross chain in mainChain
+type CCTTxStatus struct {
+	MainBlockNumber     *big.Int
+	TxHash              common.Hash
+	Owner               common.Address
+	FromChainId         string
+	ToChainId           string
+	Amount              *big.Int
+	Status              uint64
+	//if Status is CCTSUCCEEDED, to-account will add balance, or it is CCTFAILED, from-account need refund balance
+	//after this operation done, LastOperationDone will be set to true
+	LastOperationDone   bool
+}
+
+//CCTTx record execution status of cross chain tx for fromChain/toChain
+type CCTTxExecStatus struct {
+	CCTTxStatus
+	BlockNumber     *big.Int
+	LocalStatus     uint64
 }

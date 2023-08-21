@@ -1,6 +1,7 @@
 package ethapi
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,12 +9,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 	pabi "github.com/pchain/abi"
 	"github.com/tendermint/go-crypto"
 	"math/big"
@@ -168,6 +173,27 @@ func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.
 	}
 
 	input, err := pabi.ChainABI.Pack(pabi.WithdrawFromMainChain.String(), chainId, (*big.Int)(amount), txHash)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	args := SendTxArgs{
+		From:     from,
+		To:       &pabi.ChainContractMagicAddr,
+		Gas:      nil,
+		GasPrice: nil,
+		Value:    nil,
+		Input:    (*hexutil.Bytes)(&input),
+		Nonce:    nil,
+	}
+
+	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
+}
+
+
+func (s *PublicChainAPI) CrossChainTransferRequest(ctx context.Context, from common.Address, amount *hexutil.Big, fromChainId, toChainId string) (common.Hash, error) {
+	
+	input, err := pabi.ChainABI.Pack(pabi.CrossChainTransferRequest.String(), fromChainId, toChainId, (*big.Int)(amount))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -381,6 +407,14 @@ func init() {
 	core.RegisterValidateCb(pabi.WithdrawFromMainChain, wfmc_ValidateCb)
 	core.RegisterApplyCb(pabi.WithdrawFromMainChain, wfmc_ApplyCb)
 
+	//CrossChainTransferRequest
+	core.RegisterValidateCb(pabi.CrossChainTransferRequest, cctr_ValidateCb)
+	core.RegisterApplyCb(pabi.CrossChainTransferRequest, cctr_ApplyCb)
+
+	//CrossChainTransferExec
+	core.RegisterValidateCb(pabi.CrossChainTransferExec, ccte_ValidateCb)
+	core.RegisterApplyCb(pabi.CrossChainTransferExec, ccte_ApplyCb)
+
 	//SD2MCFuncName
 	core.RegisterValidateCb(pabi.SaveDataToMainChain, sd2mc_ValidateCb)
 	core.RegisterApplyCb(pabi.SaveDataToMainChain, sd2mc_ApplyCb)
@@ -390,7 +424,7 @@ func init() {
 	core.RegisterApplyCb(pabi.SetBlockReward, sbr_ApplyCb)
 }
 
-func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, cch core.CrossChainHelper) error {
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
@@ -416,7 +450,7 @@ func ccc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 	return nil
 }
 
-func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
@@ -458,7 +492,7 @@ func ccc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 	return nil
 }
 
-func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, cch core.CrossChainHelper) error {
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
@@ -479,7 +513,7 @@ func jcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 	return nil
 }
 
-func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
@@ -519,7 +553,7 @@ func jcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pending
 	return nil
 }
 
-func dimc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func dimc_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, cch core.CrossChainHelper) error {
 
 	var args pabi.DepositInMainChainArgs
 	data := tx.Data()
@@ -535,7 +569,7 @@ func dimc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 	return nil
 }
 
-func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
@@ -566,7 +600,7 @@ func dimc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	return nil
 }
 
-func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, cch core.CrossChainHelper) error {
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
@@ -608,7 +642,7 @@ func dicc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 	return nil
 }
 
-func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
@@ -655,7 +689,7 @@ func dicc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	return nil
 }
 
-func wfcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func wfcc_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, cch core.CrossChainHelper) error {
 
 	var args pabi.WithdrawFromChildChainArgs
 	data := tx.Data()
@@ -666,7 +700,7 @@ func wfcc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 	return nil
 }
 
-func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, err := types.Sender(signer, tx)
@@ -688,7 +722,7 @@ func wfcc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	return nil
 }
 
-func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, cch core.CrossChainHelper) error {
 
 	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), cch.GetHeightFromMainChain())
 	if !isSd2mc {
@@ -699,9 +733,9 @@ func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cross
 }
 
 //for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
-func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
-	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), cch.GetHeightFromMainChain())
+	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), header.Number/*header.MainChainNumber*/)
 	if !isSd2mc {
 		return wfmcApplyCb(tx, state, ops, cch, mining)
 	} else {
@@ -709,7 +743,257 @@ func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendin
 	}
 }
 
-func sd2mc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func cctr_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, cch core.CrossChainHelper) error {
+
+	signer := types.LatestSignerForChainID(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	var args pabi.CrossChainTransferRequestArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferRequest.String(), data[4:]); err != nil {
+		return err
+	}
+
+	if args.FromChainId == args.ToChainId || args.FromChainId == "" || args.ToChainId == "" {
+		return fmt.Errorf("chain ids: (%s, %s), equal or not correct", args.FromChainId, args.ToChainId)
+	}
+
+	if args.FromChainId != cch.GetMainChainId() && args.ToChainId != cch.GetMainChainId() {
+		return fmt.Errorf("only accept cross chain transfer between main chain and sub-chain")
+	}
+
+	if args.FromChainId != bc.Config().PChainId {
+		return fmt.Errorf("can only start cross chain transfer from local chain")
+	}
+
+	if state.GetBalance(from).Cmp(args.Amount) < 0 {
+		return fmt.Errorf("%w: address %x", core.ErrInsufficientFundsForTransfer, from)
+	}
+
+	if args.FromChainId != cch.GetMainChainId() {
+		chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.FromChainId)
+		if chainInfo == nil {
+			return fmt.Errorf("chain id: %s not exist in main chain", args.FromChainId)
+		}
+	} else if args.ToChainId != cch.GetMainChainId() {
+		chainInfo := core.GetChainInfo(cch.GetChainInfoDB(), args.ToChainId)
+		if chainInfo == nil {
+			return fmt.Errorf("chain id: %s not exist in main chain", args.ToChainId)
+		}
+	}
+	
+	return nil
+}
+
+func cctr_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+
+	var args pabi.CrossChainTransferRequestArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferRequest.String(), data[4:]); err != nil {
+		return err
+	}
+
+	signer := types.LatestSignerForChainID(tx.ChainId())
+	from, _ := types.Sender(signer, tx)
+
+	startCTS := types.CCTTxStatus {
+		MainBlockNumber: header.MainChainNumber,
+		TxHash:          tx.Hash(),
+		Owner:           from,
+		FromChainId:     args.FromChainId,
+		ToChainId:       args.ToChainId,
+		Amount:          args.Amount,
+		Status:          types.CCTRECEIVED,
+	}
+
+	if state.GetBalance(from).Cmp(args.Amount) < 0 {
+		return fmt.Errorf("%w: address %x", core.ErrInsufficientFundsForTransfer, from)
+	}
+
+	state.SubBalance(from, args.Amount)
+
+	cctESOp := types.SaveCCTTxExecStatusOp{
+		CCTTxExecStatus: types.CCTTxExecStatus{
+			CCTTxStatus: startCTS,
+			BlockNumber: header.Number,
+			LocalStatus: types.ReceiptStatusSuccessful,
+		},
+	}
+	if ok := ops.Append(&cctESOp); !ok {
+		return fmt.Errorf("pending ops conflict: %v", cctESOp)
+	}
+
+	if bc.Config().IsMainChain() { //transfer from mainchain to other chain
+
+		ctsOp := types.SaveCCTTxStatusOp{
+			types.CCTTxStatus{
+				MainBlockNumber: header.Number /*header.MainChainNumber*/,
+				TxHash:          tx.Hash(),
+				Owner:           from,
+				FromChainId:     args.FromChainId,
+				ToChainId:       args.ToChainId,
+				Amount:          args.Amount,
+				Status:          types.CCTFROMSUCCEEDED,
+			},
+		}
+
+		if ok := ops.Append(&ctsOp); !ok {
+			return fmt.Errorf("pending ops conflict: %v", ctsOp)
+		}
+	}
+
+	return nil
+}
+
+func ccte_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, cch core.CrossChainHelper) error {
+
+	var args pabi.CrossChainTransferExecArgs
+	data := tx.Data()
+	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferExec.String(), data[4:]); err != nil {
+		return err
+	}
+
+	if !cch.HasCCTTxStatus(args.MainBlockNumber, args.TxHash, args.FromChainId, args.ToChainId, args.Amount, args.Status) {
+		return errors.New("CCTTxStatus not exist in main chain")
+	}
+
+	if args.FromChainId != bc.Config().PChainId && args.ToChainId != bc.Config().PChainId {
+		return errors.New("CCTTxStatus in wrong chain")
+	}
+
+	if state.GetBalance(args.Owner).Cmp(args.Amount) < 0 {
+		return errors.New("no enough balance")
+	}
+
+	signer := types.LatestSignerForChainID(tx.ChainId())
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return core.ErrInvalidSender
+	}
+
+	epoch := bc.Engine().(consensus.Tendermint).GetEpoch()
+	if !epoch.Validators.VerifyConsensusAddressSignature(from, args.AddrSig) {
+		return core.ErrInvalidSender
+	}
+	
+	return nil
+}
+
+func ccte_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+
+	err := ccte_ValidateCb(tx, state, bc, cch)
+	if err != nil {
+		return err
+	}
+
+	var args pabi.CrossChainTransferExecArgs
+	data := tx.Data()
+	err = pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferExec.String(), data[4:])
+	if err != nil {
+		return err
+	}
+
+	transOut := false
+	if args.FromChainId == bc.Config().PChainId {
+		transOut = true
+	}
+
+	hasErr := false
+	handled := false
+	cctES := bc.Engine().(consensus.Tendermint).GetLatestCCTExecStatus(args.TxHash)
+	if cctES == nil {
+		if transOut {
+			if args.Status == types.CCTRECEIVED {
+				if state.GetBalance(args.Owner).Cmp(args.Amount) < 0 {
+					hasErr = true
+				} else {
+					state.SubBalance(args.Owner, args.Amount)
+				}
+				handled = true
+			}
+		} else {
+			if args.Status == types.CCTFROMSUCCEEDED {
+				//no need to operate, just return to record one cctreceipt
+				handled = true
+			}
+		}
+	} else {
+		if transOut {
+			if cctES.Status == types.CCTRECEIVED && cctES.LocalStatus == types.ReceiptStatusSuccessful && args.Status == types.CCTFAILED {
+				state.AddBalance(args.Owner, args.Amount) //do revert
+				handled = true
+			}
+		} else {
+			if cctES.Status == types.CCTFROMSUCCEEDED && cctES.LocalStatus == types.ReceiptStatusSuccessful && args.Status == types.CCTSUCCEEDED {
+				state.AddBalance(args.Owner, args.Amount)
+				handled = true
+			}
+		}
+	}
+	
+	if !handled {
+		return fmt.Errorf("not handled, state transmisstion error")
+	}
+
+	if hasErr {
+		//reproduces proposer's pre-run failure in other validator's tx-run
+		if args.Status == types.ReceiptStatusFailed {
+			err = core.ErrTryCCTTxExec
+		} else {
+			return fmt.Errorf("state transmisstion error")
+		}
+	}
+
+	localStatus := types.ReceiptStatusSuccessful
+	if hasErr {
+		localStatus = types.ReceiptStatusFailed
+	}
+
+
+	op := types.SaveCCTTxExecStatusOp {
+		CCTTxExecStatus: types.CCTTxExecStatus{
+			CCTTxStatus: types.CCTTxStatus{
+				MainBlockNumber:    args.MainBlockNumber,
+				TxHash:             args.TxHash,
+				Owner:              args.Owner,
+				FromChainId:        args.FromChainId,
+				ToChainId:          args.ToChainId,
+				Amount:             args.Amount,
+				Status:             args.Status,
+			},
+			BlockNumber: header.Number,
+			LocalStatus: localStatus,
+		},
+	}
+
+	if ok := ops.Append(&op); !ok {
+		return fmt.Errorf("pending ops conflict: %v", op)
+	}
+
+	if bc.Config().IsMainChain() {
+		cts, err := cch.GetLatestCCTTxStatusByHash(args.TxHash)
+		if err != nil {
+			return err
+		}
+		newCTS, err := cch.UpdateCCTTxStatus(cts, &op.CCTTxExecStatus.CCTTxStatus, header.Number/*header.MainChainNumber*/, cch.GetMainChainId(), localStatus, state)
+		if err != nil {
+			return err
+		}
+		op := types.SaveCCTTxStatusOp {
+			CCTTxStatus: *newCTS,
+		}
+		if ok := ops.Append(&op); !ok {
+			return fmt.Errorf("pending ops conflict: %v", op)
+		}
+	}
+
+	return err
+}
+
+func sd2mc_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, cch core.CrossChainHelper) error {
 
 	var bs []byte
 	data := tx.Data()
@@ -728,13 +1012,15 @@ func sd2mc_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.Cros
 	return fmt.Errorf("data can not pass verification")
 }
 
-func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
 	var bs []byte
 	data := tx.Data()
 	if err := pabi.ChainABI.UnpackMethodInputs(&bs, pabi.SaveDataToMainChain.String(), data[4:]); err != nil {
 		return err
 	}
+
+	proofData := (*types.ChildChainProofDataV1)(nil)
 
 	if _, err := types.DecodeChildChainProofData(bs); err == nil {
 		// Validate only when mining
@@ -744,13 +1030,132 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 				return fmt.Errorf("data can not pass verification: %v", err)
 			}
 		}
-	} else if proofDataV1, err := types.DecodeChildChainProofDataV1(bs); err == nil {
-		err := cch.VerifyChildChainProofDataV1(proofDataV1)
+	} else if proofData, err = types.DecodeChildChainProofDataV1(bs); err == nil {
+		err := cch.VerifyChildChainProofDataV1(proofData)
 		if err != nil {
 			return fmt.Errorf("data can not pass verification: %v", err)
 		}
 	} else {
 		return fmt.Errorf("data can not pass verification")
+	}
+
+	if proofData != nil && len(proofData.TxIndexs) != 0 {
+		
+		log.Infof("sd2mc_ApplyCb - Save Tx, count is %v", len(proofData.TxIndexs))
+
+		proofHeader := proofData.Header
+		tdmExtra, err := tdmTypes.ExtractTendermintExtra(proofHeader)
+		if err != nil {
+			return err
+		}
+
+		chainId := tdmExtra.ChainID
+		
+		//Tx3Indexs := make([]uint, 0)
+		//Tx3Proofs := make([]*types.BSKeyValueSet, 0)
+		for i, txIndex := range proofData.TxIndexs {
+
+			keybuf := new(bytes.Buffer)
+			rlp.Encode(keybuf, txIndex)
+			val, _, err := trie.VerifyProof(proofHeader.TxHash, keybuf.Bytes(), proofData.TxProofs[i])
+			if err != nil {
+				return err
+			}
+
+			var tx types.Transaction
+			err = rlp.DecodeBytes(val, &tx)
+			if err != nil {
+				return err
+			}
+
+			if pabi.IsPChainContractAddr(tx.To()) {
+				data := tx.Data()
+				function, err := pabi.FunctionTypeFromId(data[:4])
+				if err != nil {
+					return err
+				}
+
+				if function == pabi.WithdrawFromChildChain {
+					//do nothing
+				} else if function == pabi.CrossChainTransferRequest {
+					var args pabi.CrossChainTransferRequestArgs
+					if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferRequest.String(), data[4:]); err != nil {
+						return err
+					}
+
+					signer := types.LatestSignerForChainID(tx.ChainId())
+					from, err := types.Sender(signer, &tx)
+					if err != nil {
+						return core.ErrInvalidSender
+					}
+
+					txHash := tx.Hash()
+					cts, err := cch.GetLatestCCTTxStatusByHash(txHash)
+					if cts != nil {
+						return nil //has been handled
+					}
+
+					cts = &types.CCTTxStatus{
+						MainBlockNumber:    header.Number/*header.MainChainNumber*/,
+						TxHash:             txHash,
+						Owner:              from,
+						FromChainId:        args.FromChainId,
+						ToChainId:          args.ToChainId,
+						Amount:             args.Amount,
+						Status:             types.CCTFROMSUCCEEDED,
+						LastOperationDone:  false,
+					}
+
+					cctESOp := types.SaveCCTTxExecStatusOp{
+						CCTTxExecStatus: types.CCTTxExecStatus{
+							CCTTxStatus: *cts,
+							BlockNumber: header.Number,
+							LocalStatus: types.ReceiptStatusSuccessful,
+						},
+					}
+					if ok := ops.Append(&cctESOp); !ok {
+						return fmt.Errorf("pending ops conflict: %v", cctESOp)
+					}
+
+					cts.Status = types.CCTSUCCEEDED
+					ctsOp := types.SaveCCTTxStatusOp{
+						CCTTxStatus: *cts,
+					}
+					if ok := ops.Append(&ctsOp); !ok {
+						return fmt.Errorf("pending ops conflict: %v", ctsOp)
+					}
+				} else if function == pabi.CrossChainTransferExec {
+					var args pabi.CrossChainTransferExecArgs
+					if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferExec.String(), data[4:]); err != nil {
+						return err
+					}
+					cts, err := cch.GetLatestCCTTxStatusByHash(args.TxHash)
+					if err != nil {
+						return nil
+					}
+
+					handledCts := &types.CCTTxStatus{
+						MainBlockNumber:    args.MainBlockNumber,
+						TxHash:             args.TxHash,
+						Owner:              args.Owner,
+						FromChainId:        args.FromChainId,
+						ToChainId:          args.ToChainId,
+						Amount:             args.Amount,
+						Status:             args.Status,
+						LastOperationDone:  false,
+					}
+					newCTS, err := cch.UpdateCCTTxStatus(cts, handledCts, header.Number/*header.MainChainNumber*/, chainId, args.LocalStatus, state)
+					if newCTS != nil && err == nil {
+						op := types.SaveCCTTxStatusOp{
+							CCTTxStatus: *newCTS,
+						}
+						if ok := ops.Append(&op); !ok {
+							return fmt.Errorf("pending ops conflict: %v", op)
+						}
+					}
+				}
+			}
+		}
 	}
 
 	op := types.SaveDataToMainChainOp{
@@ -763,7 +1168,7 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.Pendi
 	return nil
 }
 
-func sbr_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossChainHelper) error {
+func sbr_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, cch core.CrossChainHelper) error {
 	from := derivedAddressFromTx(tx)
 	_, verror := setBlockRewardValidation(from, tx, cch)
 	if verror != nil {
@@ -772,7 +1177,7 @@ func sbr_ValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 	return nil
 }
 
-func sbr_ApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
+func sbr_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 	from := derivedAddressFromTx(tx)
 	args, verror := setBlockRewardValidation(from, tx, cch)
 	if verror != nil {

@@ -3853,6 +3853,8 @@ var outputBlockFormatter = function(block) {
     block.timestamp = utils.toDecimal(block.timestamp);
     if(block.number !== null)
         block.number = utils.toDecimal(block.number);
+    if(block.mainchainNumber !== null)
+        block.mainchainNumber = utils.toDecimal(block.mainchainNumber);
 
     block.difficulty = utils.toBigNumber(block.difficulty);
     block.totalDifficulty = utils.toBigNumber(block.totalDifficulty);

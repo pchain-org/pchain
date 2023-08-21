@@ -3,6 +3,7 @@ package pdbft
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
@@ -148,6 +150,7 @@ func (sb *backend) Stop() error {
 
 func (sb *backend) Close() error {
 	sb.core.epochDB.Close()
+	sb.core.sendDataDb.Close()
 	return nil
 }
 
@@ -190,8 +193,15 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 	}
 
 	// Ensure that the extra data format is satisfied
-	if _, err := tdmTypes.ExtractTendermintExtra(header); err != nil {
+	tdmExtra, err := tdmTypes.ExtractTendermintExtra(header)
+	if err != nil {
 		return errInvalidExtraDataFormat
+	}
+	
+	isEnhanceExtra := params.IsEnhanceExtra(sb.core.cch.GetMainChainId(), header.MainChainNumber)
+	if !tdmExtra.IsConsistWithBlockHash(isEnhanceExtra, header.Hash()) {
+		return fmt.Errorf("proofdata extra hash(%x) is bound with the block hash (%x) which validators voted", 
+			tdmExtra.SeenCommit.BlockID.Hash, header.Hash())
 	}
 
 	// Ensure that the coinbase is valid
@@ -453,7 +463,7 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 //
 // Note, the block header and state database might be updated to reflect any
 // consensus rules that happen at finalization (e.g. block rewards).
-func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
+func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, 
 	totalGasFee *big.Int, uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
 
 	sb.logger.Debugf("Tendermint (backend) Finalize, receipts are: %v", receipts)
@@ -483,6 +493,19 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	// Calculate the rewards
 	sb.accumulateRewards(state, header, epoch, totalGasFee, selfRetrieveReward, markProposedInEpoch)
 
+	if params.IsMainChain(sb.chainConfig.PChainId) {
+		ctss, err := sb.core.cch.FinalizeCCTTxStatus(header.Number)
+		if err == nil {
+			for _, cts := range ctss {
+				if ok := ops.Append(&types.SaveCCTTxStatusOp{
+					CCTTxStatus: *cts,
+				}); !ok {
+					sb.logger.Error("pending SaveCCTTxStatusOp error in backend.Finalize()")
+				}
+			}
+		}
+	}
+
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
 		sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
@@ -509,7 +532,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 // seal place on top.
 func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (interface{}, error) {
 
-	sb.logger.Info("/e")
+	sb.logger.Debug("enter backend.Seal()")
 
 	// update the block header timestamp and signature and propose the block to core engine
 	header := block.Header()
@@ -539,7 +562,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 	defer clear()
 
 	// post block into Istanbul engine
-	sb.logger.Infof("Tendermint (backend) Seal, before fire event with block height: %d", block.NumberU64())
+	sb.logger.Debugf("Tendermint (backend) Seal, before fire event with block height: %d", block.NumberU64())
 	go tdmTypes.FireEventRequest(sb.core.EventSwitch(), tdmTypes.EventDataRequest{Proposal: block})
 	//go sb.EventMux().Post(tdmTypes.RequestEvent{
 	//	Proposal: block,
@@ -564,7 +587,7 @@ func (sb *backend) Seal(chain consensus.ChainReader, block *types.Block, stop <-
 
 		case iresult, ok := <-sb.vcommitCh:
 
-			if ok {
+			if ok && iresult != nil {
 				sb.logger.Debugf("Tendermint (backend) Seal, v got result with block.Hash: %x, result.Hash: %x", block.Hash(), iresult.Block.Hash())
 				if block.Hash() != iresult.Block.Hash() {
 					return iresult, nil
@@ -594,6 +617,14 @@ func (sb *backend) CalcDifficulty(chain consensus.ChainReader, time uint64, pare
 
 // Commit implements istanbul.Backend.Commit
 func (sb *backend) Commit(proposal *tdmTypes.TdmBlock, seals [][]byte, isProposer func() bool) error {
+
+	//block imported outside, abort
+	if proposal == nil {
+		sb.logger.Infof("(sb *backend) Commit() receive nil block, abort\n")
+		sb.vcommitCh <- nil
+		return nil
+	}
+
 	// Check if the proposal is a valid block
 	block := proposal.Block
 
@@ -667,12 +698,47 @@ func (sb *backend) SetEpoch(ep *epoch.Epoch) {
 	sb.core.consensusState.Epoch = ep
 }
 
-// Return the private validator address of consensus
-func (sb *backend) PrivateValidator() common.Address {
+func (sb *backend) PrivateValidator() *tdmTypes.PrivValidator {
+	return sb.core.consensusState.GetPrivValidator().(*tdmTypes.PrivValidator)
+}
+
+func (sb *backend) TokenAddress() common.Address {
 	if sb.core.privValidator != nil {
 		return sb.core.privValidator.Address
 	}
 	return common.Address{}
+}
+
+func (sb *backend) ConsensusAddressSignature() (common.Address, []byte) {
+	return sb.core.consensusState.ConsensusAddressSignature()
+}
+
+func (sb *backend) SignTx(tx *types.Transaction) (*types.Transaction, error) {
+	return sb.core.consensusState.SignTx(tx)
+}
+
+func (sb *backend) CurrentCCTBlock() *big.Int {
+	return sb.core.consensusState.CurrentCCTBlock()
+}
+
+func (sb *backend) WriteCurrentCCTBlock(blockNumber *big.Int) {
+	sb.core.consensusState.WriteCurrentCCTBlock(blockNumber)
+}
+
+func (sb *backend) GetLatestCCTExecStatus(hash common.Hash) *types.CCTTxExecStatus {
+	return sb.core.consensusState.GetLatestCCTExecStatus(hash)
+}
+
+func (sb *backend) GetCCTExecStatusByHash(hash common.Hash) []*types.CCTTxExecStatus {
+	return sb.core.consensusState.GetCCTExecStatusByHash(hash)
+}
+
+func (sb *backend) WriteCCTExecStatus(receipt *types.CCTTxExecStatus) {
+	sb.core.consensusState.WriteCCTExecStatus(receipt)
+}
+
+func (sb *backend) DeleteCCTExecStatus(hash common.Hash) {
+	sb.core.consensusState.DeleteCCTExecStatus(hash)
 }
 
 // update timestamp and signature of the block based on its number of transactions
@@ -870,7 +936,7 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 
 		//if this chain rewinds or the self-proposed head block is overwritten by external block
 		//it needs clear the mark of self-address
-		selfAddress := sb.PrivateValidator()
+		selfAddress := sb.TokenAddress()
 		if sb.IsStarted() && (selfAddress != common.Address{}) && header.Coinbase != selfAddress {
 			firstProposedBlock, proposed := state.CheckProposedInEpoch(selfAddress, ep.Number)
 			if proposed && height <= firstProposedBlock {

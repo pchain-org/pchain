@@ -344,7 +344,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, *big.Int, error) {
 		}
 		ret, st.gas, vmerr = st.evm.Call(sender, st.to(), st.data, st.gas, st.value, st.inputPacket)
 		if pabi.IsPChainContractAddr(msg.To()) && vmerr != nil {
-			err = vmerr
+			if vmerr != ErrTryCCTTxExec {
+				err = vmerr
+			}
 		}
 	}
 

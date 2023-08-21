@@ -3,6 +3,7 @@ package ethclient
 import (
 	"context"
 	//"crypto/ecdsa"
+	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -49,7 +50,7 @@ func WrpNonceAt(chainUrl string, account common.Address, blockNumber *big.Int) (
 	}
 
 	// nonce, fetch the nonce first, if we get nonce too low error, we will manually add the value until the error gone
-	nonce, err := client.NonceAt(ctx, account, nil)
+	nonce, err := client.NonceAt(ctx, account, blockNumber)
 	if err != nil {
 		Close(client)
 		log.Errorf("WrpNonceAt, err: %v", err)
@@ -90,7 +91,7 @@ func WrpSendTransaction(chainUrl string, tx *types.Transaction) error {
 	err = client.SendTransaction(ctx, tx)
 	if err != nil {
 		Close(client)
-		log.Errorf("WrpSendTransaction, err: %v", err)
+		//log.Errorf("WrpSendTransaction, err: %v", err)
 		return err
 	}
 
@@ -129,7 +130,7 @@ func WrpTransactionByHash(chainUrl string, hash common.Hash) (tx *types.Transact
 	tx, isPending, err = client.TransactionByHash(ctx, hash)
 	if err != nil {
 		Close(client)
-		log.Errorf("WrpTransactionByHash, err: %v", err)
+		//log.Errorf("WrpTransactionByHash, err: %v", err)
 		return nil, false, err
 	}
 
@@ -216,6 +217,26 @@ func BroadcastDataToMainChain(chainUrl string, chainId string, data []byte) erro
 	})
 
 	return err
+}
+
+func WrpGetBlock(chainUrl string, number *big.Int) (json.RawMessage, error) {
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	client, err := Dial(chainUrl)
+	if err != nil {
+		log.Errorf("WrpTransactionByHash, dial err: %v", err)
+		return nil, err
+	}
+
+	var raw json.RawMessage
+	err = client.c.CallContext(ctx, &raw, "eth_getBlockByNumber", hexutil.EncodeBig(number), true)
+	if err != nil {
+		return nil, err
+	} else if len(raw) == 0 {
+		return nil, errors.New("nil message")
+	}
+	
+	Close(client)
+	return raw, nil
 }
 
 //attemps: this parameter means the total amount of operations

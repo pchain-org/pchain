@@ -186,7 +186,7 @@ func del_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockC
 	return nil
 }
 
-func del_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+func del_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
 	args, verror := delegateValidation(from, tx, state, bc)
@@ -214,7 +214,7 @@ func cdel_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 	return nil
 }
 
-func cdel_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+func cdel_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
 	args, verror := cancelDelegateValidation(from, tx, state, bc)
@@ -253,7 +253,7 @@ func appcdd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Blo
 	return nil
 }
 
-func appcdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+func appcdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
 	args, verror := candidateValidation(from, tx, state, bc)
@@ -281,7 +281,7 @@ func ccdd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 	return nil
 }
 
-func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
 	verror := cancelCandidateValidation(from, tx, state, bc)
@@ -340,7 +340,7 @@ func extrRwd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Bl
 	}
 }
 
-func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps) error {
 
 	//validate again
 	if err := extrRwd_ValidateCb(tx, state, bc); err != nil {
@@ -351,21 +351,19 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 		from := derivedAddressFromTx(tx)
 
-		curBlockHeight := bc.CurrentBlock().NumberU64()
-		height := curBlockHeight + 1
-		heightBI := big.NewInt(0).SetUint64(height)
-		ispatch := bc.Config().IsSelfRetrieveRewardPatch(heightBI, bc.CurrentBlock().Header().MainChainNumber)
+		height := header.Number.Uint64()
+		ispatch := bc.Config().IsSelfRetrieveRewardPatch(header.Number, header.MainChainNumber)
 		if !ispatch {
-			epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
+			epoch := tdm.GetEpoch().GetEpochByBlockNumber(height)
 			currentEpochNumber := epoch.Number
 			noExtractMark := false
-			extractEpochNumber, err := state.GetEpochRewardExtractedFromDB(from, curBlockHeight)
+			extractEpochNumber, err := state.GetEpochRewardExtractedFromDB(from, height)
 			if err != nil {
 				noExtractMark = true
 			}
 			maxExtractEpochNumber := uint64(0)
 
-			rewards := state.GetAllEpochRewardFromDB(from, curBlockHeight)
+			rewards := state.GetAllEpochRewardFromDB(from, height)
 
 			log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
 			log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
@@ -387,11 +385,11 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 			//extrRwd is after OutOfStorage feature, so need not check for IsOutOfStorage()
 			rollbackCatchup := false
 			lastBlock, err := state.ReadOOSLastBlock();
-			if err == nil && heightBI.Cmp(lastBlock) <= 0 {
+			if err == nil && header.Number.Cmp(lastBlock) <= 0 {
 				rollbackCatchup = true
 			}
 
-			epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
+			epoch := tdm.GetEpoch().GetEpochByBlockNumber(height)
 			currentEpochNumber := epoch.Number
 			noExtractMark := false
 			extractEpochNumber, err := state.GetEpochRewardExtracted(from, height)

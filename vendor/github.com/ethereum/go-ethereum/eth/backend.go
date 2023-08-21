@@ -270,6 +270,9 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if chainConfig.MarkProposedInEpochMainBlock == nil {
 			chainConfig.MarkProposedInEpochMainBlock = params.MainnetChainConfig.MarkProposedInEpochMainBlock
 		}
+		if chainConfig.EnhenceExtraBlock == nil {
+			chainConfig.EnhenceExtraBlock = params.MainnetChainConfig.EnhenceExtraBlock
+		}
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.MainnetChainConfig.Child0HashTimeLockContract
 		}
@@ -319,6 +322,9 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		}
 		if chainConfig.MarkProposedInEpochMainBlock == nil {
 			chainConfig.MarkProposedInEpochMainBlock = params.TestnetChainConfig.MarkProposedInEpochMainBlock
+		}
+		if chainConfig.EnhenceExtraBlock == nil {
+			chainConfig.EnhenceExtraBlock = params.TestnetChainConfig.EnhenceExtraBlock
 		}
 		if (chainConfig.HashTimeLockContract == common.Address{}) && chainId == "child_0" {
 			chainConfig.HashTimeLockContract = params.TestnetChainConfig.Child0HashTimeLockContract
@@ -456,7 +462,7 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	if tdm, ok := s.engine.(consensus.Tendermint); ok {
-		eb = tdm.PrivateValidator()
+		eb = tdm.TokenAddress()
 		if eb != (common.Address{}) {
 			return eb, nil
 		} else {
@@ -507,7 +513,7 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 func (s *Ethereum) StartMining(local bool) error {
 	var eb common.Address
 	if tdm, ok := s.engine.(consensus.Tendermint); ok {
-		eb = tdm.PrivateValidator()
+		eb = tdm.TokenAddress()
 		if (eb == common.Address{}) {
 			log.Error("Cannot start mining without private validator")
 			return errors.New("private validator missing")

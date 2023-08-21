@@ -31,6 +31,8 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		MixDigest   common.Hash    `json:"mixHash"          gencodec:"required"`
 		Nonce       BlockNonce     `json:"nonce"            gencodec:"required"`
 		Hash        common.Hash    `json:"hash"`
+
+		MainChainNumber *hexutil.Big `json:"mainchainNumber" gencodec:"required"`
 	}
 	var enc Header
 	enc.ParentHash = h.ParentHash
@@ -49,6 +51,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.MixDigest = h.MixDigest
 	enc.Nonce = h.Nonce
 	enc.Hash = h.Hash()
+	enc.MainChainNumber = (*hexutil.Big)(h.MainChainNumber)
 	return json.Marshal(&enc)
 }
 
