@@ -731,7 +731,7 @@ func (sd *SendData) GetLatestCCTExecStatus(hash common.Hash) *ethTypes.CCTTxExec
 	} else {
 		cctES := cctESs[0]
 		for _, cts := range cctESs {
-			if cts.MainBlockNumber.Cmp(cts.MainBlockNumber) > 0 {
+			if cts.MainBlockNumber.Cmp(cctES.MainBlockNumber) > 0 {
 				cctES = cts
 			}
 		}
