@@ -5,6 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
+	"strings"
+	"time"
+
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -21,9 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	pabi "github.com/pchain/abi"
 	"github.com/tendermint/go-crypto"
-	"math/big"
-	"strings"
-	"time"
 )
 
 type PublicChainAPI struct {
@@ -63,13 +64,21 @@ func (s *PublicChainAPI) CreateChildChain(ctx context.Context, from common.Addre
 }
 
 func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address, pubkey crypto.BLSPubKey, chainId string,
-	depositAmount *hexutil.Big, signature hexutil.Bytes, gasPrice *hexutil.Big) (common.Hash, error) {
-
+	depositAmount *hexutil.Big, signature string, gasPrice *hexutil.Big) (common.Hash, error) {
 	if chainId == "" || strings.Contains(chainId, ";") {
 		return common.Hash{}, errors.New("chainId is nil or empty, or contains ';', should be meaningful")
 	}
 
-	input, err := pabi.ChainABI.Pack(pabi.JoinChildChain.String(), pubkey.Bytes(), chainId, signature)
+	if len(signature) == 128 {
+		signature = "0x" + signature
+	}
+	var sig hexutil.Bytes
+	err := sig.UnmarshalText([]byte(signature))
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	input, err := pabi.ChainABI.Pack(pabi.JoinChildChain.String(), pubkey.Bytes(), chainId, sig)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -85,7 +94,6 @@ func (s *PublicChainAPI) JoinChildChain(ctx context.Context, from common.Address
 		Input:    (*hexutil.Bytes)(&input),
 		Nonce:    nil,
 	}
-
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
@@ -190,9 +198,8 @@ func (s *PublicChainAPI) WithdrawFromMainChain(ctx context.Context, from common.
 	return s.b.GetInnerAPIBridge().SendTransaction(ctx, args)
 }
 
-
 func (s *PublicChainAPI) CrossChainTransferRequest(ctx context.Context, from common.Address, amount *hexutil.Big, fromChainId, toChainId string) (common.Hash, error) {
-	
+
 	input, err := pabi.ChainABI.Pack(pabi.CrossChainTransferRequest.String(), fromChainId, toChainId, (*big.Int)(amount))
 	if err != nil {
 		return common.Hash{}, err
@@ -732,10 +739,10 @@ func wfmc_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 	}
 }
 
-//for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
+// for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
 func wfmc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
-	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), header.Number/*header.MainChainNumber*/)
+	isSd2mc := params.IsSd2mc(cch.GetMainChainId(), header.Number /*header.MainChainNumber*/)
 	if !isSd2mc {
 		return wfmcApplyCb(tx, state, ops, cch, mining)
 	} else {
@@ -784,7 +791,7 @@ func cctr_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 			return fmt.Errorf("chain id: %s not exist in main chain", args.ToChainId)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -799,7 +806,7 @@ func cctr_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 	signer := types.LatestSignerForChainID(tx.ChainId())
 	from, _ := types.Sender(signer, tx)
 
-	startCTS := types.CCTTxStatus {
+	startCTS := types.CCTTxStatus{
 		MainBlockNumber: header.MainChainNumber,
 		TxHash:          tx.Hash(),
 		Owner:           from,
@@ -830,7 +837,7 @@ func cctr_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 
 		ctsOp := types.SaveCCTTxStatusOp{
 			types.CCTTxStatus{
-				MainBlockNumber: header.Number /*header.MainChainNumber*/,
+				MainBlockNumber: header.Number, /*header.MainChainNumber*/
 				TxHash:          tx.Hash(),
 				Owner:           from,
 				FromChainId:     args.FromChainId,
@@ -878,7 +885,7 @@ func ccte_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 	if !epoch.Validators.VerifyConsensusAddressSignature(from, args.AddrSig) {
 		return core.ErrInvalidSender
 	}
-	
+
 	return nil
 }
 
@@ -933,7 +940,7 @@ func ccte_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 			}
 		}
 	}
-	
+
 	if !handled {
 		return fmt.Errorf("not handled, state transmisstion error")
 	}
@@ -952,17 +959,16 @@ func ccte_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 		localStatus = types.ReceiptStatusFailed
 	}
 
-
-	op := types.SaveCCTTxExecStatusOp {
+	op := types.SaveCCTTxExecStatusOp{
 		CCTTxExecStatus: types.CCTTxExecStatus{
 			CCTTxStatus: types.CCTTxStatus{
-				MainBlockNumber:    args.MainBlockNumber,
-				TxHash:             args.TxHash,
-				Owner:              args.Owner,
-				FromChainId:        args.FromChainId,
-				ToChainId:          args.ToChainId,
-				Amount:             args.Amount,
-				Status:             args.Status,
+				MainBlockNumber: args.MainBlockNumber,
+				TxHash:          args.TxHash,
+				Owner:           args.Owner,
+				FromChainId:     args.FromChainId,
+				ToChainId:       args.ToChainId,
+				Amount:          args.Amount,
+				Status:          args.Status,
 			},
 			BlockNumber: header.Number,
 			LocalStatus: localStatus,
@@ -978,11 +984,11 @@ func ccte_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 		if err != nil {
 			return err
 		}
-		newCTS, err := cch.UpdateCCTTxStatus(cts, &op.CCTTxExecStatus.CCTTxStatus, header.Number/*header.MainChainNumber*/, cch.GetMainChainId(), localStatus, state)
+		newCTS, err := cch.UpdateCCTTxStatus(cts, &op.CCTTxExecStatus.CCTTxStatus, header.Number /*header.MainChainNumber*/, cch.GetMainChainId(), localStatus, state)
 		if err != nil {
 			return err
 		}
-		op := types.SaveCCTTxStatusOp {
+		op := types.SaveCCTTxStatusOp{
 			CCTTxStatus: *newCTS,
 		}
 		if ok := ops.Append(&op); !ok {
@@ -1040,7 +1046,7 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCh
 	}
 
 	if proofData != nil && len(proofData.TxIndexs) != 0 {
-		
+
 		log.Infof("sd2mc_ApplyCb - Save Tx, count is %v", len(proofData.TxIndexs))
 
 		proofHeader := proofData.Header
@@ -1050,7 +1056,7 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCh
 		}
 
 		chainId := tdmExtra.ChainID
-		
+
 		//Tx3Indexs := make([]uint, 0)
 		//Tx3Proofs := make([]*types.BSKeyValueSet, 0)
 		for i, txIndex := range proofData.TxIndexs {
@@ -1096,14 +1102,14 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCh
 					}
 
 					cts = &types.CCTTxStatus{
-						MainBlockNumber:    header.Number/*header.MainChainNumber*/,
-						TxHash:             txHash,
-						Owner:              from,
-						FromChainId:        args.FromChainId,
-						ToChainId:          args.ToChainId,
-						Amount:             args.Amount,
-						Status:             types.CCTFROMSUCCEEDED,
-						LastOperationDone:  false,
+						MainBlockNumber:   header.Number, /*header.MainChainNumber*/
+						TxHash:            txHash,
+						Owner:             from,
+						FromChainId:       args.FromChainId,
+						ToChainId:         args.ToChainId,
+						Amount:            args.Amount,
+						Status:            types.CCTFROMSUCCEEDED,
+						LastOperationDone: false,
 					}
 
 					cctESOp := types.SaveCCTTxExecStatusOp{
@@ -1135,16 +1141,16 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCh
 					}
 
 					handledCts := &types.CCTTxStatus{
-						MainBlockNumber:    args.MainBlockNumber,
-						TxHash:             args.TxHash,
-						Owner:              args.Owner,
-						FromChainId:        args.FromChainId,
-						ToChainId:          args.ToChainId,
-						Amount:             args.Amount,
-						Status:             args.Status,
-						LastOperationDone:  false,
+						MainBlockNumber:   args.MainBlockNumber,
+						TxHash:            args.TxHash,
+						Owner:             args.Owner,
+						FromChainId:       args.FromChainId,
+						ToChainId:         args.ToChainId,
+						Amount:            args.Amount,
+						Status:            args.Status,
+						LastOperationDone: false,
 					}
-					newCTS, err := cch.UpdateCCTTxStatus(cts, handledCts, header.Number/*header.MainChainNumber*/, chainId, args.LocalStatus, state)
+					newCTS, err := cch.UpdateCCTTxStatus(cts, handledCts, header.Number /*header.MainChainNumber*/, chainId, args.LocalStatus, state)
 					if newCTS != nil && err == nil {
 						op := types.SaveCCTTxStatusOp{
 							CCTTxStatus: *newCTS,
@@ -1255,7 +1261,7 @@ func wfmcValidateCb(tx *types.Transaction, state *state.StateDB, cch core.CrossC
 	return nil
 }
 
-//for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
+// for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
 func wfmcApplyCb(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
@@ -1347,7 +1353,7 @@ func wfmcValidateCbV1(tx *types.Transaction, state *state.StateDB, cch core.Cros
 	return nil
 }
 
-//for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
+// for tx4 execution, return core.ErrInvalidTx4 if there is error, except need to wait tx3
 func wfmcApplyCbV1(tx *types.Transaction, state *state.StateDB, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
 
 	signer := types.LatestSignerForChainID(tx.ChainId())
