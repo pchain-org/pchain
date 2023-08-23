@@ -796,7 +796,6 @@ func cctr_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 }
 
 func cctr_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
-
 	var args pabi.CrossChainTransferRequestArgs
 	data := tx.Data()
 	if err := pabi.ChainABI.UnpackMethodInputs(&args, pabi.CrossChainTransferRequest.String(), data[4:]); err != nil {
@@ -851,7 +850,6 @@ func cctr_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 			return fmt.Errorf("pending ops conflict: %v", ctsOp)
 		}
 	}
-
 	return nil
 }
 
@@ -870,8 +868,7 @@ func ccte_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 	if args.FromChainId != bc.Config().PChainId && args.ToChainId != bc.Config().PChainId {
 		return errors.New("CCTTxStatus in wrong chain")
 	}
-
-	if state.GetBalance(args.Owner).Cmp(args.Amount) < 0 {
+	if args.ToChainId != bc.Config().PChainId && state.GetBalance(args.Owner).Cmp(args.Amount) < 0 {
 		return errors.New("no enough balance")
 	}
 
@@ -890,7 +887,6 @@ func ccte_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 }
 
 func ccte_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps, cch core.CrossChainHelper, mining bool) error {
-
 	err := ccte_ValidateCb(tx, state, bc, cch)
 	if err != nil {
 		return err
@@ -995,7 +991,6 @@ func ccte_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 			return fmt.Errorf("pending ops conflict: %v", op)
 		}
 	}
-
 	return err
 }
 
@@ -1096,7 +1091,7 @@ func sd2mc_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCh
 					}
 
 					txHash := tx.Hash()
-					cts, err := cch.GetLatestCCTTxStatusByHash(txHash)
+					cts, _ := cch.GetLatestCCTTxStatusByHash(txHash)
 					if cts != nil {
 						return nil //has been handled
 					}
