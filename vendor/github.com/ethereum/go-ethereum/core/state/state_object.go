@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -94,8 +95,8 @@ type stateObject struct {
 	dirtyProxied  Proxied // dirty data of proxied trie, need to be flushed to disk later
 
 	rewardTrie   Trie   // Reward Trie, store the pending reward balance for this account
-	originReward Reward // cache data of Reward trie
-	dirtyReward  Reward // dirty data of Reward trie, need to be flushed to disk later
+	originReward trie.Reward // cache data of Reward trie
+	dirtyReward  trie.Reward // dirty data of Reward trie, need to be flushed to disk later
 
 	// Cache flags.
 	// When an object is marked suicided it will be delete from the trie
@@ -184,8 +185,8 @@ func newObject(db *StateDB, address common.Address, data Account, onDirty func(a
 		dirtyTX3:      make(map[common.Hash]struct{}),
 		originProxied: make(Proxied),
 		dirtyProxied:  make(Proxied),
-		originReward:  make(Reward),
-		dirtyReward:   make(Reward),
+		originReward:  make(trie.Reward),
+		dirtyReward:   make(trie.Reward),
 		onDirty:       onDirty,
 	}
 }

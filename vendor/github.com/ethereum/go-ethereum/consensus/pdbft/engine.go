@@ -290,7 +290,7 @@ func (sb *backend) verifyCascadingFields(chain consensus.ChainReader, header *ty
 		return consensus.ErrUnknownAncestor
 	}
 
-	if !common.RoughCheckSync {
+	if !sb.chainConfig.RouchCheck {
 		err := sb.verifyCommittedSeals(chain, header, parents)
 		return err
 	} else {
@@ -491,8 +491,13 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 	}
 
 	chainId := sb.chainConfig.PChainId
-	if chainId == "child_0" {
-		for addr := range common.LogAddrs {
+	height := header.Number.Uint64()
+	if common.NeedDebug(chainId, height) {
+		sb.logger.Info("debug here")
+	}
+
+	for addr := range common.LogAddrs {
+		if common.NeedLogReward(chainId, addr, height) {
 			common.LogAddrs[addr] = &common.BalanceReward{
 				BeforeBalance: state.GetBalance(addr),
 				BeforeReward:  state.GetRewardBalance(addr),
@@ -510,7 +515,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 	rollbackCatchup := false
 	if outsideReward {
-		lastBlock, err := state.ReadOOSLastBlock()
+		lastBlock, err := state.GetOOSLastBlock()
 		if err == nil && header.Number.Cmp(lastBlock) <= 0 {
 			rollbackCatchup = true
 		}
@@ -531,7 +536,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
-		sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber),
+		sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber), rollbackCatchup,
 		selfRetrieveReward, markProposedInEpoch); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
@@ -545,10 +550,8 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		}
 	}
 
-	if chainId == "child_0" {
-
-		for addr, blnRwd := range common.LogAddrs{
-
+	for addr, blnRwd := range common.LogAddrs{
+		if common.NeedLogReward(chainId, addr, height) {
 			curBalance := state.GetBalance(addr)
 			curRewardBalance := state.GetRewardBalance(addr)
 
@@ -557,21 +560,12 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 
 			if bncDiff.Sign() != 0 || rwdBncDiff.Sign() != 0 {
 				sb.logger.Infof("in height %v, logAddr(%x) balance add %v to %v, rewardBalance added %v to %v",
-					header.Number.Uint64(), addr, bncDiff, curBalance, rwdBncDiff, curRewardBalance)
+					height, addr, bncDiff, curBalance, rwdBncDiff, curRewardBalance)
 			}
 		}
 	}
-	
-	//contract patch :-(
-	if chainId == "child_0" && header.Number.Uint64() == 53812868 {
-		contractAddr := common.HexToAddress("0x1fc20597e28fd46d045548beafa5cce7cf97e296")
-		code := "0x000000000000000000000000000000000000001fc20597e28fd46d045548beafa5cce7cf97e29600000000000000000000000000000000000000000000000000"
-		if state.Exist(contractAddr) {
-			state.SetCode(contractAddr, common.FromHex(code))
-		}
-	}
 
-	if !common.RoughCheckSync {
+	if !sb.chainConfig.RouchCheck {
 		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	}
 	header.UncleHash = types.TendermintNilUncleHash
@@ -986,7 +980,7 @@ func (sb *backend) divideRewardByEpoch(state *state.StateDB, addr common.Address
 		state.MarkAddressReward(addr)
 	}
 	
-	if common.NeedLogReward(sb.chainConfig.PChainId, addr) {
+	if common.NeedLogReward(sb.chainConfig.PChainId, addr, height) {
 		sb.logger.Infof("in height %v, addr(%x), epoch[%v-%v]'s reward is %v, epoch[%v]'s reward is %v",
 			height, addr, epochNumber, epochNumber+10, epochReward, epochNumber+11, lastEpochReward)
 	}

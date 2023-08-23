@@ -25,6 +25,7 @@ const (
 	FullSync  SyncMode = iota // Synchronise the entire blockchain history from full blocks
 	FastSync                  // Quickly download the headers, full sync only at the chain head
 	LightSync                 // Download only the headers and terminate afterwards
+	RoughCheck                // based on FullSync mode, with not checking commit seal, and with checking root
 )
 
 func (mode SyncMode) IsValid() bool {

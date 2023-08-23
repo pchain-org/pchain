@@ -1,14 +1,15 @@
 package epoch
 
 import (
-	"errors"
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	tmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/log"
 	dbm "github.com/tendermint/go-db"
 	"github.com/tendermint/go-wire"
+
+	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -354,13 +355,18 @@ func (epoch *Epoch) GetPreviousEpoch() *Epoch {
 }
 
 func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *state.StateDB,
-			outsideReward, selfRetrieveReward, markProposedInEpoch bool) (bool, *tmTypes.ValidatorSet, error) {
+			outsideReward, rollbackCatchup, selfRetrieveReward, markProposedInEpoch bool) (bool, *tmTypes.ValidatorSet, error) {
 
 	if height == epoch.EndBlock {
 		log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
 
 		epoch.nextEpoch = epoch.GetNextEpoch()
 		if epoch.nextEpoch != nil {
+
+			state.RawDumpToFile(height, fmt.Sprintf("/home/stevenlv/code/sync_from_ld_epoch%v_end_%v.txt", epoch.Number, height))
+			if epoch.nextEpoch.Number == 34 || epoch.nextEpoch.Number == 35 || epoch.nextEpoch.Number == 46 || epoch.nextEpoch.Number == 47{
+				log.Infof("ready to enter epoch 34/35/46/47, take a backup")
+			}
 
 			if !selfRetrieveReward {
 				// Step 0: Give the Epoch Reward
@@ -369,7 +375,11 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 					if outsideReward {
 						currentEpochReward := state.GetOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber,height)
 						if currentEpochReward.Sign() == 1 {
-							state.SubOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, height,currentEpochReward)
+							if !rollbackCatchup {
+								state.SubOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, height, currentEpochReward)
+							} else {
+								state.SubRewardBalance(rewardAddress, currentEpochReward)
+							}
 							state.AddBalance(rewardAddress, currentEpochReward)
 						}
 					} else {

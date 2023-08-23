@@ -24,6 +24,7 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -234,6 +235,11 @@ func (bc *BlockChain) loadLastState() error {
 		bc.logger.Warn("Head block missing, resetting chain", "hash", head)
 		return bc.Reset()
 	}
+
+	//if bc.chainConfig.PChainId == "pchain" {
+	//	currentBlock = bc.GetBlockByNumber(55470000)
+	//}
+
 	// Make sure the state associated with the block is available
 	if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
 		// Dangling block without a state associated, init from scratch
@@ -999,34 +1005,13 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	// reward outside
 	rewardOutside := bc.chainConfig.IsOutOfStorage(block.Number(), block.Header().MainChainNumber)
 	if rewardOutside {
-		outsideReward := state.GetOutsideReward()
-		for addr, reward := range outsideReward {
-			for epoch, rewardAmount := range reward {
-				/*if rewardAmount.Sign() < 0 && ((bc.chainConfig.PChainId== "pchain" && block.NumberU64() == 13311677) || (bc.chainConfig.PChainId=="child_0" && block.NumberU64()==22094435))  {
-					log.Errorf("!!!should dig it, rewardAmount for %x is %v", addr, rewardAmount)
-					rewardAmount = rewardAmount.Abs(rewardAmount)
-				}
-				*/
-				rawdb.WriteReward(bc.db, addr, epoch, block.NumberU64(), rewardAmount)
-			}
-		}
-		state.ClearOutsideReward()
-
-		prevLastBlock, err := state.ReadOOSLastBlock()
-		if err != nil || prevLastBlock.Cmp(block.Number()) < 0 {
-			state.WriteOOSLastBlock(block.Number())
-		}
+		state.CommitOOS(block.Number())
 	}
-
+	
 	tdm := bc.Engine().(consensus.Tendermint)
 	selfRetrieveReward := consensus.IsSelfRetrieveReward(tdm.GetEpoch(), bc, block.Header())
 	if selfRetrieveReward {
-		extractRewardSet := state.GetExtractRewardSet()
-		for addr, epoch := range extractRewardSet {
-			state.WriteEpochRewardExtracted(addr, epoch, block.NumberU64())
-
-		}
-		state.ClearExtractRewardSet()
+		state.CommitSelfRetrieve()
 	}
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
@@ -1045,6 +1030,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// If we're running an archive node, always flush
 	if withinEpochSwitchWindow || bc.cacheConfig.TrieDirtyDisabled || meetFlushBlockInterval{
+		if rewardOutside || selfRetrieveReward {
+			if err := state.FlushCache(block); err != nil {
+				return NonStatTy, err
+			}
+		}
 		if err := triedb.Commit(root, false); err != nil {
 			return NonStatTy, err
 		}
@@ -1077,6 +1067,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					// warn the user that the system is becoming unstable.
 					if chosen < lastWrite+triesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
 						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
+					}
+					if rewardOutside || selfRetrieveReward {
+						if err := state.FlushCache(block); err != nil {
+							return NonStatTy, err
+						}
 					}
 					// Flush an entire trie and restart the counters
 					triedb.Commit(header.Root, true)
@@ -1286,6 +1281,12 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 
 	// No validation errors for the first block (or chain prefix skipped)
 	for ; block != nil && err == nil; block, err = it.next() {
+
+		if (bc.chainConfig.PChainId == "pchain" && block.Number().Cmp(params.MainnetExtractRewardMainBlock)==0) ||
+			(bc.chainConfig.PChainId == "child_0" && block.MainchainNumber().Cmp(params.MainnetChild0OutOfStorageBlock)==0) {
+			bc.logger.Debug("ready to begin OOS, pause to backup database(.pchain directory)")
+		}
+			
 		// If the chain is terminating, stop processing blocks
 		if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 			bc.logger.Debug("Premature abort during blocks processing")
@@ -1328,6 +1329,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			if err := ApplyOp(op, bc, bc.cch); err != nil {
 				bc.logger.Error("Failed executing op", op, "err", err)
 			}
+		}
+		
+		
+		if bc.chainConfig.PChainId == "child_0" && block.NumberU64() == 88426000 {
+			log.Infof("statedb dump at height 88425050, with remote root %x, local root %x", block.Root(), statedb.IntermediateRoot(bc.chainConfig.IsEIP158(block.Number())))
+			statedb.RawDumpToFile(block.NumberU64(), "/home/stevenlv/code/sync_from_ld_88426000.txt")
+			os.Exit(0)
 		}
 
 		// Write the block to the chain and get the status.

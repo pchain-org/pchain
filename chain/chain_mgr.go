@@ -95,6 +95,7 @@ func (cm *ChainManager) LoadMainChain(ctx *cli.Context) error {
 	if ctx.GlobalBool(utils.TestnetFlag.Name) {
 		chainId = TestnetChain
 	}
+
 	cm.mainChain = LoadMainChain(cm.ctx, chainId)
 	if cm.mainChain == nil {
 		return errors.New("Load main chain failed")

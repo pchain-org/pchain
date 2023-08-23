@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/bridge"
 	"github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/consensus/pdbft"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -254,7 +255,7 @@ func newCliApp(version, usage string) *cli.App {
 			RpcLaddrFlag,
 			AddrFlag,
 		*/
-		utils.RoughCheckSyncFlag,
+		pdbft.RoughCheckSyncFlag,
 		utils.ChainIdFlag,
 		SourceDataDirFlag,
 	}

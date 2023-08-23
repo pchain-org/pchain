@@ -72,17 +72,22 @@ var LogAddrs = map[Address]*BalanceReward {
 	HexToAddress("0x723c1b86c78a04c4f125df4573acb0625bfc69a5") : nil,
 
 }
-func NeedLogReward(chainId string, addr Address) bool {
+func NeedLogReward(chainId string, addr Address, blockNr uint64) bool {
+	return false
 	if chainId == "child_0" {
 		if _, exist := LogAddrs[addr]; exist {
 			return true
 		}
 	}
+	if NeedDebug(chainId, blockNr) {
+		return true
+	}
+
 	return false
 }
 
 
-var RoughCheckSync = true
+var RoughCheckSync = false
 var SkipRootInconsistence = false
 var bhMap = make(map[Hash]Hash)
 func SetHashWithBlockNumber(old, new Hash) {
@@ -104,9 +109,12 @@ var debugBlocks = []uint64 {
 	//extrRwd patch
 	//tx skipped execution
 	32110529, 32132151,
+	//retrieve reward twice 
+	//for 0xf5005b496dff7b1ba3ca06294f8f146c9afbe09d
+	22094435, 
 	//tx need add reward difference
 	//for 0x852d12801e5fb640a84421c37eafae87ba86c76c
-	22094435, 33389535, 35182438, 36492381, 38070487, 41975759, 45115772, 49769059, 55788578,
+	33389535, 35182438, 36492381, 38070487, 41975759, 45115772, 49769059, 55788578,
 	//for 0xbecabc3fed76ca7a551d4c372c20318b7457878c
 	33611723, 37967696, 40807203, 42394831, 45190833, 47305502, 61201149,
 	//for 0x82bc1c28bef8f31e8d61a1706dcab8d36e6f5e58
@@ -153,5 +161,5 @@ func NeedDebug(chainId string, blockNr uint64) bool {
 }
 
 func init() {
-	bhMap[HexToHash("3d728590790b3955980c5ac99075bf65775aabc2fbaf65a58ce51b5384d1f5b7")] = HexToHash("4554d6932ed514e180cf7c52f5b68e1b5bcd16ecd789242bc088d563905863a5")
+	//bhMap[HexToHash("3d728590790b3955980c5ac99075bf65775aabc2fbaf65a58ce51b5384d1f5b7")] = HexToHash("4554d6932ed514e180cf7c52f5b68e1b5bcd16ecd789242bc088d563905863a5")
 }

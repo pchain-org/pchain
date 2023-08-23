@@ -135,6 +135,8 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		return nil, genesisErr
 	}
 
+	chainConfig.RouchCheck = cliCtx.GlobalBool(pdbft.RoughCheckSyncFlag.Name)
+
 	// Update HTLC Hard Fork and Contract if any one blank
 	initBlocksInChainConfig(chainConfig, isTestnet, ctx.ChainId())
 
@@ -234,9 +236,6 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if chainConfig.ExtractRewardMainBlock == nil {
 			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
 		}
-		if chainConfig.ExtractRewardPatchMainBlock == nil {
-			chainConfig.ExtractRewardPatchMainBlock = params.MainnetChainConfig.ExtractRewardPatchMainBlock
-		}
 		if chainConfig.Sd2mcV1Block == nil {
 			chainConfig.Sd2mcV1Block = params.MainnetChainConfig.Sd2mcV1Block
 		}
@@ -286,9 +285,6 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		}
 		if chainConfig.ExtractRewardMainBlock == nil {
 			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
-		}
-		if chainConfig.ExtractRewardPatchMainBlock == nil {
-			chainConfig.ExtractRewardPatchMainBlock = params.TestnetChainConfig.ExtractRewardPatchMainBlock
 		}
 		if chainConfig.Sd2mcV1Block == nil {
 			chainConfig.Sd2mcV1Block = params.TestnetChainConfig.Sd2mcV1Block

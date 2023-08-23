@@ -8,24 +8,6 @@ import (
 	"math/big"
 )
 
-// ----- Type
-type Reward map[uint64]*big.Int // key = Epoch Number, value = Reward Amount
-
-func (p Reward) String() (str string) {
-	for key, value := range p {
-		str += fmt.Sprintf("Epoch %v : %v\n", key, value)
-	}
-	return
-}
-
-func (p Reward) Copy() Reward {
-	cpy := make(Reward)
-	for key, value := range p {
-		cpy[key] = new(big.Int).Set(value)
-	}
-	return cpy
-}
-
 // ----- RewardBalance
 
 // AddRewardBalance add amount to c's RewardBalance.

@@ -84,7 +84,7 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 // otherwise nil and an error is returned.
 func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64, newBlock *types.Block) error {
 
-	if common.RoughCheckSync && !common.NeedDebug(v.config.PChainId, block.NumberU64()) && block.NumberU64() % 5000 != 0 {
+	if v.config.RouchCheck && !common.NeedDebug(v.config.PChainId, block.NumberU64()) && block.NumberU64() % 5000 != 0 {
 		return nil
 	}
 

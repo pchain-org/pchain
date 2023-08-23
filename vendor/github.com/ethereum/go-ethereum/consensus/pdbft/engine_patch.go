@@ -118,11 +118,11 @@ func (sb *backend) accumulateRewardsPatch1(state *state.StateDB, header *types.H
 			// if delegate reward > actual given reward, give remaining reward to Candidate
 			diff := new(big.Int).Sub(delegateReward, totalIndividualReward)
 			if outsideReward {
-				if !rollbackCatchup {
-					state.AddOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, height, diff)
-				} else {
+				//if !rollbackCatchup {
+				//	state.AddOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, height, diff)
+				//} else {
 					state.AddRewardBalance(coinbase, diff)
-				}
+				//}
 			} else {
 				log.Infof("should not be here")
 			}
@@ -130,11 +130,11 @@ func (sb *backend) accumulateRewardsPatch1(state *state.StateDB, header *types.H
 			// if delegate reward < actual given reward, subtract the diff from Candidate
 			diff := new(big.Int).Sub(totalIndividualReward, delegateReward)
 			if outsideReward {
-				if !rollbackCatchup {
-					state.SubOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, height, diff)
-				} else {
+				//if !rollbackCatchup {
+				//	state.SubOutsideRewardBalanceByEpochNumber(header.Coinbase, ep.Number, height, diff)
+				//} else {
 					state.SubRewardBalance(coinbase, diff)
-				}
+				//}
 			} else {
 				log.Infof("should not be here")
 			}
@@ -234,21 +234,21 @@ func (sb *backend) divideRewardByEpochPatch1(state *state.StateDB, addr common.A
 	for i := epochNumber; i < epochNumber+12; i++ {
 		if i == epochNumber+11 {
 			if outsideReward {
-				if !rollbackCatchup {
-					state.AddOutsideRewardBalanceByEpochNumber(addr, epochNumber, height, lastEpochReward)
-				} else {
+				//if !rollbackCatchup {
+				//	state.AddOutsideRewardBalanceByEpochNumber(addr, epochNumber, height, lastEpochReward)
+				//} else {
 					state.AddRewardBalance(addr, lastEpochReward)
-				}
+				//}
 			} else {
 				log.Infof("should not be here")
 			}
 		} else {
 			if outsideReward {
-				if !rollbackCatchup {
-					state.AddOutsideRewardBalanceByEpochNumber(addr, epochNumber, height, epochReward)
-				} else {
+				//if !rollbackCatchup {
+				//	state.AddOutsideRewardBalanceByEpochNumber(addr, epochNumber, height, epochReward)
+				//} else {
 					state.AddRewardBalance(addr, epochReward)
-				}
+				//}
 			} else {
 				log.Infof("should not be here")
 			}
@@ -259,7 +259,7 @@ func (sb *backend) divideRewardByEpochPatch1(state *state.StateDB, addr common.A
 		log.Infof("should not be here")
 	}
 
-	if common.NeedLogReward(sb.chainConfig.PChainId, addr) {
+	if common.NeedLogReward(sb.chainConfig.PChainId, addr, height) {
 		sb.logger.Infof("in height %v, addr(%x), epoch[%v-%v]'s reward is %v, epoch[%v]'s reward is %v",
 			height, addr, epochNumber, epochNumber+10, epochReward, epochNumber+11, lastEpochReward)
 	}
@@ -295,7 +295,7 @@ func (sb *backend) divideRewardByEpochPatch2(state *state.StateDB, addr common.A
 		log.Infof("should not be here")
 	}
 
-	if common.NeedLogReward(sb.chainConfig.PChainId, addr) {
+	if common.NeedLogReward(sb.chainConfig.PChainId, addr, height) {
 		sb.logger.Infof("in height %v, addr(%x), epoch[%v-%v]'s reward is %v, epoch[%v]'s reward is %v",
 			height, addr, epochNumber, epochNumber+10, epochReward, epochNumber+11, lastEpochReward)
 	}
