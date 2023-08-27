@@ -20,6 +20,7 @@ package consensus
 import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
+	tdmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -184,8 +185,21 @@ type Tendermint interface {
 
 	SetEpoch(ep *epoch.Epoch)
 
-	PrivateValidator() common.Address
+	PrivateValidator() *tdmTypes.PrivValidator
+	TokenAddress() common.Address
+	ConsensusAddressSignature() (common.Address, []byte)
+	SignTx(tx *types.Transaction) (*types.Transaction, error)
+
+	CurrentCCTBlock() *big.Int
+	WriteCurrentCCTBlock(blockNumber *big.Int)
+
+	GetLatestCCTExecStatus(hash common.Hash) *types.CCTTxExecStatus
+	GetCCTExecStatusByHash(hash common.Hash) []*types.CCTTxExecStatus
+	WriteCCTExecStatus(receipt *types.CCTTxExecStatus)
+	DeleteCCTExecStatus(hash common.Hash)
+	
 
 	// VerifyHeader checks whether a header conforms to the consensus rules of a given engine.
 	VerifyHeaderBeforeConsensus(chain ChainReader, header *types.Header, seal bool) error
+
 }

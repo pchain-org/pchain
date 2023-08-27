@@ -1,10 +1,11 @@
 package abi
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type FunctionType struct {
@@ -16,14 +17,16 @@ type FunctionType struct {
 
 var (
 	// Cross Chain Function
-	CreateChildChain       = FunctionType{0, true, true, false}
-	JoinChildChain         = FunctionType{1, true, true, false}
-	DepositInMainChain     = FunctionType{2, true, true, false}
-	DepositInChildChain    = FunctionType{3, true, false, true}
-	WithdrawFromChildChain = FunctionType{4, true, false, true}
-	WithdrawFromMainChain  = FunctionType{5, true, true, false}
-	SaveDataToMainChain    = FunctionType{6, true, true, false}
-	SetBlockReward         = FunctionType{7, true, false, true}
+	CreateChildChain          = FunctionType{0, true, true, false}
+	JoinChildChain            = FunctionType{1, true, true, false}
+	DepositInMainChain        = FunctionType{2, true, true, false}
+	DepositInChildChain       = FunctionType{3, true, false, true}
+	WithdrawFromChildChain    = FunctionType{4, true, false, true}
+	WithdrawFromMainChain     = FunctionType{5, true, true, false}
+	SaveDataToMainChain       = FunctionType{6, true, true, false}
+	SetBlockReward            = FunctionType{7, true, false, true}
+	CrossChainTransferRequest = FunctionType{8, true, true, true}
+	CrossChainTransferExec    = FunctionType{9, true, true, true}
 	// Non-Cross Chain Function
 	VoteNextEpoch   = FunctionType{10, false, true, true}
 	RevealVote      = FunctionType{11, false, true, true}
@@ -62,6 +65,10 @@ func (t FunctionType) RequiredGas() uint64 {
 		return 42000
 	case WithdrawFromMainChain:
 		return 0
+	case CrossChainTransferRequest:
+		return 42000
+	case CrossChainTransferExec:
+		return 0
 	case SaveDataToMainChain:
 		return 0
 	case VoteNextEpoch:
@@ -93,6 +100,10 @@ func (t FunctionType) String() string {
 		return "WithdrawFromChildChain"
 	case WithdrawFromMainChain:
 		return "WithdrawFromMainChain"
+	case CrossChainTransferRequest:
+		return "CrossChainTransferRequest"
+	case CrossChainTransferExec:
+		return "CrossChainTransferExec"
 	case SaveDataToMainChain:
 		return "SaveDataToMainChain"
 	case VoteNextEpoch:
@@ -130,6 +141,10 @@ func StringToFunctionType(s string) FunctionType {
 		return WithdrawFromChildChain
 	case "WithdrawFromMainChain":
 		return WithdrawFromMainChain
+	case "CrossChainTransferRequest":
+		return CrossChainTransferRequest
+	case "CrossChainTransferExec":
+		return CrossChainTransferExec
 	case "SaveDataToMainChain":
 		return SaveDataToMainChain
 	case "VoteNextEpoch":
@@ -184,6 +199,24 @@ type WithdrawFromMainChainArgs struct {
 	ChainId string
 	Amount  *big.Int
 	TxHash  common.Hash
+}
+
+type CrossChainTransferRequestArgs struct {
+	FromChainId string
+	ToChainId   string
+	Amount      *big.Int
+}
+
+type CrossChainTransferExecArgs struct {
+	MainBlockNumber *big.Int
+	TxHash          common.Hash
+	Owner           common.Address
+	FromChainId     string
+	ToChainId       string
+	Amount          *big.Int
+	Status          uint64
+	LocalStatus     uint64
+	AddrSig         []byte
 }
 
 type VoteNextEpochArgs struct {
@@ -316,6 +349,68 @@ const jsonChainABI = `
 			{
 				"name": "txHash",
 				"type": "bytes32"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "CrossChainTransferRequest",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "fromChainId",
+				"type": "string"
+			},
+			{
+				"name": "toChainId",
+				"type": "string"
+			},
+			{
+				"name": "amount",
+				"type": "uint256"
+			}
+		]
+	},
+	{
+		"type": "function",
+		"name": "CrossChainTransferExec",
+		"constant": false,
+		"inputs": [
+			{
+				"name": "mainBlockNumber",
+				"type": "uint256"
+			},
+			{
+				"name": "txHash",
+				"type": "bytes32"
+			},
+			{
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"name": "fromChainId",
+				"type": "string"
+			},
+			{
+				"name": "toChainId",
+				"type": "string"
+			},
+			{
+				"name": "amount",
+				"type": "uint256"
+			},
+			{
+				"name": "status",
+				"type": "uint64"
+			},
+			{
+				"name": "localStatus",
+				"type": "uint64"
+			},
+			{
+				"name": "addrSig",
+				"type": "bytes"
 			}
 		]
 	},

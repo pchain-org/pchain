@@ -95,6 +95,30 @@ func (op *LaunchChildChainsOp) String() string {
 		op.ChildChainIds, len(op.NewPendingIdx), op.DeleteChildChainIds)
 }
 
+type SaveCCTTxStatusOp struct {
+	CCTTxStatus
+}
+
+func (op *SaveCCTTxStatusOp) Conflict(op1 PendingOp) bool {
+	return false
+}
+
+func (op *SaveCCTTxStatusOp) String() string {
+	return fmt.Sprintf("SaveCCTTxStatusOp")
+}
+
+type SaveCCTTxExecStatusOp struct {
+	CCTTxExecStatus
+}
+
+func (op *SaveCCTTxExecStatusOp) Conflict(op1 PendingOp) bool {
+	return false
+}
+
+func (op *SaveCCTTxExecStatusOp) String() string {
+	return fmt.Sprintf("CrossChainTransferExeOp")
+}
+
 // SaveBlockToMainChain op
 type SaveDataToMainChainOp struct {
 	Data []byte

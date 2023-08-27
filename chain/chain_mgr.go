@@ -301,7 +301,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 	var localEtherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
-		localEtherbase = tdm.PrivateValidator()
+		localEtherbase = tdm.TokenAddress()
 	}
 
 	for _, v := range cci.JoinedValidators {
@@ -462,7 +462,7 @@ func (cm *ChainManager) LoadChildChainFromDB(ctx *cli.Context, chainId string) *
 
 	var localEtherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
-		localEtherbase = tdm.PrivateValidator()
+		localEtherbase = tdm.TokenAddress()
 	}
 
 	for _, v := range cci.Epoch.Validators.Validators {
@@ -553,7 +553,7 @@ func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool 
 
 	var localEtherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
-		localEtherbase = tdm.PrivateValidator()
+		localEtherbase = tdm.TokenAddress()
 	}
 
 	return childEpoch.Validators.HasAddress(localEtherbase[:])
@@ -608,7 +608,7 @@ func (cm *ChainManager) getNodeValidator(ethNode *node.Node) (common.Address, bo
 	var etherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
 		epoch := ethereum.Engine().(consensus.Tendermint).GetEpoch()
-		etherbase = tdm.PrivateValidator()
+		etherbase = tdm.TokenAddress()
 		log.Debugf("getNodeValidator() etherbase is :%v", etherbase)
 		return etherbase, epoch.Validators.HasAddress(etherbase[:])
 	} else {
