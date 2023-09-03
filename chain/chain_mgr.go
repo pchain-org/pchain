@@ -78,6 +78,10 @@ func (cm *ChainManager) InitP2P() {
 	cm.server = p2p.NewP2PServer(cm.ctx)
 }
 
+func (cm *ChainManager) Server() *p2p.PChainP2PServer {
+	return cm.server
+}
+
 func (cm *ChainManager) GetMainChain() *Chain {
 	return cm.mainChain
 }

@@ -56,7 +56,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		//comment this for this case: block has been written, but not refresh the head
 		return ErrKnownBlock
-
 	}
 	// Header validity is known at this point, check the uncles and transactions
 	header := block.Header()

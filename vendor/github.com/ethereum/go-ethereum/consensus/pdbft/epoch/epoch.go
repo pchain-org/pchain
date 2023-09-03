@@ -363,9 +363,11 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 		epoch.nextEpoch = epoch.GetNextEpoch()
 		if epoch.nextEpoch != nil {
 
-			state.RawDumpToFile(height, fmt.Sprintf("/home/stevenlv/code/sync_from_ld_epoch%v_end_%v.txt", epoch.Number, height))
-			if epoch.nextEpoch.Number == 34 || epoch.nextEpoch.Number == 35 || epoch.nextEpoch.Number == 46 || epoch.nextEpoch.Number == 47{
-				log.Infof("ready to enter epoch 34/35/46/47, take a backup")
+			if pchainId == "child_0" {
+				state.RawDumpToFile(height, fmt.Sprintf("/home/stevenlv/code/sync_from_ld_epoch%v_end_%v.txt", epoch.Number, height))
+				if epoch.Number == 7 || epoch.Number == 18 {
+					log.Infof("ready to end epoch 7/18, enter 8/19, take a backup")
+				}
 			}
 
 			if !selfRetrieveReward {

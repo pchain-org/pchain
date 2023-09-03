@@ -56,6 +56,7 @@ func PrintDepricationWarning(str string) {
 type BalanceReward struct {
 	BeforeBalance, BeforeReward *big.Int
 }
+
 var LogAddrs = map[Address]*BalanceReward {
 	HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") : nil,
 	HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") : nil,
@@ -70,11 +71,11 @@ var LogAddrs = map[Address]*BalanceReward {
 	HexToAddress("0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa") : nil,
 	HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") : nil,
 	HexToAddress("0x723c1b86c78a04c4f125df4573acb0625bfc69a5") : nil,
-
 }
-func NeedLogReward(chainId string, addr Address, blockNr uint64) bool {
-	return false
-	if chainId == "child_0" {
+
+func NeedLogReward(chainId string, addr Address, epoch, blockNr uint64) bool {
+
+	if chainId == "child_0" && epoch == 19 {
 		if _, exist := LogAddrs[addr]; exist {
 			return true
 		}
@@ -155,6 +156,23 @@ func NeedDebug(chainId string, blockNr uint64) bool {
 			if block == blockNr {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+var ExtractAddrs = map[Address]*struct{} {
+	HexToAddress("0x41e0a683ee564f73f1ca240d35e30a71a3848c14") : nil,
+	HexToAddress("0x6c665834015f725bd27fecda2394806be3b8d6d9") : nil,
+	HexToAddress("0xb6a43df609168ab41af7964fa8cafdeb28a15387") : nil,
+	HexToAddress("0xd06b6c1299c04b71febc1e6951458ebdd5a04f7d") : nil,
+}
+
+func NeedDebug1(chainId string, addr Address) bool {
+
+	if chainId == "child_0" {
+		if _, exist := ExtractAddrs[addr]; exist {
+			return true
 		}
 	}
 	return false

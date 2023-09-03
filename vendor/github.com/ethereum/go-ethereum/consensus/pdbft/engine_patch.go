@@ -259,7 +259,7 @@ func (sb *backend) divideRewardByEpochPatch1(state *state.StateDB, addr common.A
 		log.Infof("should not be here")
 	}
 
-	if common.NeedLogReward(sb.chainConfig.PChainId, addr, height) {
+	if common.NeedLogReward(sb.chainConfig.PChainId, addr, epochNumber, height) {
 		sb.logger.Infof("in height %v, addr(%x), epoch[%v-%v]'s reward is %v, epoch[%v]'s reward is %v",
 			height, addr, epochNumber, epochNumber+10, epochReward, epochNumber+11, lastEpochReward)
 	}
@@ -295,7 +295,7 @@ func (sb *backend) divideRewardByEpochPatch2(state *state.StateDB, addr common.A
 		log.Infof("should not be here")
 	}
 
-	if common.NeedLogReward(sb.chainConfig.PChainId, addr, height) {
+	if common.NeedLogReward(sb.chainConfig.PChainId, addr, epochNumber, height) {
 		sb.logger.Infof("in height %v, addr(%x), epoch[%v-%v]'s reward is %v, epoch[%v]'s reward is %v",
 			height, addr, epochNumber, epochNumber+10, epochReward, epochNumber+11, lastEpochReward)
 	}

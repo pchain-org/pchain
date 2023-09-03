@@ -538,6 +538,46 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
 }
 
+func (s *PublicBlockChainAPI) GetClosestBalances(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (rpc.BlockNumber,
+	*hexutil.Big, *hexutil.Big, rpc.BlockNumber, *hexutil.Big, *hexutil.Big, error) {
+	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
+
+	lowerBlock := rpc.EarliestBlockNumber
+	lowerBalance := (*big.Int)(nil)
+	lowerRewardBalance := (*big.Int)(nil)
+	higherBlock := rpc.LatestBlockNumber
+	higherBalance := (*big.Int)(nil)
+	higherRewardBalance := (*big.Int)(nil)
+	if state == nil || err != nil {
+
+		decBlock := blockNr
+		for state == nil || err != nil {
+			decBlock --
+			state, _, err = s.b.StateAndHeaderByNumber(ctx, decBlock)
+		}
+		if state !=nil && err == nil {
+			lowerBlock = decBlock
+			lowerBalance = state.GetBalance(address)
+			lowerRewardBalance = state.GetRewardBalance(address)
+		}
+
+		state = nil
+		incBlock := blockNr
+		for state == nil || err != nil {
+			incBlock ++
+			state, _, err = s.b.StateAndHeaderByNumber(ctx, incBlock)
+		}
+		if state !=nil && err == nil {
+			higherBlock = incBlock
+			higherBalance = state.GetBalance(address)
+			higherRewardBalance = state.GetRewardBalance(address)
+		}
+	}
+
+	return lowerBlock, (*hexutil.Big)(lowerBalance), (*hexutil.Big)(lowerRewardBalance), higherBlock,
+		(*hexutil.Big)(higherBalance), (*hexutil.Big)(higherRewardBalance), err
+}
+
 // GetFullBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.

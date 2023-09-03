@@ -8,13 +8,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/pchain/chain"
-	"github.com/pchain/rpc"
 	"gopkg.in/urfave/cli.v1"
 	"net/http"
 	_ "net/http/pprof"
 	"sync"
 	"time"
+)
+
+var (
+	ErrNoChildChain = errors.New("no child chain")
 )
 
 var (
@@ -42,12 +46,13 @@ synchronize one chain from one local chain's directory, an alternative of networ
 
 var sldVars struct {
 	chainId    string
+	synChild   bool
 	dataDir    string
 	srcDataDir string
 
 	srcCM, localCM               *chain.ChainManager
-	srcMainChain, localMainChain *core.BlockChain
-	srcChain, localChain         *core.BlockChain
+	srcMainChain, localMainChain *chain.Chain
+	srcChain, localChain         *chain.Chain
 	wg                           sync.WaitGroup
 }
 
@@ -68,7 +73,7 @@ func synchFromLocalDB(ctx *cli.Context) error {
 
 	go localSync(sldVars.srcMainChain, sldVars.localMainChain, &sldVars.wg)
 
-	if sldVars.localMainChain.Config().PChainId != sldVars.localChain.Config().PChainId {
+	if sldVars.synChild {
 		go localSync(sldVars.srcChain, sldVars.localChain, &sldVars.wg)
 	}
 
@@ -77,30 +82,31 @@ func synchFromLocalDB(ctx *cli.Context) error {
 	return nil
 }
 
-func localSync(srcChain, dstChain *core.BlockChain, wg *sync.WaitGroup) (err error) {
+func localSync(srcChain, dstChain *chain.Chain, wg *sync.WaitGroup) (err error) {
+
+	srcEthChain := getEthBlockChain(srcChain)
+	dstEthChain := mustHaveDstEthChain(srcChain, dstChain)
 
 	defer func() {
-		wg.Done()
+		sldVars.wg.Done()
 		if err != nil {
-			log.Infof("localSync() for chain %v returned with error(%v)", dstChain.Config().PChainId, err)
+			log.Infof("localSync() for chain %v returned with error(%v)", dstEthChain.Config().PChainId, err)
 		} else {
-			log.Infof("localSync() for chain %v returned, synchronization finished", dstChain.Config().PChainId)
+			log.Infof("localSync() for chain %v returned, synchronization finished", dstEthChain.Config().PChainId)
 		}
 	}()
 
-	dstChain = mustHaveDstChain(srcChain, dstChain)
-
-	startWith := dstChain.CurrentBlock().NumberU64()
+	startWith := dstEthChain.CurrentBlock().NumberU64()
 	startWith++
 
 	for {
-		blocks := fetch(srcChain, startWith, 256)
+		blocks := fetch(srcEthChain, startWith, 256)
 		count := len(blocks)
 		if count == 0 {
 			return nil
 		}
 
-		err = importBlockResult(dstChain, blocks)
+		err = importBlockResult(dstEthChain, blocks)
 		if err != nil {
 			return err
 		}
@@ -110,34 +116,38 @@ func localSync(srcChain, dstChain *core.BlockChain, wg *sync.WaitGroup) (err err
 	return nil
 }
 
-func mustHaveDstChain(srcChain, dstChain *core.BlockChain) *core.BlockChain {
-	if srcChain.Config().PChainId == "pchain" || dstChain != nil {
-		return dstChain
+func mustHaveDstEthChain(srcChain, dstChain *chain.Chain) *core.BlockChain {
+
+	srcEthChain := getEthBlockChain(srcChain)
+	dstEthChain := getEthBlockChain(dstChain)
+
+	chainId := srcEthChain.Config().PChainId
+	if params.IsMainChain(chainId) || dstEthChain != nil {
+		return dstEthChain
 	}
 
-	for dstChain == nil {
-		err := sldVars.localCM.LoadChains([]string{srcChain.Config().PChainId /*sldVars.chainId*/})
+	for dstEthChain == nil {
+		err := sldVars.localCM.LoadChains([]string{chainId /* = sldVars.chainId*/})
 		if err != nil {
 			log.Info("local chain may not created, wait for 10 seconds")
 			time.Sleep(10 * time.Second)
+			continue
 		}
 
-		cmChildChain := sldVars.localCM.GetChildChain(srcChain.Config().PChainId /*sldVars.chainId*/)
-		if cmChildChain == nil {
+		childChain := sldVars.localCM.GetChildChain(chainId /* = sldVars.chainId*/)
+		if childChain == nil {
 			log.Info("local chain may not created, wait for 10 seconds")
 			time.Sleep(10 * time.Second)
+			continue
 		}
 
-		var ethereum *eth.Ethereum
-		cmChildChain.EthNode.ServiceNoRunning(&ethereum)
-		dstChain = ethereum.BlockChain()
-
-		if dstChain != nil {
-			hookupChildRpc(cmChildChain)
+		dstEthChain = getEthBlockChain(childChain)
+		if dstEthChain != nil {
+			childChain.EthNode.Start1()
 		}
 	}
 
-	return dstChain
+	return dstEthChain
 }
 
 func fetch(srcChain *core.BlockChain, startWith uint64, count uint64) types.Blocks {
@@ -174,6 +184,7 @@ func importBlockResult(dstChain *core.BlockChain, blocks types.Blocks) error {
 func sfldInitEnv(ctx *cli.Context) error {
 
 	sldVars.chainId = ctx.GlobalString(utils.ChainIdFlag.Name)
+	sldVars.synChild = false
 	sldVars.dataDir = ctx.GlobalString(utils.DataDirFlag.Name)
 	sldVars.srcDataDir = ctx.GlobalString(SourceDataDirFlag.Name)
 
@@ -187,13 +198,16 @@ func sfldInitEnv(ctx *cli.Context) error {
 	}
 
 	localMainChain, localChain, err := loadBlockChain(ctx, sldVars.chainId, sldVars.dataDir, true)
-	if err != nil {
+	if err != nil && err != ErrNoChildChain {
 		return err
 	}
 
 	if srcMainChain == nil || srcChain == nil || localMainChain == nil /*|| localChain == nil*/ {
 		return errors.New("some chain load failed")
 	}
+
+	ethMainChain := getEthBlockChain(localMainChain)
+	sldVars.synChild = ethMainChain.Config().PChainId != sldVars.chainId
 
 	sldVars.srcMainChain = srcMainChain
 	sldVars.srcChain = srcChain
@@ -203,18 +217,27 @@ func sfldInitEnv(ctx *cli.Context) error {
 	return nil
 }
 
-func loadBlockChain(ctx *cli.Context, chainId, datadir string, isLocal bool) (*core.BlockChain, *core.BlockChain, error) {
+func loadBlockChain(ctx *cli.Context, chainId, datadir string, isLocal bool) (*chain.Chain, *chain.Chain, error) {
 
 	ctx.GlobalSet(utils.DataDirFlag.Name, datadir)
 
+	mainChain := (*chain.Chain)(nil)
+	childChain := (*chain.Chain)(nil)
 	chainMgr := chain.NewCMInstance(ctx)
 	err := chainMgr.LoadMainChain(ctx)
 
 	defer func() {
-		if isLocal {
-			err1 := chainMgr.StartRPC()
-			if err1 != nil {
-				log.Error("start rpc failed")
+		if isLocal && mainChain != nil {
+			// Initial P2P Server
+			chainMgr.InitP2P()
+			chainMgr.StartP2PServer()
+
+			mainChain.EthNode.SetP2PServer(chainMgr.Server().Server())
+			mainChain.EthNode.Start1()
+
+			if childChain != nil {
+				childChain.EthNode.SetP2PServer(chainMgr.Server().Server())
+				childChain.EthNode.Start1()
 			}
 		}
 	}()
@@ -233,11 +256,10 @@ func loadBlockChain(ctx *cli.Context, chainId, datadir string, isLocal bool) (*c
 	chainMgr.InitCrossChainHelper()
 	chainMgr.StartInspectEvent()
 
-	var ethereum *eth.Ethereum
-	chainMgr.GetMainChain().EthNode.ServiceNoRunning(&ethereum)
-	mainChain := ethereum.BlockChain()
+	mainChain = chainMgr.GetMainChain()
+	ethMainChain := getEthBlockChain(mainChain)
 
-	if mainChain.Config().PChainId == chainId {
+	if ethMainChain.Config().PChainId == chainId {
 		return mainChain, mainChain, nil
 	}
 
@@ -246,29 +268,20 @@ func loadBlockChain(ctx *cli.Context, chainId, datadir string, isLocal bool) (*c
 		return mainChain, nil, err
 	}
 
-	cmChildChain := chainMgr.GetChildChain(chainId)
-	if cmChildChain == nil {
-		return mainChain, nil, errors.New("no child chain")
+	childChain = chainMgr.GetChildChain(chainId)
+	if childChain == nil {
+		return mainChain, nil, ErrNoChildChain
 	}
-	cmChildChain.EthNode.ServiceNoRunning(&ethereum)
-	childChain := ethereum.BlockChain()
 
 	return mainChain, childChain, err
 }
 
-func hookupChildRpc(chain *chain.Chain) {
-	if rpc.IsHTTPRunning() {
-		if h, err := chain.EthNode.GetHTTPHandler(); err == nil {
-			rpc.HookupHTTP(chain.Id, h)
-		} else {
-			log.Errorf("Load Child Chain RPC HTTP handler failed: %v", err)
-		}
+func getEthBlockChain(chain *chain.Chain) *core.BlockChain {
+	if chain == nil {
+		return nil
 	}
-	if rpc.IsWSRunning() {
-		if h, err := chain.EthNode.GetWSHandler(); err == nil {
-			rpc.HookupWS(chain.Id, h)
-		} else {
-			log.Errorf("Load Child Chain RPC WS handler failed: %v", err)
-		}
-	}
+
+	var ethereum *eth.Ethereum
+	chain.EthNode.ServiceNoRunning(&ethereum)
+	return ethereum.BlockChain()
 }

@@ -1280,13 +1280,8 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	}
 
 	// No validation errors for the first block (or chain prefix skipped)
-	for ; block != nil && err == nil; block, err = it.next() {
+	for ; block != nil && (err == nil || err == ErrKnownBlock); block, err = it.next() {
 
-		if (bc.chainConfig.PChainId == "pchain" && block.Number().Cmp(params.MainnetExtractRewardMainBlock)==0) ||
-			(bc.chainConfig.PChainId == "child_0" && block.MainchainNumber().Cmp(params.MainnetChild0OutOfStorageBlock)==0) {
-			bc.logger.Debug("ready to begin OOS, pause to backup database(.pchain directory)")
-		}
-			
 		// If the chain is terminating, stop processing blocks
 		if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 			bc.logger.Debug("Premature abort during blocks processing")
@@ -1330,11 +1325,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 				bc.logger.Error("Failed executing op", op, "err", err)
 			}
 		}
-		
-		
-		if bc.chainConfig.PChainId == "child_0" && block.NumberU64() == 88426000 {
-			log.Infof("statedb dump at height 88425050, with remote root %x, local root %x", block.Root(), statedb.IntermediateRoot(bc.chainConfig.IsEIP158(block.Number())))
-			statedb.RawDumpToFile(block.NumberU64(), "/home/stevenlv/code/sync_from_ld_88426000.txt")
+
+		if bc.chainConfig.PChainId == "child_0" && block.NumberU64() == 98991999 {
+			log.Infof("statedb dump at height 98991999, with remote root %x, local root %x", block.Root(), statedb.IntermediateRoot(bc.chainConfig.IsEIP158(block.Number())))
+			statedb.RawDumpToFile(block.NumberU64(), "/home/stevenlv/code/sync_from_ld_dump_98991999.txt")
+		}
+
+		if bc.chainConfig.PChainId == "child_0" && block.NumberU64() == 98995000 {
+			log.Infof("statedb dump at height 98995000, with remote root %x, local root %x", block.Root(), statedb.IntermediateRoot(bc.chainConfig.IsEIP158(block.Number())))
+			statedb.RawDumpToFile(block.NumberU64(), "/home/stevenlv/code/sync_from_ld_dump_98995000.txt")
 			os.Exit(0)
 		}
 
@@ -1392,6 +1391,10 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 		events = append(events, ChainHeadEvent{lastCanon})
+	}
+
+	if err == ErrKnownBlock {
+		err = nil
 	}
 
 	return it.index, events, coalescedLogs, err

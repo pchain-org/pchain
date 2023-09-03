@@ -355,11 +355,11 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 		curBlockHeight := bc.CurrentBlock().NumberU64()
 		height := curBlockHeight + 1
 
-		if chainId == "child_0" {
+		if common.NeedDebug(chainId, height) {
 			log.Infof("debug here")
 		}
 
-		if common.NeedDebug(chainId, height) {
+		if common.NeedDebug1(chainId, from) {
 			log.Infof("debug here")
 		}
 
@@ -399,8 +399,8 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 		//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
 		for epNumber, reward := range rewards {
-			if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
 
+			if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber && reward.Sign() > 0 {
 				if !rollbackCatchup {
 					state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
 				} else {
@@ -681,8 +681,8 @@ func patchRerun(chainId string, height uint64, from common.Address, currentEpoch
 
 func patchNegRewards(chainId string, blockNumber uint64, from common.Address, state *state.StateDB, currentEpochNumber uint64) {
 
-	if (chainId == "pchain" && blockNumber == 13311677 && from == common.HexToAddress("0x8be8a44943861279377a693b51c0703420087480")) ||
-		(chainId == "child_0" && blockNumber == 22094435 && from == common.HexToAddress("0xf5005b496dff7b1ba3ca06294f8f146c9afbe09d")) {
+	//if (chainId == "pchain" && blockNumber == 13311677 && from == common.HexToAddress("0x8be8a44943861279377a693b51c0703420087480")) ||
+	//	(chainId == "child_0" && blockNumber == 22094435 && from == common.HexToAddress("0xf5005b496dff7b1ba3ca06294f8f146c9afbe09d")) {
 
 		outsideReward := state.GetOutsideReward()
 		reward := outsideReward[from]
@@ -692,7 +692,7 @@ func patchNegRewards(chainId string, blockNumber uint64, from common.Address, st
 				reward[epoch] = common.Big0
 			}
 		}
-	}
+	//}
 }
 
 func patchAllRewards(chainId string, height uint64, from common.Address, state *state.StateDB) {

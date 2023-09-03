@@ -423,11 +423,6 @@ func (self *StateDB) SetNonce(addr common.Address, nonce uint64) {
 }
 
 func (self *StateDB) SetCode(addr common.Address, code []byte) {
-
-	if addr == common.HexToAddress("0x1fc20597e28fd46d045548beafa5cce7cf97e296") {
-		fmt.Printf("debug here")
-	}
-	
 	stateObject := self.GetOrNewStateObject(addr)
 	if stateObject != nil {
 		stateObject.SetCode(crypto.Keccak256Hash(code), code)
