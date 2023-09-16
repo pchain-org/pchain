@@ -186,7 +186,7 @@ func del_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockC
 	return nil
 }
 
-func del_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+func del_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
 	args, verror := delegateValidation(from, tx, state, bc)
@@ -214,7 +214,7 @@ func cdel_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 	return nil
 }
 
-func cdel_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+func cdel_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
 	args, verror := cancelDelegateValidation(from, tx, state, bc)
@@ -253,7 +253,7 @@ func appcdd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Blo
 	return nil
 }
 
-func appcdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+func appcdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
 	args, verror := candidateValidation(from, tx, state, bc)
@@ -281,7 +281,7 @@ func ccdd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 	return nil
 }
 
-func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+func ccdd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
 	verror := cancelCandidateValidation(from, tx, state, bc)
@@ -340,7 +340,7 @@ func extrRwd_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Bl
 	}
 }
 
-func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps) error {
 
 	//validate again
 	if err := extrRwd_ValidateCb(tx, state, bc); err != nil {
@@ -351,36 +351,22 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 		chainId := bc.Config().PChainId
 		from := derivedAddressFromTx(tx)
-
-		curBlockHeight := bc.CurrentBlock().NumberU64()
-		height := curBlockHeight + 1
-
-		if common.NeedDebug(chainId, height) {
-			log.Infof("debug here")
-		}
-
-		if common.NeedDebug1(chainId, from) {
-			log.Infof("debug here")
-		}
+		height := header.Number.Uint64()
 
 		log.Infof("extrRwd_ApplyCb, (chainId, height, from) is (%v, %v, %x\n", chainId, height, from)
-
-		heightBI := new(big.Int).SetUint64(height)
 
 		if patchNoRun(chainId, height, from) {
 			return nil
 		}
-
 		patchAllRewards(chainId, height, from, state)
 
-		//extrRwd is after OutOfStorage feature, so need not check for IsOutOfStorage()
 		rollbackCatchup := false
 		lastBlock, err := state.GetOOSLastBlock()
-		if err == nil && heightBI.Cmp(lastBlock) <= 0 {
+		if err == nil && header.Number.Cmp(lastBlock) <= 0 {
 			rollbackCatchup = true
 		}
 
-		epoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockHeight)
+		epoch := tdm.GetEpoch().GetEpochByBlockNumber(height)
 		currentEpochNumber := epoch.Number
 		noExtractMark := false
 		extractEpochNumber, err := state.GetEpochRewardExtracted(from, height)
@@ -389,17 +375,15 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 		}
 		maxExtractEpochNumber := uint64(0)
 
-		log.Infof("extrRwd_ApplyCb begin, (from， balance, rewardBalance, currentEpochNumber, noExtractMark, extractEpochNumber) is (%x, %v, %v, %v, %v, %v\n",
-			from, state.GetBalance(from), state.GetRewardBalance(from).String(), currentEpochNumber, noExtractMark, extractEpochNumber)
+		log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
 
 		rewards := state.GetAllEpochReward(from, height)
-		log.Infof("extrRwd_ApplyCb before patchRerun, rewards is %v\n", rewards)
+		log.Debugf("extrRwd_ApplyCb before patchRerun, rewards is %v\n", rewards)
 		extractEpochNumber, noExtractMark, rewards = patchRerun(chainId, height, from, currentEpochNumber, extractEpochNumber, noExtractMark, rewards)
-		log.Infof("extrRwd_ApplyCb after patchRerun, rewards is %v\n", rewards)
+		log.Debugf("extrRwd_ApplyCb after patchRerun, rewards is %v\n", rewards)
 
 		//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
 		for epNumber, reward := range rewards {
-
 			if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber && reward.Sign() > 0 {
 				if !rollbackCatchup {
 					state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
@@ -416,13 +400,6 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 		}
 
 		patchNegRewards(chainId, height, from, state, currentEpochNumber)
-
-		rewards = state.GetAllEpochReward(from, height)
-		log.Infof("extrRwd_ApplyCb after patchStep2, rewards is %v\n", rewards)
-
-		log.Infof("extrRwd_ApplyCb end, (from， balance, rewardBalance, currentEpochNumber, noExtractMark, extractEpochNumber) is (%x, %v, %v, %v, %v, %v\n",
-			from, state.GetBalance(from), state.GetRewardBalance(from).String(), currentEpochNumber, noExtractMark, extractEpochNumber)
-
 	}
 
 	return nil
@@ -610,43 +587,15 @@ func checkEpochInNormalStage(bc *core.BlockChain) error {
 }
 
 
-type patchStruct struct {
-	chainId            string
-	blockNumber        uint64
-	from               common.Address
-	extractEpochNumber uint64
-	noExtractMark      bool
-	rewards            map[uint64]*big.Int
-}
-
-func (ps *patchStruct) reset(chainId string, blockNumber uint64, from common.Address) {
-	if chainId != ps.chainId || blockNumber != ps.blockNumber || from != ps.from {
-		ps.chainId = ""
-		ps.blockNumber = 0
-		ps.from = common.Address{}
-		ps.extractEpochNumber = 0
-		ps.noExtractMark = false
-		ps.rewards = make(map[uint64]*big.Int)
-	}
-}
-
-var patchData = patchStruct {
-	chainId: "",
-	blockNumber: 0,
-	extractEpochNumber: 0,
-	noExtractMark:      false,
-	rewards:            make(map[uint64]*big.Int),
-}
-
 func patchNoRun(chainId string, blockNumber uint64, from common.Address) bool {
-
-	log.Infof("patchNoRun; chainId is: %v, height: %v, from: %x", chainId, blockNumber, from)
 
 	if chainId == "child_0" {
 		if (blockNumber == 32110529 && from == common.HexToAddress("0x5e48674176e2cdc663b38cc0aeea1f92a3082db7")) ||
 			(blockNumber == 32132151 && from == common.HexToAddress("0x8128f3e133c565ccc6ca0a8d206d5e2b2ba36868")) ||
 			(blockNumber == 32132151 && from == common.HexToAddress("0xf49d2ee4e9217ae347dfddc740b7475bbceef6be")) ||
 			(blockNumber == 32132151 && from == common.HexToAddress("0xfff9b142b8e4c6aff9adbf17beec53a414c5f068")) {
+
+			log.Infof("patchNoRun; chainId is: %v, height: %v, from: %x", chainId, blockNumber, from)
 			return true
 		}
 	}
@@ -654,45 +603,50 @@ func patchNoRun(chainId string, blockNumber uint64, from common.Address) bool {
 	return false
 }
 
+var cahceData = struct {
+	chainId            string
+	height             uint64
+	from               common.Address
+	extractEpochNumber uint64
+	noExtractMark      bool
+	rewards            map[uint64]*big.Int
+}{"", 0, common.Address{}, 0, false, make(map[uint64]*big.Int)}
+
 func patchRerun(chainId string, height uint64, from common.Address, currentEpochNumber, extractEpochNumber uint64,
 	noExtractMark bool, rewards map[uint64]*big.Int) (uint64, bool, map[uint64]*big.Int) {
 
-	log.Infof("patchStep1; height: %v, from: %x", height, from)
-
-	patchData.reset(chainId, height, from)
-
 	if (chainId == "pchain" && height == 13311677 && from == common.HexToAddress("0x8be8a44943861279377a693b51c0703420087480")) ||
 		(chainId == "child_0" && height == 22094435 && from == common.HexToAddress("0xf5005b496dff7b1ba3ca06294f8f146c9afbe09d")) {
-		if len(patchData.rewards) == 0 {
-			patchData.chainId = chainId
-			patchData.blockNumber = height
-			patchData.from = from
-			patchData.extractEpochNumber = extractEpochNumber
-			patchData.noExtractMark = noExtractMark
+
+		log.Infof("patchRerun; chainId: %s, height: %v, from: %x", chainId, height, from)
+
+		if chainId != cahceData.chainId || height != cahceData.height || from != cahceData.from {
+			cahceData.chainId = chainId
+			cahceData.height = height
+			cahceData.from = from
+			cahceData.extractEpochNumber = extractEpochNumber
+			cahceData.noExtractMark = noExtractMark
 			for epoch, reward := range rewards {
-				patchData.rewards[epoch] = reward
+				cahceData.rewards[epoch] = reward
 			}
 		}
-		return patchData.extractEpochNumber, patchData.noExtractMark, patchData.rewards
+
+		return cahceData.extractEpochNumber, cahceData.noExtractMark, cahceData.rewards
 	}
 
 	return extractEpochNumber, noExtractMark, rewards
 }
 
-func patchNegRewards(chainId string, blockNumber uint64, from common.Address, state *state.StateDB, currentEpochNumber uint64) {
+func patchNegRewards(chainId string, height uint64, from common.Address, state *state.StateDB, currentEpochNumber uint64) {
 
-	//if (chainId == "pchain" && blockNumber == 13311677 && from == common.HexToAddress("0x8be8a44943861279377a693b51c0703420087480")) ||
-	//	(chainId == "child_0" && blockNumber == 22094435 && from == common.HexToAddress("0xf5005b496dff7b1ba3ca06294f8f146c9afbe09d")) {
-
-		outsideReward := state.GetOutsideReward()
-		reward := outsideReward[from]
-		for epoch, rewardAmount := range reward {
-			if rewardAmount.Sign() < 0 {
-				log.Errorf("!!!amount is negative in extrRwd_ApplyCb(), make it 0 by force, addr is %x", from)
-				reward[epoch] = common.Big0
-			}
+	outsideReward := state.GetOutsideReward()
+	reward := outsideReward[from]
+	for epoch, rewardAmount := range reward {
+		if rewardAmount.Sign() < 0 {
+			log.Errorf("!!!amount is negative in extrRwd_ApplyCb(), make it 0 by force, chainId: %s, height: %v, addr: %x", chainId, height, from)
+			reward[epoch] = common.Big0
 		}
-	//}
+	}
 }
 
 func patchAllRewards(chainId string, height uint64, from common.Address, state *state.StateDB) {
@@ -701,19 +655,19 @@ func patchAllRewards(chainId string, height uint64, from common.Address, state *
 		//for 0x852d12801e5fb640a84421c37eafae87ba86c76c
 		if height == 33389535 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
 			addSerialReward(state, from, 19, 29, height, 121128901091097)
-			addOneReward(state, from, 30, height, 121128901091097 + 11) //last epoch, has some extra pi
+			addOneReward(state, from, 30, height, 121128901091097+11) //last epoch, has some extra pi
 		}
 
 		//for 0xbecabc3fed76ca7a551d4c372c20318b7457878c
 		if height == 33611723 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
 			addSerialReward(state, from, 19, 29, height, 1041442624722396)
-			addOneReward(state, from, 30, height, 1041442624722396 + 8) //last epoch, has some extra pi
+			addOneReward(state, from, 30, height, 1041442624722396+8) //last epoch, has some extra pi
 		}
 
 		//for 0x82bc1c28bef8f31e8d61a1706dcab8d36e6f5e58
 		if height == 33612352 && from == common.HexToAddress("0x82bc1c28bef8f31e8d61a1706dcab8d36e6f5e58") {
 			addSerialReward(state, from, 19, 29, height, 19900557187202)
-			addOneReward(state, from, 30, height, 19900557187202 + 8) //last epoch, has some extra pi
+			addOneReward(state, from, 30, height, 19900557187202+8) //last epoch, has some extra pi
 		}
 
 		//for 0xceb2694a1ddb8daf849825d74c4954dcd0ad6489
@@ -726,7 +680,7 @@ func patchAllRewards(chainId string, height uint64, from common.Address, state *
 		//for "0xd5e6619291b2384b5b7da595a9bd78ec7ea30785"
 		if height == 34517913 && from == common.HexToAddress("0xd5e6619291b2384b5b7da595a9bd78ec7ea30785") {
 			addSerialReward(state, from, 19, 29, height, 6320382574071211)
-			addOneReward(state, from, 30, height, 6320382574071211 + 3) //last epoch, has some extra pi
+			addOneReward(state, from, 30, height, 6320382574071211+3) //last epoch, has some extra pi
 		}
 
 		//for 0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5
@@ -775,9 +729,6 @@ func patchAllRewards(chainId string, height uint64, from common.Address, state *
 			if from == common.HexToAddress("0x723c1b86c78a04c4f125df4573acb0625bfc69a5") {
 				addSerialReward(state, from, 19, 29, height, 5564573679550924)
 				addOneReward(state, from, 30, height, 5564573679550924 + 1) //last epoch, has some extra pi
-
-				//addSerialReward(state, from, 42, 52, height, 976169828710861027)
-				//addOneReward(state, from, 53, height, 976169828710861027 + 2348) //last epoch, has some extra pi, but should be in [0,11]???
 			}
 
 			//DO EXTRA ADDRESSES' REWARDS RECOVERY, THESE ADDRESSES DID NOT EXTRACT REWARDS TILL THIS PATCH
@@ -786,43 +737,19 @@ func patchAllRewards(chainId string, height uint64, from common.Address, state *
 				addOneReward(state, addr, 20, height, 33850000000000000)
 				addOneReward(state, addr, 25, height, 33850000000000000)
 
-				//addSerialReward(state, addr, 42, 52, height, 196200587916666665)
-				//addOneReward(state, addr, 53, height, 196200587916666665 + 20) //last epoch, has some extra pi, but should be in [0,11]???
-
-
 				addr = common.HexToAddress("0x99c3dc791f29e98255c197e7fe96f0933723db3f")
 				addSerialReward(state, addr, 19, 29, height, 6365231762939546)
 				addOneReward(state, addr, 30, height, 6365231762939546 + 3) //last epoch, has some extra pi
-
-				//addSerialReward(state, addr, 42, 52, height, 23888379986989728)
-				//addOneReward(state, addr, 53, height, 23888379986989728 + 0) //last epoch, has some extra pi
 
 
 				addr = common.HexToAddress("0xd5b10f06cbc8306235539f404ff7ab7f594c7537")
 				addSerialReward(state, addr, 19, 29, height, 240157392112417)
 				addOneReward(state, addr, 30, height, 240157392112417 + 2) //last epoch, has some extra pi
 
-				//addSerialReward(state, addr, 42, 52, height, 901298060012272)
-				//addOneReward(state, addr, 53, height, 901298060012272 + 0) //last epoch, has some extra pi
-
 
 				addr = common.HexToAddress("0xf35d12756790c527f538e00de07c837a45e72732")
 				addOneReward(state, addr, 19, height, 12232271821444278)
 				addSerialReward(state, addr, 20, 29, height, 12232271821444274)
-
-				//addOneReward(state, addr, 42, height, 95987533901413456)
-				//addSerialReward(state, addr, 43, 52, height, 95987533901413376)
-				//addOneReward(state, addr, 53, height, 95987533901413584)
-
-
-				//addr = common.HexToAddress("0xa8be4f3ee1cd772d22927fba3b1fe16e9c5ac898")
-				//addSerialReward(state, addr, 42, 52, height, 941762821999999992)
-				//addOneReward(state, addr, 53, height, 941762821999999992 + 96) //last epoch, has some extra pi, but should be in [0,11]???
-
-
-				//addr = common.HexToAddress("0xea80fd3fcc41441075fad44302548cd484a6c7af")
-				//addSerialReward(state, addr, 42, 52, height, 745562234083333327)
-				//addOneReward(state, addr, 53, height, 745562234083333327 + 76) //last epoch, has some extra pi, but should be in [0,11]???
 			}
 		}
 	}

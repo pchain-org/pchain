@@ -100,16 +100,29 @@ func localSync(srcChain, dstChain *chain.Chain, wg *sync.WaitGroup) (err error) 
 	startWith++
 
 	for {
-		blocks := fetch(srcEthChain, startWith, 256)
+		blocks := fetch(srcEthChain, startWith, 500)
 		count := len(blocks)
 		if count == 0 {
 			return nil
 		}
 
 		err = importBlockResult(dstEthChain, blocks)
+		for err != nil && err == core.ErrKnownBlock {
+			curBlock := dstEthChain.CurrentBlock().NumberU64()
+			leftBocks := make(types.Blocks, 0)
+			for _, block := range blocks {
+				if block.NumberU64() > curBlock {
+					leftBocks = append(leftBocks, block)
+				}
+			}
+			blocks = leftBocks
+			err = importBlockResult(dstEthChain, blocks)
+		}
+
 		if err != nil {
 			return err
 		}
+
 		startWith += uint64(count)
 	}
 
@@ -143,7 +156,7 @@ func mustHaveDstEthChain(srcChain, dstChain *chain.Chain) *core.BlockChain {
 
 		dstEthChain = getEthBlockChain(childChain)
 		if dstEthChain != nil {
-			childChain.EthNode.Start1()
+			childChain.EthNode.StartIPC()
 		}
 	}
 
@@ -228,16 +241,11 @@ func loadBlockChain(ctx *cli.Context, chainId, datadir string, isLocal bool) (*c
 
 	defer func() {
 		if isLocal && mainChain != nil {
-			// Initial P2P Server
-			chainMgr.InitP2P()
-			chainMgr.StartP2PServer()
 
-			mainChain.EthNode.SetP2PServer(chainMgr.Server().Server())
-			mainChain.EthNode.Start1()
+			mainChain.EthNode.StartIPC()
 
 			if childChain != nil {
-				childChain.EthNode.SetP2PServer(chainMgr.Server().Server())
-				childChain.EthNode.Start1()
+				childChain.EthNode.StartIPC()
 			}
 		}
 	}()

@@ -96,7 +96,7 @@ func vne_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockC
 	return nil
 }
 
-func vne_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+func vne_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps) error {
 	// Validate first
 	from := derivedAddressFromTx(tx)
 	args, verror := voteNextEpochValidation(tx, bc)
@@ -126,7 +126,7 @@ func rev_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockC
 	return nil
 }
 
-func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, ops *types.PendingOps) error {
+func rev_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockChain, header *types.Header, ops *types.PendingOps) error {
 
 	// Validate first
 	from := derivedAddressFromTx(tx)

@@ -106,15 +106,14 @@ func (db *odrDatabase) TrieDB() *trie.Database {
 	return nil
 }
 
-
 func (db *odrDatabase) GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64) *big.Int {return nil}
 func (db *odrDatabase) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int{return nil}
-func (db *odrDatabase) UpdateOutsideRewardBalance(addr common.Address, reward trie.Reward) {}
+func (db *odrDatabase) UpdateOutsideRewardBalance(addr common.Address, reward state.Reward) {}
 func (db *odrDatabase) GetOOSLastBlock() (*big.Int, error) {return nil, nil}
 func (db *odrDatabase) UpdateOOSLastBlock(oosBlock *big.Int) {}
 func (db *odrDatabase) GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error) {return 0, nil}
 func (db *odrDatabase) UpdateEpochRewardExtracted(address common.Address, epoch uint64) {}
-func (db *odrDatabase) FlushCache(blockNr uint64) {}
+func (db *odrDatabase) FlushOOSCache(blockNr uint64, clearCache bool) {}
 
 type odrTrie struct {
 	db   *odrDatabase
@@ -192,15 +191,6 @@ func (t *odrTrie) do(key []byte, fn func() error) error {
 		}
 	}
 }
-
-func (t *odrTrie) GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64) *big.Int {return nil}
-func (t *odrTrie) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int{return nil}
-func (t *odrTrie) UpdateOutsideRewardBalance(addr common.Address, reward trie.Reward) {}
-func (t *odrTrie) GetOOSLastBlock() (*big.Int, error) {return nil, nil}
-func (t *odrTrie) UpdateOOSLastBlock(oosBlock *big.Int) {}
-func (t *odrTrie) GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error) {return 0, nil}
-func (t *odrTrie) UpdateEpochRewardExtracted(address common.Address, epoch uint64) {}
-func (t *odrTrie) FlushCache(blockNr uint64) {}
 
 type nodeIterator struct {
 	trie.NodeIterator

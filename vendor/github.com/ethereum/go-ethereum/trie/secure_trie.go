@@ -18,7 +18,6 @@ package trie
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -196,31 +195,3 @@ func (t *SecureTrie) getSecKeyCache() map[string][]byte {
 	}
 	return t.secKeyCache
 }
-
-// ----- Type
-type Reward map[uint64]*big.Int // key = Epoch Number, value = Reward Amount
-
-func (p Reward) String() (str string) {
-	for key, value := range p {
-		str += fmt.Sprintf("Epoch %v : %v\n", key, value)
-	}
-	return
-}
-
-func (p Reward) Copy() Reward {
-	cpy := make(Reward)
-	for key, value := range p {
-		cpy[key] = new(big.Int).Set(value)
-	}
-	return cpy
-}
-
-
-func (t *SecureTrie) GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64) *big.Int {return nil}
-func (t *SecureTrie) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int{return nil}
-func (t *SecureTrie) UpdateOutsideRewardBalance(addr common.Address, reward Reward) {}
-func (t *SecureTrie) GetOOSLastBlock() (*big.Int, error) {return nil, nil}
-func (t *SecureTrie) UpdateOOSLastBlock(oosBlock *big.Int) {}
-func (t *SecureTrie) GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error){return 0, nil}
-func (t *SecureTrie) UpdateEpochRewardExtracted(address common.Address, epoch uint64){}
-func (t *SecureTrie) FlushCache(blockNr uint64) {}

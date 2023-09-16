@@ -19,11 +19,9 @@ package core
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -81,9 +79,9 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 // transition, such as amount of used gas, the receipt roots and the state root
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
-func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64, newBlock *types.Block) error {
+func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
 
-	if v.config.RouchCheck && !common.NeedDebug(v.config.PChainId, block.NumberU64()) && block.NumberU64() % 5000 != 0 {
+	if v.config.Tendermint.RouchCheck && block.NumberU64() % 5000 != 0 {
 		return nil
 	}
 
@@ -104,15 +102,8 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
-	//TODO: remove this comment
-	root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number));
-	if header.Root != root {
-		if !common.SkipRootInconsistence {
-			return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
-		} else {
-			log.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
-			common.SetHashWithBlockNumber(header.Root, root)
-		}
+	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
+		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
 	}
 	return nil
 }

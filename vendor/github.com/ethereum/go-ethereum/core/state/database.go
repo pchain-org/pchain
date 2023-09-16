@@ -64,7 +64,7 @@ type Database interface {
 
 	GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64) *big.Int
 	GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int
-	UpdateOutsideRewardBalance(addr common.Address, reward trie.Reward)
+	UpdateOutsideRewardBalance(addr common.Address, reward Reward)
 
 	GetOOSLastBlock() (*big.Int, error)
 	UpdateOOSLastBlock(oosBlock *big.Int)
@@ -72,7 +72,7 @@ type Database interface {
 	GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error)
 	UpdateEpochRewardExtracted(address common.Address, epoch uint64)
 	
-	FlushCache(blockNr uint64)
+	FlushOOSCache(blockNr uint64, clearCache bool)
 }
 
 // Trie is a Ethereum Merkle Patricia trie.
@@ -118,18 +118,6 @@ type Trie interface {
 	// nodes of the longest existing prefix of the key (at least the root), ending
 	// with the node that proves the absence of the key.
 	Prove(key []byte, fromLevel uint, proofDb ethdb.Writer) error
-
-	GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64) *big.Int
-	GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int
-	UpdateOutsideRewardBalance(addr common.Address, reward trie.Reward)
-	
-	GetOOSLastBlock() (*big.Int, error)
-	UpdateOOSLastBlock(oosBlock *big.Int)
-	
-	GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error)
-	UpdateEpochRewardExtracted(address common.Address, epoch uint64)
-	
-	FlushCache(blockNr uint64)
 }
 
 // NewDatabase creates a backing store for state. The returned database is safe for
@@ -147,18 +135,26 @@ func NewDatabaseWithCache(db ethdb.Database, cache int) Database {
 	return &cachingDB{
 		db:                            trie.NewDatabaseWithCache(db, cache),
 		codeSizeCache:                 csc,
-		rewardOutsideSet:              make(map[common.Address]trie.Reward),
+		rewardOutsideSet:              make(map[common.Address]Reward),
+		rewardOutsideBytesSet:         make(map[common.Address]RewardBytes),
+		rewardOutsideSetDirty:         make(map[common.Address]struct{}),
 		extractRewardSet:              make(map[common.Address]uint64),
+		extractRewardBytesSet:         make(map[common.Address][]byte),
+		extractRewardSetDirty:         make(map[common.Address]struct{}),
 		oosLastBlock:                  nil,
 	}
 }
 
 type cachingDB struct {
-	db                 *trie.Database
-	codeSizeCache      *lru.Cache
-	rewardOutsideSet   map[common.Address]trie.Reward
-	extractRewardSet   map[common.Address]uint64
-	oosLastBlock       *big.Int
+	db                    *trie.Database
+	codeSizeCache         *lru.Cache
+	rewardOutsideSet      map[common.Address]Reward
+	rewardOutsideBytesSet map[common.Address]RewardBytes
+	rewardOutsideSetDirty map[common.Address]struct{}
+	extractRewardSet      map[common.Address]uint64
+	extractRewardBytesSet map[common.Address][]byte
+	extractRewardSetDirty map[common.Address]struct{}
+	oosLastBlock          *big.Int
 }
 
 // OpenTrie opens the main account trie.
@@ -235,46 +231,46 @@ func (db *cachingDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, e
 		}
 	}
 
-	rb := db.db.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height-1)
+	reward, rewardBytes := db.db.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height-1)
 	if rewardset, exist := db.rewardOutsideSet[addr]; exist {
-		rewardset[epochNo] = rb
+		rewardset[epochNo] = reward
+		db.rewardOutsideBytesSet[addr][epochNo] = rewardBytes
 	} else {
-		epochReward := trie.Reward{epochNo: rb}
+		epochReward := Reward{epochNo: reward}
+		epochRewardBytes := RewardBytes{epochNo: rewardBytes}
 		db.rewardOutsideSet[addr] = epochReward
+		db.rewardOutsideBytesSet[addr] = epochRewardBytes
 	}
 
-	return rb
+	return reward
 }
 
-func (db *cachingDB) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int {
+func (db *cachingDB) GetAllEpochReward(addr common.Address, height uint64) map[uint64]*big.Int {
 	
 	//read value from lastest block
-	rewardsFromDB := db.db.GetAllEpochReward(address, height-1)
-	
-	rewardsCache, exist := db.rewardOutsideSet[address]
+	rewardsFromDB, rewardBytesFromDB := db.db.GetAllEpochReward(addr, height-1)
+
+	rewardsCache, exist := db.rewardOutsideSet[addr]
+	rewardBytesCache, _ := db.rewardOutsideBytesSet[addr]
 	if !exist {
-		db.rewardOutsideSet[address] = rewardsFromDB
+		db.rewardOutsideSet[addr] = rewardsFromDB
+		db.rewardOutsideBytesSet[addr] = rewardBytesFromDB
 	} else {
 		//refresh result with lastest value
 		for epoch, reward := range rewardsFromDB {
 			if _, exist1 := rewardsCache[epoch]; !exist1 {
 				rewardsCache[epoch] = reward
+				rewardBytesCache[epoch] = rewardBytesFromDB[epoch]
 			}
 		}
 	}
 
-	return db.rewardOutsideSet[address]
+	return db.rewardOutsideSet[addr]
 }
 
-func (db *cachingDB) UpdateOutsideRewardBalance(addr common.Address, reward trie.Reward) {
-	_, exist := db.rewardOutsideSet[addr]; 
-	if !exist {
-		db.rewardOutsideSet[addr] = reward
-	} else {
-		for epoch, oneReward := range reward {
-			db.rewardOutsideSet[addr][epoch] = oneReward
-		}
-	}
+func (db *cachingDB) UpdateOutsideRewardBalance(addr common.Address, reward Reward) {
+	db.rewardOutsideSet[addr] = reward
+	db.rewardOutsideSetDirty[addr] = struct{}{}
 }
 
 func (db *cachingDB) GetOOSLastBlock() (*big.Int, error) {
@@ -298,28 +294,33 @@ func (db *cachingDB) UpdateOOSLastBlock(oosBlock *big.Int) {
 }
 
 //if there is a cache in memory, then return it; or return the lastest value from older block(height-1)
-func (db *cachingDB) GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error) {
-	if epoch, exist := db.extractRewardSet[address]; exist {
+func (db *cachingDB) GetEpochRewardExtracted(addr common.Address, height uint64) (uint64, error) {
+	if epoch, exist := db.extractRewardSet[addr]; exist {
 		return epoch, nil
 	}
 	
-	epoch, err := db.db.GetEpochRewardExtracted(address, height-1)
+	epoch, epochBytes, err := db.db.GetEpochRewardExtracted(addr, height-1)
 	if err != nil {
 		return epoch, err
 	}
-	
-	db.extractRewardSet[address] = epoch
+
+	db.extractRewardSet[addr] = epoch
+	db.extractRewardBytesSet[addr] = epochBytes
 	return epoch, nil
 }
 
-func (db *cachingDB) UpdateEpochRewardExtracted(address common.Address, epoch uint64) {
-	db.extractRewardSet[address] = epoch
+func (db *cachingDB) UpdateEpochRewardExtracted(addr common.Address, epoch uint64) {
+	db.extractRewardSet[addr] = epoch
+	db.extractRewardSetDirty[addr] = struct{}{}
 }
 
-func (db *cachingDB) FlushCache(blockNr uint64) {
-	for addr, reward := range db.rewardOutsideSet {
-		for epoch, rewardAmount := range reward {
-			db.db.WriteOutsideRewardBalanceByEpochNumber(addr, epoch, blockNr, rewardAmount)
+func (db *cachingDB) FlushOOSCache(blockNr uint64, clearCache bool) {
+	for addr, _ := range db.rewardOutsideSetDirty {
+		for epoch, reward := range db.rewardOutsideSet[addr] {
+			rewardBytes := db.rewardOutsideBytesSet[addr][epoch]
+			newRewardBytes := db.db.WriteOutsideRewardBalanceByEpochNumber(addr, epoch, blockNr, reward, rewardBytes)
+			db.rewardOutsideBytesSet[addr][epoch] = newRewardBytes
+			delete(db.rewardOutsideSetDirty, addr)
 		}
 	}
 	
@@ -327,7 +328,20 @@ func (db *cachingDB) FlushCache(blockNr uint64) {
 		db.db.WriteOOSLastBlock(db.oosLastBlock)
 	}
 
-	for addr, epoch := range db.extractRewardSet {
-		db.db.WriteEpochRewardExtracted(addr, epoch, blockNr)
+	for addr, _ := range db.extractRewardSetDirty {
+		epoch := db.extractRewardSet[addr]
+		epochBytes := db.extractRewardBytesSet[addr]
+		newEpochBytes, _ := db.db.WriteEpochRewardExtracted(addr, epoch, blockNr, epochBytes)
+		db.extractRewardBytesSet[addr] = newEpochBytes
+		delete(db.extractRewardSetDirty, addr)
+	}
+	
+	if clearCache {
+		db.rewardOutsideSet = make(map[common.Address]Reward)
+		db.rewardOutsideBytesSet = make(map[common.Address]RewardBytes)
+		db.rewardOutsideSetDirty = make(map[common.Address]struct{})
+		db.extractRewardSet = make(map[common.Address]uint64)
+		db.extractRewardBytesSet = make(map[common.Address][]byte)
+		db.extractRewardSetDirty = make(map[common.Address]struct{})
 	}
 }

@@ -252,7 +252,8 @@ func (sb *backend) verifyHeader(chain consensus.ChainReader, header *types.Heade
 				break
 			}
 
-			if tried == 10 {
+			//wait for 12 hours
+			if tried == 2 * 60 * 12 {
 				sb.logger.Warnf("Tendermint (backend) VerifyHeader, Main Chain Number mismatch, after retried %d times", tried)
 				return errMainChainNotCatchup
 			}
@@ -290,7 +291,7 @@ func (sb *backend) verifyCascadingFields(chain consensus.ChainReader, header *ty
 		return consensus.ErrUnknownAncestor
 	}
 
-	if !sb.chainConfig.RouchCheck {
+	if !sb.chainConfig.Tendermint.RouchCheck {
 		return sb.verifyCommittedSeals(chain, header, parents)
 	}
 	
@@ -466,7 +467,7 @@ func (sb *backend) Prepare(chain consensus.ChainReader, header *types.Header) er
 //
 // Note, the block header and state database might be updated to reflect any
 // consensus rules that happen at finalization (e.g. block rewards).
-func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
+func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, 
 	totalGasFee *big.Int, uncles []*types.Header, receipts []*types.Receipt, ops *types.PendingOps) (*types.Block, error) {
 
 	sb.logger.Debugf("Tendermint (backend) Finalize, receipts are: %v", receipts)
@@ -487,20 +488,8 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		}
 	}
 
-	chainId := sb.chainConfig.PChainId
 	height := header.Number.Uint64()
 	epoch := sb.GetEpoch().GetEpochByBlockNumber(height)
-
-	if chainId == "child_0" && epoch.Number == 19 {
-		for addr := range common.LogAddrs {
-			if common.NeedLogReward(chainId, addr, epoch.Number, height) {
-				common.LogAddrs[addr] = &common.BalanceReward{
-					BeforeBalance: state.GetBalance(addr),
-					BeforeReward:  state.GetRewardBalance(addr),
-				}
-			}
-		}
-	}
 
 	selfRetrieveReward := consensus.IsSelfRetrieveReward(sb.GetEpoch(), chain, header)
 
@@ -526,11 +515,23 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		patchCoinbase := common.HexToAddress("0xd6fb7034433e11663500038c124d7c3abdd9d63c") //old coinbase for 26536499 and 26536500 in "child_0"
 		sb.accumulateRewardsPatch2(state, header, epoch, patchCoinbase, coinbaseReward, totalGasFee, selfRetrieveReward, outsideReward, rollbackCatchup)
 	}
+	
+	if params.IsMainChain(sb.chainConfig.PChainId) {
+		ctss, err := sb.core.cch.FinalizeCCTTxStatus(header.Number)
+		if err == nil {
+			for _, cts := range ctss {
+				if ok := ops.Append(&types.SaveCCTTxStatusOp{
+					CCTTxStatus: *cts,
+				}); !ok {
+					sb.logger.Error("pending SaveCCTTxStatusOp error in backend.Finalize()")
+				}
+			}
+		}
+	}
 
 	// Check the Epoch switch and update their account balance accordingly (Refund the Locked Balance)
 	if ok, newValidators, _ := epoch.ShouldEnterNewEpoch(sb.chainConfig.PChainId, header.Number.Uint64(), state,
-		sb.chainConfig.IsOutOfStorage(header.Number, header.MainChainNumber), rollbackCatchup,
-		selfRetrieveReward, markProposedInEpoch); ok {
+		outsideReward, rollbackCatchup, selfRetrieveReward, markProposedInEpoch); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
 			NewValidators: newValidators,
@@ -543,35 +544,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		}
 	}
 
-	if chainId == "child_0" && epoch.Number == 19 {
-		logCoinbase := false
-		for addr, blnRwd := range common.LogAddrs {
-			if common.NeedLogReward(chainId, addr, epoch.Number, height) {
-				curBalance := state.GetBalance(addr)
-				curRewardBalance := state.GetRewardBalance(addr)
-
-				bncDiff := new(big.Int).Sub(curBalance, blnRwd.BeforeBalance)
-				rwdBncDiff := new(big.Int).Sub(curRewardBalance, blnRwd.BeforeReward)
-
-				if bncDiff.Sign() != 0 || rwdBncDiff.Sign() != 0 {
-					logCoinbase = true
-					break
-				//	sb.logger.Infof("in height %v, logAddr(%x) balance add %v to %v, rewardBalance added %v to %v",
-				//		height, addr, bncDiff, curBalance, rwdBncDiff, curRewardBalance)
-				}
-			}
-		}
-		if logCoinbase {
-			sb.logger.Infof("header.Coinbase is %x", header.Coinbase)
-			//if pas, exist := candidateAddrs[header.Coinbase]; exist {
-			//	for _, addr := range *pas {
-			//		sb.logger.Infof("proxied addr: %x", addr)
-			//	}
-			//}
-		}
-	}
-
-	if !sb.chainConfig.RouchCheck {
+	if !sb.chainConfig.Tendermint.RouchCheck {
 		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	}
 	header.UncleHash = types.TendermintNilUncleHash
@@ -749,12 +722,47 @@ func (sb *backend) SetEpoch(ep *epoch.Epoch) {
 	sb.core.consensusState.Epoch = ep
 }
 
-// Return the private validator address of consensus
-func (sb *backend) PrivateValidator() common.Address {
+func (sb *backend) PrivateValidator() *tdmTypes.PrivValidator {
+	return sb.core.consensusState.GetPrivValidator().(*tdmTypes.PrivValidator)
+}
+
+func (sb *backend) TokenAddress() common.Address {
 	if sb.core.privValidator != nil {
 		return sb.core.privValidator.Address
 	}
 	return common.Address{}
+}
+
+func (sb *backend) ConsensusAddressSignature() (common.Address, []byte) {
+	return sb.core.consensusState.ConsensusAddressSignature()
+}
+
+func (sb *backend) SignTx(tx *types.Transaction) (*types.Transaction, error) {
+	return sb.core.consensusState.SignTx(tx)
+}
+
+func (sb *backend) CurrentCCTBlock() *big.Int {
+	return sb.core.consensusState.CurrentCCTBlock()
+}
+
+func (sb *backend) WriteCurrentCCTBlock(blockNumber *big.Int) {
+	sb.core.consensusState.WriteCurrentCCTBlock(blockNumber)
+}
+
+func (sb *backend) GetLatestCCTExecStatus(hash common.Hash) *types.CCTTxExecStatus {
+	return sb.core.consensusState.GetLatestCCTExecStatus(hash)
+}
+
+func (sb *backend) GetCCTExecStatusByHash(hash common.Hash) []*types.CCTTxExecStatus {
+	return sb.core.consensusState.GetCCTExecStatusByHash(hash)
+}
+
+func (sb *backend) WriteCCTExecStatus(receipt *types.CCTTxExecStatus) {
+	sb.core.consensusState.WriteCCTExecStatus(receipt)
+}
+
+func (sb *backend) DeleteCCTExecStatus(hash common.Hash) {
+	sb.core.consensusState.DeleteCCTExecStatus(hash)
 }
 
 // update timestamp and signature of the block based on its number of transactions
@@ -808,10 +816,6 @@ func writeCommittedSeals(h *types.Header, tdmExtra *tdmTypes.TendermintExtra) er
 	return nil
 }
 
-var changed bool
-var candidateAddrs = make(map[common.Address]*[]common.Address, 0)
-var proxiedAddrs *[]common.Address
-
 // AccumulateRewards credits the coinbase of the given block with the mining reward.
 // Main Chain:
 // The total reward consists of the 80% of static block reward of the Epoch and total tx gas fee.
@@ -820,7 +824,7 @@ var proxiedAddrs *[]common.Address
 //
 // If the coinbase is Candidate, divide the rewards by weight
 func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header, ep *epoch.Epoch,
-					totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch, outsideReward, rollbackCatchup bool) {
+	totalGasFee *big.Int, selfRetrieveReward, markProposedInEpoch, outsideReward, rollbackCatchup bool) {
 	// Total Reward = Block Reward + Total Gas Fee
 	var coinbaseReward *big.Int
 	if sb.chainConfig.IsMainChain() {
@@ -894,71 +898,19 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 	// Move the self reward to Reward Trie
 	sb.divideRewardByEpoch(state, header.Coinbase, ep.Number, height, selfReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 
-	if sb.chainConfig.PChainId == "child_0" && ep.Number == 19 {
-		changed = false
-		_, exist := candidateAddrs[header.Coinbase]
-		if !exist {
-			tmpAddrs := make([]common.Address, 0)
-			candidateAddrs[header.Coinbase] = &tmpAddrs
-		}
-		proxiedAddrs = candidateAddrs[header.Coinbase]
-	}
-
 	// Calculate the Delegate Reward
 	if delegateReward != nil && delegateReward.Sign() > 0 {
 		totalIndividualReward := big.NewInt(0)
 		// Split the reward based on Weight stack
-
-		pas := make([]common.Address, 0)
 		state.ForEachProxied(header.Coinbase, func(key common.Address, proxiedBalance, depositProxiedBalance, pendingRefundBalance *big.Int) bool {
 			if depositProxiedBalance.Sign() == 1 {
 				// deposit * delegateReward / total deposit
 				individualReward := new(big.Int).Quo(new(big.Int).Mul(depositProxiedBalance, delegateReward), totalProxiedDeposit)
 				sb.divideRewardByEpoch(state, key, ep.Number, height, individualReward, outsideReward, selfRetrieveReward, rollbackCatchup)
 				totalIndividualReward.Add(totalIndividualReward, individualReward)
-				pas = append(pas, key)
 			}
 			return true
 		})
-
-		if sb.chainConfig.PChainId == "child_0" && ep.Number == 19 {
-			changed = false
-
-			for _, key := range pas {
-				found := false
-				for _, addr := range *proxiedAddrs {
-					if key == addr {
-						found = true
-						break
-					}
-				}
-				if !found {
-					changed = true
-					break
-				}
-			}
-
-			if !changed {
-				for _, key := range *proxiedAddrs {
-					found := false
-					for _, addr := range pas {
-						if key == addr {
-							found = true
-							break
-						}
-					}
-					if !found {
-						changed = true
-						break
-					}
-				}
-			}
-
-			if changed {
-				*proxiedAddrs = pas
-			}
-		}
-
 		// Recheck the Total Individual Reward, Float the difference
 		cmp := delegateReward.Cmp(totalIndividualReward)
 		if cmp == 1 {
@@ -988,15 +940,6 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 		}
 	}
 
-	if sb.chainConfig.PChainId == "child_0" && ep.Number == 19 {
-		if changed {
-			sb.logger.Infof("header.Coinbase is %x, proxied address changed", header.Coinbase)
-			for _, addr := range *proxiedAddrs {
-				sb.logger.Infof("proxied addr: %x", addr)
-			}
-		}
-	}
-
 	if markProposedInEpoch {
 
 		_, err := state.GetProposalStartInEpoch()
@@ -1006,7 +949,7 @@ func (sb *backend) accumulateRewards(state *state.StateDB, header *types.Header,
 
 		//if this chain rewinds or the self-proposed head block is overwritten by external block
 		//it needs clear the mark of self-address
-		selfAddress := sb.PrivateValidator()
+		selfAddress := sb.TokenAddress()
 		if sb.IsStarted() && (selfAddress != common.Address{}) && header.Coinbase != selfAddress {
 			firstProposedBlock, proposed := state.CheckProposedInEpoch(selfAddress, ep.Number)
 			if proposed && height <= firstProposedBlock {
@@ -1049,10 +992,5 @@ func (sb *backend) divideRewardByEpoch(state *state.StateDB, addr common.Address
 	}
 	if !selfRetrieveReward {
 		state.MarkAddressReward(addr)
-	}
-	
-	if common.NeedLogReward(sb.chainConfig.PChainId, addr, epochNumber, height) {
-		sb.logger.Infof("in height %v, addr(%x), epoch[%v-%v]'s reward is %v, epoch[%v]'s reward is %v",
-			height, addr, epochNumber, epochNumber+10, epochReward, epochNumber+11, lastEpochReward)
 	}
 }

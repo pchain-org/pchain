@@ -135,7 +135,7 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		return nil, genesisErr
 	}
 
-	chainConfig.RouchCheck = cliCtx.GlobalBool(pdbft.RoughCheckSyncFlag.Name)
+	chainConfig.Tendermint.RouchCheck = cliCtx.GlobalBool(pdbft.RoughCheckSyncFlag.Name)
 
 	// Update HTLC Hard Fork and Contract if any one blank
 	initBlocksInChainConfig(chainConfig, isTestnet, ctx.ChainId())
@@ -236,6 +236,9 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		if chainConfig.ExtractRewardMainBlock == nil {
 			chainConfig.ExtractRewardMainBlock = params.MainnetChainConfig.ExtractRewardMainBlock
 		}
+		if chainConfig.ExtractRewardPatchMainBlock == nil {
+			chainConfig.ExtractRewardPatchMainBlock = params.MainnetChainConfig.ExtractRewardPatchMainBlock
+		}
 		if chainConfig.Sd2mcV1Block == nil {
 			chainConfig.Sd2mcV1Block = params.MainnetChainConfig.Sd2mcV1Block
 		}
@@ -285,6 +288,9 @@ func initBlocksInChainConfig(chainConfig *params.ChainConfig, isTestnet bool, ch
 		}
 		if chainConfig.ExtractRewardMainBlock == nil {
 			chainConfig.ExtractRewardMainBlock = params.TestnetChainConfig.ExtractRewardMainBlock
+		}
+		if chainConfig.ExtractRewardPatchMainBlock == nil {
+			chainConfig.ExtractRewardPatchMainBlock = params.TestnetChainConfig.ExtractRewardPatchMainBlock
 		}
 		if chainConfig.Sd2mcV1Block == nil {
 			chainConfig.Sd2mcV1Block = params.TestnetChainConfig.Sd2mcV1Block
@@ -366,6 +372,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 			config.Tendermint.Epoch = chainConfig.Tendermint.Epoch
 		}
 		config.Tendermint.ProposerPolicy = pdbft.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
+		config.Tendermint.RoughCheck = chainConfig.Tendermint.RouchCheck
 		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), cch)
 	}
 
@@ -458,7 +465,7 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	if tdm, ok := s.engine.(consensus.Tendermint); ok {
-		eb = tdm.PrivateValidator()
+		eb = tdm.TokenAddress()
 		if eb != (common.Address{}) {
 			return eb, nil
 		} else {
@@ -509,7 +516,7 @@ func (self *Ethereum) SetEtherbase(etherbase common.Address) {
 func (s *Ethereum) StartMining(local bool) error {
 	var eb common.Address
 	if tdm, ok := s.engine.(consensus.Tendermint); ok {
-		eb = tdm.PrivateValidator()
+		eb = tdm.TokenAddress()
 		if (eb == common.Address{}) {
 			log.Error("Cannot start mining without private validator")
 			return errors.New("private validator missing")

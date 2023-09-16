@@ -24,7 +24,6 @@ import (
 	"io"
 	"math/big"
 	mrand "math/rand"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -235,11 +234,6 @@ func (bc *BlockChain) loadLastState() error {
 		bc.logger.Warn("Head block missing, resetting chain", "hash", head)
 		return bc.Reset()
 	}
-
-	//if bc.chainConfig.PChainId == "pchain" {
-	//	currentBlock = bc.GetBlockByNumber(55470000)
-	//}
-
 	// Make sure the state associated with the block is available
 	if _, err := state.New(currentBlock.Root(), bc.stateCache); err != nil {
 		// Dangling block without a state associated, init from scratch
@@ -579,14 +573,7 @@ func (bc *BlockChain) HasBlockAndState(hash common.Hash, number uint64) bool {
 	if block == nil {
 		return false
 	}
-	if !bc.HasState(block.Root()) {
-		if common.SkipRootInconsistence {
-			root := common.GetHashFromBlockNumber(block.Root())
-			return bc.HasState(root)
-		}
-		return false
-	}
-	return true
+	return bc.HasState(block.Root())
 }
 
 // GetBlock retrieves a block from the database by hash and number,
@@ -698,14 +685,14 @@ func (bc *BlockChain) ValidateBlock(block *types.Block) (*state.StateDB, types.R
 	}
 
 	// Process block using the parent state as reference point.
-	newBlock, receipts, _, usedGas, ops, err := bc.processor.Process(block, state, bc.vmConfig)
+	receipts, _, usedGas, ops, err := bc.processor.Process(block, state, bc.vmConfig)
 	if err != nil {
 		log.Debugf("ValidateBlock-Process return with error: %v", err)
 		return nil, nil, nil, err
 	}
 
 	// Validate the state using the default validator
-	err = bc.Validator().ValidateState(block, state, receipts, usedGas, newBlock)
+	err = bc.Validator().ValidateState(block, state, receipts, usedGas)
 	if err != nil {
 		log.Debugf("ValidateBlock-ValidateState return with error: %v", err)
 		return nil, nil, nil, err
@@ -733,6 +720,8 @@ func (bc *BlockChain) Stop() {
 
 	bc.wg.Wait()
 
+	bc.stateCache.FlushOOSCache(bc.CurrentBlock().NumberU64(), true)
+
 	// Ensure the state of a recent block is also stored to disk before exiting.
 	// We're writing three different states to catch different restart scenarios:
 	//  - HEAD:     So we don't need to reprocess any blocks in the general case
@@ -740,7 +729,6 @@ func (bc *BlockChain) Stop() {
 	//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
 	if !bc.cacheConfig.TrieDirtyDisabled {
 		triedb := bc.stateCache.TrieDB()
-
 		for _, offset := range []uint64{0, 1, triesInMemory - 1} {
 			if number := bc.CurrentBlock().NumberU64(); number > offset {
 				recent := bc.GetBlockByNumber(number - offset)
@@ -758,6 +746,7 @@ func (bc *BlockChain) Stop() {
 			bc.logger.Error("Dangling trie nodes after full cleanup")
 		}
 	}
+
 	bc.logger.Info("Blockchain manager stopped")
 }
 
@@ -1002,16 +991,16 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	rawdb.WriteBlock(bc.db, block)
 
+	curBlockNumber := block.NumberU64()
+
 	// reward outside
-	rewardOutside := bc.chainConfig.IsOutOfStorage(block.Number(), block.Header().MainChainNumber)
-	if rewardOutside {
-		state.CommitOOS(block.Number())
-	}
-	
-	tdm := bc.Engine().(consensus.Tendermint)
-	selfRetrieveReward := consensus.IsSelfRetrieveReward(tdm.GetEpoch(), bc, block.Header())
-	if selfRetrieveReward {
-		state.CommitSelfRetrieve()
+	state.CommitOOSCache(block.Number())
+	if !bc.chainConfig.Tendermint.RouchCheck {
+		state.FlushOOSCache(curBlockNumber, false)
+	} else {
+		if curBlockNumber % (common.OOS_CACHE_SIZE-1) == 0 {
+			state.FlushOOSCache(curBlockNumber, false)
+		}
 	}
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
@@ -1022,7 +1011,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	//we flush db within 5 blocks before/after epoch-switch to avoid rollback issues
 	FORCE_FULSH_WINDOW := uint64(5)
-	curBlockNumber := block.NumberU64()
+	tdm := bc.Engine().(consensus.Tendermint)
 	curEpoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
 	withinEpochSwitchWindow := (curBlockNumber < curEpoch.StartBlock + FORCE_FULSH_WINDOW || curBlockNumber > curEpoch.EndBlock - FORCE_FULSH_WINDOW)
 	FLUSH_BLOCKS_INTERVAL := uint64(5000) //flush per this count to reduce catch-up effort/blocks when rollback occurs
@@ -1030,11 +1019,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// If we're running an archive node, always flush
 	if withinEpochSwitchWindow || bc.cacheConfig.TrieDirtyDisabled || meetFlushBlockInterval{
-		if rewardOutside || selfRetrieveReward {
-			if err := state.FlushCache(block); err != nil {
-				return NonStatTy, err
-			}
-		}
+		state.FlushOOSCache(curBlockNumber, curBlockNumber == curEpoch.EndBlock)
 		if err := triedb.Commit(root, false); err != nil {
 			return NonStatTy, err
 		}
@@ -1068,12 +1053,8 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					if chosen < lastWrite+triesInMemory && bc.gcproc >= 2*bc.cacheConfig.TrieTimeLimit {
 						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
 					}
-					if rewardOutside || selfRetrieveReward {
-						if err := state.FlushCache(block); err != nil {
-							return NonStatTy, err
-						}
-					}
 					// Flush an entire trie and restart the counters
+					state.FlushOOSCache(curBlockNumber, false)
 					triedb.Commit(header.Root, true)
 					lastWrite = chosen
 					bc.gcproc = 0
@@ -1280,8 +1261,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	}
 
 	// No validation errors for the first block (or chain prefix skipped)
-	for ; block != nil && (err == nil || err == ErrKnownBlock); block, err = it.next() {
-
+	for ; block != nil && (err == nil && err != ErrKnownBlock); block, err = it.next() {
 		// If the chain is terminating, stop processing blocks
 		if atomic.LoadInt32(&bc.procInterrupt) == 1 {
 			bc.logger.Debug("Premature abort during blocks processing")
@@ -1305,14 +1285,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			return it.index, events, coalescedLogs, err
 		}
 		// Process block using the parent state as reference point.
-		newBlock, receipts, logs, usedGas, ops, err := bc.processor.Process(block, statedb, bc.vmConfig)
+		receipts, logs, usedGas, ops, err := bc.processor.Process(block, statedb, bc.vmConfig)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return it.index, events, coalescedLogs, err
 		}
 
 		// Validate the state using the default validator
-		err = bc.Validator().ValidateState(block, statedb, receipts, usedGas, newBlock)
+		err = bc.Validator().ValidateState(block, statedb, receipts, usedGas)
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
 			return it.index, events, coalescedLogs, err
@@ -1324,17 +1304,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			if err := ApplyOp(op, bc, bc.cch); err != nil {
 				bc.logger.Error("Failed executing op", op, "err", err)
 			}
-		}
-
-		if bc.chainConfig.PChainId == "child_0" && block.NumberU64() == 98991999 {
-			log.Infof("statedb dump at height 98991999, with remote root %x, local root %x", block.Root(), statedb.IntermediateRoot(bc.chainConfig.IsEIP158(block.Number())))
-			statedb.RawDumpToFile(block.NumberU64(), "/home/stevenlv/code/sync_from_ld_dump_98991999.txt")
-		}
-
-		if bc.chainConfig.PChainId == "child_0" && block.NumberU64() == 98995000 {
-			log.Infof("statedb dump at height 98995000, with remote root %x, local root %x", block.Root(), statedb.IntermediateRoot(bc.chainConfig.IsEIP158(block.Number())))
-			statedb.RawDumpToFile(block.NumberU64(), "/home/stevenlv/code/sync_from_ld_dump_98995000.txt")
-			os.Exit(0)
 		}
 
 		// Write the block to the chain and get the status.
@@ -1391,10 +1360,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 		events = append(events, ChainHeadEvent{lastCanon})
-	}
-
-	if err == ErrKnownBlock {
-		err = nil
 	}
 
 	return it.index, events, coalescedLogs, err

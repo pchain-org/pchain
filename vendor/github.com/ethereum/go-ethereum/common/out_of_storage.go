@@ -33,7 +33,7 @@ const INV_HEIGHT = 0xffffffffffffffff
 const INV_EPOCH  = 0xffffffffffffffff
 const NONE_REWARD = 0
 
-const OBR_SIZE = 5	//OneBlockReward size - the number of cached epoch reward
+const OOS_CACHE_SIZE = 5	//OneBlockReward size - the number of cached epoch reward
 const DFLT_START = 10
 type OneBlockReward struct {
 	Height uint64
@@ -41,7 +41,7 @@ type OneBlockReward struct {
 }
 
 type OBRArray struct {
-	ObrArray [OBR_SIZE]OneBlockReward
+	ObrArray [OOS_CACHE_SIZE]OneBlockReward
 }
 
 func OBRArray2Bytes(obrArray OBRArray) ([]byte, error) {
@@ -56,14 +56,13 @@ func Bytes2OBRArray(byteArray []byte) (OBRArray, error) {
 	return obrArray, nil
 }
 
-const XTR_SIZE = 5 //XTR_SIZE size - the number of cached extrRwd operations
 type OneExtracReward struct {
 	Height  uint64
 	Epoch   uint64
 }
 
 type XTRArray struct {
-	XtrArray [XTR_SIZE]OneExtracReward
+	XtrArray [OOS_CACHE_SIZE]OneExtracReward
 }
 
 func XTRArray2Bytes(xtrArray XTRArray) ([]byte, error) {

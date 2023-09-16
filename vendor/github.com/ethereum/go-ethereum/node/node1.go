@@ -11,7 +11,8 @@ func (n *Node) RpcAPIs() []rpc.API {
 	return n.rpcAPIs
 }
 
-func (n *Node) Start1() error {
+//start p2p, ipc service
+func (n *Node) StartEx() error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -45,7 +46,7 @@ func (n *Node) Start1() error {
 	}
 
 	// Lastly start the configured RPC interfaces
-	if err := n.startRPC1(services); err != nil {
+	if err := n.startRPCEx(services); err != nil {
 		for _, service := range services {
 			service.Stop()
 		}
@@ -55,6 +56,32 @@ func (n *Node) Start1() error {
 	// Finish initializing the startup
 	n.services = services
 	n.server = running
+	n.stop = make(chan struct{})
+
+	return nil
+}
+
+//start ipc service
+func (n *Node) StartIPC() error {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+
+	if err := n.openDataDir(); err != nil {
+		return err
+	}
+
+	//service should be gathered before
+	services := n.services
+
+	// Lastly start the configured RPC interfaces
+	if err := n.startRPCEx(services); err != nil {
+		for _, service := range services {
+			service.Stop()
+		}
+		return err
+	}
+	// Finish initializing the startup
+	n.services = services
 	n.stop = make(chan struct{})
 
 	return nil
@@ -154,7 +181,7 @@ func (n *Node) GetWSHandler() (*rpc.Server, error) {
 	return handler, nil
 }
 
-func (n *Node) startRPC1(services map[reflect.Type]Service) error {
+func (n *Node) startRPCEx(services map[reflect.Type]Service) error {
 	// Gather all the possible APIs to surface
 	apis := n.apis()
 	for _, service := range services {

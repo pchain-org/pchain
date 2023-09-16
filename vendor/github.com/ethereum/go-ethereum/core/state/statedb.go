@@ -68,7 +68,7 @@ type StateDB struct {
 	childChainRewardPerBlock      *big.Int
 	childChainRewardPerBlockDirty bool
 
-	rewardOutsideSet map[common.Address]trie.Reward //cache rewards of candidate&delegators for recording in diskdb
+	rewardOutsideSet map[common.Address]Reward //cache rewards of candidate&delegators for recording in diskdb
 	rewardOutsideSetDirty map[common.Address]struct{}
 	extractRewardSet map[common.Address]uint64 //cache rewards of different epochs when delegator does extract
 	extractRewardSetDirty map[common.Address]struct{}
@@ -108,13 +108,7 @@ type StateDB struct {
 func New(root common.Hash, db Database) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
-		if common.SkipRootInconsistence {
-			newRoot := common.GetHashFromBlockNumber(root)
-			tr, err = db.OpenTrie(newRoot)
-		}
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	return &StateDB{
@@ -128,7 +122,7 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 		rewardSetDirty:                false,
 		childChainRewardPerBlock:      nil,
 		childChainRewardPerBlockDirty: false,
-		rewardOutsideSet:              make(map[common.Address]trie.Reward),
+		rewardOutsideSet:              make(map[common.Address]Reward),
 		rewardOutsideSetDirty:         make(map[common.Address]struct{}),
 		extractRewardSet:              make(map[common.Address]uint64),
 		extractRewardSetDirty:         make(map[common.Address]struct{}),
@@ -163,7 +157,7 @@ func (self *StateDB) Reset(root common.Hash) error {
 	self.delegateRefundSet = make(DelegateRefundSet)
 	self.rewardSet = make(RewardSet)
 	self.childChainRewardPerBlock = nil
-	self.rewardOutsideSet = make(map[common.Address]trie.Reward)
+	self.rewardOutsideSet = make(map[common.Address]Reward)
 	self.rewardOutsideSetDirty = make(map[common.Address]struct{})
 	self.extractRewardSet = make(map[common.Address]uint64)
 	self.extractRewardSetDirty = make(map[common.Address]struct{})
@@ -255,7 +249,8 @@ func (self *StateDB) GetBalance(addr common.Address) *big.Int {
 	return common.Big0
 }
 
-// Retrieve the ward balance from the given address or 0 if object not found
+
+// Retrieve the reward balance from the given address or 0 if object not found
 func (self *StateDB) GetRewardBalance(addr common.Address) *big.Int {
 	stateObject := self.getStateObject(addr)
 	if stateObject != nil {
@@ -671,7 +666,7 @@ func (self *StateDB) Copy() *StateDB {
 		rewardSet:                     make(RewardSet, len(self.rewardSet)),
 		rewardSetDirty:                self.rewardSetDirty,
 		childChainRewardPerBlockDirty: self.childChainRewardPerBlockDirty,
-		rewardOutsideSet:              make(map[common.Address]trie.Reward, len(self.rewardOutsideSet)),
+		rewardOutsideSet:              make(map[common.Address]Reward, len(self.rewardOutsideSet)),
 		rewardOutsideSetDirty:         make(map[common.Address]struct{}, len(self.rewardOutsideSetDirty)),
 		extractRewardSet:              make(map[common.Address]uint64, len(self.extractRewardSet)),
 		extractRewardSetDirty:         make(map[common.Address]struct{}, len(self.extractRewardSetDirty)),
@@ -927,12 +922,11 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) 
 		}
 		return nil
 	})
-
 	return root, err
 }
 
-func (s *StateDB) CommitOOS(blockNr *big.Int) error {
-	
+func (s *StateDB) CommitOOSCache(blockNr *big.Int) {
+
 	for addr, _ := range s.rewardOutsideSetDirty {
 		s.db.UpdateOutsideRewardBalance(addr, s.rewardOutsideSet[addr])
 		delete(s.rewardOutsideSetDirty, addr)
@@ -942,19 +936,15 @@ func (s *StateDB) CommitOOS(blockNr *big.Int) error {
 	s.SetOOSLastBlock(blockNr)	
 	s.db.UpdateOOSLastBlock(blockNr)
 
-	return nil
-}
-
-func (s *StateDB) CommitSelfRetrieve() {
 	for addr, _ := range s.extractRewardSetDirty {
 		s.db.UpdateEpochRewardExtracted(addr, s.extractRewardSet[addr])
 		delete(s.extractRewardSetDirty, addr)
 	}
 }
 
-func (s *StateDB) FlushCache(block *types.Block) error {
+func (s *StateDB) FlushOOSCache(blockNr uint64, clearCache bool) error {
 
-	s.db.FlushCache(block.NumberU64())
+	s.db.FlushOOSCache(blockNr, clearCache)
 
 	return nil
 }

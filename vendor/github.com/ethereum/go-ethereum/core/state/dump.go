@@ -41,7 +41,7 @@ type DumpAccount struct {
 	Reward       string            `json:"reward_balance"`
 	RewardRoot   string            `json:"reward_root"`
 	RewardDetail map[string]string `json:"reward_detail"`
-
+	
 	EpochReward  map[uint64]*big.Int `json:"epoch_reward"`
 	ExtractNumber  uint64                  `json:"extract_number"`
 
@@ -73,17 +73,6 @@ type Dump struct {
 	RefundAccounts []string               `json:"refund_accounts"`
 }
 
-var watchAddrs = map[common.Address]*big.Int {
-	common.HexToAddress("0000000000000000000000000000000000000004"): nil,
-	common.HexToAddress("0000000000000000000000000000000000000064"): nil,
-	common.HexToAddress("e23dc8c60b6b0811781b93f185e1c8bbbc503ee7"): nil,
-	common.HexToAddress("3f04251dee44077a300aebd45e7ae3a3fb1c08aa"): nil,
-	common.HexToAddress("0c63fba395071e79a11406b54f0f8ed4852eda8a"): nil,
-	common.HexToAddress("9a4eb75fc8db5680497ac33fd689b536334292b0"): nil,
-	common.HexToAddress("28ad808ac87a979611e66019e4d28145724b3510"): nil,
-	common.HexToAddress("1fc20597e28fd46d045548beafa5cce7cf97e296"): nil,
-}
-
 func (self *StateDB) RawDump() Dump {
 	dump := Dump{
 		Root:     fmt.Sprintf("%x", self.trie.Hash()),
@@ -100,11 +89,6 @@ func (self *StateDB) RawDump() Dump {
 			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 				panic(err)
 			}
-			
-			commonAddr := common.BytesToAddress(addr)
-			if _, exist := watchAddrs[commonAddr]; !exist {
-				continue
-			}
 
 			obj := newObject(nil, common.BytesToAddress(addr), data, nil)
 			account := DumpAccount{
@@ -119,6 +103,7 @@ func (self *StateDB) RawDump() Dump {
 				Reward:         data.RewardBalance.String(),
 				RewardRoot:     data.RewardRoot.String(),
 				RewardDetail:   make(map[string]string),
+				EpochReward:    make(map[uint64]*big.Int),
 
 				Tx1Root: data.TX1Root.String(),
 				Tx3Root: data.TX3Root.String(),
@@ -225,18 +210,8 @@ func (self *StateDB) RawDumpToFile(height uint64, filename string) Dump {
 			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 				panic(err)
 			}
-
-			//icount ++
-			//if icount > 20 {
-			//	return dump
-			//}
-
+			
 			commonAddr := common.BytesToAddress(addr)
-			/*if _, exist := watchAddrs[commonAddr]; !exist {
-				continue
-			}
-			*/
-
 			obj := newObject(nil, commonAddr, data, nil)
 			account := DumpAccount{
 				Balance:        data.Balance.String(),
