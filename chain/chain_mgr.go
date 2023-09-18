@@ -5,6 +5,7 @@ import (
 	"net"
 	"path"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -58,6 +59,17 @@ func GetCMInstance(ctx *cli.Context) *ChainManager {
 	return chainMgr
 }
 
+func NewCMInstance(ctx *cli.Context) *ChainManager {
+
+	chainMgr = &ChainManager{ctx: ctx}
+	chainMgr.stop = make(chan struct{})
+	chainMgr.childChains = make(map[string]*Chain)
+	chainMgr.childQuits = make(map[string]<-chan struct{})
+	chainMgr.cch = &CrossChainHelper{}
+
+	return chainMgr
+}
+
 func (cm *ChainManager) GetNodeID() string {
 	return cm.server.Server().NodeInfo().ID
 }
@@ -66,12 +78,28 @@ func (cm *ChainManager) InitP2P() {
 	cm.server = p2p.NewP2PServer(cm.ctx)
 }
 
+func (cm *ChainManager) Server() *p2p.PChainP2PServer {
+	return cm.server
+}
+
+func (cm *ChainManager) GetMainChain() *Chain {
+	return cm.mainChain
+}
+
+func (cm *ChainManager) GetChildChain(chainId string) *Chain {
+	if chain, exist := cm.childChains[chainId]; exist {
+		return chain
+	}
+	return nil
+}
+
 func (cm *ChainManager) LoadMainChain(ctx *cli.Context) error {
 	// Load Main Chain
 	chainId := MainChain
 	if ctx.GlobalBool(utils.TestnetFlag.Name) {
 		chainId = TestnetChain
 	}
+
 	cm.mainChain = LoadMainChain(cm.ctx, chainId)
 	if cm.mainChain == nil {
 		return errors.New("Load main chain failed")
@@ -120,8 +148,13 @@ func (cm *ChainManager) LoadChains(childIds []string) error {
 	for chainId := range readyToLoadChains {
 		chain := LoadChildChain(cm.ctx, chainId)
 		if chain == nil {
-			log.Errorf("Load Child Chain - %s Failed.", chainId)
-			continue
+			log.Errorf("Load Child Chain from filesystem - %s Failed.", chainId)
+			log.Infof("Try load Child Chain %s from database.", chainId)
+			chain = cm.LoadChildChainFromDB(cm.ctx, chainId)
+			if chain == nil {
+				log.Errorf("Load Child Chain from database - %s Failed.", chainId)
+				continue
+			}
 		}
 
 		cm.childChains[chainId] = chain
@@ -291,7 +324,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	validator := false
 
 	var ethereum *eth.Ethereum
-	cm.mainChain.EthNode.Service(&ethereum)
+	cm.mainChain.EthNode.ServiceNoRunning(&ethereum)
 
 	var localEtherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
@@ -319,7 +352,16 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 	// Write down the genesis into chain info db when exit the routine
 	defer writeGenesisIntoChainInfoDB(cm.cch.chainInfoDB, chainId, validators)
 
-	if !validator {
+	requestChildChain := strings.Split(cm.ctx.GlobalString(utils.ChildChainFlag.Name), ",")
+	synchronize := false
+	for _, requestChildId := range requestChildChain {
+		if requestChildId == chainId {
+			synchronize = true
+			break
+		}
+	}
+
+	if !validator && !synchronize {
 		log.Warnf("You are not in the validators of child chain %v, no need to start the child chain", chainId)
 		// Update Child Chain to formal
 		cm.formalizeChildChain(chainId, *cci, nil)
@@ -332,25 +374,33 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 		return
 	}
 
-	// Load the KeyStore file from MainChain (Optional)
-	var keyJson []byte
-	wallet, walletErr := cm.mainChain.EthNode.AccountManager().Find(accounts.Account{Address: localEtherbase})
-	if walletErr == nil {
-		var readKeyErr error
-		keyJson, readKeyErr = ioutil.ReadFile(wallet.URL().Path)
-		if readKeyErr != nil {
-			log.Errorf("Failed to Read the KeyStore %v, Error: %v", localEtherbase, readKeyErr)
+	if validator {
+		// Load the KeyStore file from MainChain (Optional)
+		var keyJson []byte
+		wallet, walletErr := cm.mainChain.EthNode.AccountManager().Find(accounts.Account{Address: localEtherbase})
+		if walletErr == nil {
+			var readKeyErr error
+			keyJson, readKeyErr = ioutil.ReadFile(wallet.URL().Path)
+			if readKeyErr != nil {
+				log.Errorf("Failed to Read the KeyStore %v, Error: %v", localEtherbase, readKeyErr)
+			}
 		}
-	}
 
-	// child chain uses the same validator with the main chain.
-	privValidatorFile := cm.mainChain.Config.GetString("priv_validator_file")
-	self := types.LoadPrivValidator(privValidatorFile)
+		// child chain uses the same validator with the main chain.
+		privValidatorFile := cm.mainChain.Config.GetString("priv_validator_file")
+		self := types.LoadPrivValidator(privValidatorFile)
 
-	err := CreateChildChain(cm.ctx, chainId, *self, keyJson, validators)
-	if err != nil {
-		log.Errorf("Create Child Chain %v failed! %v", chainId, err)
-		return
+		err := CreateChildChain(cm.ctx, chainId, *self, keyJson, validators)
+		if err != nil {
+			log.Errorf("Create Child Chain %v failed! %v", chainId, err)
+			return
+		}
+	} else if synchronize {
+		err := CreateChildChainForSynch(cm.ctx, chainId, validators)
+		if err != nil {
+			log.Errorf("Create Child Chain %v failed! %v", chainId, err)
+			return
+		}
 	}
 
 	chain := LoadChildChain(cm.ctx, chainId)
@@ -376,7 +426,7 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 	// Start the new Child Chain, and it will start child chain reactors as well
 	startDone := make(chan struct{})
-	err = StartChain(cm.ctx, chain, startDone)
+	err := StartChain(cm.ctx, chain, startDone)
 	<-startDone
 	if err != nil {
 		return
@@ -414,6 +464,119 @@ func (cm *ChainManager) LoadChildChainInRT(chainId string) {
 
 }
 
+func (cm *ChainManager) LoadChildChainFromDB(ctx *cli.Context, chainId string) *Chain {
+
+	if ChainDirExist(ctx, chainId) {
+		log.Errorf("chain directory for %s exists, will not load chain from db")
+		return nil
+	}
+
+	// Load Child Chain data from pending data
+	cci := core.GetChainInfo(cm.cch.chainInfoDB, chainId)
+	if cci == nil {
+		log.Errorf("child chain: %s does not exist, can't load", chainId)
+		return nil
+	}
+
+	cci.Epoch = core.LoadEpoch(cm.cch.chainInfoDB, chainId, uint64(0))
+
+	validators := make([]types.GenesisValidator, 0, len(cci.Epoch.Validators.Validators))
+
+	validator := false
+
+	var ethereum *eth.Ethereum
+	cm.mainChain.EthNode.ServiceNoRunning(&ethereum)
+
+	var localEtherbase common.Address
+	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
+		localEtherbase = tdm.TokenAddress()
+	}
+
+	for _, v := range cci.Epoch.Validators.Validators {
+		addr := common.BytesToAddress(v.Address)
+		if addr == localEtherbase {
+			validator = true
+		}
+
+		// dereference the PubKey
+		if pubkey, ok := v.PubKey.(*crypto.BLSPubKey); ok {
+			v.PubKey = *pubkey
+		}
+
+		// append the Validator
+		validators = append(validators, types.GenesisValidator{
+			EthAccount: addr,
+			PubKey:     v.PubKey,
+			Amount:     v.VotingPower,
+		})
+	}
+
+	// Write down the genesis into chain info db when exit the routine
+	defer writeGenesisIntoChainInfoDB(cm.cch.chainInfoDB, chainId, validators)
+
+	synchronize := false
+	requestChildChain := strings.Split(cm.ctx.GlobalString(utils.ChildChainFlag.Name), ",")
+	for _, requestChildId := range requestChildChain {
+		if requestChildId == chainId {
+			synchronize = true
+			break
+		}
+	}
+
+	if !synchronize {
+		requestChildChain = strings.Split(cm.ctx.GlobalString(utils.ChainIdFlag.Name), ",")
+		for _, requestChildId := range requestChildChain {
+			if requestChildId == chainId {
+				synchronize = true
+				break
+			}
+		}
+	}
+
+	// if child chain already loaded, just return (For catch-up case)
+	if _, ok := cm.childChains[chainId]; ok {
+		log.Infof("Child Chain [%v] has been already loaded.", chainId)
+		return nil
+	}
+
+	if validator {
+		// Load the KeyStore file from MainChain (Optional)
+		var keyJson []byte
+		wallet, walletErr := cm.mainChain.EthNode.AccountManager().Find(accounts.Account{Address: localEtherbase})
+		if walletErr == nil {
+			var readKeyErr error
+			keyJson, readKeyErr = ioutil.ReadFile(wallet.URL().Path)
+			if readKeyErr != nil {
+				log.Errorf("Failed to Read the KeyStore %v, Error: %v", localEtherbase, readKeyErr)
+			}
+		}
+
+		// child chain uses the same validator with the main chain.
+		privValidatorFile := cm.mainChain.Config.GetString("priv_validator_file")
+		self := types.LoadPrivValidator(privValidatorFile)
+
+		err := CreateChildChain(cm.ctx, chainId, *self, keyJson, validators)
+		if err != nil {
+			log.Errorf("Create Child Chain %v failed! %v", chainId, err)
+			return nil
+		}
+	} else if synchronize {
+		err := CreateChildChainForSynch(cm.ctx, chainId, validators)
+		if err != nil {
+			log.Errorf("Create Child Chain %v failed! %v", chainId, err)
+			return nil
+		}
+	}
+
+	chain := LoadChildChain(cm.ctx, chainId)
+	if chain == nil {
+		log.Errorf("Child Chain %v load failed!", chainId)
+		return nil
+	}
+
+	return chain
+}
+
 func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainInfo, ep *epoch.Epoch) {
 	// Child Chain start success, then delete the pending data in chain info db
 	core.DeletePendingChildChainData(cm.cch.chainInfoDB, chainId)
@@ -423,7 +586,7 @@ func (cm *ChainManager) formalizeChildChain(chainId string, cci core.CoreChainIn
 
 func (cm *ChainManager) checkCoinbaseInChildChain(childEpoch *epoch.Epoch) bool {
 	var ethereum *eth.Ethereum
-	cm.mainChain.EthNode.Service(&ethereum)
+	cm.mainChain.EthNode.ServiceNoRunning(&ethereum)
 
 	var localEtherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {
@@ -477,7 +640,7 @@ func (cm *ChainManager) getNodeValidator(ethNode *node.Node) (common.Address, bo
 
 	log.Debug("getNodeValidator")
 	var ethereum *eth.Ethereum
-	ethNode.Service(&ethereum)
+	ethNode.ServiceNoRunning(&ethereum)
 
 	var etherbase common.Address
 	if tdm, ok := ethereum.Engine().(consensus.Tendermint); ok {

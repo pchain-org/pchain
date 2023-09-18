@@ -802,6 +802,11 @@ web3._extend({
 			params: 4
 		}),
 		new web3._extend.Method({
+			name: 'crossChainTransferRequest',
+			call: 'chain_crossChainTransferRequest',
+			params: 4
+		}),
+		new web3._extend.Method({
 			name: 'getAllChains',
 			call: 'chain_getAllChains'
 		}),

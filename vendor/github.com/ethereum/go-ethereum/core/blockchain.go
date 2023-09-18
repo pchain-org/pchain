@@ -720,6 +720,8 @@ func (bc *BlockChain) Stop() {
 
 	bc.wg.Wait()
 
+	bc.stateCache.FlushOOSCache(bc.CurrentBlock().NumberU64(), true)
+
 	// Ensure the state of a recent block is also stored to disk before exiting.
 	// We're writing three different states to catch different restart scenarios:
 	//  - HEAD:     So we don't need to reprocess any blocks in the general case
@@ -727,7 +729,6 @@ func (bc *BlockChain) Stop() {
 	//  - HEAD-127: So we have a hard limit on the number of blocks reexecuted
 	if !bc.cacheConfig.TrieDirtyDisabled {
 		triedb := bc.stateCache.TrieDB()
-
 		for _, offset := range []uint64{0, 1, triesInMemory - 1} {
 			if number := bc.CurrentBlock().NumberU64(); number > offset {
 				recent := bc.GetBlockByNumber(number - offset)
@@ -745,6 +746,7 @@ func (bc *BlockChain) Stop() {
 			bc.logger.Error("Dangling trie nodes after full cleanup")
 		}
 	}
+
 	bc.logger.Info("Blockchain manager stopped")
 }
 
@@ -989,36 +991,16 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 	}
 	rawdb.WriteBlock(bc.db, block)
 
+	curBlockNumber := block.NumberU64()
+
 	// reward outside
-	rewardOutside := bc.chainConfig.IsOutOfStorage(block.Number(), block.Header().MainChainNumber)
-	if rewardOutside {
-		outsideReward := state.GetOutsideReward()
-		for addr, reward := range outsideReward {
-			for epoch, rewardAmount := range reward {
-				if rewardAmount.Sign() < 0 && ((bc.chainConfig.PChainId== "pchain" && block.NumberU64() == 13311677) || (bc.chainConfig.PChainId=="child_0" && block.NumberU64()==22094435))  {
-					log.Errorf("!!!should dig it, rewardAmount for %x is %v", addr, rewardAmount)
-					rewardAmount = rewardAmount.Abs(rewardAmount)
-				}
-				rawdb.WriteReward(bc.db, addr, epoch, block.NumberU64(), rewardAmount)
-			}
+	state.CommitOOSCache(block.Number())
+	if !bc.chainConfig.Tendermint.RouchCheck {
+		state.FlushOOSCache(curBlockNumber, false)
+	} else {
+		if curBlockNumber % (common.OOS_CACHE_SIZE-1) == 0 {
+			state.FlushOOSCache(curBlockNumber, false)
 		}
-		state.ClearOutsideReward()
-
-		prevLastBlock, err := state.ReadOOSLastBlock()
-		if err != nil || prevLastBlock.Cmp(block.Number()) < 0 {
-			state.WriteOOSLastBlock(block.Number())
-		}
-	}
-
-	tdm := bc.Engine().(consensus.Tendermint)
-	selfRetrieveReward := consensus.IsSelfRetrieveReward(tdm.GetEpoch(), bc, block.Header())
-	if selfRetrieveReward {
-		extractRewardSet := state.GetExtractRewardSet()
-		for addr, epoch := range extractRewardSet {
-			state.WriteEpochRewardExtracted(addr, epoch, block.NumberU64())
-
-		}
-		state.ClearExtractRewardSet()
 	}
 
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
@@ -1029,7 +1011,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	//we flush db within 5 blocks before/after epoch-switch to avoid rollback issues
 	FORCE_FULSH_WINDOW := uint64(5)
-	curBlockNumber := block.NumberU64()
+	tdm := bc.Engine().(consensus.Tendermint)
 	curEpoch := tdm.GetEpoch().GetEpochByBlockNumber(curBlockNumber)
 	withinEpochSwitchWindow := (curBlockNumber < curEpoch.StartBlock + FORCE_FULSH_WINDOW || curBlockNumber > curEpoch.EndBlock - FORCE_FULSH_WINDOW)
 	FLUSH_BLOCKS_INTERVAL := uint64(5000) //flush per this count to reduce catch-up effort/blocks when rollback occurs
@@ -1037,6 +1019,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// If we're running an archive node, always flush
 	if withinEpochSwitchWindow || bc.cacheConfig.TrieDirtyDisabled || meetFlushBlockInterval{
+		state.FlushOOSCache(curBlockNumber, curBlockNumber == curEpoch.EndBlock)
 		if err := triedb.Commit(root, false); err != nil {
 			return NonStatTy, err
 		}
@@ -1071,6 +1054,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 						log.Info("State in memory for too long, committing", "time", bc.gcproc, "allowance", bc.cacheConfig.TrieTimeLimit, "optimum", float64(chosen-lastWrite)/triesInMemory)
 					}
 					// Flush an entire trie and restart the counters
+					state.FlushOOSCache(curBlockNumber, false)
 					triedb.Commit(header.Root, true)
 					lastWrite = chosen
 					bc.gcproc = 0

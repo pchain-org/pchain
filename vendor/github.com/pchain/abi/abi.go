@@ -1,10 +1,11 @@
 package abi
 
 import (
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
 	"math/big"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type FunctionType struct {
@@ -16,24 +17,24 @@ type FunctionType struct {
 
 var (
 	// Cross Chain Function
-	CreateChildChain             = FunctionType{0, true, true, false}
-	JoinChildChain               = FunctionType{1, true, true, false}
-	DepositInMainChain           = FunctionType{2, true, true, false}
-	DepositInChildChain          = FunctionType{3, true, false, true}
-	WithdrawFromChildChain       = FunctionType{4, true, false, true}
-	WithdrawFromMainChain        = FunctionType{5, true, true, false}
-	SaveDataToMainChain          = FunctionType{6, true, true, false}
-	SetBlockReward               = FunctionType{7, true, false, true}
-	CrossChainTransferRequest    = FunctionType{8, true, true, true}
-	CrossChainTransferExec       = FunctionType{9, true, true, true}
+	CreateChildChain          = FunctionType{0, true, true, false}
+	JoinChildChain            = FunctionType{1, true, true, false}
+	DepositInMainChain        = FunctionType{2, true, true, false}
+	DepositInChildChain       = FunctionType{3, true, false, true}
+	WithdrawFromChildChain    = FunctionType{4, true, false, true}
+	WithdrawFromMainChain     = FunctionType{5, true, true, false}
+	SaveDataToMainChain       = FunctionType{6, true, true, false}
+	SetBlockReward            = FunctionType{7, true, false, true}
+	CrossChainTransferRequest = FunctionType{8, true, true, true}
+	CrossChainTransferExec    = FunctionType{9, true, true, true}
 	// Non-Cross Chain Function
-	VoteNextEpoch                = FunctionType{10, false, true, true}
-	RevealVote                   = FunctionType{11, false, true, true}
-	Delegate                     = FunctionType{12, false, true, true}
-	CancelDelegate               = FunctionType{13, false, true, true}
-	Candidate                    = FunctionType{14, false, true, true}
-	CancelCandidate              = FunctionType{15, false, true, true}
-	ExtractReward                = FunctionType{16, false, true, true}
+	VoteNextEpoch   = FunctionType{10, false, true, true}
+	RevealVote      = FunctionType{11, false, true, true}
+	Delegate        = FunctionType{12, false, true, true}
+	CancelDelegate  = FunctionType{13, false, true, true}
+	Candidate       = FunctionType{14, false, true, true}
+	CancelCandidate = FunctionType{15, false, true, true}
+	ExtractReward   = FunctionType{16, false, true, true}
 	// Unknown
 	Unknown = FunctionType{-1, false, false, false}
 )
@@ -203,19 +204,19 @@ type WithdrawFromMainChainArgs struct {
 type CrossChainTransferRequestArgs struct {
 	FromChainId string
 	ToChainId   string
-	Amount  *big.Int
+	Amount      *big.Int
 }
 
 type CrossChainTransferExecArgs struct {
 	MainBlockNumber *big.Int
-	TxHash      common.Hash
-	Owner       common.Address
-	FromChainId string
-	ToChainId   string
-	Amount      *big.Int
-	Status      uint64
-	LocalStatus uint64
-	AddrSig      []byte
+	TxHash          common.Hash
+	Owner           common.Address
+	FromChainId     string
+	ToChainId       string
+	Amount          *big.Int
+	Status          uint64
+	LocalStatus     uint64
+	AddrSig         []byte
 }
 
 type VoteNextEpochArgs struct {

@@ -354,7 +354,7 @@ func (epoch *Epoch) GetPreviousEpoch() *Epoch {
 }
 
 func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *state.StateDB,
-			outsideReward, selfRetrieveReward, markProposedInEpoch bool) (bool, *tmTypes.ValidatorSet, error) {
+			outsideReward, rollbackCatchup, selfRetrieveReward, markProposedInEpoch bool) (bool, *tmTypes.ValidatorSet, error) {
 
 	if height == epoch.EndBlock {
 		log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
@@ -369,7 +369,11 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 					if outsideReward {
 						currentEpochReward := state.GetOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber,height)
 						if currentEpochReward.Sign() == 1 {
-							state.SubOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, height,currentEpochReward)
+							if !rollbackCatchup {
+								state.SubOutsideRewardBalanceByEpochNumber(rewardAddress, currentEpochNumber, height, currentEpochReward)
+							} else {
+								state.SubRewardBalance(rewardAddress, currentEpochReward)
+							}
 							state.AddBalance(rewardAddress, currentEpochReward)
 						}
 					} else {

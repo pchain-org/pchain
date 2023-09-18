@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/bridge"
 	"github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/consensus/pdbft"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -92,6 +93,7 @@ func main() {
 		getBlockWithTxsCommand,
 		massWithdrawCommand,
 		crossChainTransferCommand,
+		synchFromLocalDBCommand,
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 
@@ -245,7 +247,7 @@ func newCliApp(version, usage string) *cli.App {
 		utils.PerfTestFlag,
 
 		LogDirFlag,
-		ChildChainFlag,
+		utils.ChildChainFlag,
 
 		/*
 			//Tendermint flags
@@ -259,7 +261,6 @@ func newCliApp(version, usage string) *cli.App {
 		*/
 
 		ToolkitDirFlag,
-		ChainIdFlag,
 		BlockNumberFlag,
 		CountPerSecFlag,
 		TotalTimeFlag,
@@ -267,6 +268,9 @@ func newCliApp(version, usage string) *cli.App {
 		ToChainIdFlag,
 		ToFlag,
 		AmountFlag,
+		pdbft.RoughCheckSyncFlag,
+		utils.ChainIdFlag,
+		SourceDataDirFlag,
 	}
 	app.Flags = append(app.Flags, DebugFlags...)
 

@@ -191,3 +191,17 @@ For example, to send 1000 wei from pchain to child_0
 ```
 ./pchain crosschaintransfer --fromchain pchain --tochain child_0 --amount 1000 --toolkitdir /home/user/toolkit/.pchain
 ```
+
+**Tool5. synchfromlocaldb**  which is to synchronize from local pchain's db.
+```
+./pchain synchfromlocaldb --chainId chainId --roughCheckSync --gcmode=full --datadir /home/user/code/new_branch/.pchain --sourceDataDir /home/user/code/master/.pchain
+```
+
+with this command, the chainId should be the chain's name which need to synchronize, roughCheckSync indicates if only verify roughly, sourceDataDir indicates the directory of local pchain's data.
+
+For example, to synchronize data from local chain 'pchain'/'child_0' which data locates under /home/usr/code/master/.pchain
+```
+./pchain synchfromlocaldb --chainId pchain --roughCheckSync --gcmode=full --datadir /home/user/code/new_branch/.pchain --sourceDataDir /home/user/code/master/.pchain
+```
+
+Refer to [sync_from_local_db](https://github.com/pchain-org/pchain/blob/sync_from_local_db/README.md) to get more information

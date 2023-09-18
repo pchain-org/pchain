@@ -57,4 +57,9 @@ var (
 		Value: "unix://@pchainrpcunixsock", //"tcp://0.0.0.0:46657",
 		Usage: "RPC listen address. Port required",
 	}
+
+	RoughCheckSyncFlag = cli.BoolFlag{
+		Name:  "roughCheckSync",
+		Usage: "Fast blockchain syncing",
+	}
 )

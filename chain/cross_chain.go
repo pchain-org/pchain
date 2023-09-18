@@ -1094,7 +1094,7 @@ func MustGetEthereumFromNode(node *node.Node) *eth.Ethereum {
 
 func getEthereumFromNode(node *node.Node) (*eth.Ethereum, error) {
 	var ethereum *eth.Ethereum
-	if err := node.Service(&ethereum); err != nil {
+	if err := node.ServiceNoRunning(&ethereum); err != nil {
 		return nil, err
 	}
 

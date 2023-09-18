@@ -120,6 +120,7 @@ var (
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
+			RouchCheck:     false,
 		},
 	}
 
@@ -155,6 +156,7 @@ var (
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,
+			RouchCheck:     false,
 		},
 	}
 
@@ -354,6 +356,7 @@ type IstanbulConfig struct {
 type TendermintConfig struct {
 	Epoch          uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
 	ProposerPolicy uint64 `json:"policy"` // The policy for proposer selection
+	RouchCheck     bool   `json:"roughCheck"` // If check commit seal and state root
 }
 
 // String implements the stringer interface, returning the consensus engine details.
@@ -380,7 +383,6 @@ func NewChildChainConfig(childChainID string) *ChainConfig {
 		ByzantiumBlock:      big.NewInt(0), //let's start from block 0
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
-		IstanbulBlock:       big.NewInt(0),
 		Tendermint: &TendermintConfig{
 			Epoch:          30000,
 			ProposerPolicy: 0,

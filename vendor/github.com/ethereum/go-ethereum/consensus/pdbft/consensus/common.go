@@ -1,9 +1,8 @@
-package pdbft
+package consensus
 
 import (
 	"github.com/ethereum/go-ethereum/consensus/pdbft/types"
 )
-
 
 // XXX: WARNING: these functions can halt the consensus as firing events is synchronous.
 // Make sure to read off the channels, and in the case of subscribeToEventRespond, to write back on it

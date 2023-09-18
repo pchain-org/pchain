@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
-	//ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/tendermint/go-merkle"
 	"math/big"
 	"sort"
