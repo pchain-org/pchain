@@ -141,3 +141,26 @@ For a full guide on how to set up and become a validator node on the Pchain Netw
 ### How To Delegate Your Stake
 
 To learn how to delegate your PI to validators to receive rewards, read [How To Delegate or Stake](https://pliangroup.gitbook.io/plian/using-the-blockchain/delegating-or-staking)
+
+### Synchronize chain from local db backup
+
+This branch implements a command 'synchfromlocaldb' to make pchain can synchronize from local pchain's db.
+
+When some new code are added to pchain and needed to process every block to verify, we need to synchronize from block zero.
+
+But the network may be not accessible or its speed is very slow, then we can use this command to synchronize from local pchain's db if we have one.
+
+For example, we have /home/user/code/master/.pchain as old pchain data, which contains blocks/txs of pchain/child_0, and our new code are added for chain 'child_0' in branch 'new_branch', then we can use this command to synchronize blocks and verify the code.
+
+```
+./pchain synchfromlocaldb --chainId child_0 --roughCheckSync --gcmode=full --datadir /home/user/code/new_branch/.pchain --sourceDataDir /home/user/code/master/.pchain
+```
+
+flags 'chainId' and 'roughCheckSync' are newly added for this command, the previous one indicates which chain to synchronize, the following one means it will avoid commit seals verification and only check state root every 5000 blocks when synchronizing.
+
+The above command will synchronize chains both 'pchain' and 'child_0', after all the chain 'child_0' depends on the main chain 'pchain' to run.
+
+If we just want to verify code for main chain, we only need to synchronize main chain's data, and we use the command like this:
+```
+./pchain synchfromlocaldb --chainId pchain --roughCheckSync --gcmode=full --datadir /home/user/code/new_branch/.pchain --sourceDataDir /home/user/code/master/.pchain
+```
