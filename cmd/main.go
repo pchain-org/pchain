@@ -94,6 +94,7 @@ func main() {
 		massWithdrawCommand,
 		crossChainTransferCommand,
 		synchFromLocalDBCommand,
+		getEpochsCommand,
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 
@@ -264,6 +265,7 @@ func newCliApp(version, usage string) *cli.App {
 		BlockNumberFlag,
 		CountPerSecFlag,
 		TotalTimeFlag,
+		ChainIdFlag,
 		FromChainIdFlag,
 		ToChainIdFlag,
 		ToFlag,

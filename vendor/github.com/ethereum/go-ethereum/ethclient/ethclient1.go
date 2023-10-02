@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	pTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core/types"
 	//"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -16,6 +17,49 @@ import (
 	"math/rand"
 	"time"
 )
+
+type RPCBlock struct {
+	Difficulty       *hexutil.Big      `json:"difficulty"`
+	ExtraData        hexutil.Bytes     `json:"extraData"`
+	GasLimit         hexutil.Uint64    `json:"gasLimit"`
+	GasUsed          hexutil.Uint64    `json:"gasUsed"`
+	Hash             common.Hash       `json:"hash"`
+	LogsBloom        types.Bloom       `json:"logsBloom"`
+	MainchainNumber  *hexutil.Big      `json:"mainchainNumber"`
+	Miner            common.Address    `json:"miner"`
+	MixHash          common.Hash       `json:"mixHash"`
+	Nonce            types.BlockNonce  `json:"nonce"`
+	Number           *hexutil.Big      `json:"number"`
+	ParentHash       common.Hash       `json:"parentHash"`
+	ReceiptsRoot     common.Hash       `json:"receiptsRoot"`
+	Sha3Uncles       common.Hash       `json:"sha3Uncles"`
+	Size             hexutil.Uint64    `json:"size"`
+	StateRoot        common.Hash       `json:"stateRoot"`
+	Timestamp        *hexutil.Big      `json:"timestamp"`
+	TotalDifficulty  *hexutil.Big      `json:"totalDifficulty"`
+	Transactions     []*RPCTransaction `json:"transactions"`
+	TransactionsRoot common.Hash       `json:"transactionsRoot"`
+	Uncles           []common.Hash     `json:"uncles"`
+}
+
+// RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
+type RPCTransaction struct {
+	Accesses         *types.AccessList `json:"accessList,omitempty"`
+	BlockHash        common.Hash       `json:"blockHash"`
+	BlockNumber      *hexutil.Big      `json:"blockNumber"`
+	From             common.Address    `json:"from"`
+	Gas              hexutil.Uint64    `json:"gas"`
+	GasPrice         *hexutil.Big      `json:"gasPrice"`
+	Hash             common.Hash       `json:"hash"`
+	Input            hexutil.Bytes     `json:"input"`
+	Nonce            hexutil.Uint64    `json:"nonce"`
+	R                *hexutil.Big      `json:"r"`
+	S                *hexutil.Big      `json:"s"`
+	To               *common.Address   `json:"to"`
+	TransactionIndex hexutil.Uint      `json:"transactionIndex"`
+	V                *hexutil.Big      `json:"v"`
+	Value            *hexutil.Big      `json:"value"`
+}
 
 //Wrapped BlockNumber, with Dial and Close
 func WrpBlockNumber(chainUrl string) (*big.Int, error) {
@@ -258,7 +302,7 @@ func BroadcastDataToMainChain(chainUrl string, chainId string, data []byte) erro
 	return err
 }
 
-func WrpGetBlock(chainUrl string, number *big.Int) (json.RawMessage, error) {
+func WrpGetBlock(chainUrl string, number *big.Int) (*RPCBlock, error) {
 	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
 	client, err := Dial(chainUrl)
 	if err != nil {
@@ -274,8 +318,59 @@ func WrpGetBlock(chainUrl string, number *big.Int) (json.RawMessage, error) {
 		return nil, errors.New("nil message")
 	}
 	
+	// Decode header and transactions.
+	var rpcBlock = &RPCBlock{}
+	err = json.Unmarshal(raw, rpcBlock)
+	if err != nil {
+		return nil, err
+	}
+	
 	Close(client)
-	return raw, nil
+	return rpcBlock, nil
+}
+
+func WrpGetCurrentEpochNumber(chainUrl string) (uint64, error) {
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	client, err := Dial(chainUrl)
+	if err != nil {
+		log.Errorf("WrpTransactionByHash, dial err: %v", err)
+		return 0, err
+	}
+
+	var curEpochNumber hexutil.Uint64
+	err = client.c.CallContext(ctx, &curEpochNumber, "tdm_getCurrentEpochNumber")
+	if err != nil {
+		return 0, err
+	}
+
+	Close(client)
+	return uint64(curEpochNumber), nil
+}
+
+func WrpGetEpoch(chainUrl string, number uint64) (*pTypes.EpochApi, error) {
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	client, err := Dial(chainUrl)
+	if err != nil {
+		log.Errorf("WrpTransactionByHash, dial err: %v", err)
+		return nil, err
+	}
+
+	var raw json.RawMessage
+	err = client.c.CallContext(ctx, &raw, "tdm_getEpoch", hexutil.EncodeUint64(number))
+	if err != nil {
+		return nil, err
+	} else if len(raw) == 0 {
+		return nil, errors.New("nil message")
+	}
+
+	var rpcEopch = &pTypes.EpochApi{}
+	err = json.Unmarshal(raw, rpcEopch)
+	if err != nil {
+		return nil, err
+	}
+
+	Close(client)
+	return rpcEopch, nil
 }
 
 //attemps: this parameter means the total amount of operations

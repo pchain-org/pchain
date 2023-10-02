@@ -64,14 +64,7 @@ func getBlockWithTxs(ctx *cli.Context) error {
 	}
 	blockNumber := ctx.Uint64(BlockNumberFlag.Name)
 
-	rawMessage, err := ethclient.WrpGetBlock(chainUrl, new(big.Int).SetUint64(blockNumber))
-	if err != nil {
-		Exit(err)
-	}
-
-	// Decode header and transactions.
-	var rpcBlock = &RPCBlock{}
-	err = json.Unmarshal(rawMessage, rpcBlock)
+	rpcBlock, err := ethclient.WrpGetBlock(chainUrl, new(big.Int).SetUint64(blockNumber))
 	if err != nil {
 		Exit(err)
 	}
@@ -90,49 +83,6 @@ func getBlockWithTxs(ctx *cli.Context) error {
 	}
 
 	return nil
-}
-
-type RPCBlock struct {
-	Difficulty       *hexutil.Big      `json:"difficulty"`
-	ExtraData        hexutil.Bytes     `json:"extraData"`
-	GasLimit         hexutil.Uint64    `json:"gasLimit"`
-	GasUsed          hexutil.Uint64    `json:"gasUsed"`
-	Hash             common.Hash       `json:"hash"`
-	LogsBloom        types.Bloom       `json:"logsBloom"`
-	MainchainNumber  *hexutil.Big      `json:"mainchainNumber"`
-	Miner            common.Address    `json:"miner"`
-	MixHash          common.Hash       `json:"mixHash"`
-	Nonce            types.BlockNonce  `json:"nonce"`
-	Number           *hexutil.Big      `json:"number"`
-	ParentHash       common.Hash       `json:"parentHash"`
-	ReceiptsRoot     common.Hash       `json:"receiptsRoot"`
-	Sha3Uncles       common.Hash       `json:"sha3Uncles"`
-	Size             hexutil.Uint64    `json:"size"`
-	StateRoot        common.Hash       `json:"stateRoot"`
-	Timestamp        *hexutil.Big      `json:"timestamp"`
-	TotalDifficulty  *hexutil.Big      `json:"totalDifficulty"`
-	Transactions     []*RPCTransaction `json:"transactions"`
-	TransactionsRoot common.Hash       `json:"transactionsRoot"`
-	Uncles           []common.Hash     `json:"uncles"`
-}
-
-// RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
-type RPCTransaction struct {
-	Accesses         *types.AccessList `json:"accessList,omitempty"`
-	BlockHash        common.Hash       `json:"blockHash"`
-	BlockNumber      *hexutil.Big      `json:"blockNumber"`
-	From             common.Address    `json:"from"`
-	Gas              hexutil.Uint64    `json:"gas"`
-	GasPrice         *hexutil.Big      `json:"gasPrice"`
-	Hash             common.Hash       `json:"hash"`
-	Input            hexutil.Bytes     `json:"input"`
-	Nonce            hexutil.Uint64    `json:"nonce"`
-	R                *hexutil.Big      `json:"r"`
-	S                *hexutil.Big      `json:"s"`
-	To               *common.Address   `json:"to"`
-	TransactionIndex hexutil.Uint      `json:"transactionIndex"`
-	V                *hexutil.Big      `json:"v"`
-	Value            *hexutil.Big      `json:"value"`
 }
 
 type ConsoleBlock struct {
@@ -177,7 +127,7 @@ type ConsoleTransaction struct {
 	Value            *big.Int          `json:"value"`
 }
 
-func rpcBlockToConsoleBlock(rpcBlock *RPCBlock) *ConsoleBlock {
+func rpcBlockToConsoleBlock(rpcBlock *ethclient.RPCBlock) *ConsoleBlock {
 
 	cosoleBlock := &ConsoleBlock{}
 
@@ -212,7 +162,7 @@ func rpcBlockToConsoleBlock(rpcBlock *RPCBlock) *ConsoleBlock {
 	return cosoleBlock
 }
 
-func rpcTxToConsoleTx(rpcTx *RPCTransaction) *ConsoleTransaction {
+func rpcTxToConsoleTx(rpcTx *ethclient.RPCTransaction) *ConsoleTransaction {
 
 	consoleTx := &ConsoleTransaction{}
 	consoleTx.Accesses = rpcTx.Accesses
