@@ -54,7 +54,7 @@ func getEpochs(ctx *cli.Context) error {
 	defer fh.Close()
 
 	timeFormat := "2006-01-02 15:04:05"
-	for number := uint64(0); number < curEpochNumber; number++ {
+	for number := uint64(0); number <= curEpochNumber; number++ {
 		rpcEpoch, err := ethclient.WrpGetEpoch(chainUrl, number)
 		if err != nil {
 			Exit(err)
