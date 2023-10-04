@@ -170,7 +170,7 @@ For example, to get block 13215 from child_0
 
 **Tool3. masswithdraw**  which is to send tx3(tx4 will be sent automatically for tx3) in batch to perform stress test, and this tool should run on local chain or test chain. the command format is 
 ```
-./pchain masswithdraw --chainid chain_Id --toolkitdir toolkit_dir --countpersec tx3number_per_second --totaltime total_seconds
+./pchain masswithdraw --chainid chain_id --toolkitdir toolkit_dir --countpersec tx3number_per_second --totaltime total_seconds
 ```
 
 with this command, the default mainchain url is http://localhost:6969/pchain, and the child chain is http://localhost:6969/chain_Id, there should be one UTC-xxx-address.json under toolkit_dir, and its example can be found under ./toolkitdir directory. this private key file contain one account who should have enough token(PI)  on chainurl for withdrawal.
@@ -185,7 +185,7 @@ For example, to send 10 tx3 to child_0 per-second, and last 5 seconds
 ./pchain crosschaintransfer --fromchain fromchain_id --tochain tochain_id --amount amount --toolkitdir toolkit_dir
 ```
 
-with this command, the fromchain's url is http://localhost:6969/fromchain_id, and the tochain's url is http://localhost:6969/tochain_Id, there should be one UTC-xxx-address.json under toolkit_dir, and its example can be found under ./toolkitdir directory. this private key file contain one account who should have enough token(PI)  on fromchain_id for cross chain transfer.
+with this command, the fromchain's url is http://localhost:6969/fromchain_id, and the tochain's url is http://localhost:6969/tochain_Id, there should be one UTC-xxx-address.json under toolkit_dir, and its example can be found under 'toolkitdir' directory. this private key file contain one account who should have enough token(PI)  on fromchain_id for cross chain transfer.
 
 For example, to send 1000 wei from pchain to child_0
 ```
@@ -194,7 +194,7 @@ For example, to send 1000 wei from pchain to child_0
 
 **Tool5. synchfromlocaldb**  which is to synchronize from local pchain's db.
 ```
-./pchain synchfromlocaldb --chainId chainId --roughCheckSync --gcmode=full --datadir /home/user/code/new_branch/.pchain --sourceDataDir /home/user/code/master/.pchain
+./pchain synchfromlocaldb --chainId chain_id --roughCheckSync --gcmode=full --datadir data_dir --sourceDataDir source_data_dir
 ```
 
 with this command, the chainId should be the chain's name which need to synchronize, roughCheckSync indicates if only verify roughly, sourceDataDir indicates the directory of local pchain's data.
@@ -205,3 +205,15 @@ For example, to synchronize data from local chain 'pchain'/'child_0' which data 
 ```
 
 Refer to [sync_from_local_db](https://github.com/pchain-org/pchain/blob/sync_from_local_db/README.md) to get more information
+
+**Tool6. getEpochs**  which is to get all epochs' brief information. the command format is 
+```
+./pchain getEpochs --chainid chain_id --toolkitdir toolkit_dir
+```
+
+with this command, the chain's url is http://localhost:6969/chain_id, and the output file 'chain_id_epochs.txt' can be found under 'toolkit_dir' directory. 
+
+For example, to get all epochs' brief information of child_0
+```
+./pchain getEpochs --chainid child_0 --toolkitdir /home/user/code/toolkit/.pchain
+```
