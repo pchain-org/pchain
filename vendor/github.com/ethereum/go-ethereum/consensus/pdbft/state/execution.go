@@ -2,11 +2,9 @@ package state
 
 import (
 	"errors"
+	"time"
 
 	"github.com/ethereum/go-ethereum/consensus"
-
-	//"fmt"
-
 	ep "github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core"
@@ -97,8 +95,12 @@ func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 			}
 			currentEpoch.Save()
 		} else if epochInBlock.Number == currentEpoch.Number {
-			// Update the current epoch Start Time from proposer
-			currentEpoch.StartTime = epochInBlock.StartTime
+			if epochInBlock.StartTime != time.Unix(0,0) {
+				// Update the current epoch Start Time from proposer
+				currentEpoch.StartTime = epochInBlock.StartTime
+			} else {
+				currentEpoch.StartTime = time.Unix(int64(bc.GetBlockByNumber(currentEpoch.StartBlock).Time()), 0)
+			}
 			currentEpoch.Save()
 
 			// Update the previous epoch End Time
