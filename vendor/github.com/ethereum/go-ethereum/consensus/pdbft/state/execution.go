@@ -2,6 +2,7 @@ package state
 
 import (
 	"errors"
+	"time"
 
 	"github.com/ethereum/go-ethereum/consensus"
 
@@ -36,7 +37,7 @@ func (s *State) ValidateBlock(block *types.TdmBlock) error {
 	return s.validateBlock(block)
 }
 
-//Very current block
+// Very current block
 func (s *State) validateBlock(block *types.TdmBlock) error {
 	// Basic block validation.
 	err := block.ValidateBasic(s.TdmExtra)
@@ -97,13 +98,17 @@ func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 			}
 			currentEpoch.Save()
 		} else if epochInBlock.Number == currentEpoch.Number {
-			// Update the current epoch Start Time from proposer
-			currentEpoch.StartTime = epochInBlock.StartTime
+			if !epochInBlock.StartTime.IsZero() {
+				// Update the current epoch Start Time from proposer
+				currentEpoch.StartTime = epochInBlock.StartTime
+			} else if block.NumberU64() >= currentEpoch.StartBlock {
+				currentEpoch.StartTime = time.Unix(int64(bc.GetBlockByNumber(currentEpoch.StartBlock).Time()), 0)
+			}
 			currentEpoch.Save()
 
 			// Update the previous epoch End Time
 			if currentEpoch.Number > 0 {
-				ep.UpdateEpochEndTime(currentEpoch.GetDB(), currentEpoch.Number-1, epochInBlock.StartTime)
+				ep.UpdateEpochEndTime(currentEpoch.GetDB(), currentEpoch.Number-1, currentEpoch.StartTime)
 			}
 		}
 	}
