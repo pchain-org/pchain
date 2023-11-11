@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -104,6 +105,15 @@ func (db *odrDatabase) ContractCodeSize(addrHash, codeHash common.Hash) (int, er
 func (db *odrDatabase) TrieDB() *trie.Database {
 	return nil
 }
+
+func (db *odrDatabase) GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64) (*big.Int, error) {return nil, nil}
+func (db *odrDatabase) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int{return nil}
+func (db *odrDatabase) UpdateOutsideRewardBalance(addr common.Address, reward state.Reward) {}
+func (db *odrDatabase) GetOOSLastBlock() (*big.Int, error) {return nil, nil}
+func (db *odrDatabase) UpdateOOSLastBlock(oosBlock *big.Int) {}
+func (db *odrDatabase) GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error) {return 0, nil}
+func (db *odrDatabase) UpdateEpochRewardExtracted(address common.Address, epoch uint64) {}
+func (db *odrDatabase) FlushOOSCache(blockNr uint64, clearCache bool) {}
 
 type odrTrie struct {
 	db   *odrDatabase

@@ -54,7 +54,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	if v.bc.HasBlockAndState(block.Hash(), block.NumberU64()) {
 		//comment this for this case: block has been written, but not refresh the head
 		return ErrKnownBlock
-
 	}
 	// Header validity is known at this point, check the uncles and transactions
 	header := block.Header()
@@ -81,6 +80,11 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 // itself. ValidateState returns a database batch if the validation was a success
 // otherwise nil and an error is returned.
 func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateDB, receipts types.Receipts, usedGas uint64) error {
+
+	if v.config.Tendermint.RouchCheck && block.NumberU64() % 5000 != 0 {
+		return nil
+	}
+
 	header := block.Header()
 	if block.GasUsed() != usedGas {
 		return fmt.Errorf("invalid gas used (remote: %d local: %d)", block.GasUsed(), usedGas)

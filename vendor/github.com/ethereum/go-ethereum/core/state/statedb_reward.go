@@ -116,38 +116,42 @@ func (self *StateDB) GetOutsideReward() map[common.Address]Reward {
 	return self.rewardOutsideSet
 }
 
-func (self *StateDB) ClearOutsideReward() {
-	self.rewardOutsideSet = make(map[common.Address]Reward)
+func (self *StateDB) SetOutsideReward(addr common.Address, reward Reward) {
+	self.rewardOutsideSet[addr] = reward
+	self.rewardOutsideSetDirty[addr] = struct{}{}
 }
 
-//if there is a cache in memory, then return it; or return the lastest value from older block(height-1)
+func (self *StateDB) ClearOutsideReward() {
+	self.rewardOutsideSet = make(map[common.Address]Reward)
+	self.rewardOutsideSetDirty = make(map[common.Address]struct{})
+}
+
 func (self *StateDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64) *big.Int {
 	if rewardset, exist := self.rewardOutsideSet[addr]; exist {
 		if rewardbalance, rewardexist := rewardset[epochNo]; rewardexist {
 			return rewardbalance
 		}
 	}
-	rb := self.db.TrieDB().GetEpochReward(addr, epochNo,height-1)
+
+	rb, err := self.db.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height-1)
 	// if 0 epoch reward, try to read from trie
-	if rb.Sign() == 0 {
+	if err != nil || rb.Sign() == 0 {
 		rb = self.GetRewardBalanceByEpochNumber(addr, epochNo)
+	}
+
+	if rb != nil && rb.Sign() != 0 {
+		if rewardset, exist := self.rewardOutsideSet[addr]; exist {
+			rewardset[epochNo] = rb
+		} else {
+			epochReward := Reward{epochNo: rb}
+			self.rewardOutsideSet[addr] = epochReward
+		}
 	}
 
 	return rb
 }
 
-//get value from db directly; this will ignore current runtime-context
-func (self *StateDB) GetOutsideRewardBalanceByEpochNumberFromDB(addr common.Address, epochNo uint64, height uint64) *big.Int {
-	rb := self.db.TrieDB().GetEpochReward(addr, epochNo, height)
-	// if 0 epoch reward, try to read from trie
-	if rb.Sign() == 0 {
-		rb = self.GetRewardBalanceByEpochNumber(addr, epochNo)
-	}
-
-	return rb
-}
-
-func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+func (self *StateDB) AddOutsideRewardBalanceByEpochNumberBase(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
 	currentRewardBalance := self.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height)
 	newReward := new(big.Int).Add(currentRewardBalance, amount)
 	if rs, exist := self.rewardOutsideSet[addr]; exist {
@@ -156,11 +160,15 @@ func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, e
 		epochReward := Reward{epochNo: newReward}
 		self.rewardOutsideSet[addr] = epochReward
 	}
+	self.rewardOutsideSetDirty[addr] = struct{}{}
+}
 
+func (self *StateDB) AddOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+	self.AddOutsideRewardBalanceByEpochNumberBase(addr, epochNo, height, amount)
 	self.AddRewardBalance(addr, amount)
 }
 
-func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+func (self *StateDB) SubOutsideRewardBalanceByEpochNumberBase(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
 	currentRewardBalance := self.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height)
 	newReward := new(big.Int).Sub(currentRewardBalance, amount)
 	if rs, exist := self.rewardOutsideSet[addr]; exist {
@@ -170,69 +178,89 @@ func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, e
 		self.rewardOutsideSet[addr] = epochReward
 	}
 
-	self.SubRewardBalance(addr, amount)
+	self.rewardOutsideSetDirty[addr] = struct{}{}
 }
 
+func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64, amount *big.Int) {
+	self.SubOutsideRewardBalanceByEpochNumberBase(addr, epochNo, height, amount)
+	self.SubRewardBalance(addr, amount)
+}
 
 //func (self *StateDB) GetEpochReward(address common.Address, epoch uint64) *big.Int {
 //	return self.db.TrieDB().GetEpochReward(address, epoch)
 //}
 
-func (self *StateDB) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int {
-	//read value from lastest block
-	result := self.GetAllEpochRewardFromDB(address, height-1)
+func (self *StateDB) GetAllEpochReward(address common.Address, height uint64, asCache bool) map[uint64]*big.Int {
 
-	//refresh result with lastest value
-	for epoch, reward := range self.rewardOutsideSet[address] {
-		result[epoch] = reward
+	rewardsCache, exist := self.rewardOutsideSet[address]
+	if !exist {
+		if asCache {
+			self.rewardOutsideSet[address] = self.db.GetAllEpochReward(address, height-1)
+		} else {
+			return self.db.GetAllEpochReward(address, height)
+		}
+	} else {
+		//read value from lastest block
+		rewardsFromDB := self.db.GetAllEpochReward(address, height-1)
+		//refresh result with lastest value
+		for epoch, reward := range rewardsFromDB {
+			if _, exist1 := rewardsCache[epoch]; !exist1 {
+				rewardsCache[epoch] = reward
+			}
+		}
 	}
-
-	return result
-}
-
-//get value from db directly; this will ignore current runtime-context
-func (self *StateDB) GetAllEpochRewardFromDB(address common.Address, height uint64) map[uint64]*big.Int {
-	return self.db.TrieDB().GetAllEpochReward(address, height)
+	
+	return self.rewardOutsideSet[address]
 }
 
 func (self *StateDB) GetExtractRewardSet() map[common.Address]uint64 {
 	return self.extractRewardSet
 }
 
-func (self *StateDB) ClearExtractRewardSet() {
-	self.extractRewardSet = make(map[common.Address]uint64)
-}
-
-func (self *StateDB) MarkEpochRewardExtracted(address common.Address, epoch uint64) {
-	self.extractRewardSet[address] = epoch
-}
-
-//if there is a cache in memory, then return it; or return the lastest value from older block(height-1)
 func (self *StateDB) GetEpochRewardExtracted(address common.Address, height uint64) (uint64, error) {
 	if epoch, exist := self.extractRewardSet[address]; exist {
 		return epoch, nil
-	} else {
-		return self.GetEpochRewardExtractedFromDB(address, height-1)
 	}
+
+	epoch, err := self.db.GetEpochRewardExtracted(address, height-1)
+	if err != nil {
+		return epoch, err
+	}
+
+	self.extractRewardSet[address] = epoch
+	return epoch, nil
 }
 
-//get value from db directly; this will ignore current runtime-context
-func (self *StateDB) GetEpochRewardExtractedFromDB(address common.Address, height uint64) (uint64, error) {
-	return self.db.TrieDB().GetEpochRewardExtracted(address, height)
+func (self *StateDB) SetEpochRewardExtracted(address common.Address, epoch uint64) {
+	self.extractRewardSet[address] = epoch
+	self.extractRewardSetDirty[address] = struct{}{}
 }
 
-
-func (self *StateDB) WriteEpochRewardExtracted(address common.Address, epoch uint64, height uint64) error {
-	return self.db.TrieDB().WriteEpochRewardExtracted(address, epoch, height)
+func (self *StateDB) ClearExtractRewardSet() {
+	self.extractRewardSet = make(map[common.Address]uint64)
+	self.extractRewardSetDirty = make(map[common.Address]struct{})
 }
 
 //record candidate's last proposed block which brings reward
-func (self *StateDB) ReadOOSLastBlock() (*big.Int, error) {
-	return self.db.TrieDB().ReadOOSLastBlock()
+func (self *StateDB) GetOOSLastBlock() (*big.Int, error) {
+	if self.oosLastBlock != nil {
+		return self.oosLastBlock, nil
+	}
+	
+	oosLastBlock, err := self.db.GetOOSLastBlock()
+	if err != nil {
+		return oosLastBlock, err
+	}
+	
+	self.oosLastBlock = oosLastBlock
+	return self.oosLastBlock, nil
 }
 
-func (self *StateDB) WriteOOSLastBlock(blockNumber *big.Int) error {
-	return self.db.TrieDB().WriteOOSLastBlock(blockNumber)
+//record candidate's last proposed block which brings reward
+func (self *StateDB) SetOOSLastBlock(oosBlock *big.Int) {
+	if self.oosLastBlock == nil || self.oosLastBlock.Cmp(oosBlock) < 0 {
+		self.oosLastBlock = oosBlock
+	}
 }
 
 // ----- Reward Set

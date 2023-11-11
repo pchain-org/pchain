@@ -9,7 +9,8 @@ import (
 )
 
 // ----- Type
-type Reward map[uint64]*big.Int // key = Epoch Number, value = Reward Amount
+type Reward      map[uint64]*big.Int // key = Epoch Number, value = Reward Amount
+type RewardBytes map[uint64][]byte   // key = Epoch Number, value = Reward Bytes read from DB
 
 func (p Reward) String() (str string) {
 	for key, value := range p {
@@ -51,7 +52,7 @@ func (c *stateObject) SubRewardBalance(amount *big.Int) {
 
 func (self *stateObject) SetRewardBalance(amount *big.Int) {
 	if amount.Sign() < 0 {
-		log.Infof("!!!amount is negative, make it 0 by force, addr is %x", self.address)
+		log.Infof("!!!amount is negative in SetRewardBalance(), make it 0 by force, addr is %x", self.address)
 		amount = big.NewInt(0)
 	}
 

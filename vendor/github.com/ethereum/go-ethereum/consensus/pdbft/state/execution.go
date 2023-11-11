@@ -95,17 +95,17 @@ func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 			}
 			currentEpoch.Save()
 		} else if epochInBlock.Number == currentEpoch.Number {
-			if epochInBlock.StartTime != time.Unix(0,0) {
+			if !epochInBlock.StartTime.IsZero() {
 				// Update the current epoch Start Time from proposer
 				currentEpoch.StartTime = epochInBlock.StartTime
-			} else {
+			} else if block.NumberU64() >= currentEpoch.StartBlock {
 				currentEpoch.StartTime = time.Unix(int64(bc.GetBlockByNumber(currentEpoch.StartBlock).Time()), 0)
 			}
 			currentEpoch.Save()
 
 			// Update the previous epoch End Time
 			if currentEpoch.Number > 0 {
-				ep.UpdateEpochEndTime(currentEpoch.GetDB(), currentEpoch.Number-1, epochInBlock.StartTime)
+				ep.UpdateEpochEndTime(currentEpoch.GetDB(), currentEpoch.Number-1, currentEpoch.StartTime)
 			}
 		}
 	}

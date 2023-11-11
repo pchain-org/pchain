@@ -649,7 +649,7 @@ func (sd *SendData) SendDataToMainChain(data []byte, nonce *uint64) (common.Hash
 
 	// nonce, fetch the nonce first, if we get nonce too low error, we will manually add the value until the error gone
 	if *nonce == 0 {
-		hexNonce, err := apiBridge.GetTransactionCount(sendTxVars.ctx, sendTxVars.account, rpc.PendingBlockNumber)
+		hexNonce, err := apiBridge.GetTransactionCount(sendTxVars.ctx, sendTxVars.account, rpc.LatestBlockNumber)
 		if err != nil {
 			log.Errorf("SendDataToMainChain, WrpNonceAt err: %v", err)
 			return hash, err

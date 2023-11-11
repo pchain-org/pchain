@@ -49,7 +49,7 @@ func ApplyOp(op types.PendingOp, bc *BlockChain, cch CrossChainHelper) error {
 		return errors.New("SaveDataToMainChain data type not match")
 	case *tmTypes.SwitchEpochOp:
 		eng := bc.engine.(consensus.Tendermint)
-		nextEp, err := eng.GetEpoch().EnterNewEpoch(op.NewValidators)
+		nextEp, err := eng.GetEpoch().EnterNewEpoch(op.NewValidators, op.SwitchTime)
 		if err == nil {
 			// Stop the Engine if we are not in the new validators
 			if !op.NewValidators.HasAddress(eng.TokenAddress().Bytes()) && eng.IsStarted() {

@@ -135,6 +135,8 @@ func New(ctx *node.ServiceContext, config *Config, cliCtx *cli.Context,
 		return nil, genesisErr
 	}
 
+	chainConfig.Tendermint.RouchCheck = cliCtx.GlobalBool(pdbft.RoughCheckSyncFlag.Name)
+
 	// Update HTLC Hard Fork and Contract if any one blank
 	initBlocksInChainConfig(chainConfig, isTestnet, ctx.ChainId())
 
@@ -370,6 +372,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, config *Config, chainConfig
 			config.Tendermint.Epoch = chainConfig.Tendermint.Epoch
 		}
 		config.Tendermint.ProposerPolicy = pdbft.ProposerPolicy(chainConfig.Tendermint.ProposerPolicy)
+		config.Tendermint.RoughCheck = chainConfig.Tendermint.RouchCheck
 		return tendermintBackend.New(chainConfig, cliCtx, ctx.NodeKey(), cch)
 	}
 

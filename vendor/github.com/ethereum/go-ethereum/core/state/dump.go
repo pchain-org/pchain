@@ -280,7 +280,7 @@ func (self *StateDB) RawDumpToFile(height uint64, filename string) Dump {
 				}
 			}
 
-			account.EpochReward = self.GetAllEpochReward(commonAddr, height)
+			account.EpochReward = self.GetAllEpochReward(commonAddr, height, false)
 			for epoch, reward := range account.EpochReward {
 				if reward == nil || reward.Sign() == 0 {
 					delete(account.EpochReward, epoch)

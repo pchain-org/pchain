@@ -349,79 +349,57 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 	if tdm, ok := bc.Engine().(consensus.Tendermint); ok {
 
+		chainId := bc.Config().PChainId
 		from := derivedAddressFromTx(tx)
-
 		height := header.Number.Uint64()
-		ispatch := bc.Config().IsSelfRetrieveRewardPatch(header.Number, header.MainChainNumber)
-		if !ispatch {
-			epoch := tdm.GetEpoch().GetEpochByBlockNumber(height)
-			currentEpochNumber := epoch.Number
-			noExtractMark := false
-			extractEpochNumber, err := state.GetEpochRewardExtractedFromDB(from, height)
-			if err != nil {
-				noExtractMark = true
-			}
-			maxExtractEpochNumber := uint64(0)
 
-			rewards := state.GetAllEpochRewardFromDB(from, height)
+		log.Infof("extrRwd_ApplyCb, (chainId, height, from) is (%v, %v, %x\n", chainId, height, from)
 
-			log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
-			log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
+		if patchNoRun(chainId, height, from) {
+			return nil
+		}
+		patchAllRewards(chainId, height, from, state)
 
-			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
-			for epNumber, reward := range rewards{
-				if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
+		rollbackCatchup := false
+		lastBlock, err := state.GetOOSLastBlock()
+		if err == nil && header.Number.Cmp(lastBlock) <= 0 {
+			rollbackCatchup = true
+		}
+
+		epoch := tdm.GetEpoch().GetEpochByBlockNumber(height)
+		currentEpochNumber := epoch.Number
+		noExtractMark := false
+		extractEpochNumber, err := state.GetEpochRewardExtracted(from, height)
+		if err != nil {
+			noExtractMark = true
+		}
+		maxExtractEpochNumber := uint64(0)
+
+		log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
+
+		rewards := state.GetAllEpochReward(from, height, true)
+		log.Debugf("extrRwd_ApplyCb before patchRerun, rewards is %v\n", rewards)
+		extractEpochNumber, noExtractMark, rewards = patchRerun(chainId, height, from, currentEpochNumber, extractEpochNumber, noExtractMark, rewards)
+		log.Debugf("extrRwd_ApplyCb after patchRerun, rewards is %v\n", rewards)
+
+		//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
+		for epNumber, reward := range rewards {
+			if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber && reward.Sign() > 0 {
+				if !rollbackCatchup {
 					state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
-					state.AddBalance(from, reward)
-
-					if maxExtractEpochNumber < epNumber {
-						maxExtractEpochNumber = epNumber
-						state.MarkEpochRewardExtracted(from, maxExtractEpochNumber)
-					}
+				} else {
+					state.SubRewardBalance(from, reward)
 				}
-			}
-		} else {
+				state.AddBalance(from, reward)
 
-			//extrRwd is after OutOfStorage feature, so need not check for IsOutOfStorage()
-			rollbackCatchup := false
-			lastBlock, err := state.ReadOOSLastBlock();
-			if err == nil && header.Number.Cmp(lastBlock) <= 0 {
-				rollbackCatchup = true
-			}
-
-			epoch := tdm.GetEpoch().GetEpochByBlockNumber(height)
-			currentEpochNumber := epoch.Number
-			noExtractMark := false
-			extractEpochNumber, err := state.GetEpochRewardExtracted(from, height)
-			if err != nil {
-				noExtractMark = true
-			}
-			maxExtractEpochNumber := uint64(0)
-
-			rewards := state.GetAllEpochReward(from, height)
-
-			log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
-			log.Debugf("extrRwd_ApplyCb rewards is %v\n", rewards)
-
-			//feature 'ExtractReward' is after 'OutOfStorage', so just operate on reward directly
-			for epNumber, reward := range rewards{
-				if (noExtractMark || extractEpochNumber < epNumber) && epNumber < currentEpochNumber {
-
-					if !rollbackCatchup {
-						state.SubOutsideRewardBalanceByEpochNumber(from, epNumber, height, reward)
-					} else {
-						state.SubRewardBalance(from, reward)
-					}
-					state.AddBalance(from, reward)
-
-					if maxExtractEpochNumber < epNumber {
-						maxExtractEpochNumber = epNumber
-						state.MarkEpochRewardExtracted(from, maxExtractEpochNumber)
-					}
+				if maxExtractEpochNumber < epNumber {
+					maxExtractEpochNumber = epNumber
+					state.SetEpochRewardExtracted(from, maxExtractEpochNumber)
 				}
 			}
 		}
 
+		patchNegRewards(chainId, height, from, state, currentEpochNumber)
 	}
 
 	return nil
@@ -606,4 +584,184 @@ func checkEpochInNormalStage(bc *core.BlockChain) error {
 		return errors.New(fmt.Sprintf("you can't send this tx during this time, current height %v", height))
 	}
 	return nil
+}
+
+
+func patchNoRun(chainId string, blockNumber uint64, from common.Address) bool {
+
+	if chainId == "child_0" {
+		if (blockNumber == 32110529 && from == common.HexToAddress("0x5e48674176e2cdc663b38cc0aeea1f92a3082db7")) ||
+			(blockNumber == 32132151 && from == common.HexToAddress("0x8128f3e133c565ccc6ca0a8d206d5e2b2ba36868")) ||
+			(blockNumber == 32132151 && from == common.HexToAddress("0xf49d2ee4e9217ae347dfddc740b7475bbceef6be")) ||
+			(blockNumber == 32132151 && from == common.HexToAddress("0xfff9b142b8e4c6aff9adbf17beec53a414c5f068")) {
+
+			log.Infof("patchNoRun; chainId is: %v, height: %v, from: %x", chainId, blockNumber, from)
+			return true
+		}
+	}
+
+	return false
+}
+
+var cahceData = struct {
+	chainId            string
+	height             uint64
+	from               common.Address
+	extractEpochNumber uint64
+	noExtractMark      bool
+	rewards            map[uint64]*big.Int
+}{"", 0, common.Address{}, 0, false, make(map[uint64]*big.Int)}
+
+func patchRerun(chainId string, height uint64, from common.Address, currentEpochNumber, extractEpochNumber uint64,
+	noExtractMark bool, rewards map[uint64]*big.Int) (uint64, bool, map[uint64]*big.Int) {
+
+	if (chainId == "pchain" && height == 13311677 && from == common.HexToAddress("0x8be8a44943861279377a693b51c0703420087480")) ||
+		(chainId == "child_0" && height == 22094435 && from == common.HexToAddress("0xf5005b496dff7b1ba3ca06294f8f146c9afbe09d")) {
+
+		log.Infof("patchRerun; chainId: %s, height: %v, from: %x", chainId, height, from)
+
+		if chainId != cahceData.chainId || height != cahceData.height || from != cahceData.from {
+			cahceData.chainId = chainId
+			cahceData.height = height
+			cahceData.from = from
+			cahceData.extractEpochNumber = extractEpochNumber
+			cahceData.noExtractMark = noExtractMark
+			for epoch, reward := range rewards {
+				cahceData.rewards[epoch] = reward
+			}
+		}
+
+		return cahceData.extractEpochNumber, cahceData.noExtractMark, cahceData.rewards
+	}
+
+	return extractEpochNumber, noExtractMark, rewards
+}
+
+func patchNegRewards(chainId string, height uint64, from common.Address, state *state.StateDB, currentEpochNumber uint64) {
+
+	outsideReward := state.GetOutsideReward()
+	reward := outsideReward[from]
+	for epoch, rewardAmount := range reward {
+		if rewardAmount.Sign() < 0 {
+			log.Errorf("!!!amount is negative in extrRwd_ApplyCb(), make it 0 by force, chainId: %s, height: %v, addr: %x", chainId, height, from)
+			reward[epoch] = common.Big0
+		}
+	}
+}
+
+func patchAllRewards(chainId string, height uint64, from common.Address, state *state.StateDB) {
+
+	if chainId == "child_0" {
+		//for 0x852d12801e5fb640a84421c37eafae87ba86c76c
+		if height == 33389535 && from == common.HexToAddress("0x852d12801e5fb640a84421c37eafae87ba86c76c") {
+			addSerialReward(state, from, 19, 29, height, 121128901091097)
+			addOneReward(state, from, 30, height, 121128901091097+11) //last epoch, has some extra pi
+		}
+
+		//for 0xbecabc3fed76ca7a551d4c372c20318b7457878c
+		if height == 33611723 && from == common.HexToAddress("0xbecabc3fed76ca7a551d4c372c20318b7457878c") {
+			addSerialReward(state, from, 19, 29, height, 1041442624722396)
+			addOneReward(state, from, 30, height, 1041442624722396+8) //last epoch, has some extra pi
+		}
+
+		//for 0x82bc1c28bef8f31e8d61a1706dcab8d36e6f5e58
+		if height == 33612352 && from == common.HexToAddress("0x82bc1c28bef8f31e8d61a1706dcab8d36e6f5e58") {
+			addSerialReward(state, from, 19, 29, height, 19900557187202)
+			addOneReward(state, from, 30, height, 19900557187202+8) //last epoch, has some extra pi
+		}
+
+		//for 0xceb2694a1ddb8daf849825d74c4954dcd0ad6489
+		if height == 34132176 && from == common.HexToAddress("0xceb2694a1ddb8daf849825d74c4954dcd0ad6489") {
+			addOneReward(state, from, 20, height, 8124004097323)
+			//where is rewards[21] ???
+			addSerialReward(state, from, 22, 27, height, 8124004097323)
+		}
+
+		//for "0xd5e6619291b2384b5b7da595a9bd78ec7ea30785"
+		if height == 34517913 && from == common.HexToAddress("0xd5e6619291b2384b5b7da595a9bd78ec7ea30785") {
+			addSerialReward(state, from, 19, 29, height, 6320382574071211)
+			addOneReward(state, from, 30, height, 6320382574071211+3) //last epoch, has some extra pi
+		}
+
+		//for 0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5
+		if height == 36553835 && from == common.HexToAddress("0x39a9590fdee5f90d05360beb6cf2f4adb05a02a5") {
+			addSerialReward(state, from, 19, 29, height, 734409970398072)
+			addOneReward(state, from, 30, height, 734409970398072 + 0) //last epoch, has some extra pi
+		}
+
+		if height == 36677302 && from == common.HexToAddress("0xeaeb9794265a4b38ddfcf69ede2f65d15fe99902") {
+			addSerialReward(state, from, 19, 29, height, 458798981837926)
+			addOneReward(state, from, 30, height, 458798981837926 + 1) //last epoch, has some extra pi
+		}
+
+		//for 0x9a4eb75fc8db5680497ac33fd689b536334292b0
+		if height == 36816616 && from == common.HexToAddress("0x9a4eb75fc8db5680497ac33fd689b536334292b0") {
+			addSerialReward(state, from, 19, 29, height, 812400409732380)
+			addOneReward(state, from, 30, height, 812400409732380 + 6) //last epoch, has some extra pi
+		}
+
+		if height == 37056299 && from == common.HexToAddress("0xae6bde77bc386d2cb6492f824ded9147d0926512") {
+			addSerialReward(state, from, 19, 21, height, 3327665194300706)
+			//rewards[22] = new(big.Int).Add(rewards[22], rewardDiff) why need omit one????
+			addSerialReward(state, from, 23, 27, height, 3327665194300706)
+		}
+
+		//for 0xef470c3a63343585651808b8187bba0e277bc3c8
+		if height == 37682064 && from == common.HexToAddress("0xef470c3a63343585651808b8187bba0e277bc3c8") {
+			addSerialReward(state, from, 19, 29, height, 10268741179017)
+			addOneReward(state, from, 30, height, 10268741179017 + 3) //last epoch, has some extra pi
+		}
+
+		//for 0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa
+		if height == 39602464 && from == common.HexToAddress("0x133d604a2a138f04db8fb7d1f57fd739ad4b08aa") {
+			addSerialReward(state, from, 19, 29, height, 1676043787709040)
+			addOneReward(state, from, 30, height, 1676043787709040 + 9) //last epoch, has some extra pi
+		}
+
+		//for 0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc
+		if height == 43635343 && from == common.HexToAddress("0x6ea97c1d1588c589589fa0e1f66457897fa9b1cc") {
+			addSerialReward(state, from, 19, 29, height, 40072897040696)
+			addOneReward(state, from, 30, height, 40072897040696 + 4) //last epoch, has some extra pi
+		}
+
+		//for 0x723c1b86c78a04c4f125df4573acb0625bfc69a5
+		if height == 80530396 {
+			if from == common.HexToAddress("0x723c1b86c78a04c4f125df4573acb0625bfc69a5") {
+				addSerialReward(state, from, 19, 29, height, 5564573679550924)
+				addOneReward(state, from, 30, height, 5564573679550924 + 1) //last epoch, has some extra pi
+			}
+
+			//DO EXTRA ADDRESSES' REWARDS RECOVERY, THESE ADDRESSES DID NOT EXTRACT REWARDS TILL THIS PATCH
+			{
+				addr := common.HexToAddress("0x9351e3962a708c92b78bfe640d224f33055e90ba")
+				addOneReward(state, addr, 20, height, 33850000000000000)
+				addOneReward(state, addr, 25, height, 33850000000000000)
+
+				addr = common.HexToAddress("0x99c3dc791f29e98255c197e7fe96f0933723db3f")
+				addSerialReward(state, addr, 19, 29, height, 6365231762939546)
+				addOneReward(state, addr, 30, height, 6365231762939546 + 3) //last epoch, has some extra pi
+
+
+				addr = common.HexToAddress("0xd5b10f06cbc8306235539f404ff7ab7f594c7537")
+				addSerialReward(state, addr, 19, 29, height, 240157392112417)
+				addOneReward(state, addr, 30, height, 240157392112417 + 2) //last epoch, has some extra pi
+
+
+				addr = common.HexToAddress("0xf35d12756790c527f538e00de07c837a45e72732")
+				addOneReward(state, addr, 19, height, 12232271821444278)
+				addSerialReward(state, addr, 20, 29, height, 12232271821444274)
+			}
+		}
+	}
+}
+
+func addOneReward(state *state.StateDB, addr common.Address, epoch uint64, height, rewardDiff uint64) {
+	state.AddOutsideRewardBalanceByEpochNumberBase(addr, epoch, height, new(big.Int).SetUint64(rewardDiff))
+}
+
+func addSerialReward(state *state.StateDB, addr common.Address, startEp, endEp, height, rewardDiff uint64) {
+	rewardDiffBig := new(big.Int).SetUint64(rewardDiff)
+	for epoch := startEp; epoch <= endEp; epoch++ {
+		state.AddOutsideRewardBalanceByEpochNumberBase(addr, epoch, height, rewardDiffBig)
+	}
 }
