@@ -3,18 +3,19 @@ package epoch
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	tmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/log"
-	dbm "github.com/tendermint/go-db"
-	"github.com/tendermint/go-wire"
 	"math"
 	"math/big"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	tmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/log"
+	dbm "github.com/tendermint/go-db"
+	"github.com/tendermint/go-wire"
 )
 
 var NextEpochNotExist = errors.New("next epoch parameters do not exist, fatal error")
@@ -357,6 +358,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 			outsideReward, rollbackCatchup, selfRetrieveReward, markProposedInEpoch bool) (bool, *tmTypes.ValidatorSet, error) {
 
 	if height == epoch.EndBlock {
+
 		log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
 
 		epoch.nextEpoch = epoch.GetNextEpoch()
@@ -504,12 +506,11 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 }
 
 // Move to New Epoch
-func (epoch *Epoch) EnterNewEpoch(newValidators *tmTypes.ValidatorSet) (*Epoch, error) {
+func (epoch *Epoch) EnterNewEpoch(newValidators *tmTypes.ValidatorSet, switchTime time.Time) (*Epoch, error) {
 	if epoch.nextEpoch != nil {
-		now := time.Now()
 
 		// Set the End Time for current Epoch and Save it
-		epoch.EndTime = now
+		epoch.EndTime = switchTime
 		epoch.Save()
 		// Old Epoch Ended
 		epoch.logger.Infof("Epoch %v reach to his end", epoch.Number)
@@ -518,7 +519,7 @@ func (epoch *Epoch) EnterNewEpoch(newValidators *tmTypes.ValidatorSet) (*Epoch, 
 		nextEpoch := epoch.nextEpoch
 		// Store the Previous Epoch Validators only
 		nextEpoch.previousEpoch = &Epoch{Validators: epoch.Validators}
-		nextEpoch.StartTime = now
+		nextEpoch.StartTime = switchTime
 		nextEpoch.Validators = newValidators
 
 		nextEpoch.nextEpoch = nil //suppose we will not generate a more epoch after next-epoch
@@ -765,7 +766,7 @@ func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime t
 	var epochNumberPerYear = epoch.rs.EpochNumberPerYear //12
 	var totalYear = epoch.rs.TotalYear                   // 23
 
-	const EMERGENCY_BLOCKS_OF_NEXT_EPOCH uint64 = 2400 //at least 2400 blocks per epoch
+	const EMERGENCY_BLOCKS_OF_NEXT_EPOCH uint64 = 432000 //at least 432000 blocks per epoch(about 5 days)
 
 	zeroEpoch := loadOneEpoch(epoch.db, 0, epoch.logger)
 	initStartTime := zeroEpoch.StartTime

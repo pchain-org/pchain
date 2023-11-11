@@ -377,7 +377,7 @@ func extrRwd_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 
 		log.Debugf("extrRwd_ApplyCb currentEpochNumber, noExtractMark, extractEpochNumber is %v, %v, %v\n", currentEpochNumber, noExtractMark, extractEpochNumber)
 
-		rewards := state.GetAllEpochReward(from, height)
+		rewards := state.GetAllEpochReward(from, height, true)
 		log.Debugf("extrRwd_ApplyCb before patchRerun, rewards is %v\n", rewards)
 		extractEpochNumber, noExtractMark, rewards = patchRerun(chainId, height, from, currentEpochNumber, extractEpochNumber, noExtractMark, rewards)
 		log.Debugf("extrRwd_ApplyCb after patchRerun, rewards is %v\n", rewards)

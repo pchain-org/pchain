@@ -791,8 +791,8 @@ func (w *worker) NewChildCCTTx(cts *types.CCTTxStatus, nonce uint64, addrSig []b
 	if err != nil {
 		return nil, err
 	}
-
-	tx := types.NewTransaction(nonce, pabi.ChainContractMagicAddr, nil, 0, common.Big256, input)
+	gasprice := w.eth.TxPool().GasPrice()
+	tx := types.NewTransaction(nonce, pabi.ChainContractMagicAddr, nil, 0, gasprice, input)
 	return w.engine.(consensus.Tendermint).SignTx(tx)
 }
 
@@ -827,8 +827,10 @@ func (w *worker) commitCCTExecTransactionsEx(cctTxsInOneBlock []*types.CCTTxStat
 	for _, cts := range cctTxsInOneBlock {
 		latestCCTES := tdmEngine.GetLatestCCTExecStatus(cts.TxHash)
 		if w.needHandle(w.config.PChainId, cts, latestCCTES) {
-
+			log.Warnf("w.config.PChainId %v", w.config.PChainId)
+			log.Warnf("w.eth.TxPool().GasPrice() %v", w.eth.TxPool().GasPrice().String())
 			nonce := w.current.state.GetNonce(addr)
+			// w.cch.GetApiBridgeFromMainChain().GasPrice()
 			tx, err := w.NewChildCCTTx(cts, nonce, addrSig)
 			if err != nil {
 				w.logger.Trace("called NewChildCCTTx", "error", err)
@@ -866,8 +868,9 @@ func (w *worker) commitCCTExecTransactionEx(tx *types.Transaction, coinbase comm
 		if err != nil {
 			return nil, err
 		}
-
-		newTx := types.NewTransaction(tx.Nonce(), pabi.ChainContractMagicAddr, nil, 0, common.Big256, input)
+		// newTx := types.NewTransaction(tx.Nonce(), pabi.ChainContractMagicAddr, nil, 0, common.Big256, input)
+		gasprice := w.eth.TxPool().GasPrice()
+		newTx := types.NewTransaction(tx.Nonce(), pabi.ChainContractMagicAddr, nil, 0, gasprice, input)
 		newTx, _ = w.engine.(consensus.Tendermint).SignTx(newTx)
 		receipt.TxHash = newTx.Hash()
 		receipt.Status = types.ReceiptStatusFailed //should be this value, just re-assign

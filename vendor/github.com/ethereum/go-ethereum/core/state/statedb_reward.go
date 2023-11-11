@@ -133,17 +133,19 @@ func (self *StateDB) GetOutsideRewardBalanceByEpochNumber(addr common.Address, e
 		}
 	}
 
-	rb := self.db.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height)
+	rb, err := self.db.GetOutsideRewardBalanceByEpochNumber(addr, epochNo, height-1)
 	// if 0 epoch reward, try to read from trie
-	if rb.Sign() == 0 {
+	if err != nil || rb.Sign() == 0 {
 		rb = self.GetRewardBalanceByEpochNumber(addr, epochNo)
 	}
 
-	if rewardset, exist := self.rewardOutsideSet[addr]; exist {
-		rewardset[epochNo] = rb
-	} else {
-		epochReward := Reward{epochNo: rb}
-		self.rewardOutsideSet[addr] = epochReward
+	if rb != nil && rb.Sign() != 0 {
+		if rewardset, exist := self.rewardOutsideSet[addr]; exist {
+			rewardset[epochNo] = rb
+		} else {
+			epochReward := Reward{epochNo: rb}
+			self.rewardOutsideSet[addr] = epochReward
+		}
 	}
 
 	return rb
@@ -158,7 +160,6 @@ func (self *StateDB) AddOutsideRewardBalanceByEpochNumberBase(addr common.Addres
 		epochReward := Reward{epochNo: newReward}
 		self.rewardOutsideSet[addr] = epochReward
 	}
-
 	self.rewardOutsideSetDirty[addr] = struct{}{}
 }
 
@@ -189,14 +190,18 @@ func (self *StateDB) SubOutsideRewardBalanceByEpochNumber(addr common.Address, e
 //	return self.db.TrieDB().GetEpochReward(address, epoch)
 //}
 
-func (self *StateDB) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int {
-	//read value from lastest block
-	rewardsFromDB := self.db.GetAllEpochReward(address, height)
+func (self *StateDB) GetAllEpochReward(address common.Address, height uint64, asCache bool) map[uint64]*big.Int {
 
 	rewardsCache, exist := self.rewardOutsideSet[address]
 	if !exist {
-		self.rewardOutsideSet[address] = rewardsFromDB
+		if asCache {
+			self.rewardOutsideSet[address] = self.db.GetAllEpochReward(address, height-1)
+		} else {
+			return self.db.GetAllEpochReward(address, height)
+		}
 	} else {
+		//read value from lastest block
+		rewardsFromDB := self.db.GetAllEpochReward(address, height-1)
 		//refresh result with lastest value
 		for epoch, reward := range rewardsFromDB {
 			if _, exist1 := rewardsCache[epoch]; !exist1 {
@@ -217,7 +222,7 @@ func (self *StateDB) GetEpochRewardExtracted(address common.Address, height uint
 		return epoch, nil
 	}
 
-	epoch, err := self.db.GetEpochRewardExtracted(address, height)
+	epoch, err := self.db.GetEpochRewardExtracted(address, height-1)
 	if err != nil {
 		return epoch, err
 	}
