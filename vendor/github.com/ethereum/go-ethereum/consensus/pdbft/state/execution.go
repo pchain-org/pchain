@@ -124,7 +124,7 @@ func autoStartMining(bc *core.BlockChain, block *ethTypes.Block) {
 		state, _ := bc.State()
 		epochNo := currentEpoch.Number
 		nextValidators := currentEpoch.Validators.Copy()
-		dryrunErr := ep.DryRunUpdateEpochValidatorSet(state, epochNo, nextValidators,
+		dryrunErr := ep.DryRunUpdateEpochValidatorSet(state, bc.Config().PChainId, epochNo, nextValidators,
 			nextEp.GetEpochValidatorVoteSet(), markProposedInEpoch)
 		if dryrunErr != nil {
 			panic("can not update the validator set base on the vote, error: " + dryrunErr.Error())
