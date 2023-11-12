@@ -128,7 +128,7 @@ func (api *API) GetNextEpochValidators() ([]*tdmTypes.EpochValidator, error) {
 		markProposedInEpoch := api.chain.Config().IsMarkProposedInEpoch(api.chain.CurrentBlock().Header().MainChainNumber)
 
 		nextValidators := ep.Validators.Copy()
-		err = epoch.DryRunUpdateEpochValidatorSet(state, ep.Number, nextValidators,
+		err = epoch.DryRunUpdateEpochValidatorSet(state, api.chain.Config().PChainId, ep.Number, nextValidators,
 			nextEp.GetEpochValidatorVoteSet(), markProposedInEpoch)
 		if err != nil {
 			return nil, err
