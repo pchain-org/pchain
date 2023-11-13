@@ -2,11 +2,9 @@ package state
 
 import (
 	"errors"
+	"time"
 
 	"github.com/ethereum/go-ethereum/consensus"
-
-	//"fmt"
-
 	ep "github.com/ethereum/go-ethereum/consensus/pdbft/epoch"
 	"github.com/ethereum/go-ethereum/consensus/pdbft/types"
 	"github.com/ethereum/go-ethereum/core"
@@ -97,13 +95,17 @@ func updateLocalEpoch(bc *core.BlockChain, block *ethTypes.Block) {
 			}
 			currentEpoch.Save()
 		} else if epochInBlock.Number == currentEpoch.Number {
-			// Update the current epoch Start Time from proposer
-			currentEpoch.StartTime = epochInBlock.StartTime
+			if !epochInBlock.StartTime.IsZero() {
+				// Update the current epoch Start Time from proposer
+				currentEpoch.StartTime = epochInBlock.StartTime
+			} else if block.NumberU64() >= currentEpoch.StartBlock {
+				currentEpoch.StartTime = time.Unix(int64(bc.GetBlockByNumber(currentEpoch.StartBlock).Time()), 0)
+			}
 			currentEpoch.Save()
 
 			// Update the previous epoch End Time
 			if currentEpoch.Number > 0 {
-				ep.UpdateEpochEndTime(currentEpoch.GetDB(), currentEpoch.Number-1, epochInBlock.StartTime)
+				ep.UpdateEpochEndTime(currentEpoch.GetDB(), currentEpoch.Number-1, currentEpoch.StartTime)
 			}
 		}
 	}
@@ -122,7 +124,7 @@ func autoStartMining(bc *core.BlockChain, block *ethTypes.Block) {
 		state, _ := bc.State()
 		epochNo := currentEpoch.Number
 		nextValidators := currentEpoch.Validators.Copy()
-		dryrunErr := ep.DryRunUpdateEpochValidatorSet(state, epochNo, nextValidators,
+		dryrunErr := ep.DryRunUpdateEpochValidatorSet(state, bc.Config().PChainId, epochNo, nextValidators,
 			nextEp.GetEpochValidatorVoteSet(), markProposedInEpoch)
 		if dryrunErr != nil {
 			panic("can not update the validator set base on the vote, error: " + dryrunErr.Error())

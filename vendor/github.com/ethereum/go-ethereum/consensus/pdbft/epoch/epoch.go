@@ -3,18 +3,19 @@ package epoch
 import (
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	tmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/log"
-	dbm "github.com/tendermint/go-db"
-	"github.com/tendermint/go-wire"
 	"math"
 	"math/big"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	tmTypes "github.com/ethereum/go-ethereum/consensus/pdbft/types"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/log"
+	dbm "github.com/tendermint/go-db"
+	"github.com/tendermint/go-wire"
 )
 
 var NextEpochNotExist = errors.New("next epoch parameters do not exist, fatal error")
@@ -357,6 +358,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 			outsideReward, rollbackCatchup, selfRetrieveReward, markProposedInEpoch bool) (bool, *tmTypes.ValidatorSet, error) {
 
 	if height == epoch.EndBlock {
+
 		log.Debugf("ShouldEnterNewEpoch outsideReward, selfRetrieveReward is %v, %v\n", outsideReward, selfRetrieveReward)
 
 		epoch.nextEpoch = epoch.GetNextEpoch()
@@ -435,7 +437,7 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 
 
 			// Update Validators with vote
-			refunds, err := updateEpochValidatorSet(state, epoch.Number, newValidators, epoch.nextEpoch.validatorVoteSet, markProposedInEpoch)
+			refunds, err := updateEpochValidatorSet(state, pchainId, epoch.Number, newValidators, epoch.nextEpoch.validatorVoteSet, markProposedInEpoch)
 
 
 			if err != nil {
@@ -504,12 +506,11 @@ func (epoch *Epoch) ShouldEnterNewEpoch(pchainId string, height uint64, state *s
 }
 
 // Move to New Epoch
-func (epoch *Epoch) EnterNewEpoch(newValidators *tmTypes.ValidatorSet) (*Epoch, error) {
+func (epoch *Epoch) EnterNewEpoch(newValidators *tmTypes.ValidatorSet, switchTime time.Time) (*Epoch, error) {
 	if epoch.nextEpoch != nil {
-		now := time.Now()
 
 		// Set the End Time for current Epoch and Save it
-		epoch.EndTime = now
+		epoch.EndTime = switchTime
 		epoch.Save()
 		// Old Epoch Ended
 		epoch.logger.Infof("Epoch %v reach to his end", epoch.Number)
@@ -518,7 +519,7 @@ func (epoch *Epoch) EnterNewEpoch(newValidators *tmTypes.ValidatorSet) (*Epoch, 
 		nextEpoch := epoch.nextEpoch
 		// Store the Previous Epoch Validators only
 		nextEpoch.previousEpoch = &Epoch{Validators: epoch.Validators}
-		nextEpoch.StartTime = now
+		nextEpoch.StartTime = switchTime
 		nextEpoch.Validators = newValidators
 
 		nextEpoch.nextEpoch = nil //suppose we will not generate a more epoch after next-epoch
@@ -531,7 +532,7 @@ func (epoch *Epoch) EnterNewEpoch(newValidators *tmTypes.ValidatorSet) (*Epoch, 
 }
 
 // DryRunUpdateEpochValidatorSet Re-calculate the New Validator Set base on the current state db and vote set
-func DryRunUpdateEpochValidatorSet(state *state.StateDB, epochNo uint64, validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet, markProposedInEpoch bool) error {
+func DryRunUpdateEpochValidatorSet(state *state.StateDB, chainId string, epochNo uint64, validators *tmTypes.ValidatorSet, voteSet *EpochValidatorVoteSet, markProposedInEpoch bool) error {
 
 	for _, v := range validators.Validators {
 		vAddr := common.BytesToAddress(v.Address)
@@ -549,13 +550,13 @@ func DryRunUpdateEpochValidatorSet(state *state.StateDB, epochNo uint64, validat
 		}
 	}
 
-	_, err := updateEpochValidatorSet(state, epochNo, validators, voteSet, markProposedInEpoch)
+	_, err := updateEpochValidatorSet(state, chainId, epochNo, validators, voteSet, markProposedInEpoch)
 	return err
 }
 
 // updateEpochValidatorSet Update the Current Epoch Validator by vote
 //
-func updateEpochValidatorSet(state *state.StateDB, epochNo uint64, validators *tmTypes.ValidatorSet,
+func updateEpochValidatorSet(state *state.StateDB, chainId string, epochNo uint64, validators *tmTypes.ValidatorSet,
 	voteSet *EpochValidatorVoteSet, markProposedInEpoch bool) ([]*tmTypes.RefundValidatorAmount, error) {
 
 	// Refund List will be vaildators contain from Vote (exit validator or less amount than previous amount) and Knockout after sort by amount
@@ -595,7 +596,8 @@ func updateEpochValidatorSet(state *state.StateDB, epochNo uint64, validators *t
 					//could start in the middle of an epoch
 					if err == nil && epochNo > startEp {
 						_, proposed := state.CheckProposedInEpoch(v.Address, epochNo)
-						shouldVoteOut = !proposed
+						inVOPatch := IsInVoteoutPatch(chainId, epochNo, v.Address)
+						shouldVoteOut = !proposed && !inVOPatch
 					} else {
 						fmt.Printf("markProposedInEpoch is true, err is %v, epochNo is %v, startEp is %v\n",
 							err, epochNo, startEp)
@@ -644,7 +646,8 @@ func updateEpochValidatorSet(state *state.StateDB, epochNo uint64, validators *t
 				_, validator := validators.GetByAddress(addr)
 				if validator != nil {
 					_, proposed := state.CheckProposedInEpoch(commonAddr, epochNo)
-					shouldVoteOut := !proposed
+					inVOPatch := IsInVoteoutPatch(chainId, epochNo, commonAddr)
+					shouldVoteOut := !proposed && !inVOPatch
 					if shouldVoteOut {
 						refund = append(refund, &tmTypes.RefundValidatorAmount{Address: commonAddr, Amount: nil, Voteout: true})
 						_, removed := validators.Remove(addr)
@@ -765,7 +768,7 @@ func (epoch *Epoch) estimateForNextEpoch(lastBlockHeight uint64, lastBlockTime t
 	var epochNumberPerYear = epoch.rs.EpochNumberPerYear //12
 	var totalYear = epoch.rs.TotalYear                   // 23
 
-	const EMERGENCY_BLOCKS_OF_NEXT_EPOCH uint64 = 2400 //at least 2400 blocks per epoch
+	const EMERGENCY_BLOCKS_OF_NEXT_EPOCH uint64 = 432000 //at least 432000 blocks per epoch(about 5 days)
 
 	zeroEpoch := loadOneEpoch(epoch.db, 0, epoch.logger)
 	initStartTime := zeroEpoch.StartTime
@@ -949,4 +952,19 @@ func UpdateEpochEndTime(db dbm.DB, epNumber uint64, endTime time.Time) {
 		// Save back to DB
 		db.SetSync(calcEpochKeyWithHeight(epNumber), ep.Bytes())
 	}
+}
+
+//patch it for synchronization with avoiding bad block 
+func IsInVoteoutPatch(chainId string, epochNo uint64, addr common.Address) bool {
+
+	if chainId == "child_0" {
+		if epochNo == 58/*blockNo == 103415152*/ && addr == common.HexToAddress("0xda2e8314fd78879d80bd8ecad92952cbdeb88ed1") {
+			return true
+		}
+		if epochNo == 64/*blockNo == 103431952*/ && addr == common.HexToAddress("0xea80fd3fcc41441075fad44302548cd484a6c7af") {
+			return true
+		}
+	}
+
+	return false
 }

@@ -106,7 +106,7 @@ func (db *odrDatabase) TrieDB() *trie.Database {
 	return nil
 }
 
-func (db *odrDatabase) GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64) *big.Int {return nil}
+func (db *odrDatabase) GetOutsideRewardBalanceByEpochNumber(addr common.Address, epochNo uint64, height uint64) (*big.Int, error) {return nil, nil}
 func (db *odrDatabase) GetAllEpochReward(address common.Address, height uint64) map[uint64]*big.Int{return nil}
 func (db *odrDatabase) UpdateOutsideRewardBalance(addr common.Address, reward state.Reward) {}
 func (db *odrDatabase) GetOOSLastBlock() (*big.Int, error) {return nil, nil}

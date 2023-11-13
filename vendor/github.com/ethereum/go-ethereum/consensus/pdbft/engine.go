@@ -534,6 +534,7 @@ func (sb *backend) Finalize(chain consensus.ChainReader, header *types.Header, s
 		outsideReward, rollbackCatchup, selfRetrieveReward, markProposedInEpoch); ok {
 		ops.Append(&tdmTypes.SwitchEpochOp{
 			ChainId:       sb.chainConfig.PChainId,
+			SwitchTime:    time.Unix(header.Time.Int64(), 0),
 			NewValidators: newValidators,
 		})
 		if sb.chainConfig.IsChildSd2mcWhenEpochEndsBlock(header.MainChainNumber) {

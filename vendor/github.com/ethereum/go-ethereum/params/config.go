@@ -82,8 +82,8 @@ var (
 	MainnetMarkProposedInEpochMainBlock = big.NewInt(44916230)
 	TestnetMarkProposedInEpochMainBlock = big.NewInt(40)
 
-	MainnetEnhenceExtraBlock *big.Int = nil //big.NewInt(100000000000)
-	TestnetEnhenceExtraBlock *big.Int = nil //big.NewInt(100000000000)
+	MainnetEnhenceExtraBlock *big.Int = big.NewInt(67720000)
+	TestnetEnhenceExtraBlock *big.Int = big.NewInt(40)
 )
 
 var (

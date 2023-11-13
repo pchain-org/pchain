@@ -872,10 +872,10 @@ func (db *Database) accumulate(hash common.Hash, reachable map[common.Hash]struc
 	}
 }
 
-func (db *Database) GetOutsideRewardBalanceByEpochNumber(address common.Address, epoch uint64, height uint64) (*big.Int, []byte) {
+func (db *Database) GetOutsideRewardBalanceByEpochNumber(address common.Address, epoch uint64, height uint64) (*big.Int, []byte, error) {
 	reward, _ := db.diskdb.Get(common.RewardKey(address, epoch))
 	if len(reward) == 0 {
-		return big.NewInt(0), reward
+		return big.NewInt(0), reward, errors.New("not reward yet")
 	} else {
 		obrArray, err := common.Bytes2OBRArray(reward)
 		if err == nil {
@@ -884,7 +884,7 @@ func (db *Database) GetOutsideRewardBalanceByEpochNumber(address common.Address,
 			for i := 0; i < common.OOS_CACHE_SIZE; i++ {
 				key := obrArray.ObrArray[i].Height
 				if key == height {
-					return obrArray.ObrArray[i].Reward, reward
+					return obrArray.ObrArray[i].Reward, reward, nil
 				} else if key < height {
 					if closestHeight == common.INV_HEIGHT || key > closestHeight {
 						closestIndex = i
@@ -894,13 +894,13 @@ func (db *Database) GetOutsideRewardBalanceByEpochNumber(address common.Address,
 			}
 
 			if closestHeight != common.INV_HEIGHT {
-				return obrArray.ObrArray[closestIndex].Reward, reward
+				return obrArray.ObrArray[closestIndex].Reward, reward, nil
 			}
 
-			return big.NewInt(0), reward
+			return nil, reward, errors.New("not reward yet")
 		}
 
-		return new(big.Int).SetBytes(reward), reward
+		return new(big.Int).SetBytes(reward), reward, nil
 	}
 }
 
@@ -912,9 +912,11 @@ func (db *Database) GetAllEpochReward(address common.Address, height uint64) (ma
 	rewardBytesResult := make(map[uint64][]byte)
 	for it.Next() {
 		epoch := common.DecodeUint64(it.Key()[21:])
-		reward, rewardBytes := db.GetOutsideRewardBalanceByEpochNumber(address, epoch, height)
-		rewardResult[epoch] = reward
-		rewardBytesResult[epoch] = rewardBytes
+		reward, rewardBytes, err := db.GetOutsideRewardBalanceByEpochNumber(address, epoch, height)
+		if err == nil {
+			rewardResult[epoch] = reward
+			rewardBytesResult[epoch] = rewardBytes
+		}
 	}
 	return rewardResult, rewardBytesResult
 }

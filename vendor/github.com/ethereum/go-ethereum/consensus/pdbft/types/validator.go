@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/ethereum/go-ethereum/core/types"
@@ -89,7 +90,8 @@ type RefundValidatorAmount struct {
 
 // SwitchEpoch op
 type SwitchEpochOp struct {
-	ChainId string
+	ChainId       string
+	SwitchTime    time.Time
 	NewValidators *ValidatorSet
 }
 
@@ -102,5 +104,5 @@ func (op *SwitchEpochOp) Conflict(op1 ethTypes.PendingOp) bool {
 }
 
 func (op *SwitchEpochOp) String() string {
-	return fmt.Sprintf("SwitchEpochOp - ChainId:%v, New Validators: %v", op.ChainId, op.NewValidators)
+	return fmt.Sprintf("SwitchEpochOp - ChainId:%v, SwitchTime:%v, New Validators: %v", op.ChainId, op.SwitchTime, op.NewValidators)
 }

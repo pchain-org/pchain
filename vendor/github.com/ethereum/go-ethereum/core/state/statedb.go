@@ -931,9 +931,9 @@ func (s *StateDB) CommitOOSCache(blockNr *big.Int) {
 		s.db.UpdateOutsideRewardBalance(addr, s.rewardOutsideSet[addr])
 		delete(s.rewardOutsideSetDirty, addr)
 	}
+
 	//s.ClearOutsideReward()
-	
-	s.SetOOSLastBlock(blockNr)	
+	s.SetOOSLastBlock(blockNr)
 	s.db.UpdateOOSLastBlock(blockNr)
 
 	for addr, _ := range s.extractRewardSetDirty {

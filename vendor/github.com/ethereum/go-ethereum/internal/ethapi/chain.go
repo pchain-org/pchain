@@ -776,7 +776,10 @@ func cctr_ValidateCb(tx *types.Transaction, state *state.StateDB, bc *core.Block
 		return fmt.Errorf("can only start cross chain transfer from local chain")
 	}
 
-	if state.GetBalance(from).Cmp(args.Amount) < 0 {
+	var fee, total big.Int
+	fee.Mul(big.NewInt(int64(tx.Gas())), tx.GasPrice())
+	total.Add(args.Amount, &fee)
+	if state.GetBalance(from).Cmp(&total) < 0 {
 		return fmt.Errorf("%w: address %x", core.ErrInsufficientFundsForTransfer, from)
 	}
 
@@ -814,7 +817,6 @@ func cctr_ApplyCb(tx *types.Transaction, state *state.StateDB, bc *core.BlockCha
 		Amount:          args.Amount,
 		Status:          types.CCTRECEIVED,
 	}
-
 	if state.GetBalance(from).Cmp(args.Amount) < 0 {
 		return fmt.Errorf("%w: address %x", core.ErrInsufficientFundsForTransfer, from)
 	}
