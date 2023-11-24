@@ -297,7 +297,7 @@ func (c *ChainIndexer) updateLoop() {
 				c.lock.Unlock()
 				newHead, err := c.processSection(section, oldHead)
 				if err != nil {
-					c.log.Error("Section processing failed", "error", err)
+					c.log.Debug("Section processing failed", "error", err)
 				}
 				c.lock.Lock()
 

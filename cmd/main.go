@@ -2,6 +2,12 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"runtime"
+	"time"
+
 	"github.com/ethereum/go-ethereum/bridge"
 	"github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -13,11 +19,6 @@ import (
 	"github.com/pchain/chain"
 	"github.com/pchain/version"
 	"gopkg.in/urfave/cli.v1"
-	"os"
-	"path"
-	"path/filepath"
-	"runtime"
-	"time"
 )
 
 const (
@@ -95,6 +96,7 @@ func main() {
 		crossChainTransferCommand,
 		synchFromLocalDBCommand,
 		getEpochsCommand,
+		snapshotCommand,
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 

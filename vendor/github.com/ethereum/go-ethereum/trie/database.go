@@ -58,6 +58,13 @@ var secureKeyPrefix = []byte("secure-key-")
 // secureKeyLength is the length of the above prefix + 32byte hash.
 const secureKeyLength = 11 + 32
 
+
+// used to handle the raw data when it is retrieving from db
+type Snapshot interface {
+	Handle(key, value []byte) //action on key/value bytes from source db
+}
+
+
 // Database is an intermediate write layer between the trie data structures and
 // the disk database. The aim is to accumulate trie writes in-memory and only
 // periodically flush a couple tries to disk, garbage collecting the remainder.
@@ -87,6 +94,8 @@ type Database struct {
 
 	dirtiesSize   common.StorageSize // Storage size of the dirty node cache (exc. flushlist)
 	preimagesSize common.StorageSize // Storage size of the preimages cache
+
+	snapshot	Snapshot		// snapshot helps to handle key/value when accessing raw data from db
 
 	lock sync.RWMutex
 }
@@ -308,6 +317,30 @@ func NewDatabaseWithCache(diskdb ethdb.KeyValueStore, cache int) *Database {
 	}
 }
 
+// NewDatabaseWithCache creates a new trie database to store ephemeral trie content
+// before its written out to disk or garbage collected. It also acts as a read cache
+// for nodes loaded from disk.
+func NewDatabaseWithCacheSnapShot(diskdb ethdb.KeyValueStore, cache int, sn Snapshot) *Database {
+	var cleans *bigcache.BigCache
+	if cache > 0 {
+		cleans, _ = bigcache.NewBigCache(bigcache.Config{
+			Shards:             1024,
+			LifeWindow:         time.Hour,
+			MaxEntriesInWindow: cache * 1024,
+			MaxEntrySize:       512,
+			HardMaxCacheSize:   cache,
+			Hasher:             trienodeHasher{},
+		})
+	}
+	return &Database{
+		diskdb:    diskdb,
+		cleans:    cleans,
+		dirties:   map[common.Hash]*cachedNode{{}: {}},
+		preimages: make(map[common.Hash][]byte),
+		snapshot:  sn,
+	}
+}
+
 // DiskDB retrieves the persistent storage backing the trie database.
 func (db *Database) DiskDB() ethdb.KeyValueStore {
 	return db.diskdb
@@ -391,6 +424,11 @@ func (db *Database) node(hash common.Hash) node {
 	if err != nil || enc == nil {
 		return nil
 	}
+
+	if db.snapshot != nil {
+		db.snapshot.Handle(hash[:], enc)
+	}
+
 	if db.cleans != nil {
 		db.cleans.Set(string(hash[:]), enc)
 		memcacheCleanMissMeter.Mark(1)
@@ -425,6 +463,11 @@ func (db *Database) Node(hash common.Hash) ([]byte, error) {
 	// Content unavailable in memory, attempt to retrieve from disk
 	enc, err := db.diskdb.Get(hash[:])
 	if err == nil && enc != nil {
+
+		if db.snapshot != nil {
+			db.snapshot.Handle(hash[:], enc)
+		}
+
 		if db.cleans != nil {
 			db.cleans.Set(string(hash[:]), enc)
 			memcacheCleanMissMeter.Mark(1)

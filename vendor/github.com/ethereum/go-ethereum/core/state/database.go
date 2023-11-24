@@ -131,6 +131,17 @@ func NewDatabase(db ethdb.Database) Database {
 // NewDatabaseWithCache creates a backing store for state. The returned database
 // is safe for concurrent use and retains a lot of collapsed RLP trie nodes in a
 // large memory cache.
+func NewDatabaseWithCacheSnapshot(db ethdb.Database, cache int, sn trie.Snapshot) Database {
+	csc, _ := lru.New(codeSizeCacheSize)
+	return &cachingDB{
+		db:            trie.NewDatabaseWithCacheSnapShot(db, cache, sn),
+		codeSizeCache: csc,
+	}
+}
+
+// NewDatabaseWithCache creates a backing store for state. The returned database
+// is safe for concurrent use and retains a lot of collapsed RLP trie nodes in a
+// large memory cache.
 func NewDatabaseWithCache(db ethdb.Database, cache int) Database {
 	csc, _ := lru.New(codeSizeCacheSize)
 	return &cachingDB{

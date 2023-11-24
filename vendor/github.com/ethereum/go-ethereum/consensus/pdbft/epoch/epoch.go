@@ -351,6 +351,14 @@ func (epoch *Epoch) SetNextEpoch(next *Epoch) {
 }
 
 func (epoch *Epoch) GetPreviousEpoch() *Epoch {
+	if epoch.previousEpoch == nil {
+		epoch.previousEpoch = loadOneEpoch(epoch.db, epoch.Number-1, epoch.logger)
+		if epoch.previousEpoch != nil {
+			epoch.previousEpoch.rs = epoch.rs
+			// Set ValidatorVoteSet
+			epoch.previousEpoch.validatorVoteSet = LoadEpochVoteSet(epoch.db, epoch.Number-1)
+		}
+	}
 	return epoch.previousEpoch
 }
 

@@ -217,3 +217,18 @@ For example, to get all epochs' brief information of child_0
 ```
 ./pchain getEpochs --chainid child_0 --toolkitdir /home/user/code/toolkit/.pchain
 ```
+
+**Tool7. snapshot**  which is to snapshot one chain's data to save disk usage, and this chain of course can continue running on this snapshot. the command format is
+```
+./pchain snapshot --datadir data_dir --chainId chain_id
+```
+
+For example, to snapshot the main chain
+```
+./pchain snapshot --datadir /home/user/code/master/.pchain --chainId pchain
+```
+
+to snapshot the first official child chain
+```
+./pchain snapshot --chainId child_0 --datadir /home/user/code/master/.pchain
+```

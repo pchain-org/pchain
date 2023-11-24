@@ -13,8 +13,10 @@ var OosLastBlockKey = []byte("oos-last-block")
 var ProposedInEpochPrefix = []byte("proposed-in-epoch-")
 var StartMarkProposalInEpochPrefix = []byte("sp-in-epoch-")
 
+const Uint64Len  = 8
+
 func EncodeUint64(number uint64) []byte {
-	enc := make([]byte, 8)
+	enc := make([]byte, Uint64Len)
 	binary.BigEndian.PutUint64(enc, number)
 	return enc
 }
