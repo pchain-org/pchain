@@ -4,6 +4,11 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"math/big"
+	"os"
+	"strings"
+	"time"
+
 	gethmain "github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
@@ -20,10 +25,6 @@ import (
 	"github.com/pchain/chain"
 	"github.com/syndtr/goleveldb/leveldb"
 	"gopkg.in/urfave/cli.v1"
-	"math/big"
-	"os"
-	"strings"
-	"time"
 )
 
 var BlockWithDiccArray = []uint64{
@@ -62,7 +63,7 @@ var BlockWithDiccArray = []uint64{
 	36164962, 36334834, 36370337, 36370496, 36382402, 36382454, 36417513, 36585002, 36639041, 36653942, 36668889, 36681606, 36693923, 36721612, 36721698, 36722499, 36907682, 37150350, 37223698, 37291133, 37302309, 37341160, 37401329, 37978270, 37980363, 38021204, 38119808, 38230397, 38345608, 38350010, 38350755, 38490953, 38683669, 39140718, 39143855, 39170859, 39253091, 39266111, 39294014, 39403998, 39441399, 39496414, 39498620, 39498645, 39561060, 39644402, 39676908, 39747769, 39784271, 39865137, 39945723, 39957046, 39957278, 39975358, 40049389, 40097582, 40135763, 40189637, 40195814, 40540421, 40571514, 40572523, 40575804, 40577690, 40612171, 40816680, 41181971, 41225296, 41693898, 41694550, 41817058, 42014363, 42232266, 43071076, 43657401, 43940691, 43997572, 44212511, 44286172, 44932794, 44995435, 44996343, 45485508, 45630156, 45746733, 46256241, 46256411, 46436484, 46440241, 46493125, 46493142, 46922909, 46961159, 46964121, 46966744, 46967196, 47504082, 47507520, 47507661, 47511393, 47519933, 49470464, 50444032, 52605168, 52605385, 52683181, 52684005, 52684776, 52705385, 52705466, 52910234, 52910686,
 	52911367, 52917353, 52970584, 52980519, 52980567, 53437223, 53440872, 53441785, 53441862, 53442545, 53442787, 53442879, 53442907, 53443855, 53444159, 53444575, 53445014, 53445457, 53446184, 53492622, 53494257, 53505892, 53506193, 53506292, 53506573, 53513671, 53734216, 54122759, 54128976, 54132374, 54133213, 54249230, 54249482, 54263367, 54264083, 54278089, 54468312, 54486224, 54707408, 55643511, 55963286, 55963448, 56159371, 57327128, 57327371, 57328551, 57328580, 57629803, 57708245, 57744101, 57744221, 57986408, 58212435, 58415549, 58474495, 58476674, 58477420, 58482582, 58494701, 58495594, 58884606, 59595558, 60800143, 62481766, 63021485, 63032116, 63084763, 63085201, 63085250, 63085321, 63106642, 63178451, 63218756, 63235783, 63236192, 63506626, 63507607, 63509143, 63512496, 63512520, 63512580, 63512900, 63694446, 63748283, 63750955, 63751472, 63753182, 64212785, 64225403, 64273496, 64311773, 64323868, 64449676, 64591999, 65965763, 66030546, 66030602, 66031650, 66260197, 66689952, 67154117, 67674000, 69091320,
 }
-var maxBlockNoChecked = uint64(70180000)
+var maxBlockNoChecked = uint64(71457200)
 
 var chaindataDbName = "chaindata"
 var snapshotDbName = "snapshot"
@@ -235,7 +236,7 @@ func doSnapshot(ctx *cli.Context, chainId string, chain *core.BlockChain) error 
 	return nil
 }
 
-//copy start-block and end-block(headers) of each epoch, not include the state
+// copy start-block and end-block(headers) of each epoch, not include the state
 func copyEpochEndpointBlock(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Database) error {
 
 	tdm := bc.Engine().(consensus.Tendermint)
@@ -276,7 +277,7 @@ func copyEpochEndpointBlock(ctx *cli.Context, bc *core.BlockChain, dstDiskDb eth
 	return nil
 }
 
-//copy previous block(headers), not include the state
+// copy previous block(headers), not include the state
 func copyCommonBlock(ctx *cli.Context, number uint64, bc *core.BlockChain, dstDiskDb ethdb.Database) error {
 
 	//1. write block
@@ -309,7 +310,7 @@ func copyCommonBlock(ctx *cli.Context, number uint64, bc *core.BlockChain, dstDi
 	return nil
 }
 
-//copy blocks which contain Dicc(deposit_in_child_chain) txs, not include the state
+// copy blocks which contain Dicc(deposit_in_child_chain) txs, not include the state
 func copyBlocksWithDiccTxs(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Database) error {
 
 	chainId := bc.Config().PChainId
@@ -400,7 +401,7 @@ func copyBlocksWithDiccTxs(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethd
 	return nil
 }
 
-//copy last 2 blocks(headers/tx/receips, not include the state
+// copy last 2 blocks(headers/tx/receips, not include the state
 func copyLastTwoBlocks(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Database) error {
 
 	//copy 2nd last block
@@ -421,7 +422,7 @@ func copyLastTwoBlocks(ctx *cli.Context, bc *core.BlockChain, dstDiskDb ethdb.Da
 	return nil
 }
 
-//copy last block(headers/tx/receips, not include the state
+// copy last block(headers/tx/receips, not include the state
 func copyLastBlock(ctx *cli.Context, ptd *big.Int, block *types.Block, dstDiskDb ethdb.Database) error {
 
 	externTd := new(big.Int).Add(block.Difficulty(), ptd)

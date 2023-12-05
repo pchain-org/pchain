@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/bridge"
-	"github.com/ethereum/go-ethereum/cmd/geth"
+	gethmain "github.com/ethereum/go-ethereum/cmd/geth"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/consensus/pdbft"
 	"github.com/ethereum/go-ethereum/console"
@@ -97,6 +97,7 @@ func main() {
 		synchFromLocalDBCommand,
 		getEpochsCommand,
 		snapshotCommand,
+		dumpCommand,
 	}
 	cliApp.HideVersion = true // we have a command to print the version
 

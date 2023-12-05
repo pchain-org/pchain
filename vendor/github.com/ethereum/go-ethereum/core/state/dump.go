@@ -43,9 +43,9 @@ type DumpAccount struct {
 	Reward       string            `json:"reward_balance"`
 	RewardRoot   string            `json:"reward_root"`
 	RewardDetail map[string]string `json:"reward_detail"`
-	
-	EpochReward  map[uint64]*big.Int `json:"epoch_reward"`
-	ExtractNumber  uint64                  `json:"extract_number"`
+
+	EpochReward   map[uint64]*big.Int `json:"epoch_reward"`
+	ExtractNumber uint64              `json:"extract_number"`
 
 	Tx1Root   string   `json:"tx1_root"`
 	Tx1Detail []string `json:"tx1_detail"`
@@ -208,7 +208,6 @@ func (self *StateDB) RawDumpToFile(height uint64, filename string) Dump {
 		//RefundAccounts: make([]string, 0),
 	}
 
-
 	//icount := 0
 	it := trie.NewIterator(self.trie.NodeIterator(nil))
 	for it.Next() {
@@ -219,7 +218,7 @@ func (self *StateDB) RawDumpToFile(height uint64, filename string) Dump {
 			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 				panic(err)
 			}
-			
+
 			commonAddr := common.BytesToAddress(addr)
 			obj := newObject(nil, commonAddr, data, nil)
 			account := DumpAccount{
@@ -233,8 +232,8 @@ func (self *StateDB) RawDumpToFile(height uint64, filename string) Dump {
 				ProxiedDetail:  make(map[string]*DumpProxied),
 				Reward:         data.RewardBalance.String(),
 				RewardRoot:     data.RewardRoot.String(),
-				RewardDetail:   make(map[string]string),
-				EpochReward:    make(map[uint64]*big.Int),
+				// RewardDetail:   make(map[string]string),
+				// EpochReward:    make(map[uint64]*big.Int),
 
 				Tx1Root: data.TX1Root.String(),
 				Tx3Root: data.TX3Root.String(),
@@ -243,15 +242,15 @@ func (self *StateDB) RawDumpToFile(height uint64, filename string) Dump {
 				Root:     common.Bytes2Hex(data.Root[:]),
 				CodeHash: common.Bytes2Hex(data.CodeHash),
 				Code:     common.Bytes2Hex(obj.Code(self.db)),
-				Storage:  make(map[string]string),
+				// Storage:  make(map[string]string),
 
 				Candidate:  data.Candidate,
 				Commission: data.Commission,
 			}
-			storageIt := trie.NewIterator(obj.getTrie(self.db).NodeIterator(nil))
-			for storageIt.Next() {
-				account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
-			}
+			// storageIt := trie.NewIterator(obj.getTrie(self.db).NodeIterator(nil))
+			// for storageIt.Next() {
+			// 	account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
+			// }
 
 			tx1It := trie.NewIterator(obj.getTX1Trie(self.db).NodeIterator(nil))
 			for tx1It.Next() {
@@ -278,31 +277,31 @@ func (self *StateDB) RawDumpToFile(height uint64, filename string) Dump {
 				}
 			}
 
-			if data.RewardRoot.String() != "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421" {
-				rewardIt := trie.NewIterator(obj.getRewardTrie(self.db).NodeIterator(nil))
-				for rewardIt.Next() {
-					var key uint64
-					rlp.DecodeBytes(self.trie.GetKey(rewardIt.Key), &key)
-					var value big.Int
-					rlp.DecodeBytes(rewardIt.Value, &value)
-					account.RewardDetail[fmt.Sprintf("epoch_%d", key)] = value.String()
-				}
-			}
+			// if data.RewardRoot.String() != "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421" {
+			// 	rewardIt := trie.NewIterator(obj.getRewardTrie(self.db).NodeIterator(nil))
+			// 	for rewardIt.Next() {
+			// 		var key uint64
+			// 		rlp.DecodeBytes(self.trie.GetKey(rewardIt.Key), &key)
+			// 		var value big.Int
+			// 		rlp.DecodeBytes(rewardIt.Value, &value)
+			// 		account.RewardDetail[fmt.Sprintf("epoch_%d", key)] = value.String()
+			// 	}
+			// }
 
-			account.EpochReward = self.GetAllEpochReward(commonAddr, height, false)
-			for epoch, reward := range account.EpochReward {
-				if reward == nil || reward.Sign() == 0 {
-					delete(account.EpochReward, epoch)
-				}
-			}
-			if extractNumber, err1 := self.GetEpochRewardExtracted(commonAddr, height); err1 == nil {
-				account.ExtractNumber = extractNumber
-				for epoch, _ := range account.EpochReward {
-					if epoch <= account.ExtractNumber {
-						delete(account.EpochReward, epoch)
-					}
-				}
-			}
+			// account.EpochReward = self.GetAllEpochReward(commonAddr, height, false)
+			// for epoch, reward := range account.EpochReward {
+			// 	if reward == nil || reward.Sign() == 0 {
+			// 		delete(account.EpochReward, epoch)
+			// 	}
+			// }
+			// if extractNumber, err1 := self.GetEpochRewardExtracted(commonAddr, height); err1 == nil {
+			// 	account.ExtractNumber = extractNumber
+			// 	for epoch, _ := range account.EpochReward {
+			// 		if epoch <= account.ExtractNumber {
+			// 			delete(account.EpochReward, epoch)
+			// 		}
+			// 	}
+			// }
 
 			dump.Accounts[common.Bytes2Hex(addr)] = account
 		} else {
@@ -354,7 +353,7 @@ func (self *StateDB) DoSnapshot(sn trie.Snapshot) error {
 	content := fmt.Sprintf("%v state object copied", soCount)
 	replacePrint(backLen, content)
 	backLen = len(content)
-	
+
 	it := trie.NewIterator(self.trie.NodeIterator(nil))
 	for it.Next() {
 
@@ -462,7 +461,7 @@ func (self *StateDB) DoSnapshot(sn trie.Snapshot) error {
 			}
 		}
 
-		soCount ++
+		soCount++
 		content = fmt.Sprintf("%v state object copied", soCount)
 		replacePrint(backLen, content)
 		backLen = len(content)
@@ -478,17 +477,17 @@ func (self *StateDB) DoSnapshot(sn trie.Snapshot) error {
 func replacePrint(backlen int, content string) {
 
 	backString := ""
-	for i:=0; i<backlen; i++ {
+	for i := 0; i < backlen; i++ {
 		backString += "\b"
 	}
 	fmt.Print(backString)
 	fmt.Print(content)
 }
 
-//for debug; to check if doing snapshot for the specific strAddr
+// for debug; to check if doing snapshot for the specific strAddr
 func checkForAddress(key, addr []byte, strAddr string) bool {
 
-	keyHex :=  common.Bytes2Hex(key)
+	keyHex := common.Bytes2Hex(key)
 	addrHex := common.Bytes2Hex(addr)
 	fmt.Printf("it.Key %v, addrHex %v\n", keyHex, addrHex)
 
