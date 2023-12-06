@@ -232,3 +232,18 @@ to snapshot the first official child chain
 ```
 ./pchain snapshot --chainId child_0 --datadir /home/user/code/master/.pchain
 ```
+
+**Tool8. dump**  which is to dump accouts info to file
+```
+./pchain dump --datadir data_dir --chainId chain_id
+```
+
+For example, to dump the main chain
+```
+./pchain dump --datadir /home/user/code/master/.pchain --chainId pchain
+```
+
+to dump the first official child chain
+```
+./pchain dump --datadir /home/user/code/master/.pchain --chainId child_0
+```

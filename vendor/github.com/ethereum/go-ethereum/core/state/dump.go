@@ -75,6 +75,21 @@ type Dump struct {
 	ChildChainRewardPerBlock *big.Int               `json:"child_chain_reward_per_block"`
 	RefundAccounts           []string               `json:"refund_accounts"`
 }
+type DumpAccountBalance struct {
+	Balance        string `json:"balance"`
+	Deposit        string `json:"deposit_balance"`
+	Delegate       string `json:"delegate_balance"`
+	Proxied        string `json:"proxied_balance"`
+	DepositProxied string `json:"deposit_proxied_balance"`
+	PendingRefund  string `json:"pending_refund_balance"`
+	Reward         string `json:"reward_balance"`
+	Nonce          uint64 `json:"nonce"`
+	Candidate      bool   `json:"candidate"`
+}
+type DumpBalance struct {
+	Root     string                        `json:"root"`
+	Accounts map[string]DumpAccountBalance `json:"accounts"`
+}
 
 func (self *StateDB) RawDump() Dump {
 	dump := Dump{
@@ -232,8 +247,8 @@ func (self *StateDB) RawDumpToFile(height uint64, filename string) Dump {
 				ProxiedDetail:  make(map[string]*DumpProxied),
 				Reward:         data.RewardBalance.String(),
 				RewardRoot:     data.RewardRoot.String(),
-				// RewardDetail:   make(map[string]string),
-				// EpochReward:    make(map[uint64]*big.Int),
+				RewardDetail:   make(map[string]string),
+				EpochReward:    make(map[uint64]*big.Int),
 
 				Tx1Root: data.TX1Root.String(),
 				Tx3Root: data.TX3Root.String(),
@@ -242,15 +257,15 @@ func (self *StateDB) RawDumpToFile(height uint64, filename string) Dump {
 				Root:     common.Bytes2Hex(data.Root[:]),
 				CodeHash: common.Bytes2Hex(data.CodeHash),
 				Code:     common.Bytes2Hex(obj.Code(self.db)),
-				// Storage:  make(map[string]string),
+				Storage:  make(map[string]string),
 
 				Candidate:  data.Candidate,
 				Commission: data.Commission,
 			}
-			// storageIt := trie.NewIterator(obj.getTrie(self.db).NodeIterator(nil))
-			// for storageIt.Next() {
-			// 	account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
-			// }
+			storageIt := trie.NewIterator(obj.getTrie(self.db).NodeIterator(nil))
+			for storageIt.Next() {
+				account.Storage[common.Bytes2Hex(self.trie.GetKey(storageIt.Key))] = common.Bytes2Hex(storageIt.Value)
+			}
 
 			tx1It := trie.NewIterator(obj.getTX1Trie(self.db).NodeIterator(nil))
 			for tx1It.Next() {
@@ -277,31 +292,31 @@ func (self *StateDB) RawDumpToFile(height uint64, filename string) Dump {
 				}
 			}
 
-			// if data.RewardRoot.String() != "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421" {
-			// 	rewardIt := trie.NewIterator(obj.getRewardTrie(self.db).NodeIterator(nil))
-			// 	for rewardIt.Next() {
-			// 		var key uint64
-			// 		rlp.DecodeBytes(self.trie.GetKey(rewardIt.Key), &key)
-			// 		var value big.Int
-			// 		rlp.DecodeBytes(rewardIt.Value, &value)
-			// 		account.RewardDetail[fmt.Sprintf("epoch_%d", key)] = value.String()
-			// 	}
-			// }
+			if data.RewardRoot.String() != "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421" {
+				rewardIt := trie.NewIterator(obj.getRewardTrie(self.db).NodeIterator(nil))
+				for rewardIt.Next() {
+					var key uint64
+					rlp.DecodeBytes(self.trie.GetKey(rewardIt.Key), &key)
+					var value big.Int
+					rlp.DecodeBytes(rewardIt.Value, &value)
+					account.RewardDetail[fmt.Sprintf("epoch_%d", key)] = value.String()
+				}
+			}
 
-			// account.EpochReward = self.GetAllEpochReward(commonAddr, height, false)
-			// for epoch, reward := range account.EpochReward {
-			// 	if reward == nil || reward.Sign() == 0 {
-			// 		delete(account.EpochReward, epoch)
-			// 	}
-			// }
-			// if extractNumber, err1 := self.GetEpochRewardExtracted(commonAddr, height); err1 == nil {
-			// 	account.ExtractNumber = extractNumber
-			// 	for epoch, _ := range account.EpochReward {
-			// 		if epoch <= account.ExtractNumber {
-			// 			delete(account.EpochReward, epoch)
-			// 		}
-			// 	}
-			// }
+			account.EpochReward = self.GetAllEpochReward(commonAddr, height, false)
+			for epoch, reward := range account.EpochReward {
+				if reward == nil || reward.Sign() == 0 {
+					delete(account.EpochReward, epoch)
+				}
+			}
+			if extractNumber, err1 := self.GetEpochRewardExtracted(commonAddr, height); err1 == nil {
+				account.ExtractNumber = extractNumber
+				for epoch, _ := range account.EpochReward {
+					if epoch <= account.ExtractNumber {
+						delete(account.EpochReward, epoch)
+					}
+				}
+			}
 
 			dump.Accounts[common.Bytes2Hex(addr)] = account
 		} else {
@@ -328,6 +343,45 @@ func (self *StateDB) RawDumpToFile(height uint64, filename string) Dump {
 					dump.RefundAccounts = append(dump.RefundAccounts, refundAddr.Hex())
 				}
 			}
+		}
+	}
+
+	json, err := json.MarshalIndent(dump, "", "    ")
+	if err != nil {
+		fmt.Println("dump err", err)
+	}
+	ioutil.WriteFile(filename, json, 0644)
+	return dump
+}
+
+func (self *StateDB) RawDumpBalanceToFile(height uint64, filename string) DumpBalance {
+	dump := DumpBalance{
+		Root:     fmt.Sprintf("%x", self.trie.Hash()),
+		Accounts: make(map[string]DumpAccountBalance),
+	}
+
+	it := trie.NewIterator(self.trie.NodeIterator(nil))
+	for it.Next() {
+		addr := self.trie.GetKey(it.Key)
+		if len(addr) == 20 {
+			var data Account
+			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
+				panic(err)
+			}
+
+			account := DumpAccountBalance{
+				Balance:        data.Balance.String(),
+				Deposit:        data.DepositBalance.String(),
+				Delegate:       data.DelegateBalance.String(),
+				Proxied:        data.ProxiedBalance.String(),
+				DepositProxied: data.DepositProxiedBalance.String(),
+				PendingRefund:  data.PendingRefundBalance.String(),
+				Reward:         data.RewardBalance.String(),
+				Nonce:          data.Nonce,
+				Candidate:      data.Candidate,
+			}
+
+			dump.Accounts[common.Bytes2Hex(addr)] = account
 		}
 	}
 
