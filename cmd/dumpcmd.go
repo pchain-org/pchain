@@ -75,7 +75,7 @@ func dump(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	fileName := fmt.Sprintf("dump-%v-%v.json", chain.Config().PChainId, curBlock)
+	fileName := fmt.Sprintf("dump-%v-%v.csv", chain.Config().PChainId, curBlock)
 	stateDb.RawDumpBalanceToFile(chain.CurrentBlock().NumberU64(), fileName)
 	fmt.Printf("Done. Please find %v under current folder. \n", fileName)
 	return nil

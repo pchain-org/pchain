@@ -18,14 +18,18 @@ package state
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 )
@@ -76,6 +80,7 @@ type Dump struct {
 	RefundAccounts           []string               `json:"refund_accounts"`
 }
 type DumpAccountBalance struct {
+	Address        string `json:"address"`
 	Balance        string `json:"balance"`
 	Deposit        string `json:"deposit_balance"`
 	Delegate       string `json:"delegate_balance"`
@@ -85,10 +90,6 @@ type DumpAccountBalance struct {
 	Reward         string `json:"reward_balance"`
 	Nonce          uint64 `json:"nonce"`
 	Candidate      bool   `json:"candidate"`
-}
-type DumpBalance struct {
-	Root     string                        `json:"root"`
-	Accounts map[string]DumpAccountBalance `json:"accounts"`
 }
 
 func (self *StateDB) RawDump() Dump {
@@ -354,12 +355,8 @@ func (self *StateDB) RawDumpToFile(height uint64, filename string) Dump {
 	return dump
 }
 
-func (self *StateDB) RawDumpBalanceToFile(height uint64, filename string) DumpBalance {
-	dump := DumpBalance{
-		Root:     fmt.Sprintf("%x", self.trie.Hash()),
-		Accounts: make(map[string]DumpAccountBalance),
-	}
-
+func (self *StateDB) RawDumpBalanceToFile(height uint64, filename string) {
+	var accounts [][]string
 	it := trie.NewIterator(self.trie.NodeIterator(nil))
 	for it.Next() {
 		addr := self.trie.GetKey(it.Key)
@@ -368,29 +365,41 @@ func (self *StateDB) RawDumpBalanceToFile(height uint64, filename string) DumpBa
 			if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 				panic(err)
 			}
-
-			account := DumpAccountBalance{
-				Balance:        data.Balance.String(),
-				Deposit:        data.DepositBalance.String(),
-				Delegate:       data.DelegateBalance.String(),
-				Proxied:        data.ProxiedBalance.String(),
-				DepositProxied: data.DepositProxiedBalance.String(),
-				PendingRefund:  data.PendingRefundBalance.String(),
-				Reward:         data.RewardBalance.String(),
-				Nonce:          data.Nonce,
-				Candidate:      data.Candidate,
+			pi := big.NewInt(params.PI)
+			if data.Balance.Sign() != 0 || data.DelegateBalance.Sign() != 0 || data.DepositBalance.Sign() != 0 {
+				var acc []string
+				acc = append(acc,
+					"0x"+common.Bytes2Hex(addr),
+					data.Balance.Div(data.Balance, pi).String(),
+					data.DepositBalance.Div(data.DepositBalance, pi).String(),
+					data.DelegateBalance.Div(data.DelegateBalance, pi).String(),
+					data.ProxiedBalance.Div(data.ProxiedBalance, pi).String(),
+					data.DepositProxiedBalance.Div(data.DepositProxiedBalance, pi).String(),
+					data.PendingRefundBalance.Div(data.PendingRefundBalance, pi).String(),
+					data.RewardBalance.Div(data.RewardBalance, pi).String(),
+					strconv.FormatUint(data.Nonce, 10),
+				)
+				accounts = append(accounts, acc)
 			}
-
-			dump.Accounts[common.Bytes2Hex(addr)] = account
 		}
 	}
 
-	json, err := json.MarshalIndent(dump, "", "    ")
+	file, err := os.Create(filename)
 	if err != nil {
-		fmt.Println("dump err", err)
+		panic(err)
 	}
-	ioutil.WriteFile(filename, json, 0644)
-	return dump
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	writer.Write([]string{"adress", "balance", "deposit_balance", "delegate_balance", "proxied_balance", "deposit_proxied_balance", "pending_refund_balance", "reward_balance", "nonce"})
+	defer writer.Flush()
+
+	for _, acc := range accounts {
+		err := writer.Write(acc)
+		if err != nil {
+			panic(err)
+		}
+	}
 }
 
 func (self *StateDB) DoSnapshot(sn trie.Snapshot) error {
