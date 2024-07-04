@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -376,16 +377,19 @@ func (self *StateDB) RawDumpBalanceToFile(height uint64, filename string) {
 			total.Add(total, data.RewardBalance)
 			totalGwei := total.Div(total, pi)
 			if totalGwei.Sign() != 0 {
+				fb, _ := totalGwei.Float64()
+				fb = fb / 1e9
 				acc = append(acc,
 					"0x"+common.Bytes2Hex(addr),
-					data.Balance.Div(data.Balance, pi).String(),
-					data.DepositBalance.Div(data.DepositBalance, pi).String(),
-					data.DelegateBalance.Div(data.DelegateBalance, pi).String(),
+					// data.Balance.Div(data.Balance, pi).String(),
+					// data.DepositBalance.Div(data.DepositBalance, pi).String(),
+					// data.DelegateBalance.Div(data.DelegateBalance, pi).String(),
 					// data.ProxiedBalance.Div(data.ProxiedBalance, pi).String(),
 					// data.DepositProxiedBalance.Div(data.DepositProxiedBalance, pi).String(),
-					data.PendingRefundBalance.Div(data.PendingRefundBalance, pi).String(),
-					data.RewardBalance.Div(data.RewardBalance, pi).String(),
+					// data.PendingRefundBalance.Div(data.PendingRefundBalance, pi).String(),
+					// data.RewardBalance.Div(data.RewardBalance, pi).String(),
 					totalGwei.String(),
+					strconv.FormatFloat(fb, 'g', -1, 64),
 				)
 				accounts = append(accounts, acc)
 			}
@@ -425,7 +429,8 @@ func (self *StateDB) RawDumpBalanceToFile(height uint64, filename string) {
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
-	writer.Write([]string{"address", "balance", "deposit_balance", "delegate_balance", "pending_refund_balance", "reward_balance", "total"})
+	// writer.Write([]string{"address", "balance", "deposit_balance", "delegate_balance", "pending_refund_balance", "reward_balance", "total-Gwei", "total-Pi"})
+	writer.Write([]string{"address", "total-Gwei", "total-Pi"})
 	defer writer.Flush()
 
 	for _, acc := range accounts {
