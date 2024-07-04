@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -366,45 +365,56 @@ func (self *StateDB) RawDumpBalanceToFile(height uint64, filename string) {
 				panic(err)
 			}
 			pi := big.NewInt(params.GWei)
-			if data.Balance.Sign() != 0 || data.DelegateBalance.Sign() != 0 || data.DepositBalance.Sign() != 0 {
-				var acc []string
-				// acc = append(acc,
-				// 	"0x"+common.Bytes2Hex(addr),
-				// 	data.Balance.Div(data.Balance, pi).String(),
-				// 	data.DepositBalance.Div(data.DepositBalance, pi).String(),
-				// 	data.DelegateBalance.Div(data.DelegateBalance, pi).String(),
-				// 	data.ProxiedBalance.Div(data.ProxiedBalance, pi).String(),
-				// 	data.DepositProxiedBalance.Div(data.DepositProxiedBalance, pi).String(),
-				// 	data.PendingRefundBalance.Div(data.PendingRefundBalance, pi).String(),
-				// 	data.RewardBalance.Div(data.RewardBalance, pi).String(),
-				// 	strconv.FormatUint(data.Nonce, 10),
-				// )
-
-				// totalBalance = Balance + DepositBalance + DelegateBalance + PendingRefundBalance + RewardBalance
-				totalBalance := data.Balance
-				if data.DepositBalance.Sign() != 0 {
-					totalBalance.Add(totalBalance, data.DepositBalance)
-				}
-				if data.DelegateBalance.Sign() != 0 {
-					totalBalance.Add(totalBalance, data.DelegateBalance)
-				}
-				if data.PendingRefundBalance.Sign() != 0 {
-					totalBalance.Add(totalBalance, data.PendingRefundBalance)
-				}
-				if data.RewardBalance.Sign() != 0 {
-					totalBalance.Add(totalBalance, data.RewardBalance)
-				}
-				if totalBalance.Sign() != 0 {
-					fb, _ := totalBalance.Div(data.Balance, pi).Float64()
-					fb = fb / 1e9
-					acc = append(acc,
-						"0x"+common.Bytes2Hex(addr),
-						fmt.Sprintf("%s", fb),
-						(*hexutil.Big)(totalBalance).String(),
-					)
-					accounts = append(accounts, acc)
-				}
+			// if data.Balance.Sign() != 0 || data.DelegateBalance.Sign() != 0 || data.DepositBalance.Sign() != 0 {
+			var acc []string
+			// totalBalance = Balance + DepositBalance + DelegateBalance + PendingRefundBalance + RewardBalance
+			total := big.NewInt(0)
+			total.Add(total, data.Balance)
+			total.Add(total, data.DepositBalance)
+			total.Add(total, data.DelegateBalance)
+			total.Add(total, data.PendingRefundBalance)
+			total.Add(total, data.RewardBalance)
+			totalGwei := total.Div(total, pi)
+			if totalGwei.Sign() != 0 {
+				acc = append(acc,
+					"0x"+common.Bytes2Hex(addr),
+					data.Balance.Div(data.Balance, pi).String(),
+					data.DepositBalance.Div(data.DepositBalance, pi).String(),
+					data.DelegateBalance.Div(data.DelegateBalance, pi).String(),
+					// data.ProxiedBalance.Div(data.ProxiedBalance, pi).String(),
+					// data.DepositProxiedBalance.Div(data.DepositProxiedBalance, pi).String(),
+					data.PendingRefundBalance.Div(data.PendingRefundBalance, pi).String(),
+					data.RewardBalance.Div(data.RewardBalance, pi).String(),
+					totalGwei.String(),
+				)
+				accounts = append(accounts, acc)
 			}
+
+			// totalBalance = Balance + DepositBalance + DelegateBalance + PendingRefundBalance + RewardBalance
+			// totalBalance := data.Balance
+			// if data.DepositBalance.Sign() != 0 {
+			// 	totalBalance.Add(totalBalance, data.DepositBalance)
+			// }
+			// if data.DelegateBalance.Sign() != 0 {
+			// 	totalBalance.Add(totalBalance, data.DelegateBalance)
+			// }
+			// if data.PendingRefundBalance.Sign() != 0 {
+			// 	totalBalance.Add(totalBalance, data.PendingRefundBalance)
+			// }
+			// if data.RewardBalance.Sign() != 0 {
+			// 	totalBalance.Add(totalBalance, data.RewardBalance)
+			// }
+			// if totalBalance.Sign() != 0 {
+			// 	fb, _ := totalBalance.Div(data.Balance, pi).Float64()
+			// 	fb = fb / 1e9
+			// 	acc = append(acc,
+			// 		"0x"+common.Bytes2Hex(addr),
+			// 		fmt.Sprintf("%s", fb),
+			// 		(*hexutil.Big)(totalBalance).String(),
+			// 	)
+			// 	accounts = append(accounts, acc)
+			// }
+			// }
 		}
 	}
 
@@ -415,8 +425,7 @@ func (self *StateDB) RawDumpBalanceToFile(height uint64, filename string) {
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
-	// writer.Write([]string{"address", "balance", "deposit_balance", "delegate_balance", "proxied_balance", "deposit_proxied_balance", "pending_refund_balance", "reward_balance", "nonce"})
-	writer.Write([]string{"address", "balance", "hex_balance"})
+	writer.Write([]string{"address", "balance", "deposit_balance", "delegate_balance", "pending_refund_balance", "reward_balance", "total"})
 	defer writer.Flush()
 
 	for _, acc := range accounts {
